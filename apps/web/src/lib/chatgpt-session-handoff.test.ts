@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { deliverChatGptSessionToken, parseChatGptSessionHandoff } from "./chatgpt-session-handoff";
+import {
+  chatGptSessionHandoffNext,
+  deliverChatGptSessionToken,
+  parseChatGptSessionHandoff,
+} from "./chatgpt-session-handoff";
 
 const STATE = "abcdefghijklmnopqrstuvwxyzABCDEFGH0123456789_-";
 
@@ -36,6 +40,17 @@ describe("ChatGPT session handoff", () => {
         `?callback=${encodeURIComponent("http://127.0.0.1:49152/callback")}&state=short`,
       ),
     ).toBeNull();
+  });
+
+
+  it("preserves only a fully validated handoff as an auth next target", () => {
+    const next = `/chatgpt/session?callback=${encodeURIComponent(
+      "http://127.0.0.1:49152/callback",
+    )}&state=${STATE}`;
+    expect(chatGptSessionHandoffNext(next)).toBe(next);
+    expect(chatGptSessionHandoffNext("/app")).toBeNull();
+    expect(chatGptSessionHandoffNext("/chatgpt/session?state=short")).toBeNull();
+    expect(chatGptSessionHandoffNext("https://example.com/chatgpt/session")).toBeNull();
   });
 
   it("posts the token only in a no-cors loopback request body", async () => {
