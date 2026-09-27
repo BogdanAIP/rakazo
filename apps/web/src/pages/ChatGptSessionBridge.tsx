@@ -7,10 +7,7 @@ import {
 } from "../lib/chatgpt-session-handoff";
 
 export function ChatGptSessionBridgePage({ sessionToken }: { sessionToken: string }) {
-  const handoff = useMemo(
-    () => parseChatGptSessionHandoff(window.location.search),
-    [],
-  );
+  const handoff = useMemo(() => parseChatGptSessionHandoff(window.location.search), []);
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
 
   if (!handoff) {
