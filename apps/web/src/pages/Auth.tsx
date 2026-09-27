@@ -5,6 +5,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { authClient } from "../lib/auth";
+import { chatGptSessionHandoffNext } from "../lib/chatgpt-session-handoff";
 import { clearSpaceSelection } from "../lib/rpc";
 
 type AuthMode = "in" | "up" | "forgot";
@@ -106,13 +107,12 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
         return;
       }
       clearSpaceSelection();
-      navigate(
-        mode === "up"
-          ? "/onboarding"
-          : searchParams.get("next") === "/integrations/setup"
-            ? "/integrations/setup"
-            : "/app",
-      );
+      const requestedNext = searchParams.get("next");
+      const signInDestination =
+        requestedNext === "/integrations/setup"
+          ? requestedNext
+          : (chatGptSessionHandoffNext(requestedNext) ?? "/app");
+      navigate(mode === "up" ? "/onboarding" : signInDestination);
     } catch {
       setError(t`Could not reach the server`);
     } finally {
