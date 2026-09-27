@@ -13,12 +13,12 @@ ChatGPT
   -> Rakazo bots, threads, computers, memory, routines, skills, integrations, artifacts, voice, and providers
 ```
 
-The MCP server does not duplicate Rakazo features. It projects the existing `packages/contracts/src/rpc.ts` appContract and discovers procedures from that source at startup.
+The MCP server does not duplicate Rakazo features. It imports Rakazo's existing runtime `appContract` and discovers procedures directly from that contract. Input and output Zod schemas are converted to JSON Schema, so ChatGPT can inspect exact procedure fields without maintaining a second API definition.
 
 Instead of registering hundreds of MCP tools, it exposes six stable tools:
 
 - `rakazo_procedures` — discover the complete current appContract surface.
-- `rakazo_describe` — inspect the live contract signature for one procedure.
+- `rakazo_describe` — inspect the live input/output JSON Schema for one procedure.
 - `rakazo_read` — invoke procedures classified as read-only.
 - `rakazo_write` — invoke non-destructive mutations.
 - `rakazo_destructive` — invoke destructive/high-consequence mutations.
