@@ -51,6 +51,61 @@ const READ_ACTIONS = new Set([
   "voices",
 ]);
 
+const WRITE_ACTIONS = new Set([
+  "allow",
+  "answer",
+  "appConnected",
+  "appendEvent",
+  "approve",
+  "begin",
+  "beginOAuth",
+  "boot",
+  "bot",
+  "choose",
+  "complete",
+  "completeOAuth",
+  "connect",
+  "connectProvider",
+  "create",
+  "dismissFocus",
+  "dismissUpdate",
+  "duplicate",
+  "finishOAuth",
+  "followUp",
+  "heartbeat",
+  "input",
+  "install",
+  "markRead",
+  "markUnread",
+  "promptFocus",
+  "put",
+  "react",
+  "recover",
+  "registerPush",
+  "release",
+  "releaseInterrupted",
+  "rename",
+  "reorder",
+  "replace",
+  "respond",
+  "restore",
+  "save",
+  "send",
+  "set",
+  "setBot",
+  "setComputer",
+  "setDefault",
+  "setDefaultScope",
+  "setVoice",
+  "start",
+  "submitOAuthCode",
+  "takeover",
+  "testRun",
+  "update",
+  "updateDraft",
+  "updatePolicy",
+]);
+
 const DESTRUCTIVE_ACTIONS = new Set([
   "apply",
   "archive",
@@ -124,7 +179,8 @@ export function classifyProcedure(procedure: string): ProcedureMode {
   const action = procedure.split("/").at(-1) ?? "";
   if (DESTRUCTIVE_ACTIONS.has(action)) return "destructive";
   if (READ_ACTIONS.has(action)) return "read";
-  return "write";
+  if (WRITE_ACTIONS.has(action)) return "write";
+  return "destructive";
 }
 
 export async function loadProcedureCatalog(): Promise<
