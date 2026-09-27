@@ -1,4 +1,6 @@
 import process from "node:process";
+import { createORPCClient } from "@orpc/client";
+import { RPCLink } from "@orpc/client/fetch";
 import { appContract } from "@rakazo/contracts";
 import * as z from "zod";
 
@@ -153,7 +155,7 @@ function apiBase(): string {
   return (process.env.RAKAZO_API_URL ?? "http://127.0.0.1:3100").replace(/\/$/, "");
 }
 
-function authHeaders(accept = "application/json"): Headers {
+function rpcHeaders(): Headers {
   const token = process.env.RAKAZO_SESSION_TOKEN?.trim();
   if (!token) {
     throw new Error(
@@ -162,9 +164,7 @@ function authHeaders(accept = "application/json"): Headers {
   }
 
   const headers = new Headers({
-    accept,
     authorization: `Bearer ${token}`,
-    "content-type": "application/json",
     origin: process.env.RAKAZO_ORIGIN ?? "http://127.0.0.1:5173",
   });
   const spaceId = process.env.RAKAZO_SPACE_ID?.trim();
@@ -172,47 +172,70 @@ function authHeaders(accept = "application/json"): Headers {
   return headers;
 }
 
-async function boundedText(response: Response): Promise<string> {
-  const declared = Number(response.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) {
-    throw new Error(`Rakazo response exceeds ${MAX_RESPONSE_BYTES} bytes`);
+type DynamicRpcProcedure = (
+  input?: unknown,
+  options?: { signal?: AbortSignal },
+) => Promise<unknown>;
+
+let rpcClient: unknown;
+
+function rakazoRpcClient(): unknown {
+  if (rpcClient) return rpcClient;
+
+  rpcClient = createORPCClient(
+    new RPCLink({
+      url: () => `${apiBase()}/rpc`,
+      headers: () => rpcHeaders(),
+      fetch: async (request, init) => {
+        const response = await fetch(request, init);
+        const declared = Number(response.headers.get("content-length") ?? "0");
+        if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) {
+          await response.body?.cancel().catch(() => undefined);
+          throw new Error(`Rakazo response exceeds ${MAX_RESPONSE_BYTES} bytes`);
+        }
+        return response;
+      },
+    }),
+  );
+  return rpcClient;
+}
+
+function rpcProcedure(procedure: string): DynamicRpcProcedure {
+  procedureContract(procedure);
+
+  let node = rakazoRpcClient();
+  for (const segment of procedure.split("/")) {
+    if ((typeof node !== "object" && typeof node !== "function") || node === null) {
+      throw new Error(`Rakazo RPC client has no procedure: ${procedure}`);
+    }
+    node = (node as Record<string, unknown>)[segment];
   }
 
-  const text = await response.text();
-  if (Buffer.byteLength(text, "utf8") > MAX_RESPONSE_BYTES) {
-    throw new Error(`Rakazo response exceeds ${MAX_RESPONSE_BYTES} bytes`);
+  if (typeof node !== "function") {
+    throw new Error(`Rakazo RPC client has no procedure: ${procedure}`);
   }
-  return text;
+  return node as DynamicRpcProcedure;
 }
 
 export async function callRakazoRpc(
   procedure: string,
   input: Record<string, unknown> = {},
 ): Promise<unknown> {
-  const response = await fetch(`${apiBase()}/rpc/${procedure}`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({ json: input }),
-  });
-
-  const text = await boundedText(response);
-  let payload: { json?: unknown; error?: { message?: string } };
-  try {
-    payload = text ? (JSON.parse(text) as typeof payload) : {};
-  } catch {
-    throw new Error(`Rakazo RPC ${procedure} returned invalid JSON (HTTP ${response.status})`);
-  }
-
-  if (!response.ok || payload.error) {
-    throw new Error(
-      payload.error?.message ?? `Rakazo RPC ${procedure} failed (HTTP ${response.status})`,
-    );
-  }
-
-  return payload.json;
+  const contract = procedureContract(procedure);
+  const callable = rpcProcedure(procedure);
+  const payload = contract["~orpc"].inputSchema === undefined ? undefined : input;
+  return callable(payload);
 }
 
 type EventTarget = { botId: string } | { groupId: string };
+
+function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
+  return (
+    (typeof value === "object" || typeof value === "function") &&
+    value !== null &&
+    Symbol.asyncIterator in value
+  );
+}
 
 export async function collectThreadEvents(options: {
   target: EventTarget;
@@ -225,57 +248,25 @@ export async function collectThreadEvents(options: {
   const events: unknown[] = [];
 
   try {
-    const response = await fetch(`${apiBase()}/rpc/threads/subscribe`, {
-      method: "POST",
-      headers: authHeaders("text/event-stream"),
-      body: JSON.stringify({ json: { ...options.target, cursor: options.cursor } }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok || !response.body) {
-      await response.text().catch(() => "");
-      throw new Error(`Rakazo thread subscription failed (HTTP ${response.status})`);
+    const stream = await rpcProcedure("threads/subscribe")(
+      { ...options.target, cursor: options.cursor },
+      { signal: controller.signal },
+    );
+    if (!isAsyncIterable(stream)) {
+      throw new Error("Rakazo threads/subscribe did not return an event iterator");
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (events.length < options.maxEvents && !controller.signal.aborted) {
-      const chunk = await reader.read().catch((error: unknown) => {
-        if (controller.signal.aborted) return null;
-        throw error;
-      });
-      if (!chunk || chunk.done) break;
-
-      buffer += decoder.decode(chunk.value, { stream: true });
-      const frames = buffer.split("\n\n");
-      buffer = frames.pop() ?? "";
-
-      for (const frame of frames) {
-        const data = frame
-          .split("\n")
-          .filter((line) => line.startsWith("data:"))
-          .map((line) => line.slice(5).trim())
-          .join("");
-
-        if (!data || data === "[DONE]") continue;
-        try {
-          const parsed = JSON.parse(data) as { json?: unknown; error?: { message?: string } };
-          if (parsed.error) throw new Error(parsed.error.message ?? "Rakazo event stream error");
-          if (parsed.json !== undefined) events.push(parsed.json);
-        } catch (error) {
-          if (error instanceof SyntaxError) continue;
-          throw error;
-        }
-
-        if (events.length >= options.maxEvents) break;
+    try {
+      for await (const event of stream) {
+        events.push(event);
+        if (events.length >= options.maxEvents || controller.signal.aborted) break;
       }
+    } catch (error) {
+      if (!controller.signal.aborted) throw error;
     }
-
-    await reader.cancel().catch(() => undefined);
     return events;
   } finally {
     clearTimeout(timer);
   }
 }
+
