@@ -6,9 +6,9 @@ import {
   callRakazoRpc,
   classifyProcedure,
   collectThreadEvents,
-  loadProcedureCatalog,
-  type ProcedureMode,
+  loadProcedureCatalog
 } from "./chatgpt-rakazo.js";
+import type { ProcedureMode } from "./chatgpt-rakazo.js";
 
 const server = new McpServer({
   name: "rakazo-chatgpt",
