@@ -269,4 +269,3 @@ export async function collectThreadEvents(options: {
     clearTimeout(timer);
   }
 }
-
