@@ -49,7 +49,13 @@ describe("ChatGPT Rakazo procedure projection", () => {
     const originalOrigin = process.env.RAKAZO_ORIGIN;
     const originalSpaceId = process.env.RAKAZO_SPACE_ID;
     let requestSnapshot:
-      | { url: string; method: string; authorization: string | null; spaceId: string | null; body: string }
+      | {
+          url: string;
+          method: string;
+          authorization: string | null;
+          spaceId: string | null;
+          body: string;
+        }
       | undefined;
 
     process.env.RAKAZO_SESSION_TOKEN = "test-session-token";
