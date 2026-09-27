@@ -8,7 +8,7 @@ Rakazo can be used as a full ChatGPT plugin surface through OpenAI Secure MCP Tu
 ChatGPT
   -> OpenAI Secure MCP Tunnel
   -> local tunnel-client
-  -> stdio: pnpm chatgpt:mcp
+  -> stdio: node node_modules/tsx/dist/cli.mjs packages/adapters/src/chatgpt-mcp.ts
   -> Rakazo RPC API on 127.0.0.1:3100
   -> Rakazo bots, threads, computers, memory, routines, skills, integrations, artifacts, voice, and providers
 ```
@@ -32,20 +32,40 @@ The server reads configuration only from environment variables. Never commit the
 
 - `RAKAZO_API_URL` — optional, defaults to `http://127.0.0.1:3100`.
 - `RAKAZO_ORIGIN` — optional, defaults to `http://127.0.0.1:5173`.
-- `RAKAZO_SESSION_TOKEN` — required Better Auth session token used as a Bearer token.
+- `RAKAZO_SESSION_TOKEN` — Better Auth session token used as a Bearer token. The launcher should obtain this through the authenticated local handoff below; setting it manually is a development fallback only.
 - `RAKAZO_SPACE_ID` — optional Space selection.
 
-Run from the repository root:
+### Session handoff
+
+A normal Rakazo browser session already contains the Better Auth session token, but users should not copy it manually. A local launcher can obtain it without reading browser cookies:
+
+1. Bind a one-shot HTTP listener on a random loopback port and generate a cryptographically random state value.
+2. Open `/chatgpt/session?callback=http://127.0.0.1:<port>/callback&state=<state>` on the configured `RAKAZO_ORIGIN`.
+3. Rakazo requires an existing signed-in session and explicit user confirmation.
+4. The page POSTs `{ state, token }` to the loopback callback. The token is never rendered or placed in a URL.
+5. The launcher verifies the state, stores the token in OS-protected storage, and supplies it to the MCP child as `RAKAZO_SESSION_TOKEN`.
+
+The handoff accepts only `http://localhost|127.0.0.1|[::1]:<high-port>/callback` targets and rejects duplicate, weak, or non-loopback parameters.
+
+For manual development only:
 
 ```bash
 RAKAZO_SESSION_TOKEN=... pnpm chatgpt:mcp
 ```
 
-For OpenAI Secure MCP Tunnel, configure the local stdio command as `pnpm chatgpt:mcp` and supply the environment variables to the tunnel process. Rakazo and the MCP server can remain loopback-only.
+For OpenAI Secure MCP Tunnel, do not put a package-manager wrapper in the stdio path: package managers may write banners to stdout and corrupt MCP JSON-RPC framing. Start the MCP entry point directly, for example:
+
+```text
+node node_modules/tsx/dist/cli.mjs packages/adapters/src/chatgpt-mcp.ts
+```
+
+Rakazo and the MCP server can remain loopback-only.
 
 ## Verification
 
 ```bash
 pnpm --filter @rakazo/adapters test -- chatgpt-mcp
 pnpm --filter @rakazo/adapters check
+pnpm --filter @rakazo/web test -- chatgpt-session-handoff
+pnpm --filter @rakazo/web check
 ```
