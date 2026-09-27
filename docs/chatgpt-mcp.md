@@ -15,9 +15,10 @@ ChatGPT
 
 The MCP server does not duplicate Rakazo features. It projects the existing `packages/contracts/src/rpc.ts` appContract and discovers procedures from that source at startup.
 
-Instead of registering hundreds of MCP tools, it exposes five stable tools:
+Instead of registering hundreds of MCP tools, it exposes six stable tools:
 
 - `rakazo_procedures` — discover the complete current appContract surface.
+- `rakazo_describe` — inspect the live contract signature for one procedure.
 - `rakazo_read` — invoke procedures classified as read-only.
 - `rakazo_write` — invoke non-destructive mutations.
 - `rakazo_destructive` — invoke destructive/high-consequence mutations.
