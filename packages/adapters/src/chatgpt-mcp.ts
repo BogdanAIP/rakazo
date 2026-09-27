@@ -6,7 +6,8 @@ import {
   callRakazoRpc,
   classifyProcedure,
   collectThreadEvents,
-  loadProcedureCatalog
+  describeProcedure,
+  loadProcedureCatalog,
 } from "./chatgpt-rakazo.js";
 import type { ProcedureMode } from "./chatgpt-rakazo.js";
 
@@ -63,6 +64,26 @@ server.registerTool(
     );
     return textResult({ count: catalog.length, procedures: catalog });
   },
+);
+
+
+server.registerTool(
+  "rakazo_describe",
+  {
+    title: "Describe Rakazo procedure",
+    description:
+      "Return the live appContract signature for one Rakazo procedure before calling it. Use this when you need the exact input/output shape.",
+    inputSchema: z.object({
+      procedure: z.string().min(1),
+    }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ procedure }) => textResult(await describeProcedure(procedure)),
 );
 
 server.registerTool(
