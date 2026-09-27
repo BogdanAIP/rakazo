@@ -12,6 +12,7 @@ import {
   sessionRetryDelayMs,
   showSessionUnavailable,
 } from "./lib/session-gate";
+import { ChatGptSessionBridgePage } from "./pages/ChatGptSessionBridge";
 import { IntegrationSetupPage } from "./pages/IntegrationSetup";
 import { LocalSettingsPage } from "./pages/LocalSettings";
 import { McpOAuthCallbackPage } from "./pages/McpOAuthCallback";
@@ -40,8 +41,11 @@ export function App() {
 
 function SessionApp() {
   const [searchParams] = useSearchParams();
+  const requestedNext = searchParams.get("next");
   const signInDestination =
-    searchParams.get("next") === "/integrations/setup" ? "/integrations/setup" : "/app";
+    requestedNext === "/integrations/setup" || requestedNext?.startsWith("/chatgpt/session?")
+      ? requestedNext
+      : "/app";
   const session = authClient.useSession();
   const gate = sessionGate(session);
   const [holdingUnreachable, setHoldingUnreachable] = useState(false);
@@ -71,6 +75,7 @@ function SessionApp() {
   }
 
   const user = session.data?.user;
+  const sessionToken = session.data?.session.token;
   return (
     <div className="h-full" data-rakazo-app-state="ready">
       <Suspense fallback={<div className="h-full bg-background" />}>
@@ -108,6 +113,21 @@ function SessionApp() {
                 <IntegrationSetupPage />
               ) : (
                 <Navigate to="/sign-in?next=/integrations/setup" replace />
+              )
+            }
+          />
+          <Route
+            path="/chatgpt/session"
+            element={
+              user && sessionToken ? (
+                <ChatGptSessionBridgePage sessionToken={sessionToken} />
+              ) : (
+                <Navigate
+                  to={`/sign-in?next=${encodeURIComponent(
+                    `/chatgpt/session${window.location.search}`,
+                  )}`}
+                  replace
+                />
               )
             }
           />
