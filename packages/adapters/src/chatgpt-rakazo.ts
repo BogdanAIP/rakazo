@@ -247,14 +247,11 @@ export async function collectThreadEvents(options: {
     let buffer = "";
 
     while (events.length < options.maxEvents && !controller.signal.aborted) {
-      let chunk;
-      try {
-        chunk = await reader.read();
-      } catch (error) {
-        if (controller.signal.aborted) break;
+      const chunk = await reader.read().catch((error: unknown) => {
+        if (controller.signal.aborted) return null;
         throw error;
-      }
-      if (chunk.done) break;
+      });
+      if (!chunk || chunk.done) break;
 
       buffer += decoder.decode(chunk.value, { stream: true });
       const frames = buffer.split("\n\n");
