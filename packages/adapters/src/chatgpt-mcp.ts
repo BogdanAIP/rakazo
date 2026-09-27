@@ -65,7 +65,6 @@ server.registerTool(
   },
 );
 
-
 server.registerTool(
   "rakazo_describe",
   {
