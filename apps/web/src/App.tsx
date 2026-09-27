@@ -5,6 +5,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "re
 import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { LoadingState } from "./components/ai/primitives";
 import { authClient } from "./lib/auth";
+import { chatGptSessionHandoffNext } from "./lib/chatgpt-session-handoff";
 import { markAfterPaint, markOnce } from "./lib/performance";
 import {
   holdUnreachableGate,
@@ -43,9 +44,9 @@ function SessionApp() {
   const [searchParams] = useSearchParams();
   const requestedNext = searchParams.get("next");
   const signInDestination =
-    requestedNext === "/integrations/setup" || requestedNext?.startsWith("/chatgpt/session?")
+    requestedNext === "/integrations/setup"
       ? requestedNext
-      : "/app";
+      : (chatGptSessionHandoffNext(requestedNext) ?? "/app");
   const session = authClient.useSession();
   const gate = sessionGate(session);
   const [holdingUnreachable, setHoldingUnreachable] = useState(false);
