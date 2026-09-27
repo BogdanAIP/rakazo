@@ -2,14 +2,13 @@ import process from "node:process";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import type { ProcedureMode } from "./chatgpt-rakazo.js";
 import {
   callRakazoRpc,
-  classifyProcedure,
   collectThreadEvents,
   describeProcedure,
   loadProcedureCatalog,
 } from "./chatgpt-rakazo.js";
-import type { ProcedureMode } from "./chatgpt-rakazo.js";
 
 const server = new McpServer({
   name: "rakazo-chatgpt",
