@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import {
   classifyProcedure,
+  describeProcedureSource,
   discoverProcedurePaths,
   loadProcedureCatalog,
 } from "./chatgpt-rakazo.js";
@@ -24,6 +25,15 @@ describe("ChatGPT Rakazo procedure projection", () => {
     expect(procedures).toContain("agentSecrets/remove");
     expect(procedures).not.toContain("threads/send/taskId");
     expect(new Set(procedures).size).toBe(procedures.length);
+  });
+
+  it("returns the live contract signature for a procedure", async () => {
+    const source = await readFile(new URL("../../contracts/src/rpc.ts", import.meta.url), "utf8");
+    const signature = describeProcedureSource(source, "threads/send");
+
+    expect(signature).toContain("send: oc.input(threadSendInput)");
+    expect(signature).toContain("taskId: Id");
+    expect(signature).not.toContain("react: oc");
   });
 
   it("separates read, write, destructive, and stream calls", () => {
