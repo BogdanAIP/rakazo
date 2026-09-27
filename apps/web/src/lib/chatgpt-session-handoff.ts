@@ -61,3 +61,25 @@ export async function deliverChatGptSessionToken(
     body: JSON.stringify({ state: handoff.state, token }),
   });
 }
+
+export function chatGptSessionHandoffNext(value: string | null): string | null {
+  if (!value) return null;
+
+  let target: URL;
+  try {
+    target = new URL(value, "http://rakazo.local");
+  } catch {
+    return null;
+  }
+
+  if (
+    target.origin !== "http://rakazo.local" ||
+    target.pathname !== "/chatgpt/session" ||
+    target.hash ||
+    !parseChatGptSessionHandoff(target.search)
+  ) {
+    return null;
+  }
+
+  return `${target.pathname}${target.search}`;
+}
