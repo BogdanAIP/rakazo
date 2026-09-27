@@ -42,7 +42,6 @@ describe("ChatGPT session handoff", () => {
     ).toBeNull();
   });
 
-
   it("preserves only a fully validated handoff as an auth next target", () => {
     const next = `/chatgpt/session?callback=${encodeURIComponent(
       "http://127.0.0.1:49152/callback",
