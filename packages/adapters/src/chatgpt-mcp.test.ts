@@ -103,6 +103,7 @@ describe("ChatGPT Rakazo procedure projection", () => {
     expect(classifyProcedure("bots/rotateWebhookSecret")).toBe("destructive");
     expect(classifyProcedure("updater/apply")).toBe("destructive");
     expect(classifyProcedure("threads/subscribe")).toBe("stream");
+    expect(classifyProcedure("future/purge")).toBe("destructive");
   });
 
   it("classifies every current procedure", async () => {
