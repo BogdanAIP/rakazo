@@ -55,13 +55,19 @@ const DESTRUCTIVE_ACTIONS = new Set([
   "unlink",
 ]);
 
-export function discoverProcedurePaths(source: string): string[] {
+type ProcedureLocation = {
+  procedure: string;
+  lineIndex: number;
+  indent: number;
+};
+
+function discoverProcedureLocations(source: string): ProcedureLocation[] {
   const lines = source.split("\n");
   const start = lines.findIndex((line) => line.includes("export const appContract = {"));
   if (start < 0) throw new Error("Could not find appContract in packages/contracts/src/rpc.ts");
 
   const stack: Array<{ indent: number; key: string }> = [];
-  const paths: string[] = [];
+  const locations: ProcedureLocation[] = [];
 
   for (let index = start + 1; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
@@ -82,11 +88,40 @@ export function discoverProcedurePaths(source: string): string[] {
     }
 
     if (rhs.startsWith("oc")) {
-      paths.push([...stack.map((entry) => entry.key), key].join("/"));
+      locations.push({
+        procedure: [...stack.map((entry) => entry.key), key].join("/"),
+        lineIndex: index,
+        indent,
+      });
     }
   }
 
-  return [...new Set(paths)].sort();
+  return locations;
+}
+
+export function discoverProcedurePaths(source: string): string[] {
+  return [...new Set(discoverProcedureLocations(source).map((entry) => entry.procedure))].sort();
+}
+
+export function describeProcedureSource(source: string, procedure: string): string {
+  const lines = source.split("\n");
+  const location = discoverProcedureLocations(source).find(
+    (entry) => entry.procedure === procedure,
+  );
+  if (!location) throw new Error(`Unknown Rakazo procedure: ${procedure}`);
+
+  let end = lines.length;
+  for (let index = location.lineIndex + 1; index < lines.length; index += 1) {
+    const match = (lines[index] ?? "").match(/^(\s*)([A-Za-z][A-Za-z0-9]*):\s*(.*)$/);
+    if (!match) continue;
+    const indent = match[1]?.length ?? 0;
+    if (indent <= location.indent) {
+      end = index;
+      break;
+    }
+  }
+
+  return lines.slice(location.lineIndex, end).join("\n").trimEnd();
 }
 
 export function classifyProcedure(procedure: string): ProcedureMode {
@@ -106,6 +141,17 @@ export async function loadProcedureCatalog(): Promise<
     procedure,
     mode: classifyProcedure(procedure),
   }));
+}
+
+export async function describeProcedure(
+  procedure: string,
+): Promise<{ procedure: string; mode: ProcedureMode; contract: string }> {
+  const source = await readFile(CONTRACT_URL, "utf8");
+  return {
+    procedure,
+    mode: classifyProcedure(procedure),
+    contract: describeProcedureSource(source, procedure),
+  };
 }
 
 function apiBase(): string {
@@ -163,7 +209,9 @@ export async function callRakazoRpc(
   }
 
   if (!response.ok || payload.error) {
-    throw new Error(payload.error?.message ?? `Rakazo RPC ${procedure} failed (HTTP ${response.status})`);
+    throw new Error(
+      payload.error?.message ?? `Rakazo RPC ${procedure} failed (HTTP ${response.status})`,
+    );
   }
 
   return payload.json;
