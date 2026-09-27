@@ -557,6 +557,9 @@ importers:
       '@observablehq/plot':
         specifier: 0.6.17
         version: 0.6.17
+      '@orpc/client':
+        specifier: 1.15.0
+        version: 1.15.0(@opentelemetry/api@1.9.1)
       '@rakazo/adapter-kit':
         specifier: workspace:*
         version: link:../adapter-kit
