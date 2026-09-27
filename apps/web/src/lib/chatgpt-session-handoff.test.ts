@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  deliverChatGptSessionToken,
-  parseChatGptSessionHandoff,
-} from "./chatgpt-session-handoff";
+import { deliverChatGptSessionToken, parseChatGptSessionHandoff } from "./chatgpt-session-handoff";
 
 const STATE = "abcdefghijklmnopqrstuvwxyzABCDEFGH0123456789_-";
 
@@ -24,9 +21,7 @@ describe("ChatGPT session handoff", () => {
     "http://127.0.0.1:49152/callback?x=1",
   ])("rejects unsafe callback %s", (callback) => {
     expect(
-      parseChatGptSessionHandoff(
-        `?callback=${encodeURIComponent(callback)}&state=${STATE}`,
-      ),
+      parseChatGptSessionHandoff(`?callback=${encodeURIComponent(callback)}&state=${STATE}`),
     ).toBeNull();
   });
 
@@ -49,9 +44,7 @@ describe("ChatGPT session handoff", () => {
     );
     expect(handoff).not.toBeNull();
 
-    let observed:
-      | { input: RequestInfo | URL; init?: RequestInit }
-      | undefined;
+    let observed: { input: RequestInfo | URL; init?: RequestInit } | undefined;
     const request = (async (input: RequestInfo | URL, init?: RequestInit) => {
       observed = { input, init };
       return new Response(null, { status: 204 });
@@ -68,8 +61,6 @@ describe("ChatGPT session handoff", () => {
       referrerPolicy: "no-referrer",
       headers: { "content-type": "text/plain;charset=UTF-8" },
     });
-    expect(observed?.init?.body).toBe(
-      JSON.stringify({ state: STATE, token: "session-secret" }),
-    );
+    expect(observed?.init?.body).toBe(JSON.stringify({ state: STATE, token: "session-secret" }));
   });
 });
