@@ -190,12 +190,8 @@ export async function collectThreadEvents(options: {
     });
 
     if (!response.ok || !response.body) {
-      const text = await response.text().catch(() => "");
-      throw new Error(
-        text
-          ? `Rakazo thread subscription failed (HTTP ${response.status})`
-          : `Rakazo thread subscription failed (HTTP ${response.status})`,
-      );
+      await response.text().catch(() => "");
+      throw new Error(`Rakazo thread subscription failed (HTTP ${response.status})`);
     }
 
     const reader = response.body.getReader();
@@ -203,7 +199,7 @@ export async function collectThreadEvents(options: {
     let buffer = "";
 
     while (events.length < options.maxEvents && !controller.signal.aborted) {
-      let chunk: ReadableStreamReadResult<Uint8Array>;
+      let chunk;
       try {
         chunk = await reader.read();
       } catch (error) {
