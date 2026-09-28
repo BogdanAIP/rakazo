@@ -389,12 +389,8 @@ export const appContract = {
         imageBase64: z.string(),
         width: z.number().int().positive(),
         height: z.number().int().positive(),
-        cursor: z
-          .object({ x: z.number().nonnegative(), y: z.number().nonnegative() })
-          .optional(),
-        activeWindow: z
-          .object({ id: z.string(), title: z.string().optional() })
-          .optional(),
+        cursor: z.object({ x: z.number().nonnegative(), y: z.number().nonnegative() }).optional(),
+        activeWindow: z.object({ id: z.string(), title: z.string().optional() }).optional(),
       }),
     ),
     screenUrl: oc.input(botId).output(z.object({ url: z.string().nullable() })),
