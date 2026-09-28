@@ -900,7 +900,11 @@ describe("computer observation", () => {
       },
     });
     expect(observe).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "computer-1", providerRef: "sandbox-ref-1" }),
+      expect.objectContaining({
+        id: "sandbox-ref-1",
+        kind: "docker",
+        providerRef: "sandbox-ref-1",
+      }),
       expect.objectContaining({ botId: "bot-1", operationId: "observe" }),
     );
   });
