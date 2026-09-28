@@ -319,7 +319,9 @@ export async function actRakazoComputer(
   options: { observe?: boolean } = {},
 ): Promise<{ completed: number; observation?: RakazoComputerObservation }> {
   if (actions.length === 0) throw new Error("Rakazo computer actions cannot be empty");
-  if (actions.length > 24) throw new Error("Rakazo computer accepts at most 24 actions per batch");
+  if (actions.length > 24) {
+    throw new Error("Rakazo computer accepts at most 24 actions per batch");
+  }
 
   await callRakazoRpc("computer/takeover", { botId });
 

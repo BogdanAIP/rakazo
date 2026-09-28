@@ -10,8 +10,8 @@ import {
   describeProcedure,
   loadProcedureCatalog,
   observeRakazoComputer,
+  type RakazoComputerObservation,
 } from "./chatgpt-rakazo.js";
-import type { RakazoComputerObservation } from "./chatgpt-rakazo.js";
 
 const server = new McpServer({
   name: "rakazo-chatgpt",
