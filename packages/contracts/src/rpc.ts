@@ -381,6 +381,22 @@ export const appContract = {
     readFile: oc
       .input(z.object({ botId: Id, path: z.string() }))
       .output(z.object({ path: z.string(), content: z.string() })),
+    observe: oc.input(botId).output(
+      z.object({
+        frameId: z.string(),
+        capturedAt: z.string(),
+        mimeType: z.enum(["image/png", "image/jpeg"]),
+        imageBase64: z.string(),
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+        cursor: z
+          .object({ x: z.number().nonnegative(), y: z.number().nonnegative() })
+          .optional(),
+        activeWindow: z
+          .object({ id: z.string(), title: z.string().optional() })
+          .optional(),
+      }),
+    ),
     screenUrl: oc.input(botId).output(z.object({ url: z.string().nullable() })),
     heartbeat: oc.input(botId).output(z.object({ ok: z.literal(true) })),
   },

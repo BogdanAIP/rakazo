@@ -1,6 +1,7 @@
 import process from "node:process";
 import { describe, expect, it } from "vitest";
 import {
+  actRakazoComputer,
   callRakazoRpc,
   classifyProcedure,
   describeProcedure,
@@ -17,6 +18,7 @@ describe("ChatGPT Rakazo procedure projection", () => {
     expect(procedures).toContain("threads/send");
     expect(procedures).toContain("threads/subscribe");
     expect(procedures).toContain("computer/input");
+    expect(procedures).toContain("computer/observe");
     expect(procedures).toContain("memory/update");
     expect(procedures).toContain("routines/create");
     expect(procedures).toContain("mcp/servers/create");
@@ -96,8 +98,89 @@ describe("ChatGPT Rakazo procedure projection", () => {
     }
   });
 
+  it("drives a Rakazo computer through takeover and input before observing", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalToken = process.env.RAKAZO_SESSION_TOKEN;
+    const originalApiUrl = process.env.RAKAZO_API_URL;
+    const originalOrigin = process.env.RAKAZO_ORIGIN;
+    const calls: Array<{ path: string; body: unknown }> = [];
+
+    process.env.RAKAZO_SESSION_TOKEN = "test-session-token";
+    process.env.RAKAZO_API_URL = "http://127.0.0.1:3100";
+    process.env.RAKAZO_ORIGIN = "http://127.0.0.1:5173";
+
+    globalThis.fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      const path = new URL(request.url).pathname;
+      const body = JSON.parse(await request.clone().text()) as unknown;
+      calls.push({ path, body });
+
+      const json = path.endsWith("/computer/takeover")
+        ? { leaseId: "lease-1", expiresAt: "2026-09-28T10:10:00.000Z" }
+        : path.endsWith("/computer/observe")
+          ? {
+              frameId: "frame-1",
+              capturedAt: "2026-09-28T10:00:00.000Z",
+              mimeType: "image/png",
+              imageBase64: "AQID",
+              width: 1280,
+              height: 720,
+            }
+          : { ok: true };
+
+      return new Response(JSON.stringify({ json }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    try {
+      const result = await actRakazoComputer(
+        "bot-1",
+        [
+          { kind: "key", key: "l", modifiers: ["CTRL"] },
+          { kind: "type", text: "https://example.test" },
+          { kind: "key", key: "ENTER" },
+        ],
+        { observe: true },
+      );
+
+      expect(result).toEqual({
+        completed: 3,
+        observation: {
+          frameId: "frame-1",
+          capturedAt: "2026-09-28T10:00:00.000Z",
+          mimeType: "image/png",
+          imageBase64: "AQID",
+          width: 1280,
+          height: 720,
+        },
+      });
+      expect(calls.map((call) => call.path)).toEqual([
+        "/rpc/computer/takeover",
+        "/rpc/computer/input",
+        "/rpc/computer/input",
+        "/rpc/computer/input",
+        "/rpc/computer/observe",
+      ]);
+      expect(calls[1]?.body).toEqual({
+        json: {
+          botId: "bot-1",
+          kind: "key",
+          payload: { key: "l", modifiers: ["CTRL"] },
+        },
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      restoreEnv("RAKAZO_SESSION_TOKEN", originalToken);
+      restoreEnv("RAKAZO_API_URL", originalApiUrl);
+      restoreEnv("RAKAZO_ORIGIN", originalOrigin);
+    }
+  });
+
   it("separates read, write, destructive, and stream calls", () => {
     expect(classifyProcedure("bots/list")).toBe("read");
+    expect(classifyProcedure("computer/observe")).toBe("read");
     expect(classifyProcedure("threads/send")).toBe("write");
     expect(classifyProcedure("bots/remove")).toBe("destructive");
     expect(classifyProcedure("bots/rotateWebhookSecret")).toBe("destructive");

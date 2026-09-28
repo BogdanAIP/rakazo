@@ -15,7 +15,7 @@ ChatGPT
 
 The MCP server does not duplicate Rakazo features. It imports Rakazo's existing runtime `appContract` and discovers procedures directly from that contract. Input and output Zod schemas are converted to JSON Schema, so ChatGPT can inspect exact procedure fields without maintaining a second API definition.
 
-Instead of registering hundreds of MCP tools, it exposes six stable tools:
+Instead of registering hundreds of MCP tools, it exposes six generic tools plus two graphical computer tools:
 
 - `rakazo_procedures` — discover the complete current appContract surface.
 - `rakazo_describe` — inspect the live input/output JSON Schema for one procedure.
@@ -23,8 +23,27 @@ Instead of registering hundreds of MCP tools, it exposes six stable tools:
 - `rakazo_write` — invoke non-destructive mutations.
 - `rakazo_destructive` — invoke destructive/high-consequence mutations.
 - `rakazo_thread_events` — collect bounded live events from `threads/subscribe`.
+- `rakazo_computer_observe` — return a Rakazo desktop screenshot as MCP image content.
+- `rakazo_computer_act` — acquire the existing user-control lease, batch desktop input, and optionally return the resulting screenshot.
 
-The MCP server validates the requested procedure against the current appContract before delivery, so a procedure cannot be smuggled through the wrong tool class.
+The MCP server validates the requested procedure against the current appContract before delivery, so a procedure cannot be smuggled through the wrong tool class. The two graphical tools are specialized because screenshots must remain image content instead of being flattened into JSON/base64 text.
+
+### ChatGPT as the computer brain
+
+The graphical path does not require Rakazo to call an LLM. A normal ChatGPT conversation can use Rakazo as the stateful execution environment:
+
+```text
+ChatGPT
+  -> rakazo_computer_observe
+  -> screenshot
+  -> ChatGPT chooses the next action
+  -> rakazo_computer_act
+  -> Rakazo Computer
+  -> screenshot
+  -> repeat
+```
+
+`rakazo_computer_act` uses Rakazo's existing `computer/takeover` and `computer/input` authorization path rather than bypassing computer-control leases. Other Rakazo capabilities remain available through the generic tools, so the same ChatGPT conversation can combine the graphical desktop with memory, files, integrations, routines, artifacts, and other appContract procedures.
 
 ## Local configuration
 

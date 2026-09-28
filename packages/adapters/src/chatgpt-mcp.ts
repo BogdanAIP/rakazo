@@ -4,11 +4,14 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import type { ProcedureMode } from "./chatgpt-rakazo.js";
 import {
+  actRakazoComputer,
   callRakazoRpc,
   collectThreadEvents,
   describeProcedure,
   loadProcedureCatalog,
+  observeRakazoComputer,
 } from "./chatgpt-rakazo.js";
+import type { RakazoComputerObservation } from "./chatgpt-rakazo.js";
 
 const server = new McpServer({
   name: "rakazo-chatgpt",
@@ -20,9 +23,67 @@ const callSchema = z.object({
   input: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
+const computerActionSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.enum(["click", "move", "down", "up"]),
+    x: z.number().int().min(0).max(100_000),
+    y: z.number().int().min(0).max(100_000),
+    button: z.enum(["left", "right"]).optional(),
+  }),
+  z.object({
+    kind: z.literal("type"),
+    text: z.string().max(100_000),
+  }),
+  z.object({
+    kind: z.literal("key"),
+    key: z.string().min(1).max(100),
+    modifiers: z.array(z.string().min(1).max(32)).max(4).optional(),
+  }),
+  z.object({
+    kind: z.literal("scroll"),
+    direction: z.enum(["up", "down"]),
+    amount: z.number().int().min(1).max(20).optional(),
+  }),
+  z.object({
+    kind: z.literal("wait"),
+    ms: z.number().int().min(0).max(5_000),
+  }),
+]);
+
 function textResult(value: unknown) {
   return {
     content: [{ type: "text" as const, text: JSON.stringify(value) }],
+  };
+}
+
+function computerObservationResult(
+  observation: RakazoComputerObservation,
+  note: string,
+  previousFrameId?: string,
+) {
+  const unchanged = previousFrameId === observation.frameId;
+  const metadata = {
+    frameId: observation.frameId,
+    capturedAt: observation.capturedAt,
+    width: observation.width,
+    height: observation.height,
+    cursor: observation.cursor,
+    activeWindow: observation.activeWindow,
+    unchanged,
+  };
+  return {
+    content: [
+      { type: "text" as const, text: `${note}\n${JSON.stringify(metadata)}` },
+      ...(unchanged
+        ? []
+        : [
+            {
+              type: "image" as const,
+              data: observation.imageBase64,
+              mimeType: observation.mimeType,
+            },
+          ]),
+    ],
   };
 }
 
@@ -141,6 +202,61 @@ server.registerTool(
   async ({ procedure, input }) => {
     await assertProcedureMode(procedure, "destructive");
     return textResult(await callRakazoRpc(procedure, input));
+  },
+);
+
+server.registerTool(
+  "rakazo_computer_observe",
+  {
+    title: "Observe Rakazo computer",
+    description:
+      "Observe a running Rakazo bot computer and return the current desktop screenshot as MCP image content. Use this for the visual agent loop instead of calling computer/observe through rakazo_read.",
+    inputSchema: z.object({
+      botId: z.string().min(1),
+      previousFrameId: z.string().min(1).optional(),
+    }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+  },
+  async ({ botId, previousFrameId }) =>
+    computerObservationResult(
+      await observeRakazoComputer(botId),
+      "Rakazo computer observed",
+      previousFrameId,
+    ),
+);
+
+server.registerTool(
+  "rakazo_computer_act",
+  {
+    title: "Act on Rakazo computer",
+    description:
+      "Take the existing Rakazo user-control lease, execute up to 24 desktop actions on a running bot computer, and by default return the resulting screenshot. This drives Rakazo Computer directly and does not invoke a Rakazo model.",
+    inputSchema: z.object({
+      botId: z.string().min(1),
+      actions: z.array(computerActionSchema).min(1).max(24),
+      observe: z.boolean().default(true),
+      previousFrameId: z.string().min(1).optional(),
+    }),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  },
+  async ({ botId, actions, observe, previousFrameId }) => {
+    const result = await actRakazoComputer(botId, actions, { observe });
+    if (!result.observation) return textResult({ completed: result.completed });
+    return computerObservationResult(
+      result.observation,
+      `Completed ${result.completed} Rakazo computer action${result.completed === 1 ? "" : "s"}`,
+      previousFrameId,
+    );
   },
 );
 

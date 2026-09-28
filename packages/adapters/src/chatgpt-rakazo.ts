@@ -37,6 +37,7 @@ const READ_ACTIONS = new Set([
   "listVersions",
   "me",
   "messages",
+  "observe",
   "prepare",
   "probeOpenAiCompatible",
   "providerConfig",
@@ -281,6 +282,88 @@ export async function callRakazoRpc(
   const callable = rpcProcedure(procedure);
   const payload = contract["~orpc"].inputSchema === undefined ? undefined : input;
   return callable(payload);
+}
+
+const computerObservationSchema = z.object({
+  frameId: z.string(),
+  capturedAt: z.string(),
+  mimeType: z.enum(["image/png", "image/jpeg"]),
+  imageBase64: z.string().min(1),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  cursor: z.object({ x: z.number(), y: z.number() }).optional(),
+  activeWindow: z.object({ id: z.string(), title: z.string().optional() }).optional(),
+});
+
+export type RakazoComputerObservation = z.infer<typeof computerObservationSchema>;
+
+export type RakazoComputerAction =
+  | {
+      kind: "click" | "move" | "down" | "up";
+      x: number;
+      y: number;
+      button?: "left" | "right";
+    }
+  | { kind: "type"; text: string }
+  | { kind: "key"; key: string; modifiers?: string[] }
+  | { kind: "scroll"; direction: "up" | "down"; amount?: number }
+  | { kind: "wait"; ms: number };
+
+export async function observeRakazoComputer(botId: string): Promise<RakazoComputerObservation> {
+  return computerObservationSchema.parse(await callRakazoRpc("computer/observe", { botId }));
+}
+
+export async function actRakazoComputer(
+  botId: string,
+  actions: RakazoComputerAction[],
+  options: { observe?: boolean } = {},
+): Promise<{ completed: number; observation?: RakazoComputerObservation }> {
+  if (actions.length === 0) throw new Error("Rakazo computer actions cannot be empty");
+  if (actions.length > 24) throw new Error("Rakazo computer accepts at most 24 actions per batch");
+
+  await callRakazoRpc("computer/takeover", { botId });
+
+  let completed = 0;
+  for (const action of actions) {
+    if (action.kind === "wait") {
+      const ms = Math.min(Math.max(Math.round(action.ms), 0), 5_000);
+      if (ms > 0) await new Promise<void>((resolve) => setTimeout(resolve, ms));
+      completed += 1;
+      continue;
+    }
+
+    const request =
+      action.kind === "type"
+        ? { botId, kind: "clipboard", payload: { text: action.text } }
+        : action.kind === "key"
+          ? {
+              botId,
+              kind: "key",
+              payload: { key: action.key, modifiers: action.modifiers },
+            }
+          : action.kind === "scroll"
+            ? {
+                botId,
+                kind: "scroll",
+                payload: { direction: action.direction, amount: action.amount ?? 3 },
+              }
+            : {
+                botId,
+                kind: "pointer",
+                payload: {
+                  x: action.x,
+                  y: action.y,
+                  type: action.kind,
+                  button: action.button ?? "left",
+                },
+              };
+
+    await callRakazoRpc("computer/input", request);
+    completed += 1;
+  }
+
+  if (options.observe === false) return { completed };
+  return { completed, observation: await observeRakazoComputer(botId) };
 }
 
 type EventTarget = { botId: string } | { groupId: string };

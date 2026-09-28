@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { implement, ORPCError } from "@orpc/server";
 import type {
@@ -2240,7 +2241,13 @@ export function createRouter(deps: RouterDeps) {
         if (!computer.providerRef) return { ok: true as const };
         const mapped =
           input.kind === "key"
-            ? { kind: "key" as const, key: String(input.payload.key ?? "") }
+            ? {
+                kind: "key" as const,
+                key: String(input.payload.key ?? ""),
+                modifiers: Array.isArray(input.payload.modifiers)
+                  ? input.payload.modifiers.map((value) => String(value))
+                  : undefined,
+              }
             : input.kind === "clipboard"
               ? { kind: "clipboard" as const, text: String(input.payload.text ?? "") }
               : input.kind === "scroll"
@@ -2329,6 +2336,58 @@ export function createRouter(deps: RouterDeps) {
           }
         }
         return { path: input.path, content };
+      }),
+      observe: authed.computer.observe.handler(async ({ context, input }) => {
+        let bot = await repos.getBot(context.actor, input.botId);
+        if (await expireStaleComputerControl(deps, bot.computer)) {
+          bot = await repos.getBot(context.actor, input.botId);
+        }
+        if (!bot.computer?.providerRef || bot.computer.state !== "running") {
+          throw new ORPCError("BAD_REQUEST", { message: "computer must be running" });
+        }
+
+        const computer = bot.computer;
+        let observation: Awaited<ReturnType<SandboxProvider["observe"]>>;
+        try {
+          observation = await deps.sandbox.observe(
+            toComputerRef(computer),
+            await computerScreenContext(
+              deps.prisma,
+              context.actor,
+              computer.id,
+              bot.id,
+              "observe",
+            ),
+          );
+        } catch (error) {
+          if (isComputerScreenUnavailable(error)) {
+            throw new ORPCError("CONFLICT", {
+              message: error instanceof Error ? error.message : "computer screen unavailable",
+            });
+          }
+          if (!isSandboxGoneError(error)) throw error;
+          await deps.prisma.computer.updateMany({
+            where: { id: computer.id, providerRef: computer.providerRef },
+            data: { state: "stopped", providerRef: null },
+          });
+          throw new ORPCError("BAD_REQUEST", { message: "computer is no longer running" });
+        }
+
+        await deps.prisma.computer.updateMany({
+          where: { id: computer.id, state: "running" },
+          data: { updatedAt: new Date() },
+        });
+        scheduleComputerSleep(deps.jobs, computer.id);
+        return {
+          frameId: observation.frameId,
+          capturedAt: observation.capturedAt,
+          mimeType: observation.mimeType,
+          imageBase64: Buffer.from(observation.image).toString("base64"),
+          width: observation.width,
+          height: observation.height,
+          cursor: observation.cursor,
+          activeWindow: observation.activeWindow,
+        };
       }),
       screenUrl: authed.computer.screenUrl.handler(async ({ context, input }) => {
         let bot = await repos.getBot(context.actor, input.botId);
