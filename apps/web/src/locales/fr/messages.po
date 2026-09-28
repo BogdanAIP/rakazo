@@ -530,7 +530,7 @@ msgstr "à {timeSelect}"
 msgid "Attach file"
 msgstr "Joindre un fichier"
 
-#: src/components/computer/TerminalApp.tsx:37
+#: src/components/computer/TerminalApp.tsx:40
 msgid "Attached {path}"
 msgstr ""
 
@@ -1250,7 +1250,7 @@ msgstr "Impossible de charger les artefacts."
 msgid "Could not load bots. Reload to try again."
 msgstr "Impossible de charger les bots. Rechargez pour réessayer."
 
-#: src/components/computer/TerminalApp.tsx:78
+#: src/components/computer/TerminalApp.tsx:84
 msgid "Could not load commands"
 msgstr ""
 
@@ -2213,7 +2213,7 @@ msgstr "Langue"
 msgid "Later"
 msgstr "Plus tard"
 
-#: src/components/computer/TerminalApp.tsx:39
+#: src/components/computer/TerminalApp.tsx:42
 msgid "Launched {app}"
 msgstr ""
 
@@ -2638,6 +2638,10 @@ msgstr "pas d'authentification"
 msgid "No authentication"
 msgstr "Aucune authentification"
 
+#: src/components/computer/TerminalApp.tsx:49
+msgid "No bot activity yet."
+msgstr "Aucune activité du bot pour le moment."
+
 #: src/pages/shell/command-palette.tsx:107
 msgid "No bots"
 msgstr "Aucun bot"
@@ -2823,7 +2827,7 @@ msgstr "Travaux en cours"
 msgid "OpenAI-compatible server URL"
 msgstr "URL de serveur compatible OpenAI"
 
-#: src/components/computer/TerminalApp.tsx:38
+#: src/components/computer/TerminalApp.tsx:41
 msgid "Opened {path}"
 msgstr ""
 
@@ -4089,7 +4093,7 @@ msgstr "Où les bots doivent-ils s'exécuter ?"
 msgid "Working…"
 msgstr "En cours…"
 
-#: src/components/computer/TerminalApp.tsx:36
+#: src/components/computer/TerminalApp.tsx:39
 msgid "Wrote {path}"
 msgstr ""
 

@@ -530,7 +530,7 @@ msgstr "в {timeSelect}"
 msgid "Attach file"
 msgstr "Прикрепить файл"
 
-#: src/components/computer/TerminalApp.tsx:37
+#: src/components/computer/TerminalApp.tsx:40
 msgid "Attached {path}"
 msgstr ""
 
@@ -1250,7 +1250,7 @@ msgstr ""
 msgid "Could not load bots. Reload to try again."
 msgstr "Не удалось загрузить ботов. Обновите страницу и попробуйте снова."
 
-#: src/components/computer/TerminalApp.tsx:78
+#: src/components/computer/TerminalApp.tsx:84
 msgid "Could not load commands"
 msgstr ""
 
@@ -2213,7 +2213,7 @@ msgstr "Язык"
 msgid "Later"
 msgstr "Позже"
 
-#: src/components/computer/TerminalApp.tsx:39
+#: src/components/computer/TerminalApp.tsx:42
 msgid "Launched {app}"
 msgstr ""
 
@@ -2638,6 +2638,10 @@ msgstr "нет авторизации"
 msgid "No authentication"
 msgstr "Нет аутентификации"
 
+#: src/components/computer/TerminalApp.tsx:49
+msgid "No bot activity yet."
+msgstr "Активности бота пока нет."
+
 #: src/pages/shell/command-palette.tsx:107
 msgid "No bots"
 msgstr "Нет ботов"
@@ -2823,7 +2827,7 @@ msgstr "Открытые задачи"
 msgid "OpenAI-compatible server URL"
 msgstr "URL-адрес сервера, совместимого с OpenAI"
 
-#: src/components/computer/TerminalApp.tsx:38
+#: src/components/computer/TerminalApp.tsx:41
 msgid "Opened {path}"
 msgstr ""
 
@@ -4089,7 +4093,7 @@ msgstr "Где должны работать боты?"
 msgid "Working…"
 msgstr "Выполняется…"
 
-#: src/components/computer/TerminalApp.tsx:36
+#: src/components/computer/TerminalApp.tsx:39
 msgid "Wrote {path}"
 msgstr ""
 
