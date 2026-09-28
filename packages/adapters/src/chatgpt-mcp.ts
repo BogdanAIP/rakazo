@@ -161,6 +161,11 @@ server.registerTool(
   },
   async ({ procedure, input }) => {
     await assertProcedureMode(procedure, "read");
+    if (procedure === "computer/observe") {
+      throw new Error(
+        "Use rakazo_computer_observe for computer/observe so the screenshot stays MCP image content",
+      );
+    }
     return textResult(await callRakazoRpc(procedure, input));
   },
 );

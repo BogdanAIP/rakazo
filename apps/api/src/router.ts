@@ -2351,13 +2351,7 @@ export function createRouter(deps: RouterDeps) {
         try {
           observation = await deps.sandbox.observe(
             toComputerRef(computer),
-            await computerScreenContext(
-              deps.prisma,
-              context.actor,
-              computer.id,
-              bot.id,
-              "observe",
-            ),
+            await computerScreenContext(deps.prisma, context.actor, computer.id, bot.id, "observe"),
           );
         } catch (error) {
           if (isComputerScreenUnavailable(error)) {
