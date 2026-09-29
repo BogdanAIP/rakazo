@@ -460,6 +460,7 @@ export const TeachRecordingEventSchema = z.object({
   key: z.string().optional(),
   text: z.string().optional(),
   summary: z.string().optional(),
+  sensitive: z.boolean().optional(),
 });
 export type TeachRecordingEvent = z.infer<typeof TeachRecordingEventSchema>;
 
@@ -787,6 +788,7 @@ export const ComputerStatusSchema = z.object({
   homeRevision: z.string().nullable(),
   busyBotName: z.string().nullable(),
   canUpdate: z.boolean(),
+  terminalAvailable: z.boolean(),
 });
 export type ComputerStatus = z.infer<typeof ComputerStatusSchema>;
 
@@ -848,6 +850,7 @@ export const RunSchema = z.object({
     "resume",
     "follow_up",
     "reaction",
+    "call_end",
     "spawn",
     "skill",
     "bot_message",
@@ -1087,6 +1090,8 @@ export const VoiceCredentialSchema = z.object({
   hasKey: z.boolean(),
   isDefault: z.boolean(),
   voiceId: z.string(),
+  /** Fish speech-model override. Empty uses the deployment default. */
+  speechModel: z.string(),
   transcribe: z.boolean(),
 });
 export type VoiceCredential = z.infer<typeof VoiceCredentialSchema>;

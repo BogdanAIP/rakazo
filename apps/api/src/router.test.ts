@@ -1,6 +1,7 @@
 import { RPCHandler } from "@orpc/server/fetch";
 import {
   COMPUTER_SCREEN_UNAVAILABLE,
+  CodexCatalogCache,
   ComputerScreenUnavailableError,
   screenLeaseIdForRun,
 } from "@rakazo/adapters";
@@ -362,7 +363,8 @@ describe("MCP server deletion", () => {
         delete: deleteServer,
       },
       secret: { deleteMany: deleteSecrets },
-      $transaction: vi.fn((operations: Promise<unknown>[]) => Promise.all(operations)),
+      message: { findMany: vi.fn().mockResolvedValue([]) },
+      $transaction: vi.fn(async (run: (tx: unknown) => Promise<unknown>) => run(prisma)),
     } as unknown as PrismaClient;
     const deps = {
       prisma,
@@ -403,6 +405,198 @@ describe("MCP server deletion", () => {
         userId: "user-1",
       },
     });
+  });
+});
+
+describe("MCP loopback endpoints", () => {
+  const LOOPBACK = "http://localhost:3100/api/auth/get-session";
+
+  function mcpDeps() {
+    const create = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+      ...data,
+      id: "server-1",
+      secretId: null,
+      revision: 1,
+      createdAt: new Date(0),
+      updatedAt: new Date(0),
+    }));
+    const prisma = {
+      mcpServer: {
+        create,
+        findFirst: vi
+          .fn()
+          .mockResolvedValue({ id: "server-1", endpoint: LOOPBACK, secretId: null }),
+      },
+      mcpOAuthSession: {
+        count: vi.fn().mockResolvedValue(0),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      secret: { findFirst: vi.fn() },
+      deploymentSettings: { findUnique: vi.fn().mockResolvedValue({ ownerUserId: "owner-1" }) },
+      $transaction: vi.fn(async (run: (tx: unknown) => Promise<unknown>) => run(prisma)),
+    } as unknown as PrismaClient;
+    const deps = {
+      prisma,
+      env: {
+        defaultProvider: "fake",
+        defaultModel: "fake-model",
+        webOrigin: "http://127.0.0.1:5173",
+        screenProxySecret: "fake-test-secret",
+        sandboxProvider: "fake",
+      },
+      dataDir: "/tmp/rakazo-router-test",
+    } as unknown as RouterDeps;
+    return { create, handler: new RPCHandler(createRouter(deps)) };
+  }
+
+  function actor(isDeploymentOwner: boolean): Actor {
+    return {
+      spaceId: "workspace-1",
+      userId: isDeploymentOwner ? "owner-1" : "member-1",
+      email: "user@rakazo.test",
+      isDeploymentOwner,
+    };
+  }
+
+  function rpc(path: string, json: unknown) {
+    return new Request(`http://127.0.0.1/rpc/${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ json }),
+    });
+  }
+
+  const createInput = {
+    transport: "streamable_http",
+    slug: "local",
+    name: "Local",
+    endpoint: LOOPBACK,
+  };
+
+  it("refuses a loopback endpoint from a user who is not the deployment owner", async () => {
+    const { create, handler } = mcpDeps();
+    const { response } = await handler.handle(rpc("mcp/servers/create", createInput), {
+      prefix: "/rpc",
+      context: { actor: actor(false) },
+    });
+
+    expect(response.status).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("lets the deployment owner save a loopback endpoint", async () => {
+    const { create, handler } = mcpDeps();
+    const { response } = await handler.handle(rpc("mcp/servers/create", createInput), {
+      prefix: "/rpc",
+      context: { actor: actor(true) },
+    });
+
+    expect(response.status).toBe(200);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses to start OAuth against a stored loopback endpoint for a non-owner", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    try {
+      const { handler } = mcpDeps();
+      const { response } = await handler.handle(
+        rpc("mcp/oauth/begin", {
+          serverId: "server-1",
+          redirectUri: "http://127.0.0.1:5173/mcp/oauth/callback",
+        }),
+        { prefix: "/rpc", context: { actor: actor(false) } },
+      );
+
+      expect(response.status).toBe(400);
+      const body = (await response.json()) as { json: { message: string } };
+      expect(body.json.message).toMatch(/HTTPS/);
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("private API connectors", () => {
+  function privateDeps(mcpAllowPrivateEndpoint = false) {
+    const create = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+      ...data,
+      id: "install-1",
+      secretId: null,
+      version: "1.0.0",
+      digest: "sha256:fake",
+      createdAt: new Date(0),
+    }));
+    const prisma = {
+      capabilityInstall: { create },
+      $transaction: vi.fn(async (run: (tx: unknown) => Promise<unknown>) => run(prisma)),
+    } as unknown as PrismaClient;
+    const deps = {
+      prisma,
+      env: {
+        defaultProvider: "fake",
+        defaultModel: "fake-model",
+        webOrigin: "http://127.0.0.1:5173",
+        screenProxySecret: "fake-test-secret",
+        sandboxProvider: "fake",
+        mcpAllowPrivateEndpoint,
+      },
+      dataDir: "/tmp/rakazo-router-test",
+    } as unknown as RouterDeps;
+    return { create, handler: new RPCHandler(createRouter(deps)) };
+  }
+
+  function actor(isDeploymentOwner: boolean): Actor {
+    return {
+      spaceId: "workspace-1",
+      userId: isDeploymentOwner ? "owner-1" : "member-1",
+      email: "user@rakazo.test",
+      isDeploymentOwner,
+    };
+  }
+
+  function rpc(path: string, json: unknown) {
+    return new Request(`http://127.0.0.1/rpc/${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ json }),
+    });
+  }
+
+  const installInput = {
+    kind: "api",
+    name: "Local API",
+    source: "http://localhost:4000",
+    config: {
+      auth: { type: "none" },
+      operations: [{ id: "list_items", method: "GET", path: "/items" }],
+    },
+  };
+
+  it.each([
+    ["the deployment owner", true, false],
+    ["every user under the instance flag", false, true],
+  ])("lets %s install a loopback API connector", async (_label, owner, flag) => {
+    const { create, handler } = privateDeps(flag);
+    const { response } = await handler.handle(rpc("capabilities/install", installInput), {
+      prefix: "/rpc",
+      context: { actor: actor(owner) },
+    });
+
+    expect(response.status).toBe(200);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a loopback API connector from a user who is not the deployment owner", async () => {
+    const { create, handler } = privateDeps();
+    const { response } = await handler.handle(rpc("capabilities/install", installInput), {
+      prefix: "/rpc",
+      context: { actor: actor(false) },
+    });
+
+    expect(response.status).toBe(400);
+    expect(create).not.toHaveBeenCalled();
   });
 });
 
@@ -910,6 +1104,181 @@ describe("computer observation", () => {
   });
 });
 
+describe("computer terminal and file transfer", () => {
+  const actor = {
+    spaceId: "workspace-1",
+    userId: "user-1",
+    email: "user@rakazo.test",
+    isDeploymentOwner: true,
+  } satisfies Actor;
+  const controlled = {
+    controlHolder: "user",
+    controlLeaseId: "lease-1",
+    controlLeaseExpiresAt: new Date(Date.now() + 60_000),
+    controlBotId: "bot-1",
+  };
+
+  function setup(computer: Record<string, unknown> = {}) {
+    const sandbox = {
+      connectTerminal: vi.fn().mockResolvedValue({
+        url: "https://screen.example/vnc.html?path=websockify%3Ftoken%3Dterminal-1",
+      }),
+      readFile: vi.fn().mockResolvedValue(new TextEncoder().encode("hello")),
+      writeFile: vi.fn().mockResolvedValue(undefined),
+    };
+    const prisma = {
+      bot: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "bot-1",
+          screenGeneration: 2,
+          thread: { id: "thread-1" },
+          computer: {
+            id: "computer-1",
+            screenGeneration: 3,
+            kind: "docker",
+            scope: "team",
+            state: "running",
+            providerRef: "sandbox-ref-1",
+            homeKey: "home-1",
+            controlHolder: "none",
+            controlLeaseId: null,
+            controlLeaseExpiresAt: null,
+            controlBotId: null,
+            controlRunId: null,
+            ...computer,
+          },
+        }),
+      },
+      computer: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      computerExecutionLease: { findUnique: vi.fn().mockResolvedValue(null) },
+    } as unknown as PrismaClient;
+    const deps = {
+      prisma,
+      sandbox,
+      jobs: { enqueue: vi.fn().mockResolvedValue(undefined) },
+      env: {
+        webOrigin: "http://127.0.0.1:5173",
+        screenProxySecret: "fake-test-secret",
+        sandboxProvider: "docker",
+      },
+      dataDir: "/tmp/rakazo-router-test",
+    } as unknown as RouterDeps;
+    const handler = new RPCHandler(createRouter(deps));
+    const call = async (procedure: string, json: Record<string, unknown>) => {
+      const { response } = await handler.handle(
+        new Request(`http://127.0.0.1/rpc/computer/${procedure}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ json: { botId: "bot-1", ...json } }),
+        }),
+        { prefix: "/rpc", context: { actor } },
+      );
+      return { status: response.status, body: await response.json() };
+    };
+    return { sandbox, prisma, call };
+  }
+
+  it("opens a terminal only for the user holding this bot's control lease", async () => {
+    const released = setup();
+    await expect(released.call("terminalUrl", {})).resolves.toMatchObject({ status: 403 });
+    expect(released.sandbox.connectTerminal).not.toHaveBeenCalled();
+
+    const { sandbox, call } = setup(controlled);
+    const { status, body } = await call("terminalUrl", {});
+    expect(status).toBe(200);
+    expect(sandbox.connectTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "sandbox-ref-1" }),
+      { controlToken: "lease-1", cwd: "bots/bot-1" },
+      expect.anything(),
+    );
+    const url = new URL(body.json.url);
+    expect(url.origin).toBe("http://127.0.0.1:5173");
+    expect(openScreenCapability(url.pathname, "fake-test-secret")).toMatchObject({
+      scope: { botId: "bot-1", controlLeaseId: "lease-1" },
+      target: { hostname: "screen.example", interactive: true },
+    });
+  });
+
+  it("clears the row when the provider reclaimed the sandbox before the terminal opened", async () => {
+    const gone = setup(controlled);
+    gone.sandbox.connectTerminal.mockRejectedValueOnce(
+      Object.assign(new Error("Sandbox is probably not running anymore"), {
+        name: "SandboxNotFoundError",
+      }),
+    );
+    await expect(gone.call("terminalUrl", {})).resolves.toEqual({
+      status: 200,
+      body: { json: { url: null } },
+    });
+    expect(gone.prisma.computer.updateMany).toHaveBeenCalledWith({
+      where: { id: "computer-1", providerRef: "sandbox-ref-1" },
+      data: { state: "stopped", providerRef: null },
+    });
+
+    const blip = setup(controlled);
+    blip.sandbox.connectTerminal.mockRejectedValueOnce(new Error("fetch failed"));
+    await expect(blip.call("terminalUrl", {})).resolves.toMatchObject({ status: 500 });
+    expect(blip.prisma.computer.updateMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { state: "stopped", providerRef: null } }),
+    );
+  });
+
+  it("offers no terminal on host computers", async () => {
+    const { sandbox, call } = setup({ ...controlled, kind: "desktop" });
+    await expect(call("terminalUrl", {})).resolves.toEqual({
+      status: 200,
+      body: { json: { url: null } },
+    });
+    expect(sandbox.connectTerminal).not.toHaveBeenCalled();
+  });
+
+  it("uploads into the bot workspace only under control", async () => {
+    const contentBase64 = Buffer.from("notes").toString("base64");
+    const released = setup();
+    await expect(
+      released.call("uploadFile", { path: "notes.txt", contentBase64 }),
+    ).resolves.toMatchObject({ status: 403 });
+    expect(released.sandbox.writeFile).not.toHaveBeenCalled();
+
+    const { sandbox, call } = setup(controlled);
+    await expect(call("uploadFile", { path: "notes.txt", contentBase64 })).resolves.toMatchObject({
+      status: 200,
+    });
+    expect(sandbox.writeFile).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "sandbox-ref-1" }),
+      { path: "bots/bot-1/notes.txt", content: Buffer.from("notes") },
+      expect.anything(),
+    );
+  });
+
+  it("rejects team uploads into another bot workspace", async () => {
+    const contentBase64 = Buffer.from("x").toString("base64");
+    const { sandbox, call } = setup(controlled);
+    await expect(
+      call("uploadFile", { path: "bots/bot-2/secret.txt", contentBase64 }),
+    ).resolves.toMatchObject({ status: 400 });
+    expect(sandbox.writeFile).not.toHaveBeenCalled();
+  });
+
+  it("downloads bytes from a running computer", async () => {
+    const { sandbox, call } = setup();
+    await expect(call("downloadFile", { path: "notes.txt" })).resolves.toEqual({
+      status: 200,
+      body: { json: { path: "notes.txt", contentBase64: Buffer.from("hello").toString("base64") } },
+    });
+    expect(sandbox.readFile).toHaveBeenCalledWith(
+      expect.anything(),
+      "bots/bot-1/notes.txt",
+      expect.anything(),
+      { maxBytes: 10 * 1024 * 1024 },
+    );
+    const stopped = setup({ state: "stopped" });
+    await expect(stopped.call("downloadFile", { path: "notes.txt" })).resolves.toMatchObject({
+      status: 409,
+    });
+  });
+});
+
 describe("integration setup authorization", () => {
   it.each([
     { owner: false, configured: false, needsSetup: false },
@@ -1183,6 +1552,71 @@ describe("model credential persistence", () => {
       }),
     );
   });
+
+  it("rejects an API key for ChatGPT-subscription Codex before persisting", async () => {
+    const { upsert, deps, handler } = persistDeps();
+
+    const response = await call(handler, "models/connect", {
+      provider: "openai-codex",
+      apiKey: "sk-test-key-123",
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      json: expect.objectContaining({
+        code: "BAD_REQUEST",
+        message: expect.stringContaining("ChatGPT subscription sign-in is required"),
+      }),
+    });
+    expect(deps.secrets.put).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("still accepts an API key for other providers", async () => {
+    const { deps, handler } = persistDeps();
+
+    const response = await call(handler, "models/connect", {
+      provider: "anthropic",
+      apiKey: "sk-test-key-123",
+    });
+
+    expect(response.status).toBe(200);
+    expect(deps.secrets.put).toHaveBeenCalledWith(
+      "sk-test-key-123",
+      expect.objectContaining({ userId: actor.userId }),
+    );
+  });
+
+  it.each([
+    ["github-copilot", "GitHub Copilot"],
+    ["openai-codex", "OpenAI Codex"],
+    ["anthropic", "Anthropic"],
+  ])("labels a %s subscription sign-in with its own provider name", async (provider, label) => {
+    const { finish, deps, handler } = persistDeps();
+    finish.mockImplementation(async (_loginId, _actor, persist) => ({
+      status: "connected" as const,
+      value: await persist({
+        status: "connected",
+        provider,
+        credential: {
+          type: "oauth",
+          access: "access-token",
+          refresh: "refresh-token",
+          expires: Date.now() + 60_000,
+        },
+        signal: new AbortController().signal,
+      }),
+    }));
+
+    const response = await call(handler, "models/finishOAuth", { loginId: "login-1" });
+
+    expect(response.status).toBe(200);
+    expect(deps.prisma.userModelCredential.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ provider, label }),
+      }),
+    );
+  });
 });
 
 describe("bot intro run", () => {
@@ -1361,6 +1795,505 @@ describe("codex catalog auth", () => {
     );
     expect(load).toHaveBeenCalledWith("cipher-oauth", "secret-oauth");
     expect(load).not.toHaveBeenCalledWith("cipher-api", "secret-api");
+  });
+});
+
+describe("codex live catalog", () => {
+  const actor = {
+    spaceId: "workspace-1",
+    userId: "user-1",
+    email: "user@rakazo.test",
+    isDeploymentOwner: true,
+  } satisfies Actor;
+  const spark = "gpt-5.3-codex-spark";
+  const luna = "gpt-6-luna";
+  const sol = "gpt-6-sol";
+  const oauth = (accountId?: string) =>
+    JSON.stringify({
+      type: "oauth",
+      access: "access-token",
+      refresh: "refresh-token",
+      expires: Date.now() + 60_000,
+      ...(accountId ? { accountId } : {}),
+    });
+  const apiKey = "sk-test-api-key-12345678";
+
+  function liveModel(slug: string) {
+    return {
+      slug,
+      reasoningEfforts: ["low", "medium", "high"],
+      contextWindow: 272_000,
+      supportsImages: false,
+      supportsFastTier: true,
+    };
+  }
+
+  async function call(handler: RPCHandler<never>, path: string, body: unknown) {
+    const { response } = await handler.handle(
+      new Request(`http://127.0.0.1/rpc/${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ json: body }),
+      }),
+      { prefix: "/rpc", context: { actor } },
+    );
+    return response;
+  }
+
+  async function listIds(handler: RPCHandler<never>): Promise<string[]> {
+    const response = await call(handler, "models/list", null);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      json: Array<{ provider: string; id: string }>;
+    };
+    return body.json.filter((entry) => entry.provider === "openai-codex").map((entry) => entry.id);
+  }
+
+  function catalogDeps(opts: {
+    read: ReturnType<typeof vi.fn>;
+    oauthAccountId?: string | null;
+    apiKeyOnly?: boolean;
+    disconnected?: boolean;
+  }) {
+    const oauthPlaintext = oauth(
+      opts.oauthAccountId === null ? undefined : (opts.oauthAccountId ?? "acct-live-test"),
+    );
+    const load = vi.fn((ciphertext: string) =>
+      ciphertext === "cipher-oauth" ? oauthPlaintext : apiKey,
+    );
+    const prisma = opts.disconnected
+      ? {
+          userModelCredential: { findMany: vi.fn().mockResolvedValue([]) },
+          spaceModelPreference: { findMany: vi.fn().mockResolvedValue([]) },
+          secret: { findMany: vi.fn().mockResolvedValue([]) },
+        }
+      : opts.apiKeyOnly
+        ? {
+            userModelCredential: {
+              findMany: vi
+                .fn()
+                .mockResolvedValue([{ provider: "openai-codex", secretId: "secret-api" }]),
+            },
+            spaceModelPreference: { findMany: vi.fn().mockResolvedValue([]) },
+            secret: {
+              findMany: vi.fn().mockResolvedValue([{ id: "secret-api", ciphertext: "cipher-api" }]),
+            },
+          }
+        : {
+            userModelCredential: {
+              findMany: vi.fn().mockResolvedValue([
+                { provider: "openai-codex", secretId: "secret-api" },
+                { provider: "openai-codex", secretId: "secret-oauth" },
+              ]),
+            },
+            spaceModelPreference: {
+              findMany: vi
+                .fn()
+                .mockResolvedValue([
+                  { credential: { provider: "openai-codex", secretId: "secret-oauth" } },
+                ]),
+            },
+            secret: {
+              findMany: vi
+                .fn()
+                .mockResolvedValue([{ id: "secret-oauth", ciphertext: "cipher-oauth" }]),
+            },
+          };
+    const deps = {
+      prisma,
+      secrets: { load },
+      env: {
+        defaultProvider: "fake",
+        defaultModel: "fake-model",
+        webOrigin: "http://127.0.0.1:5173",
+        screenProxySecret: "fake-test-secret",
+        sandboxProvider: "fake",
+      },
+      codexCatalog: { read: opts.read },
+    } as unknown as RouterDeps;
+    return { handler: new RPCHandler(createRouter(deps)) };
+  }
+
+  it("unlocks Spark and bounds the codex list to the live account catalog", async () => {
+    const read = vi.fn().mockResolvedValue([liveModel(spark), liveModel(luna)]);
+    const { handler } = catalogDeps({ read });
+
+    const ids = await listIds(handler);
+
+    expect(ids).toContain(spark);
+    expect(ids).toContain(luna);
+    expect(ids).not.toContain(sol);
+    expect(read).toHaveBeenCalledWith(
+      actor.userId,
+      expect.objectContaining({ accountId: "acct-live-test" }),
+    );
+  });
+
+  it("keeps the static oauth catalog when the live read fails", async () => {
+    const read = vi.fn().mockResolvedValue(undefined);
+    const { handler } = catalogDeps({ read });
+
+    const ids = await listIds(handler);
+
+    expect(ids).not.toContain(spark);
+    expect(ids).toContain(luna);
+  });
+
+  it("ignores a live catalog that shares no known codex slug", async () => {
+    const read = vi.fn().mockResolvedValue([liveModel("gpt-unknown-from-backend")]);
+    const { handler } = catalogDeps({ read });
+
+    const ids = await listIds(handler);
+
+    expect(ids).not.toContain(spark);
+    expect(ids).toContain(luna);
+    expect(ids).not.toContain("gpt-unknown-from-backend");
+  });
+
+  it("never reads the catalog for an API-key credential and still lists Spark", async () => {
+    const read = vi.fn().mockResolvedValue([liveModel(spark)]);
+    const { handler } = catalogDeps({ read, apiKeyOnly: true });
+
+    const ids = await listIds(handler);
+
+    expect(ids).toContain(spark);
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("never reads the catalog when no credential exists", async () => {
+    const read = vi.fn().mockResolvedValue([liveModel(spark)]);
+    const { handler } = catalogDeps({ read, disconnected: true });
+
+    const ids = await listIds(handler);
+
+    // Disconnected browsing still lists Codex models but keeps the Spark exclusion.
+    expect(ids).not.toContain(spark);
+    expect(ids).toContain(luna);
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the static catalog when the oauth credential has no account id", async () => {
+    const read = vi.fn().mockResolvedValue([liveModel(spark)]);
+    const { handler } = catalogDeps({ read, oauthAccountId: null });
+
+    const ids = await listIds(handler);
+
+    expect(ids).not.toContain(spark);
+    expect(ids).toContain(luna);
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("governs each codex model by the credential that owns it", async () => {
+    const stamp = new Date("2026-01-01T00:00:00.000Z");
+    const credentialA = {
+      id: "cred-a",
+      userId: actor.userId,
+      provider: "openai-codex",
+      label: "ChatGPT A",
+      secretId: "secret-a",
+      createdAt: stamp,
+      updatedAt: stamp,
+    };
+    const credentialB = { ...credentialA, id: "cred-b", secretId: "secret-b" };
+    const prisma = {
+      userModelCredential: { findMany: vi.fn().mockResolvedValue([credentialA, credentialB]) },
+      spaceModelPreference: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "pref-luna",
+            modelId: luna,
+            isDefault: true,
+            updatedAt: stamp,
+            credential: credentialA,
+          },
+          {
+            id: "pref-spark",
+            modelId: spark,
+            isDefault: false,
+            updatedAt: stamp,
+            credential: credentialB,
+          },
+        ]),
+      },
+      secret: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: "secret-a", ciphertext: "cipher-a" },
+          { id: "secret-b", ciphertext: "cipher-b" },
+        ]),
+      },
+    };
+    const secrets = {
+      load: (ciphertext: string) => (ciphertext === "cipher-a" ? oauth("acct-a") : oauth("acct-b")),
+    };
+    const deps = {
+      prisma,
+      secrets,
+      env: {
+        defaultProvider: "fake",
+        defaultModel: "fake-model",
+        webOrigin: "http://127.0.0.1:5173",
+        screenProxySecret: "fake-test-secret",
+        sandboxProvider: "fake",
+      },
+    } as unknown as RouterDeps;
+
+    // Spark's preference points at account B: only B's catalog can unlock it.
+    const read = vi.fn(async (_userId: string, account: { accountId: string }) =>
+      account.accountId === "acct-b" ? [liveModel(spark)] : [liveModel(luna)],
+    );
+    deps.codexCatalog = { read };
+    const first = await listIds(new RPCHandler(createRouter(deps)));
+    expect(first).toContain(spark);
+    expect(first).toContain(luna);
+
+    // Account A listing Spark must not unlock it — B's catalog does not list it.
+    const swapped = vi.fn(async (_userId: string, account: { accountId: string }) =>
+      account.accountId === "acct-a" ? [liveModel(spark), liveModel(luna)] : [liveModel(luna)],
+    );
+    deps.codexCatalog = { read: swapped };
+    const second = await listIds(new RPCHandler(createRouter(deps)));
+    expect(second).not.toContain(spark);
+    expect(second).toContain(luna);
+  });
+
+  it("never fetches the catalog for an expired token and kicks a detached refresh", async () => {
+    const expiredOauth = JSON.stringify({
+      type: "oauth",
+      access: "access-token",
+      refresh: "refresh-token",
+      expires: Date.now() - 1_000,
+      accountId: "acct-live-test",
+    });
+    const prisma = {
+      userModelCredential: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ provider: "openai-codex", secretId: "secret-oauth" }]),
+      },
+      spaceModelPreference: { findMany: vi.fn().mockResolvedValue([]) },
+      secret: {
+        findMany: vi.fn().mockResolvedValue([{ id: "secret-oauth", ciphertext: "cipher-oauth" }]),
+      },
+    };
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () =>
+        new Response(
+          JSON.stringify({ models: [{ slug: spark, visibility: "list", supported_in_api: true }] }),
+          { status: 200 },
+        ),
+    );
+    const refreshExpiredModelCredential = vi.fn();
+    const deps = {
+      prisma,
+      secrets: { load: vi.fn(() => expiredOauth), put: vi.fn() },
+      env: {
+        defaultProvider: "fake",
+        defaultModel: "fake-model",
+        webOrigin: "http://127.0.0.1:5173",
+        screenProxySecret: "fake-test-secret",
+        sandboxProvider: "fake",
+      },
+      codexCatalog: new CodexCatalogCache({ fetch: fetchImpl }),
+      refreshExpiredModelCredential,
+    } as unknown as RouterDeps;
+
+    const ids = await listIds(new RPCHandler(createRouter(deps)));
+
+    // Static exclusion stands this round; the credential's refresh is kicked so
+    // the next read can see the account's real catalog.
+    expect(ids).not.toContain(spark);
+    expect(ids).toContain(luna);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(refreshExpiredModelCredential).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: actor.userId }),
+      "secret-oauth",
+      "openai-codex",
+    );
+  });
+
+  it("lets models.setDefault pick Spark when the account's live catalog lists it", async () => {
+    const stamp = new Date("2026-01-01T00:00:00.000Z");
+    const oauthCredential = {
+      id: "cred-oauth",
+      userId: actor.userId,
+      provider: "openai-codex",
+      label: "ChatGPT",
+      secretId: "secret-oauth",
+      createdAt: stamp,
+      updatedAt: stamp,
+    };
+    const upsert = vi.fn(async () => ({ id: "pref-spark" }));
+    const tx = {
+      userModelCredential: { findMany: vi.fn().mockResolvedValue([oauthCredential]) },
+      spaceModelPreference: {
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        upsert,
+      },
+      secret: {
+        findFirst: vi.fn(async () => ({ id: "secret-oauth", ciphertext: "cipher-oauth" })),
+      },
+    };
+    const deps = {
+      prisma: { $transaction: vi.fn(async (fn: (client: typeof tx) => unknown) => fn(tx)) },
+      secrets: { load: vi.fn(() => oauth("acct-live-test")) },
+      env: {
+        defaultProvider: "fake",
+        defaultModel: "fake-model",
+        webOrigin: "http://127.0.0.1:5173",
+        screenProxySecret: "fake-test-secret",
+        sandboxProvider: "fake",
+      },
+      codexCatalog: { read: vi.fn(async () => [liveModel(spark)]) },
+    } as unknown as RouterDeps;
+    const handler = new RPCHandler(createRouter(deps));
+
+    const response = await call(handler, "models/setDefault", {
+      provider: "openai-codex",
+      modelId: spark,
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ json: { ok: true } });
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          spaceId_userId_credentialId: {
+            spaceId: actor.spaceId,
+            userId: actor.userId,
+            credentialId: "cred-oauth",
+          },
+        },
+      }),
+    );
+  });
+
+  it("still rejects models.setDefault for Spark when the live catalog omits it", async () => {
+    const stamp = new Date("2026-01-01T00:00:00.000Z");
+    const oauthCredential = {
+      id: "cred-oauth",
+      userId: actor.userId,
+      provider: "openai-codex",
+      label: "ChatGPT",
+      secretId: "secret-oauth",
+      createdAt: stamp,
+      updatedAt: stamp,
+    };
+    const tx = {
+      userModelCredential: { findMany: vi.fn().mockResolvedValue([oauthCredential]) },
+      spaceModelPreference: {
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        upsert: vi.fn(async () => ({ id: "pref-spark" })),
+      },
+      secret: {
+        findFirst: vi.fn(async () => ({ id: "secret-oauth", ciphertext: "cipher-oauth" })),
+      },
+    };
+    const deps = {
+      prisma: { $transaction: vi.fn(async (fn: (client: typeof tx) => unknown) => fn(tx)) },
+      secrets: { load: vi.fn(() => oauth("acct-live-test")) },
+      env: {
+        defaultProvider: "fake",
+        defaultModel: "fake-model",
+        webOrigin: "http://127.0.0.1:5173",
+        screenProxySecret: "fake-test-secret",
+        sandboxProvider: "fake",
+      },
+      codexCatalog: { read: vi.fn(async () => [liveModel(luna)]) },
+    } as unknown as RouterDeps;
+    const handler = new RPCHandler(createRouter(deps));
+
+    const response = await call(handler, "models/setDefault", {
+      provider: "openai-codex",
+      modelId: spark,
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      json: expect.objectContaining({
+        code: "BAD_REQUEST",
+        message: expect.stringMatching(/not available with your current sign-in/i),
+      }),
+    });
+  });
+
+  it("warms the live catalog before setDefault's transaction and reads zero-wait inside it", async () => {
+    const stamp = new Date("2026-01-01T00:00:00.000Z");
+    const oauthCredential = {
+      id: "cred-oauth",
+      userId: actor.userId,
+      provider: "openai-codex",
+      label: "ChatGPT",
+      secretId: "secret-oauth",
+      createdAt: stamp,
+      updatedAt: stamp,
+    };
+    const upsert = vi.fn(async () => ({ id: "pref-spark" }));
+    const tx = {
+      userModelCredential: { findMany: vi.fn().mockResolvedValue([oauthCredential]) },
+      spaceModelPreference: {
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        upsert,
+      },
+      secret: {
+        findFirst: vi.fn(async () => ({ id: "secret-oauth", ciphertext: "cipher-oauth" })),
+      },
+    };
+    const transaction = vi.fn(async (fn: (client: typeof tx) => unknown) => fn(tx));
+    // The same delegates serve the pre-transaction warm read on deps.prisma.
+    const prisma = {
+      $transaction: transaction,
+      userModelCredential: tx.userModelCredential,
+      spaceModelPreference: { findMany: tx.spaceModelPreference.findMany },
+      secret: tx.secret,
+    };
+    const read = vi.fn(
+      async (_userId: string, _account: { accountId: string }, _opts?: { waitMs?: number }) => [
+        liveModel(spark),
+      ],
+    );
+    const refreshExpiredModelCredential = vi.fn();
+    const deps = {
+      prisma,
+      secrets: { load: vi.fn(() => oauth("acct-live-test")), put: vi.fn() },
+      env: {
+        defaultProvider: "fake",
+        defaultModel: "fake-model",
+        webOrigin: "http://127.0.0.1:5173",
+        screenProxySecret: "fake-test-secret",
+        sandboxProvider: "fake",
+      },
+      codexCatalog: { read },
+      refreshExpiredModelCredential,
+    } as unknown as RouterDeps;
+    const handler = new RPCHandler(createRouter(deps));
+
+    const response = await call(handler, "models/setDefault", {
+      provider: "openai-codex",
+      modelId: spark,
+    });
+
+    expect(response.status).toBe(200);
+    const warmCall = read.mock.calls.find((call) => call[2]?.waitMs !== 0);
+    const txCall = read.mock.calls.find((call) => call[2]?.waitMs === 0);
+    expect(warmCall).toBeDefined();
+    expect(txCall).toBeDefined();
+    // The unbounded-wait read happens before the transaction opens; inside it
+    // the catalog is only consulted from settled cache state.
+    const txOpenedAt = transaction.mock.invocationCallOrder[0]!;
+    expect(read.mock.invocationCallOrder[read.mock.calls.indexOf(warmCall!)]!).toBeLessThan(
+      txOpenedAt,
+    );
+    // Every catalog read issued after the transaction opened is zero-wait — a
+    // cold cache can never stall the serializable transaction on the network.
+    const inTxCalls = read.mock.calls.filter(
+      (_, index) => read.mock.invocationCallOrder[index]! > txOpenedAt,
+    );
+    expect(inTxCalls.length).toBeGreaterThan(0);
+    for (const call of inTxCalls) expect(call[2]?.waitMs).toBe(0);
+    expect(upsert).toHaveBeenCalled();
   });
 });
 
@@ -1995,6 +2928,215 @@ describe("bot restore computer quota", () => {
 
 afterEach(() => {
   delete process.env.SANDBOX_MAX_COMPUTERS_PER_USER;
+});
+
+describe("routines.update", () => {
+  const actor = {
+    spaceId: "space-1",
+    userId: "user-1",
+    email: "user@rakazo.test",
+    isDeploymentOwner: true,
+  } satisfies Actor;
+  const routine = {
+    id: "routine-1",
+    botId: "bot-1",
+    spaceId: "space-1",
+    userId: "user-1",
+    name: "Later",
+    prompt: "say done",
+    crons: ["@once"],
+    timezone: "UTC",
+    active: false,
+    notify: false,
+    webhookEnabled: false,
+    githubEnabled: false,
+    messageProvider: null,
+    lastRunAt: null,
+    nextRunAt: null,
+    createdAt: new Date("2026-09-01T00:00:00.000Z"),
+  };
+
+  function fixture(botArchived: boolean, archivedBeforeWrite = false) {
+    const update = vi.fn(async (args: { data: Record<string, unknown> }) => {
+      if (archivedBeforeWrite) throw Object.assign(new Error("not found"), { code: "P2025" });
+      return {
+        ...routine,
+        ...Object.fromEntries(Object.entries(args.data).filter(([, value]) => value !== undefined)),
+      };
+    });
+    const enqueue = vi.fn(async () => undefined);
+    const prisma = {
+      routine: {
+        findFirst: vi.fn(async (args: { where: { bot?: { archivedAt: null } } }) =>
+          botArchived && args.where.bot?.archivedAt === null ? null : routine,
+        ),
+        update,
+      },
+      bot: {
+        findFirst: vi.fn(async () =>
+          botArchived ? null : { id: "bot-1", thread: { id: "thread-1" }, computer: null },
+        ),
+      },
+    };
+    const handler = new RPCHandler(
+      createRouter({
+        prisma,
+        env: { sandboxProvider: "fake" },
+        events: { append: vi.fn(async () => undefined) },
+        jobs: { enqueue, cancel: vi.fn(async () => undefined) },
+      } as unknown as RouterDeps),
+    );
+    const call = () =>
+      handler.handle(
+        new Request("http://127.0.0.1/rpc/routines/update", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            json: {
+              routineId: "routine-1",
+              active: true,
+              runAt: new Date(Date.now() + 60_000).toISOString(),
+            },
+          }),
+        }),
+        { prefix: "/rpc", context: { actor } },
+      );
+    return { update, enqueue, call };
+  }
+
+  it("refuses to re-arm a routine on an archived bot without writing", async () => {
+    const { update, enqueue, call } = fixture(true);
+    const { response } = await call();
+    expect(response.status).toBe(404);
+    expect(update).not.toHaveBeenCalled();
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it("re-arms a routine on an active bot", async () => {
+    const { update, enqueue, call } = fixture(false);
+    const { response } = await call();
+    expect(response.status).toBe(200);
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "routine-1", bot: { archivedAt: null } },
+        data: expect.objectContaining({ active: true }),
+      }),
+    );
+    expect(enqueue).toHaveBeenCalledOnce();
+  });
+
+  it("does not re-arm when the bot is archived between the read and the write", async () => {
+    const { enqueue, call } = fixture(false, true);
+    const { response } = await call();
+    expect(response.status).toBe(404);
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+});
+
+describe("threads.endCall", () => {
+  function fixture(duplicateMarker?: boolean) {
+    const created: { blocks?: unknown; clientNonce?: string }[] = [];
+    const events: { type: string; payload: Record<string, unknown> }[] = [];
+    const tx = {
+      thread: { update: vi.fn().mockResolvedValue({ nextMessageSeq: 3, nextEventSeq: 5 }) },
+      message: {
+        create: vi.fn(async ({ data }: { data: { blocks: unknown; clientNonce?: string } }) => {
+          if (duplicateMarker) throw Object.assign(new Error("unique"), { code: "P2002" });
+          created.push({ blocks: data.blocks, clientNonce: data.clientNonce });
+          return { id: "message-1" };
+        }),
+      },
+      event: vi.fn(),
+      task: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
+      run: {
+        create: vi.fn().mockResolvedValue({ id: "run-1" }),
+        findUnique: vi.fn().mockResolvedValue({ status: "queued", startedAt: null }),
+      },
+    };
+    tx.event = {
+      create: vi.fn(async ({ data }: { data: { type: string; payload: never } }) => {
+        events.push({ type: data.type, payload: data.payload });
+        return { seq: 4, threadId: "thread-1" };
+      }),
+    } as never;
+    const prisma = {
+      bot: {
+        findFirst: vi
+          .fn()
+          .mockResolvedValue({ id: "bot-1", thread: { id: "thread-1" }, computer: null }),
+      },
+      taughtSkill: { findFirst: vi.fn().mockResolvedValue(null) },
+      $transaction: vi.fn(async (run: (client: typeof tx) => unknown) => run(tx)),
+    } as unknown as PrismaClient;
+    const enqueue = vi.fn().mockResolvedValue(undefined);
+    const deps = {
+      prisma,
+      events: { notify: vi.fn().mockResolvedValue(undefined) },
+      jobs: { enqueue },
+      env: { sandboxProvider: "fake" },
+    } as unknown as RouterDeps;
+    const actor = {
+      spaceId: "space-1",
+      userId: "user-1",
+      email: "user@rakazo.test",
+      isDeploymentOwner: true,
+    } satisfies Actor;
+    const handler = new RPCHandler(createRouter(deps));
+    return {
+      tx,
+      created,
+      events,
+      enqueue,
+      call: () =>
+        handler.handle(
+          new Request("http://127.0.0.1/rpc/threads/endCall", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ json: { botId: "bot-1", callId: "call-1" } }),
+          }),
+          { prefix: "/rpc", context: { actor } },
+        ),
+    };
+  }
+
+  it("closes the card and queues a call_end run", async () => {
+    const { call, created, events, tx, enqueue } = fixture();
+    const { response } = await call();
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ json: { ok: true } });
+    expect(created[0]?.blocks).toEqual([
+      { kind: "voice_call", callId: "call-1", title: "", farewell: "" },
+    ]);
+    expect(created[0]?.clientNonce).toBe("call:call-1:marker");
+    expect(events.map((event) => event.type)).toEqual([
+      "thread.message.created",
+      "thread.call.ended",
+    ]);
+    expect(events[1]?.payload).toMatchObject({
+      callId: "call-1",
+      title: "",
+      messageId: "message-1",
+    });
+    expect(events[0]?.payload).toMatchObject({ callId: "call-1", messageId: "message-1" });
+    expect(tx.run.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ trigger: "call_end", taskId: "task-1" }),
+      }),
+    );
+    expect(String(tx.run.create.mock.calls[0]?.[0]?.data?.clientNonce)).toMatch(/^call:call-1:/);
+    expect(enqueue).toHaveBeenCalledOnce();
+  });
+
+  it("is a no-op when a concurrent hang-up already wrote the marker", async () => {
+    const { call, created, events, tx, enqueue } = fixture(true);
+    const { response } = await call();
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ json: { ok: true } });
+    expect(created).toEqual([]);
+    expect(events).toEqual([]);
+    expect(tx.run.create).not.toHaveBeenCalled();
+    expect(enqueue).not.toHaveBeenCalled();
+  });
 });
 
 describe("groups.archive", () => {

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { TERMINAL_SERVER_PROGRAM } from "./terminal-server.js";
 // Each live Chrome needs a private debugger port. This is the TCP address-space
 // boundary, not a product limit on bots or saved browser profiles.
 export const MAX_DESKTOP_DISPLAY = 65535 - 9221;
@@ -332,8 +333,14 @@ export function resetDesktopRuntimeCommand(env = DEFAULT_DESKTOP_ENV) {
 
 const TARGETS = "/tmp/rakazo/desktop-targets";
 
+// Menu exec strings run through `/bin/sh -c`, where `#` starts a comment; rgb:a/b/c keeps
+// hex colors intact. infra/sandboxes/computer/fluxbox.menu carries the same entry.
+// selectToClipboard puts selections in CLIPBOARD, which x11vnc forwards to the host.
+export const TERMINAL_MENU_COMMAND =
+  "xterm -bg rgb:11/11/13 -fg rgb:e8/e8/ea -cr rgb:e8/e8/ea -title Terminal -xrm 'XTerm*selectToClipboard: true'";
+
 // Keep fixed mapping files present: TokenFile may be reading the directory concurrently.
-function revokeTargetCommand(kind: "view" | "control", display: number | string) {
+function revokeTargetCommand(kind: "view" | "control" | "terminal", display: number | string) {
   return `mkdir -p ${TARGETS}; : >/tmp/rakazo/${kind}-target-next-${display}; mv /tmp/rakazo/${kind}-target-next-${display} ${TARGETS}/${kind}-${display}`;
 }
 
@@ -347,6 +354,25 @@ function stopVncCommand(kind: "view" | "control", layout: ReturnType<typeof comm
     `for i in $(seq 1 10); do pgrep -f ${pattern} >/dev/null || break; sleep 0.1; done`,
     `if pgrep -f ${pattern} >/dev/null; then echo 'computer screen transport failed to stop' >&2; exit 1; fi`,
     `rm -f ${socketPrefix}*`,
+  ].join("\n");
+}
+
+const TERMINAL_SERVER = "/tmp/rakazo/rakazo-terminal.py";
+
+function terminalServerPattern(socket: string) {
+  return `^([^ ]*/)?python[0-9.]* ${TERMINAL_SERVER} ${socket}( |$)`;
+}
+
+function stopTerminalCommand(layout: ReturnType<typeof commandLayout>) {
+  const socketPrefix = `/tmp/rakazo/sockets/terminal-${layout.displayNumber}-`;
+  const pattern = quoteLayout(terminalServerPattern(`${socketPrefix}[^ ]+`));
+  return [
+    revokeTargetCommand("terminal", layout.displayNumber),
+    // Killing the server closes every relayed connection; each shell then gets SIGHUP.
+    `pkill -f ${pattern} || true`,
+    `for i in $(seq 1 10); do pgrep -f ${pattern} >/dev/null || break; sleep 0.1; done`,
+    `pkill -KILL -f ${pattern} || true`,
+    `rm -rf ${socketPrefix}* /tmp/rakazo/terminal-state-${layout.displayNumber}`,
   ].join("\n");
 }
 
@@ -400,6 +426,7 @@ function renderStopScreenTransportsCommand(index: number | undefined, env = DEFA
     revokeTargetCommand("control", layout.displayNumber),
     stopVncCommand("view", layout),
     stopVncCommand("control", layout),
+    stopTerminalCommand(layout),
     `rm -f /tmp/rakazo/control-token-${layout.displayNumber}`,
   ].join("\n");
 }
@@ -462,6 +489,11 @@ function renderEnsureScreenCommand(
           `for i in $(seq 1 100); do xdpyinfo -display ${layout.display} >/dev/null 2>&1 && break; sleep 0.1; done`,
         ]
       : [
+          // A display created before the Terminal entry already answers xdpyinfo, so the
+          // branch below does not run. Rewrite the menu anyway; fluxbox rereads that file,
+          // so leave the display and window manager running.
+          `mkdir -p ${fluxHome}/.fluxbox`,
+          `printf '[begin] (Desktop)\\n[exec] (Browser) {%s}\\n[exec] (Terminal) {%s}\\n[end]\\n' ${browserLauncherPath(layout.displayNumber)} ${shellQuote(TERMINAL_MENU_COMMAND)} >${fluxHome}/.fluxbox/menu`,
           `if ! xdpyinfo -display ${layout.display} >/dev/null 2>&1; then`,
           `  mkdir -p /tmp/rakazo ${fluxHome}/.fluxbox /tmp/.X11-unix`,
           `  rm -f /tmp/.X${layout.displayNumber}-lock /tmp/.X11-unix/X${layout.displayNumber}`,
@@ -470,7 +502,6 @@ function renderEnsureScreenCommand(
           `  xdpyinfo -display ${layout.display} >/dev/null 2>&1 || exit 1`,
           `  if [ -f /etc/rakazo/fluxbox/init ]; then cp /etc/rakazo/fluxbox/init ${fluxHome}/.fluxbox/init; else printf "session.screen0.toolbar.visible: false\\n" >${fluxHome}/.fluxbox/init; fi`,
           `  cp /etc/rakazo/fluxbox/apps ${fluxHome}/.fluxbox/apps 2>/dev/null || true`,
-          `  printf '[begin] (Desktop)\\n[exec] (Browser) {%s}\\n[end]\\n' ${browserLauncherPath(layout.displayNumber)} >${fluxHome}/.fluxbox/menu`,
           `  printf '\\nsession.menuFile: %s\\n' ${fluxHome}/.fluxbox/menu >>${fluxHome}/.fluxbox/init`,
           `  HOME=${shellQuote(env.homeDir)} CHROME_USER_DATA_DIR=${shellQuote(profile)} BROWSER=${browserLauncherPath(layout.displayNumber)} DISPLAY=${layout.display} nohup fluxbox -rc ${fluxHome}/.fluxbox/init 8>&- 9>&- </dev/null >${log}-fluxbox.log 2>&1 &`,
           "fi",
@@ -526,6 +557,8 @@ export function interactiveScreenCommand(
   const stopProcesses = [
     revokeTargetCommand("control", layout.displayNumber),
     stopVncCommand("control", layout),
+    // The terminal belongs to the control lease and ends with it.
+    stopTerminalCommand(layout),
     `rm -f ${tokenFile}`,
   ].join("\n");
   if (!interactive) {
@@ -550,6 +583,62 @@ export function interactiveScreenCommand(
     `printf '%s: unix_socket:%s\\n' ${shellQuote(controlToken)} ${socket} >/tmp/rakazo/control-target-next-${layout.displayNumber}`,
     `mv /tmp/rakazo/control-target-next-${layout.displayNumber} ${targetFile}`,
     gatewayCommand(layout.controlPort),
+  ].join("\n");
+}
+
+/**
+ * Open a terminal session for the current control lease. The lease's PTY server is reused, so
+ * a second browser tab gets its own shell without ending the first; a server left from an
+ * earlier lease is replaced.
+ */
+export function terminalCommand(
+  controlToken: string,
+  terminalToken: string,
+  cwd: string,
+  env = DEFAULT_DESKTOP_ENV,
+  layout: ReturnType<typeof commandLayout> = screenPorts(0),
+) {
+  return [
+    startTerminalCommand(controlToken, terminalToken, cwd, env, layout),
+    proxyEnvironmentCommand(),
+    gatewayCommand(layout.controlPort),
+  ].join("\n");
+}
+
+/** Everything in `terminalCommand` except the shared screen gateway. */
+export function startTerminalCommand(
+  controlToken: string,
+  terminalToken: string,
+  cwd: string,
+  env = DEFAULT_DESKTOP_ENV,
+  layout: ReturnType<typeof commandLayout> = screenPorts(0),
+) {
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(terminalToken)) throw new Error("invalid terminal token");
+  const display = layout.displayNumber;
+  const tokenFile = `/tmp/rakazo/control-token-${display}`;
+  const socket = `/tmp/rakazo/sockets/terminal-${display}-${browserKeyForScreen(controlToken)}`;
+  const target = `${TARGETS}/terminal-${display}`;
+  const next = `/tmp/rakazo/terminal-target-next-${display}`;
+  const entry = `printf '%s: unix_socket:%s\\n' ${shellQuote(terminalToken)} ${socket}`;
+  return [
+    // Callers differ (the Docker supervisor runs plain `bash -c`); an unpublished token must
+    // fail here, not hand out a URL the gateway refuses.
+    "set -e",
+    `[ -f ${tokenFile} ] && [ "$(cat ${tokenFile})" = ${shellQuote(controlToken)} ] || exit 75`,
+    `if [ -S ${socket} ] && pgrep -f ${quoteLayout(terminalServerPattern(socket))} >/dev/null; then`,
+    `  { cat ${target} 2>/dev/null || true; ${entry}; } >${next}`,
+    "else",
+    stopTerminalCommand(layout),
+    `  mkdir -p ${TARGETS} /tmp/rakazo/sockets`,
+    // Displays share the program file; replace it whole so a starting server never reads half.
+    `  printf %s ${shellQuote(TERMINAL_SERVER_PROGRAM)} >${TERMINAL_SERVER}.$$`,
+    `  mv ${TERMINAL_SERVER}.$$ ${TERMINAL_SERVER}`,
+    `  HOME=${shellQuote(env.homeDir)} nohup python3 ${TERMINAL_SERVER} ${socket} ${shellQuote(cwd)} /tmp/rakazo/terminal-state-${display} 8>&- 9>&- </dev/null >/tmp/rakazo/terminal-${display}.log 2>&1 &`,
+    `  for i in $(seq 1 50); do [ -S ${socket} ] && break; sleep 0.1; done`,
+    `  [ -S ${socket} ] || exit 1`,
+    `  ${entry} >${next}`,
+    "fi",
+    `mv ${next} ${target}`,
   ].join("\n");
 }
 
@@ -639,9 +728,14 @@ export function releaseDesktopCommand(
     'index=$(sed -n "1p" "$slot")',
     "flock -u 9; exec 9>&-",
     `bash -eu -c ${shellQuote(renderStopExtraScreenCommand(undefined, screenId, env))} desktop "$index"`,
-    'exec 9>"$dir/.lock"; flock -w 120 9',
-    'rm -f "$slot"',
+    // Chromium has stopped. Publish that before clearing the slot so a later
+    // lock or removal failure is not read as a browser that is still running.
+    // set -e leaves that failure non-zero, and the slot is removed only while
+    // the shared registry lock is held.
     'printf "RAKAZO_DESKTOP_RELEASED=%s\\n" "$index"',
+    'exec 9>"$dir/.lock"',
+    "flock -w 120 9",
+    'rm -f -- "$slot"',
   ].join("\n");
 }
 
@@ -660,6 +754,25 @@ export function desktopControlCommand(
     'index=$(sed -n "1p" "$slot")',
     "flock -u 9; exec 9>&-",
     `bash -eu -c ${shellQuote([...layoutVariables(undefined, env), interactiveScreenCommand(interactive, token, commandLayout(undefined, env))].join("\n"))} desktop "$index"`,
+  ].join("\n");
+}
+
+/** Open a terminal on this bot's assigned display; it requires the display's current control token. */
+export function desktopTerminalCommand(
+  screenId: string,
+  leaseId: string | undefined,
+  env: DesktopEnvironment,
+  controlToken: string,
+  terminalToken: string,
+  cwd: string,
+) {
+  return [
+    ...registryLockCommand(screenId),
+    '[ -f "$slot" ] || exit 75',
+    ...acceptLeaseCommand(leaseId),
+    'index=$(sed -n "1p" "$slot")',
+    "flock -u 9; exec 9>&-",
+    `bash -eu -c ${shellQuote([...layoutVariables(undefined, env), terminalCommand(controlToken, terminalToken, cwd, env, commandLayout(undefined, env))].join("\n"))} desktop "$index"`,
   ].join("\n");
 }
 

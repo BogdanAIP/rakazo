@@ -187,6 +187,9 @@ importers:
       expo-speech:
         specifier: 57.0.3
         version: 57.0.3(expo@57.0.25)
+      expo-speech-recognition:
+        specifier: 57.1.0
+        version: 57.1.0(expo@57.0.25)(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
       expo-splash-screen:
         specifier: 57.0.9
         version: 57.0.9(expo@57.0.25)(typescript@6.0.3)
@@ -281,6 +284,12 @@ importers:
       '@rakazo/ui-web':
         specifier: workspace:*
         version: link:../../packages/ui-web
+      '@xterm/addon-fit':
+        specifier: 0.11.0
+        version: 0.11.0
+      '@xterm/xterm':
+        specifier: 6.0.0
+        version: 6.0.0
       better-auth:
         specifier: 1.7.4
         version: 1.7.4(@opentelemetry/api@1.9.1)(@prisma/client@7.10.0(prisma@7.10.0(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(magicast@0.5.4)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@7.0.2))(typescript@7.0.2))(mysql2@3.15.3)(pg@8.23.0)(prisma@7.10.0(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(magicast@0.5.4)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@7.0.2))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.5.0)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@8.3.0(@types/node@26.5.0)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.50.0)(tsx@4.23.13)(yaml@2.9.0)))
@@ -310,6 +319,9 @@ importers:
         specifier: 6.6.0
         version: 6.6.0(esbuild@0.28.2)(rolldown@1.2.8)
       '@lingui/conf':
+        specifier: 6.6.0
+        version: 6.6.0
+      '@lingui/format-po':
         specifier: 6.6.0
         version: 6.6.0
       '@lingui/vite-plugin':
@@ -676,6 +688,9 @@ importers:
       '@ronradtke/react-native-markdown-display':
         specifier: 9.0.3
         version: 9.0.3(@expo/config-plugins@57.0.9(typescript@7.0.2))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
+      linkify-it:
+        specifier: 5.0.2
+        version: 5.0.2
       react-markdown:
         specifier: 10.1.0
         version: 10.1.0(@types/react@19.2.18)(react@19.2.3)
@@ -4432,6 +4447,12 @@ packages:
     engines: {node: '>=14.6'}
     deprecated: this version has critical issues, please update to the latest version
 
+  '@xterm/addon-fit@0.11.0':
+    resolution: {integrity: sha512-jYcgT6xtVYhnhgxh3QgYDnnNMYTcf8ElbxxFzX0IZo+vabQqSPAjC3c1wJrKB5E19VwQei89QCiZZP86DCPF7g==}
+
+  '@xterm/xterm@6.0.0':
+    resolution: {integrity: sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg==}
+
   abbrev@4.0.0:
     resolution: {integrity: sha512-a1wflyaL0tHtJSmLSOVybYhy22vRih4eduhhrkcjgrWGnRfrZtovJ2FRjxuTtkkj47O/baf0R86QU5OuYpz8fA==}
     engines: {node: ^20.17.0 || >=22.9.0}
@@ -6048,6 +6069,13 @@ packages:
 
   expo-sharing@57.0.22:
     resolution: {integrity: sha512-IWmiz0Dnjd7ifsZ2Gg5XODxb6DQoJ4/H6FofW9bTL9gDjfX2+va8SV1BYVkFvJ8vKQoKR4HgkMCKDCZlrrbKkg==}
+    peerDependencies:
+      expo: '*'
+      react: 19.2.3
+      react-native: '*'
+
+  expo-speech-recognition@57.1.0:
+    resolution: {integrity: sha512-eUiODNPb3CNeQB8Rzro79Dsf+dWzFNdyDRxzorfh2SNwXeCQkC5yh8goPNmCO+d1JyaYmV89F4jcGu52p3uW6w==}
     peerDependencies:
       expo: '*'
       react: 19.2.3
@@ -14125,6 +14153,10 @@ snapshots:
 
   '@xmldom/xmldom@0.9.11': {}
 
+  '@xterm/addon-fit@0.11.0': {}
+
+  '@xterm/xterm@6.0.0': {}
+
   abbrev@4.0.0: {}
 
   abort-controller@3.0.0:
@@ -16000,6 +16032,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
       - typescript
+
+  expo-speech-recognition@57.1.0(expo@57.0.25)(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3):
+    dependencies:
+      expo: 57.0.25(@babel/core@7.29.7)(@expo/dom-webview@57.0.1)(@expo/metro-runtime@57.0.16)(expo-router@57.0.23)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native-webview@13.16.1(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native-worklets@0.10.1(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
+      react: 19.2.3
+      react-native: 0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)
 
   expo-speech@57.0.3(expo@57.0.25):
     dependencies:

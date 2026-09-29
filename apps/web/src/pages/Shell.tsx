@@ -1,7 +1,7 @@
 import { i18n } from "@lingui/core";
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { ChatMarkdown } from "@rakazo/chat-ui/web";
+import { ChatMarkdown, LinkifiedText } from "@rakazo/chat-ui/web";
 import type {
   AgentSkillCatalogEntry,
   Bot,
@@ -39,6 +39,7 @@ import {
   clampMentionHighlightIndex,
   cronFromPreset,
   groupBotsForSidebar,
+  groupVoiceChats,
   inferAttachmentMimeType,
   isActive,
   isPeerReceiptBlocks,
@@ -89,6 +90,7 @@ import {
   ChevronDown,
   Clock,
   Copy,
+  FolderOpen,
   Gauge,
   LayoutGrid,
   Lock,
@@ -132,7 +134,6 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { AppRail } from "../components/AppRail";
 import { ArtifactFileCard } from "../components/ArtifactFileCard";
 import { AskCard } from "../components/AskCard";
 import { ActiveBotGlyph, CollaborationMarker } from "../components/ai/CollaborationMarker";
@@ -143,6 +144,9 @@ import {
   computersAreUnavailable,
 } from "../components/ComputersUnavailableHint";
 import { ComputerUpdateProgress } from "../components/ComputerUpdateProgress";
+import { CallCard } from "../components/call/CallCard";
+import { VoiceChatCard } from "../components/call/VoiceChatCard";
+import { ComputerWorkspace } from "../components/computer/ComputerWorkspace";
 import { MessageHoverMetadata } from "../components/MessageHoverMetadata";
 import { SkillDraftCard } from "../components/teach/SkillDraftCard";
 import { TeachCaptureOverlay } from "../components/teach/TeachCaptureOverlay";
@@ -162,12 +166,14 @@ import {
   requestBrowserNotificationPermission,
   shouldNotifyBrowser,
 } from "../lib/browser-notifications";
+import { startCall, useCallSession } from "../lib/call-session";
 import { newClientId } from "../lib/client-id";
 import {
   embeddableScreenUrl,
   loadComputerScreen,
   screenIframeSandbox,
 } from "../lib/computer-screen";
+import { publishComputerCommand } from "../lib/computer-workspace";
 import { desktopBridge } from "../lib/desktop";
 import { scheduleFocusPrompt } from "../lib/focus-prompt";
 import { localTimezone } from "../lib/local-timezone";
@@ -176,6 +182,7 @@ import { messageProviderLabel } from "../lib/messaging";
 import {
   isFileDrag,
   isFilePaste,
+  readFileAsBase64,
   revokePendingAttachmentPreviews,
 } from "../lib/pending-attachments";
 import { markAfterPaint, markOnce } from "../lib/performance";
@@ -263,7 +270,6 @@ const PluginsOverlay = lazy(() =>
 const McpServersOverlay = lazy(() =>
   import("./McpServersOverlay").then((module) => ({ default: module.McpServersOverlay })),
 );
-const CallView = lazy(() => import("./CallView").then((module) => ({ default: module.CallView })));
 
 type Panel =
   | "computer"
@@ -408,6 +414,7 @@ export function ShellPage() {
   const [replyTarget, setReplyTarget] = useState<ThreadMessage | null>(null);
   const [replyQuote, setReplyQuote] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -496,7 +503,7 @@ export function ShellPage() {
     SpaceMemoryConfig | null | undefined
   >(undefined);
   const memoryProviderConfigRevision = useRef(0);
-  const [callOpen, setCallOpen] = useState(false);
+  const call = useCallSession();
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [dismissedRunErrorIds, setDismissedRunErrorIds] =
@@ -598,7 +605,7 @@ export function ShellPage() {
   const computerOpenRef = useRef(false);
   const computerBotIdRef = useRef<string | undefined>(undefined);
   const computerBootEpoch = useRef(0);
-  const openComputerRef = useRef<(botId?: string) => Promise<void>>(async () => {});
+  const openComputerRef = useRef<(botId?: string) => Promise<boolean>>(async () => false);
   const [computerViewport, setComputerViewport] = useState<{
     height: number;
     offsetTop: number;
@@ -1186,7 +1193,7 @@ export function ShellPage() {
       autoSpoken.current = lastBot?.id ?? null;
       return;
     }
-    if (callOpen || !active.autoSpeak) {
+    if (call?.botId === active.id || !active.autoSpeak) {
       autoSpoken.current = lastBot?.id ?? null;
       return;
     }
@@ -1202,7 +1209,7 @@ export function ShellPage() {
     snapshot?.botId,
     active?.autoSpeak,
     active?.id,
-    callOpen,
+    call?.botId,
   ]);
 
   useEffect(() => {
@@ -2038,6 +2045,7 @@ export function ShellPage() {
         if (permissionRequest) void permissionRequest.then(flushPendingBrowserNotifications);
       }
       const trimmed = plan.trimmed;
+      sendingRef.current = true;
       setSending(true);
       setSendError(null);
       const dropDelayedSetup = () => {
@@ -2151,6 +2159,7 @@ export function ShellPage() {
           setSendError(error instanceof Error ? error.message : t`Failed to send message`);
         }
       } finally {
+        sendingRef.current = false;
         setSending(false);
       }
     },
@@ -2165,14 +2174,9 @@ export function ShellPage() {
       t,
     ],
   );
-  const followUpMessage = useCallback(async (text: string) => {
-    const id = activeBotId.current;
-    if (!id) return;
-    await rpc.threads.followUp({ botId: id, text });
-    await refreshThreadRef.current(id);
-  }, []);
   const stopRun = useCallback(async () => {
     if (sending) return;
+    sendingRef.current = true;
     setSending(true);
     try {
       const botTarget = activeBotId.current;
@@ -2220,6 +2224,7 @@ export function ShellPage() {
       }
       await refreshThreadRef.current(botTarget).catch(() => undefined);
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   }, [sending, t]);
@@ -2345,6 +2350,7 @@ export function ShellPage() {
     void scheduleFocusPrompt({
       immediate: isFirstBot,
       signal: controller.signal,
+      shouldSkip: () => sendingRef.current,
       prompt: async () => {
         if (focusPromptBotIdRef.current !== bot.id || activeBotId.current !== bot.id) return;
         await rpc.onboarding.promptFocus({ botId: bot.id }).catch(() => undefined);
@@ -2531,11 +2537,12 @@ export function ShellPage() {
     return () => window.clearInterval(timer);
   }, [panel, computerOpen, computerBot?.id, active?.id, computer?.state]);
 
+  /** Open the computer view, taking control when possible. Resolves false if booting failed. */
   async function openComputer(botId?: string) {
     const id = botId ?? active?.id;
-    if (!id) return;
+    if (!id) return false;
     const bot = botsRef.current.find((candidate) => candidate.id === id);
-    if (!bot) return;
+    if (!bot) return false;
     computerBotIdRef.current = id;
     setComputerBotId(id);
     const cached = computerCacheRef.current.get(id);
@@ -2556,8 +2563,10 @@ export function ShellPage() {
         overlay: (needsTakeover && !blocked) || targetComputer?.state !== "running",
         force: targetComputer?.state !== "running",
       });
+      return true;
     } catch {
       // computerError already set in bootComputer
+      return false;
     }
   }
   openComputerRef.current = openComputer;
@@ -2694,7 +2703,6 @@ export function ShellPage() {
           className="absolute bottom-20 start-0 top-16 z-20 w-8 touch-none md:hidden"
         />
       ) : null}
-      <AppRail active="bots" />
       <aside
         data-testid="bots-sidebar"
         data-collapsed={botsSidebarCollapsed ? "true" : "false"}
@@ -3253,6 +3261,18 @@ export function ShellPage() {
               <Button
                 variant="ghost"
                 className="w-full justify-start font-normal"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setMobileSidebarOpen(false);
+                  navigate("/app/artifacts");
+                }}
+              >
+                <FolderOpen className="text-muted-foreground" strokeWidth={1.75} />
+                <Trans>Artifacts</Trans>
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full justify-start font-normal"
                 aria-label={t`Settings`}
                 onClick={() => {
                   setMenuOpen(false);
@@ -3296,48 +3316,51 @@ export function ShellPage() {
         </Popover>
       </aside>
 
-      <button
-        type="button"
-        data-testid="bots-sidebar-edge"
-        aria-label={botsSidebarCollapsed ? t`Show bots` : t`Hide bots`}
-        aria-pressed={!botsSidebarCollapsed}
-        className={`absolute inset-y-0 z-50 hidden w-2 cursor-ew-resize touch-none border-0 bg-transparent p-0 md:block ${
-          botsSidebarCollapsed ? "start-0" : "start-[308px]"
-        }`}
-        onPointerDown={(event) => {
-          event.currentTarget.setPointerCapture(event.pointerId);
-          botsSidebarEdgeDragRef.current = {
-            startX: event.clientX,
-            mode: botsSidebarCollapsed ? "expand" : "collapse",
-          };
-        }}
-        onPointerMove={(event) => {
-          const drag = botsSidebarEdgeDragRef.current;
-          if (!drag) return;
-          const rtl =
-            typeof document !== "undefined" &&
-            document.documentElement.getAttribute("dir") === "rtl";
-          const delta = rtl ? drag.startX - event.clientX : event.clientX - drag.startX;
-          if (drag.mode === "expand" && delta >= BOTS_SIDEBAR_EDGE_DRAG_PX) {
+      {/* The full-screen computer covers the sidebar, so its edge must not catch clicks there. */}
+      {computerOpen || booting ? null : (
+        <button
+          type="button"
+          data-testid="bots-sidebar-edge"
+          aria-label={botsSidebarCollapsed ? t`Show bots` : t`Hide bots`}
+          aria-pressed={!botsSidebarCollapsed}
+          className={`absolute inset-y-0 z-50 hidden w-2 cursor-ew-resize touch-none border-0 bg-transparent p-0 md:block ${
+            botsSidebarCollapsed ? "start-0" : "start-[308px]"
+          }`}
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            botsSidebarEdgeDragRef.current = {
+              startX: event.clientX,
+              mode: botsSidebarCollapsed ? "expand" : "collapse",
+            };
+          }}
+          onPointerMove={(event) => {
+            const drag = botsSidebarEdgeDragRef.current;
+            if (!drag) return;
+            const rtl =
+              typeof document !== "undefined" &&
+              document.documentElement.getAttribute("dir") === "rtl";
+            const delta = rtl ? drag.startX - event.clientX : event.clientX - drag.startX;
+            if (drag.mode === "expand" && delta >= BOTS_SIDEBAR_EDGE_DRAG_PX) {
+              botsSidebarEdgeDragRef.current = null;
+              setBotsSidebarCollapsedPref(false);
+            } else if (drag.mode === "collapse" && delta <= -BOTS_SIDEBAR_EDGE_DRAG_PX) {
+              botsSidebarEdgeDragRef.current = null;
+              setBotsSidebarCollapsedPref(true);
+            }
+          }}
+          onPointerUp={(event) => {
+            const drag = botsSidebarEdgeDragRef.current;
             botsSidebarEdgeDragRef.current = null;
-            setBotsSidebarCollapsedPref(false);
-          } else if (drag.mode === "collapse" && delta <= -BOTS_SIDEBAR_EDGE_DRAG_PX) {
+            if (!drag) return;
+            if (Math.abs(event.clientX - drag.startX) < BOTS_SIDEBAR_EDGE_DRAG_PX) {
+              setBotsSidebarCollapsedPref(!botsSidebarCollapsed);
+            }
+          }}
+          onPointerCancel={() => {
             botsSidebarEdgeDragRef.current = null;
-            setBotsSidebarCollapsedPref(true);
-          }
-        }}
-        onPointerUp={(event) => {
-          const drag = botsSidebarEdgeDragRef.current;
-          botsSidebarEdgeDragRef.current = null;
-          if (!drag) return;
-          if (Math.abs(event.clientX - drag.startX) < BOTS_SIDEBAR_EDGE_DRAG_PX) {
-            setBotsSidebarCollapsedPref(!botsSidebarCollapsed);
-          }
-        }}
-        onPointerCancel={() => {
-          botsSidebarEdgeDragRef.current = null;
-        }}
-      />
+          }}
+        />
+      )}
 
       <main
         aria-hidden={mobileSidebarOpen || undefined}
@@ -3495,7 +3518,12 @@ export function ShellPage() {
                       openSettings("voice");
                       return;
                     }
-                    setCallOpen(true);
+                    startCall({
+                      botId: active.id,
+                      botName: active.name,
+                      botColor: active.color,
+                      transcribe: Boolean(voiceStatus?.transcribe),
+                    });
                   }
                 : undefined
             }
@@ -3526,6 +3554,8 @@ export function ShellPage() {
           />
         ) : null}
       </main>
+
+      <CallCard onSettings={() => openSettings("voice")} />
 
       <aside
         data-testid="side-panel"
@@ -4284,7 +4314,7 @@ export function ShellPage() {
                   await Promise.race([rpc.voice.status(), voiceStatusRefreshTimeout()]),
                 );
               } catch {
-                // Prefer reopening Voice settings over CallView with stale readiness.
+                // Prefer reopening Voice settings over starting a call with stale readiness.
                 setVoiceStatus(null);
               }
             }}
@@ -4305,18 +4335,6 @@ export function ShellPage() {
               resolveTranscriptBot(peerConversation.peerBotId)?.color ?? FALLBACK_BOT_COLOR
             }
             onClose={() => setPeerConversation(null)}
-          />
-        ) : null}
-        {callOpen && active ? (
-          <CallView
-            botId={active.id}
-            botName={active.name}
-            transcribe={Boolean(voiceStatus?.transcribe)}
-            snapshot={activeSnapshot}
-            onSend={sendMessage}
-            onFollowUp={followUpMessage}
-            onAnswer={answerMessage}
-            onClose={() => setCallOpen(false)}
           />
         ) : null}
       </Suspense>
@@ -4354,6 +4372,7 @@ export function ShellPage() {
                 {recordingSkill ? (
                   <TeachRecordingChrome
                     recording={recordingSkill}
+                    botId={computerBot.id}
                     busy={teachBusy}
                     onStop={stopTeaching}
                     variant="overlay"
@@ -4435,38 +4454,52 @@ export function ShellPage() {
               </div>
             ) : null}
             <div className="relative min-h-0 flex-1 bg-background">
-              {computer?.kind === "desktop" ? (
-                <DesktopKindEmptyState className="grid h-full place-items-center px-8 text-center text-sm text-muted-foreground/80" />
-              ) : computer?.state === "running" && embeddedScreenUrl && !computerScreenError ? (
-                <>
-                  <iframe
-                    title={t`Bot screen`}
-                    src={embeddedScreenUrl}
-                    sandbox={screenIframeSandbox(embeddedScreenUrl)}
-                    className="h-full w-full border-0 bg-black"
-                    allow="clipboard-read; clipboard-write; fullscreen"
-                    style={{
-                      pointerEvents: recordingSkill || !hasControl ? "none" : "auto",
-                    }}
-                  />
-                  {computerBot ? (
-                    <TeachCaptureOverlay
-                      botId={computerBot.id}
-                      skill={recordingSkill}
-                      enabled={Boolean(recordingSkill)}
-                      screenWidth={computer?.screenWidth}
-                      screenHeight={computer?.screenHeight}
+              <ComputerWorkspace
+                botId={computerBot.id}
+                computer={computer}
+                hasControl={hasControl}
+                dock={!recordingSkill}
+                onTakeControl={
+                  computer?.state === "running" &&
+                  !hasControl &&
+                  !computerTakeoverBlocked(computer, snapshot?.run?.status)
+                    ? () => openComputer(computerBot.id)
+                    : undefined
+                }
+              >
+                {computer?.kind === "desktop" ? (
+                  <DesktopKindEmptyState className="grid h-full place-items-center px-8 text-center text-sm text-muted-foreground/80" />
+                ) : computer?.state === "running" && embeddedScreenUrl && !computerScreenError ? (
+                  <>
+                    <iframe
+                      title={t`Bot screen`}
+                      src={embeddedScreenUrl}
+                      sandbox={screenIframeSandbox(embeddedScreenUrl)}
+                      className="h-full w-full border-0 bg-black"
+                      allow="clipboard-read; clipboard-write; fullscreen"
+                      style={{
+                        pointerEvents: recordingSkill || !hasControl ? "none" : "auto",
+                      }}
                     />
-                  ) : null}
-                </>
-              ) : (
-                <div className="grid h-full place-items-center text-sm text-muted-foreground/80">
-                  {computerScreenError ??
-                    (computer?.state === "suspended"
-                      ? t`Computer is asleep`
-                      : computerLabel(computer?.mode, computerBot.name))}
-                </div>
-              )}
+                    {computerBot ? (
+                      <TeachCaptureOverlay
+                        botId={computerBot.id}
+                        skill={recordingSkill}
+                        enabled={Boolean(recordingSkill)}
+                        screenWidth={computer?.screenWidth}
+                        screenHeight={computer?.screenHeight}
+                      />
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="grid h-full place-items-center text-sm text-muted-foreground/80">
+                    {computerScreenError ??
+                      (computer?.state === "suspended"
+                        ? t`Computer is asleep`
+                        : computerLabel(computer?.mode, computerBot.name))}
+                  </div>
+                )}
+              </ComputerWorkspace>
             </div>
           </div>
         </div>
@@ -4792,7 +4825,17 @@ const Transcript = memo(function Transcript({
             {loadingOlder ? t`Loading…` : t`Load earlier messages`}
           </button>
         ) : null}
-        {reactionView.visibleMessages.map((message) => {
+        {groupVoiceChats(reactionView.visibleMessages).map((item) => {
+          if (item.kind === "voiceChat") {
+            return (
+              <VoiceChatCard
+                key={item.key}
+                group={item}
+                revealMessageId={scrollRequest?.messageId}
+              />
+            );
+          }
+          const message = item.message;
           if (!message.blocks.some((block) => !isToolActivityBlock(block))) return null;
           const peerReceipt = isPeerReceiptBlocks(message.blocks);
           const messageReactions = reactionView.reactions.get(message.id);
@@ -4831,19 +4874,11 @@ const Transcript = memo(function Transcript({
                       ? undefined
                       : `relative w-fit min-w-0 ${
                           message.role === "user"
-                            ? "max-w-[min(84%,calc(100%_-_6rem))]"
-                            : "max-w-[min(88%,calc(100%_-_6rem))]"
+                            ? "max-w-[min(84%,calc(100%_-_6rem))] [@media(hover:none)]:max-w-[84%]"
+                            : "max-w-[min(88%,calc(100%_-_6rem))] [@media(hover:none)]:max-w-[88%]"
                         }`
                   }
                 >
-                  {peerReceipt ? null : (
-                    <MessageHoverActions
-                      message={message}
-                      side={message.role === "user" ? "start" : "end"}
-                      onReply={onReply}
-                      onReact={onReact}
-                    />
-                  )}
                   <MessageView
                     artifactTarget={artifactTarget}
                     message={message}
@@ -4875,6 +4910,14 @@ const Transcript = memo(function Transcript({
                     onSpeak={() => onSpeak(message)}
                     onOpenComputer={onOpenComputer}
                   />
+                  {peerReceipt ? null : (
+                    <MessageHoverActions
+                      message={message}
+                      side={message.role === "user" ? "start" : "end"}
+                      onReply={onReply}
+                      onReact={onReact}
+                    />
+                  )}
                 </div>
               </div>
               {!peerReceipt && messageReactions ? (
@@ -5683,7 +5726,7 @@ const Composer = memo(function Composer({
             className="max-h-32 min-h-[24px] min-w-[8rem] flex-1 resize-none overflow-y-auto bg-transparent py-0.5 text-[15.5px] leading-6 text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-40"
           />
         </div>
-        {onVoice ? (
+        {onVoice && draft.trim().length === 0 ? (
           <Button
             variant="outline"
             size="icon"
@@ -5913,7 +5956,10 @@ function MessageHoverActions({
           type="button"
           aria-label={t`Reply`}
           onClick={() => onReply(message)}
-          className={`${iconButtonClass} hidden [@media(hover:hover)_and_(pointer:fine)]:grid`}
+          className={cn(
+            iconButtonClass,
+            "h-11 w-11 [@media(hover:hover)_and_(pointer:fine)]:h-7 [@media(hover:hover)_and_(pointer:fine)]:w-7",
+          )}
         >
           <Reply size={15} strokeWidth={1.7} />
         </button>
@@ -5928,13 +5974,6 @@ function MessageHoverActions({
             <MoreHorizontal size={15} strokeWidth={1.7} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align={side === "end" ? "start" : "end"}>
-            <DropdownMenuItem
-              className="[@media(hover:hover)_and_(pointer:fine)]:hidden"
-              onClick={() => onReply(message)}
-            >
-              <Reply size={15} />
-              <Trans>Reply</Trans>
-            </DropdownMenuItem>
             <DropdownMenuItem onClick={copyMessage}>
               <Copy size={14} strokeWidth={1.7} />
               <Trans>Copy</Trans>
@@ -5962,6 +6001,7 @@ function applyThreadEvent(
   snapshotRef: MutableRefObject<ThreadSnapshot | null>,
   computerRef: MutableRefObject<ComputerStatus | null>,
 ) {
+  publishComputerCommand(event);
   if (isThreadSnapshotEvent(event)) {
     const next = reduceThreadSnapshot(snapshotRef.current, event);
     commitSnapshot(next);
@@ -6102,7 +6142,7 @@ const MessageView = memo(function MessageView({
     return (
       <>
         {messageContext}
-        <div className="flex w-fit max-w-full justify-start">
+        <div className="flex w-fit max-w-full justify-start [@media(hover:none)]:w-full">
           <div
             data-testid="message-bot-bubble"
             className="max-w-full space-y-2.5 rounded-[20px] bg-muted px-[18px] py-3 text-[15.5px] leading-[1.5] text-foreground/90"
@@ -6198,7 +6238,10 @@ const MessageView = memo(function MessageView({
         }
         if (block.kind === "progress") {
           return (
-            <div key={i} className="flex w-fit max-w-full justify-start">
+            <div
+              key={i}
+              className="flex w-fit max-w-full justify-start [@media(hover:none)]:w-full"
+            >
               <div
                 data-testid="message-bot-bubble"
                 className="max-w-full rounded-[20px] bg-muted px-[18px] py-3 text-[15.5px] leading-[1.5] text-foreground/90"
@@ -6307,16 +6350,11 @@ const MessageView = memo(function MessageView({
           );
         }
         if (block.kind === "mcp_approval") {
+          const botId = "botId" in artifactTarget ? artifactTarget.botId : message.botId;
+          if (!botId) return null;
           return (
             <div key={i} className="flex justify-start">
-              <McpApprovalCard
-                botId={"botId" in artifactTarget ? artifactTarget.botId : message.botId}
-                name={block.name}
-                serverId={block.serverId}
-                transport={block.transport}
-                endpoint={block.endpoint}
-                needsOAuth={block.needsOAuth}
-              />
+              <McpApprovalCard botId={botId} threadId={message.threadId} block={block} />
             </div>
           );
         }
@@ -6351,22 +6389,28 @@ const MessageView = memo(function MessageView({
           );
         }
         if (block.kind === "text" && message.role === "user") {
+          // User bubbles stay literal text on web and mobile. Only explicit URLs
+          // and email addresses are links, so a sent address is tappable without
+          // formatting bold or headings.
           return (
-            <div key={i} className="flex w-fit max-w-full justify-end">
+            <div key={i} className="flex w-fit max-w-full justify-end [@media(hover:none)]:w-full">
               <div
                 data-testid="message-user-bubble"
                 data-quote-message-id={quoteMessageId}
                 className="max-w-full whitespace-pre-wrap wrap-anywhere rounded-[20px] bg-chat-user px-[18px] py-3 text-[15.5px] leading-[1.45] text-chat-user-foreground"
                 dir="auto"
               >
-                {block.text}
+                <LinkifiedText>{block.text}</LinkifiedText>
               </div>
             </div>
           );
         }
         if (block.kind === "text") {
           return (
-            <div key={i} className="flex w-fit max-w-full justify-start">
+            <div
+              key={i}
+              className="flex w-fit max-w-full justify-start [@media(hover:none)]:w-full"
+            >
               <div
                 data-testid="message-bot-bubble"
                 className="max-w-full rounded-[20px] bg-muted px-[18px] py-3 text-[15.5px] leading-[1.5] text-foreground/90"
@@ -6492,17 +6536,4 @@ function computerLabel(mode: ComputerStatus["mode"] | undefined, botName: string
 
 function newClientNonce(): string {
   return newClientId();
-}
-
-function readFileAsBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      const base64 = result.includes(",") ? (result.split(",")[1] ?? "") : result;
-      resolve(base64);
-    };
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
-    reader.readAsDataURL(file);
-  });
 }

@@ -1,4 +1,4 @@
-import { ChatMarkdown } from "@rakazo/chat-ui/native";
+import { ChatMarkdown, LinkifiedText } from "@rakazo/chat-ui/native";
 import type {
   AgentSkillCatalogEntry,
   Connection,
@@ -11,12 +11,14 @@ import {
   MESSAGE_REACTIONS,
   type MessageReaction,
 } from "@rakazo/contracts";
+import type { ThreadItem } from "@rakazo/core";
 import {
   abortableDelay,
   attachmentsForThread,
   buildComposerMentionOptions,
   type ComposerMention,
   cloudAgentHttpsUrl,
+  groupVoiceChats,
   isApprovalAskBlock,
   isRunTerminalEvent,
   isSecretAskBlock,
@@ -72,11 +74,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppConnectCard } from "../components/AppConnectCard";
 import { AskActions } from "../components/AskActions";
 import { BotAvatar } from "../components/bot-avatar";
+import { McpApprovalCard } from "../components/McpApprovalCard";
 import {
   MarkdownArtifactPreview,
   type MarkdownArtifactPreviewTarget,
 } from "../components/markdown-artifact-preview";
 import { NativeSymbol } from "../components/native-symbol";
+import { VoiceChatCard } from "../components/VoiceChatCard";
+import { WorkingIndicator } from "../components/WorkingIndicator";
 import {
   applyMobileThreadEvent,
   blockText,
@@ -101,6 +106,8 @@ import { mobileTokens } from "../lib/appearance";
 import { type MobileArtifactTarget, openMobileArtifact } from "../lib/artifact-open";
 import { nextAutoSpeakAction } from "../lib/auto-speak";
 import { confirmDeleteBot } from "../lib/bot-lifecycle";
+import { startCall, useCallSession } from "../lib/call-session";
+import { available as dictationAvailable } from "../lib/dictation";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
 import { saveLastBotId } from "../lib/last-bot";
@@ -114,6 +121,8 @@ import {
   hasVisibleMessagePresentation,
   isCenteredAgentEvent,
   messagePresentationSegments,
+  quotableMessageSegments,
+  truncateQuoteExcerpt,
 } from "../lib/message-presentation";
 import { native, useMobileTokens, useResolvedAppearance } from "../lib/native";
 import {
@@ -260,7 +269,9 @@ function Thread() {
     messageId?: string;
   }>();
   const inGroup = Boolean(groupId);
-  const scroll = useRef<FlatList<MobileMessage>>(null);
+  const call = useCallSession();
+  const onCall = Boolean(botId) && call?.botId === botId;
+  const scroll = useRef<FlatList<ThreadItem<MobileMessage>>>(null);
   const pinnedScroll = useRef<ScrollView>(null);
   const scrollBehavior = useRef(new ThreadScrollBehavior());
   const userDragging = useRef(false);
@@ -344,6 +355,8 @@ function Thread() {
   const [selectedSkill, setSelectedSkill] = useState<AgentSkillCatalogEntry | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [replyTarget, setReplyTarget] = useState<MobileMessage | null>(null);
+  const [replyQuote, setReplyQuote] = useState<string | null>(null);
+  const [quoteTarget, setQuoteTarget] = useState<MobileMessage | null>(null);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1047,6 +1060,8 @@ function Thread() {
     setSelectedSkill(null);
     setSelectedMentions([]);
     setReplyTarget(null);
+    setReplyQuote(null);
+    setQuoteTarget(null);
     setAttachmentNotice(null);
     setError(null);
   }, [threadKey]);
@@ -1157,6 +1172,7 @@ function Thread() {
         setSelectedSkill(null);
         setSelectedMentions([]);
         setReplyTarget(null);
+        setReplyQuote(null);
         setAttachmentNotice(null);
       };
       if (!plan.shouldSend) {
@@ -1198,6 +1214,7 @@ function Thread() {
               mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
               artifactIds: artifactIds.length ? artifactIds : undefined,
               replyToMessageId: reroutedToGroup ? undefined : replyTarget?.id,
+              replyQuote: reroutedToGroup ? undefined : (replyQuote ?? undefined),
             }
           : {
               botId: botTarget!,
@@ -1206,6 +1223,7 @@ function Thread() {
               mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
               artifactIds: artifactIds.length ? artifactIds : undefined,
               replyToMessageId: replyTarget?.id,
+              replyQuote: replyQuote ?? undefined,
             },
       );
       dropDelayedSetup();
@@ -1299,6 +1317,37 @@ function Thread() {
     [botId, snap?.members],
   );
 
+  async function startVoiceCall() {
+    if (!botId) return;
+    try {
+      const status = await rpc<{ ready: boolean; transcribe: boolean }>("voice/status");
+      if (!status.ready) {
+        router.push("/voice");
+        return;
+      }
+      // The device recognising speech itself is enough: a speak-only provider still calls.
+      if (!status.transcribe && !(await dictationAvailable())) {
+        Alert.alert(
+          t("Calls need transcription"),
+          t("Allow speech recognition in Settings, or connect ElevenLabs, OpenAI, or Fish Audio."),
+          [
+            { text: t("Not now"), style: "cancel" },
+            { text: t("Open Voice"), onPress: () => router.push("/voice") },
+          ],
+        );
+        return;
+      }
+      startCall({
+        botId,
+        botName: displayName ?? t("Bot"),
+        botColor: mentionBots.find((bot) => bot.id === botId)?.color,
+        transcribe: status.transcribe,
+      });
+    } catch {
+      router.push("/voice");
+    }
+  }
+
   function showAttachMenu() {
     Alert.alert(t("Attach"), undefined, [
       {
@@ -1341,7 +1390,8 @@ function Thread() {
 
   const answerableAskMessageId = latestAnswerableAskMessageId(snap);
   const runError = snap?.run?.status === "failed" ? (snap.run.error ?? null) : null;
-  const liveMessages = useMemo(() => [...visibleMessages].reverse(), [visibleMessages]);
+  // Group calls in reading order, then reverse for the inverted list.
+  const liveItems = useMemo(() => groupVoiceChats(visibleMessages).reverse(), [visibleMessages]);
   const messagesById = useMemo(
     () => new Map((snap?.messages ?? []).map((message) => [message.id, message])),
     [snap?.messages],
@@ -1388,7 +1438,18 @@ function Thread() {
 
   function messageActionProps(message: MobileMessage): MessageActionProps {
     const actions = [
-      { name: "reply", text: t("Reply"), onPress: () => setReplyTarget(message) },
+      {
+        name: "reply",
+        text: t("Reply"),
+        onPress: () => {
+          setReplyTarget(message);
+          setReplyQuote(null);
+        },
+      },
+      ...(!message.id.startsWith("progress:") &&
+      quotableMessageSegments(message.role, message.blocks).length > 0
+        ? [{ name: "quote", text: t("Quote"), onPress: () => setQuoteTarget(message) }]
+        : []),
       ...(canReactToThreadMessage(message)
         ? [
             {
@@ -1408,7 +1469,8 @@ function Thread() {
             },
           ]
         : []),
-      ...(message.role === "bot" && blockText(message)
+      // The call already reads replies aloud; a second voice would talk over it.
+      ...(message.role === "bot" && !onCall && blockText(message)
         ? [{ name: "speak", text: t("Speak message"), onPress: () => void speak(message) }]
         : []),
       {
@@ -1564,6 +1626,7 @@ function Thread() {
         style={{
           flexDirection: "row",
           alignItems: "center",
+          gap: 8,
           minHeight: 40,
           marginTop: 12,
         }}
@@ -1574,6 +1637,7 @@ function Thread() {
           size={28}
           status={currentBotStatus}
         />
+        <WorkingIndicator />
       </View>
     ) : inGroup && workingGroupBots.length > 0 ? (
       <View
@@ -1603,6 +1667,7 @@ function Thread() {
             </View>
           ))}
         </View>
+        <WorkingIndicator />
       </View>
     ) : null;
 
@@ -1649,9 +1714,9 @@ function Thread() {
           <FlatList
             key={threadKey}
             ref={scroll}
-            data={liveMessages}
+            data={liveItems}
             inverted
-            keyExtractor={(message) => message.id}
+            keyExtractor={(item) => (item.kind === "voiceChat" ? item.key : item.message.id)}
             extraData={answerableAskMessageId}
             style={{ flex: 1, marginTop: 8 }}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
@@ -1686,7 +1751,15 @@ function Thread() {
             }}
             ListFooterComponent={loadEarlierControl}
             ListHeaderComponent={workingFooter}
-            renderItem={({ item }) => renderMessageRow(item)}
+            renderItem={({ item }) =>
+              item.kind === "voiceChat" ? (
+                <View style={{ marginTop: 12, width: "100%" }}>
+                  <VoiceChatCard group={item} />
+                </View>
+              ) : (
+                renderMessageRow(item.message)
+              )
+            }
           />
         )}
         {!showPinnedPage && threadScrollState.detached ? (
@@ -1757,10 +1830,16 @@ function Thread() {
                 {t("Replying to")}
               </Text>
               <Text style={{ color: tokens.foreground, fontSize: 13 }} numberOfLines={1}>
-                {previewMessageText(replyTarget)}
+                {replyQuote ? `“${replyQuote}”` : previewMessageText(replyTarget)}
               </Text>
             </View>
-            <Pressable accessibilityLabel={t("Cancel reply")} onPress={() => setReplyTarget(null)}>
+            <Pressable
+              accessibilityLabel={t("Cancel reply")}
+              onPress={() => {
+                setReplyTarget(null);
+                setReplyQuote(null);
+              }}
+            >
               <Text style={{ color: tokens.mutedForeground }}>✕</Text>
             </Pressable>
           </View>
@@ -2092,6 +2171,28 @@ function Thread() {
               }}
             />
           </View>
+          {botId && !onCall && draft.trim().length === 0 ? (
+            <Pressable
+              accessibilityLabel={t("Call")}
+              onPress={() => void startVoiceCall()}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                borderWidth: 1,
+                borderColor: tokens.border,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <NativeSymbol
+                ios="waveform"
+                android="pulse-outline"
+                size={18}
+                color={tokens.mutedForeground}
+              />
+            </Pressable>
+          ) : null}
           <Pressable
             accessibilityLabel={t("Send")}
             disabled={sending || !canSend}
@@ -2187,6 +2288,17 @@ function Thread() {
           onClose={() => setMarkdownPreview(null)}
         />
       ) : null}
+      {quoteTarget ? (
+        <QuoteSheet
+          message={quoteTarget}
+          onCancel={() => setQuoteTarget(null)}
+          onQuote={(excerpt) => {
+            setReplyTarget(quoteTarget);
+            setReplyQuote(excerpt);
+            setQuoteTarget(null);
+          }}
+        />
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
@@ -2249,6 +2361,107 @@ function MentionOptionIcon({ mention }: { mention: ComposerMention }) {
         backgroundColor: mention.color ?? tokens.mutedForeground,
       }}
     />
+  );
+}
+
+function QuoteSheet({
+  message,
+  onCancel,
+  onQuote,
+}: {
+  message: MobileMessage;
+  onCancel: () => void;
+  onQuote: (excerpt: string) => void;
+}) {
+  const tokens = useMobileTokens();
+  const insets = useSafeAreaInsets();
+  const segments = useMemo(() => quotableMessageSegments(message.role, message.blocks), [message]);
+  const [selection, setSelection] = useState<{
+    segment: number;
+    start: number;
+    end: number;
+  } | null>(null);
+  const [revision, setRevision] = useState(0);
+  const selectedText = selection === null ? undefined : segments[selection.segment];
+  const start = selection ? Math.min(selection.start, selection.end) : 0;
+  const end = selection ? Math.max(selection.start, selection.end) : 0;
+  const excerpt =
+    selectedText === undefined ? "" : truncateQuoteExcerpt(selectedText.slice(start, end).trim());
+
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onCancel}>
+      <View
+        accessibilityViewIsModal
+        style={{
+          flex: 1,
+          backgroundColor: tokens.background,
+          // Page sheets clear the notch on iOS; Android modals are full-screen.
+          paddingTop: Platform.OS === "ios" ? 12 : insets.top + 12,
+          paddingBottom: insets.bottom,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            paddingHorizontal: 20,
+            paddingBottom: 12,
+          }}
+        >
+          <Pressable accessibilityRole="button" onPress={onCancel} hitSlop={8}>
+            <Text style={{ color: tokens.mutedForeground, fontSize: 17 }}>{t("Cancel")}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !excerpt }}
+            disabled={!excerpt}
+            onPress={() => onQuote(excerpt)}
+            hitSlop={8}
+          >
+            <Text
+              style={{
+                color: excerpt ? tokens.primary : tokens.mutedForeground,
+                fontSize: 17,
+                fontWeight: "600",
+              }}
+            >
+              {t("Quote")}
+            </Text>
+          </Pressable>
+        </View>
+        <ScrollView style={{ flex: 1, paddingHorizontal: 20 }}>
+          {segments.map((text, index) => (
+            <TextInput
+              key={`${index}:${revision}`}
+              multiline
+              scrollEnabled={false}
+              showSoftInputOnFocus={false}
+              value={text}
+              // Any edit (paste, hardware keyboard, dictation) remounts the
+              // field with the source text — the excerpt slices the original,
+              // so the displayed text must never diverge from it.
+              onChangeText={() => setRevision((value) => value + 1)}
+              style={{
+                color: tokens.foreground,
+                fontSize: 15.5,
+                lineHeight: 23,
+                padding: 0,
+                marginTop: index === 0 ? 0 : 12,
+                textAlignVertical: "top",
+              }}
+              onSelectionChange={(event) => {
+                const range = event.nativeEvent.selection;
+                // A collapsed caret (tap, focus change, the Quote press
+                // itself) keeps the last real span armed.
+                if (range.start === range.end) return;
+                setSelection({ segment: index, ...range });
+              }}
+            />
+          ))}
+        </ScrollView>
+      </View>
+    </Modal>
   );
 }
 
@@ -2380,6 +2593,10 @@ const MessageBubble = memo(function MessageBubble({
     (block): block is Extract<MessageBlock, { kind: "app_connect" }> =>
       block.kind === "app_connect",
   );
+  const mcpApprovalBlocks = message.blocks.filter(
+    (block): block is Extract<MessageBlock, { kind: "mcp_approval" }> =>
+      block.kind === "mcp_approval",
+  );
   const ask = message.blocks.find(
     (block): block is Extract<MessageBlock, { kind: "ask" }> =>
       block.kind === "ask" && !isApprovalAskBlock(block) && !block.actions?.length,
@@ -2397,6 +2614,16 @@ const MessageBubble = memo(function MessageBubble({
           <AppConnectCard
             key={`${block.provider}-${index}`}
             botId={cardBotId}
+            block={block}
+            accessibilityActions={actionProps.accessibilityActions}
+            onAccessibilityAction={actionProps.onAccessibilityAction}
+          />
+        ))}
+        {mcpApprovalBlocks.map((block) => (
+          <McpApprovalCard
+            key={block.serverId}
+            botId={cardBotId}
+            threadId={message.threadId}
             block={block}
             accessibilityActions={actionProps.accessibilityActions}
             onAccessibilityAction={actionProps.onAccessibilityAction}
@@ -2651,13 +2878,24 @@ const MessageBubble = memo(function MessageBubble({
       </Pressable>
     );
   }
-  if (appConnectBlocks.length > 0 && appConnectBlocks.length === message.blocks.length) {
+  const inlineCardCount = appConnectBlocks.length + mcpApprovalBlocks.length;
+  if (inlineCardCount > 0 && inlineCardCount === message.blocks.length) {
     return (
       <View style={{ gap: 8, width: "100%" }}>
         {appConnectBlocks.map((block, index) => (
           <AppConnectCard
             key={`${block.provider}-${index}`}
             botId={cardBotId}
+            block={block}
+            accessibilityActions={actionProps.accessibilityActions}
+            onAccessibilityAction={actionProps.onAccessibilityAction}
+          />
+        ))}
+        {mcpApprovalBlocks.map((block) => (
+          <McpApprovalCard
+            key={block.serverId}
+            botId={cardBotId}
+            threadId={message.threadId}
             block={block}
             accessibilityActions={actionProps.accessibilityActions}
             onAccessibilityAction={actionProps.onAccessibilityAction}
@@ -2741,6 +2979,16 @@ const MessageBubble = memo(function MessageBubble({
           <AppConnectCard
             key={`${block.provider}-${index}`}
             botId={cardBotId}
+            block={block}
+            accessibilityActions={actionProps.accessibilityActions}
+            onAccessibilityAction={actionProps.onAccessibilityAction}
+          />
+        ))}
+        {mcpApprovalBlocks.map((block) => (
+          <McpApprovalCard
+            key={block.serverId}
+            botId={cardBotId}
+            threadId={message.threadId}
             block={block}
             accessibilityActions={actionProps.accessibilityActions}
             onAccessibilityAction={actionProps.onAccessibilityAction}
@@ -2896,6 +3144,16 @@ const MessageBubble = memo(function MessageBubble({
             onAccessibilityAction={actionProps.onAccessibilityAction}
           />
         ))}
+        {mcpApprovalBlocks.map((block) => (
+          <McpApprovalCard
+            key={block.serverId}
+            botId={cardBotId}
+            threadId={message.threadId}
+            block={block}
+            accessibilityActions={actionProps.accessibilityActions}
+            onAccessibilityAction={actionProps.onAccessibilityAction}
+          />
+        ))}
       </View>
     );
   }
@@ -2982,19 +3240,24 @@ function MessageTextCard({
               : ""}
         </Text>
       ) : null}
-      {message.role === "user" ? (
-        <Text style={{ color: tokens.secondaryForeground, fontSize: 15.5, lineHeight: 23 }}>
-          {contentText}
-        </Text>
-      ) : (
-        <ChatMarkdown
-          palette={tokens}
-          colorScheme={colorScheme}
-          streaming={message.id.startsWith("progress:")}
-        >
-          {contentText}
-        </ChatMarkdown>
-      )}
+      {
+        // User bubbles stay literal text on web and mobile. Only explicit URLs
+        // and email addresses are links, so a sent address is tappable without
+        // formatting bold or headings.
+        message.role === "user" ? (
+          <LinkifiedText color={tokens.secondaryForeground} linkColor={tokens.link}>
+            {contentText}
+          </LinkifiedText>
+        ) : (
+          <ChatMarkdown
+            palette={tokens}
+            colorScheme={colorScheme}
+            streaming={message.id.startsWith("progress:")}
+          >
+            {contentText}
+          </ChatMarkdown>
+        )
+      }
     </Pressable>
   );
 }
