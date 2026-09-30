@@ -68,6 +68,8 @@ function transport(pairing?: WindowsHostPairingResult): WindowsHostTransport {
       serverTime: "2026-09-30T00:00:01.000Z",
       revoked: false,
     })),
+    poll: vi.fn(async () => null),
+    report: vi.fn(async () => undefined),
   };
 }
 
