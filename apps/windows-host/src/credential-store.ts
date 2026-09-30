@@ -169,7 +169,6 @@ function runPowerShell(script: string, stdin: string): Promise<string> {
   });
 }
 
-
 function sanitizePowerShellDiagnostic(value: string) {
   return value
     .replace(/[\r\n]+/gu, " ")
