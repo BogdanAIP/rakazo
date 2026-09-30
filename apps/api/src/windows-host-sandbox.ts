@@ -109,11 +109,7 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
     yield { type: "exit", code: 1 };
   }
 
-  async connectScreen(
-    _computer: ComputerRef,
-    _request: ScreenRequest,
-    _context: AdapterContext,
-  ) {
+  async connectScreen(_computer: ComputerRef, _request: ScreenRequest, _context: AdapterContext) {
     return {
       url: null,
       mimeType: "text/plain",
@@ -134,11 +130,7 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
     throw new Error("Physical Windows observation is not enabled yet");
   }
 
-  async act(
-    _computer: ComputerRef,
-    _request: ComputerActionRequest,
-    _context: AdapterContext,
-  ) {
+  async act(_computer: ComputerRef, _request: ComputerActionRequest, _context: AdapterContext) {
     throw new Error("Physical Windows actions are not enabled yet");
   }
 
@@ -155,11 +147,7 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
     throw new Error("Physical Windows file access is not enabled yet");
   }
 
-  async writeFile(
-    _computer: ComputerRef,
-    _file: PortableFile,
-    _context: AdapterContext,
-  ) {
+  async writeFile(_computer: ComputerRef, _file: PortableFile, _context: AdapterContext) {
     throw new Error("Physical Windows file access is not enabled yet");
   }
 
@@ -167,6 +155,7 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
     _computer: ComputerRef,
     _context: AdapterContext,
   ): AsyncIterable<PortableFile> {
+    yield* [] as PortableFile[];
     throw new Error("Physical Windows workspace export is not enabled yet");
   }
 
