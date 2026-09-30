@@ -190,10 +190,9 @@ export async function createApp(
       });
   const { prisma } = created;
   const windowsHostCommandHub = new WindowsHostCommandHub();
-  const windowsHostSandbox =
-    windowsHostEnabled
-      ? new WindowsHostSandboxProvider(prisma, windowsHostCommandHub)
-      : undefined;
+  const windowsHostSandbox = windowsHostEnabled
+    ? new WindowsHostSandboxProvider(prisma, windowsHostCommandHub)
+    : undefined;
   const realtime =
     realtimeOverride ??
     (created.pool
