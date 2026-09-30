@@ -2,13 +2,16 @@ import type {
   AdapterContext,
   CommandRequest,
   ComputerActionRequest,
+  ComputerActionResult,
   ComputerInput,
+  ComputerObservation,
   ComputerRef,
   ControlLeaseRef,
   PortableFile,
   ProcessEvent,
   SandboxProvider,
   ScreenRequest,
+  SnapshotRef,
 } from "@rakazo/adapter-kit";
 import type { WindowsHostCommandRequest, WindowsHostCommandResult } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
@@ -157,11 +160,15 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
     throw new Error("Physical Windows input is not enabled yet");
   }
 
-  async observe(_computer: ComputerRef, _context: AdapterContext) {
+  async observe(_computer: ComputerRef, _context: AdapterContext): Promise<ComputerObservation> {
     throw new Error("Physical Windows observation is not enabled yet");
   }
 
-  async act(_computer: ComputerRef, _request: ComputerActionRequest, _context: AdapterContext) {
+  async act(
+    _computer: ComputerRef,
+    _request: ComputerActionRequest,
+    _context: AdapterContext,
+  ): Promise<ComputerActionResult> {
     throw new Error("Physical Windows actions are not enabled yet");
   }
 
@@ -230,7 +237,7 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
     throw new Error("Physical Windows workspace import is not enabled yet");
   }
 
-  async snapshot(_computer: ComputerRef, _context: AdapterContext) {
+  async snapshot(_computer: ComputerRef, _context: AdapterContext): Promise<SnapshotRef> {
     throw new Error("Physical Windows snapshots are not enabled yet");
   }
 
