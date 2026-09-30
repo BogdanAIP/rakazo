@@ -1,18 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
-import type {
-  WindowsHostAdvertisement,
-  WindowsHostHeartbeat,
-} from "@rakazo/contracts";
+import type { WindowsHostAdvertisement, WindowsHostHeartbeat } from "@rakazo/contracts";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 const DEFAULT_PAIRING_TTL_MS = 5 * 60_000;
 
-type WindowsHostDb = Pick<
-  PrismaClient,
-  "windowsHost" | "windowsHostPairing" | "$transaction"
->;
+type WindowsHostDb = Pick<PrismaClient, "windowsHost" | "windowsHostPairing" | "$transaction">;
 
 export class WindowsHostPairingError extends Error {
   constructor(message: string) {
