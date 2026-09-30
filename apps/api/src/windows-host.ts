@@ -1,10 +1,13 @@
 import type { Hono } from "hono";
 import {
+  WindowsHostCommandPollSchema,
+  WindowsHostCommandReportSchema,
   WindowsHostHeartbeatSchema,
   WindowsHostPairingClaimSchema,
 } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import {
+  authenticateWindowsHost,
   claimWindowsHostPairing,
   createWindowsHostPairing,
   listWindowsHosts,
@@ -14,6 +17,7 @@ import {
   WindowsHostPairingError,
   WindowsHostReplayError,
 } from "@rakazo/db";
+import type { WindowsHostCommandHub } from "./windows-host-command-hub.js";
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
@@ -26,6 +30,7 @@ export function mountWindowsHostRoutes(
   app: Hono,
   deps: {
     prisma: PrismaClient;
+    commandHub: WindowsHostCommandHub;
     resolveOwner: (request: Request) => Promise<OwnerIdentity | null>;
   },
 ) {
@@ -107,6 +112,57 @@ export function mountWindowsHostRoutes(
     } catch (error) {
       if (error instanceof WindowsHostPairingError) {
         return c.json({ error: "Invalid or expired pairing capability" }, 401);
+      }
+      throw error;
+    }
+  });
+
+  app.post("/api/windows-host/commands/next", async (c) => {
+    const credential = bearerToken(c.req.header("authorization"));
+    if (!credential) return c.json({ error: "Unauthorized" }, 401);
+
+    const parsed = WindowsHostCommandPollSchema.safeParse(await requiredJson(c.req.raw));
+    if (!parsed.success) return c.json({ error: "Invalid command poll" }, 400);
+
+    try {
+      const host = await authenticateWindowsHost(deps.prisma, {
+        hostId: parsed.data.hostId,
+        credential,
+      });
+      if (host.revoked) return c.json({ error: "Host revoked" }, 403);
+
+      const command = await deps.commandHub.poll(parsed.data.hostId, 25_000, c.req.raw.signal);
+      if (!command) return c.body(null, 204);
+      return c.json(command);
+    } catch (error) {
+      if (error instanceof WindowsHostAuthenticationError) {
+        return c.json({ error: "Unauthorized" }, 401);
+      }
+      throw error;
+    }
+  });
+
+  app.post("/api/windows-host/commands/result", async (c) => {
+    const credential = bearerToken(c.req.header("authorization"));
+    if (!credential) return c.json({ error: "Unauthorized" }, 401);
+
+    const parsed = WindowsHostCommandReportSchema.safeParse(await requiredJson(c.req.raw));
+    if (!parsed.success) return c.json({ error: "Invalid command result" }, 400);
+
+    try {
+      const host = await authenticateWindowsHost(deps.prisma, {
+        hostId: parsed.data.hostId,
+        credential,
+      });
+      if (host.revoked) return c.json({ error: "Host revoked" }, 403);
+
+      if (!deps.commandHub.settle(parsed.data.hostId, parsed.data.result)) {
+        return c.json({ error: "Command is no longer pending" }, 409);
+      }
+      return c.json({ ok: true as const }, 202);
+    } catch (error) {
+      if (error instanceof WindowsHostAuthenticationError) {
+        return c.json({ error: "Unauthorized" }, 401);
       }
       throw error;
     }
