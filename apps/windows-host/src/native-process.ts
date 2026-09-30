@@ -14,7 +14,9 @@ export type WindowsProcessRunner = (
 function terminateWindowsTree(pid: number | undefined) {
   if (!pid || process.platform !== "win32") return;
   const killer = spawn("taskkill.exe", ["/pid", String(pid), "/t", "/f"], {
-    windowsHide: true, shell: false, stdio: "ignore",
+    windowsHide: true,
+    shell: false,
+    stdio: "ignore",
   });
   killer.on("error", () => undefined);
   killer.unref();
@@ -56,7 +58,9 @@ export async function runBoundedWindowsProcess(
       if (bytes > MAX_OUTPUT_BYTES) {
         terminateWindowsTree(child.pid);
         child.kill();
-        finish(new Error("Windows process output exceeded 64 KiB; verify termination before retry"));
+        finish(
+          new Error("Windows process output exceeded 64 KiB; verify termination before retry"),
+        );
         return;
       }
       if (isError) stderr += buffer.toString("utf8");
