@@ -322,8 +322,30 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
     return new Uint8Array(bytes);
   }
 
-  async writeFile(_computer: ComputerRef, _file: PortableFile, _context: AdapterContext) {
-    throw new Error("Physical Windows file access is not enabled yet");
+  async writeFile(computer: ComputerRef, file: PortableFile, context: AdapterContext) {
+    if (file.content.byteLength > 2 * 1024 * 1024) {
+      throw new Error("Windows host file writes are limited to 2 MiB");
+    }
+    const result = await this.commands.dispatch(
+      computer.providerRef,
+      {
+        kind: "files.write",
+        botId: computer.botId,
+        path: file.path,
+        contentBase64: Buffer.from(file.content).toString("base64"),
+        executable: file.executable ?? false,
+      },
+      context.signal,
+      30_000,
+      context.userId,
+    );
+    if (!result.ok) throw new Error(result.error);
+    if (result.result.kind !== "file-write") {
+      throw new Error("Windows host returned an unexpected file-write response");
+    }
+    if (result.result.bytesWritten !== file.content.byteLength) {
+      throw new Error("Windows host reported an incomplete file write");
+    }
   }
 
   async *exportWorkspace(
@@ -335,11 +357,13 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
   }
 
   async importWorkspace(
-    _computer: ComputerRef,
-    _files: AsyncIterable<PortableFile>,
-    _context: AdapterContext,
+    computer: ComputerRef,
+    files: AsyncIterable<PortableFile>,
+    context: AdapterContext,
   ) {
-    throw new Error("Physical Windows workspace import is not enabled yet");
+    for await (const file of files) {
+      await this.writeFile(computer, file, context);
+    }
   }
 
   async snapshot(_computer: ComputerRef, _context: AdapterContext): Promise<SnapshotRef> {
