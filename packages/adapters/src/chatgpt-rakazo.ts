@@ -69,6 +69,7 @@ const WRITE_ACTIONS = new Set([
   "connect",
   "connectProvider",
   "create",
+  "createPairing",
   "dismissFocus",
   "dismissUpdate",
   "duplicate",
