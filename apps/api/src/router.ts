@@ -914,9 +914,13 @@ export function createRouter(deps: RouterDeps) {
         if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
         const hosts = await listWindowsHosts(deps.prisma, context.actor.userId);
         return hosts.map((host) => {
+          if (host.platform !== "win32") {
+            throw new Error("Stored Windows host platform is invalid");
+          }
           const capabilities = WindowsHostCapabilitySchema.array().safeParse(host.capabilities);
           return {
             ...host,
+            platform: "win32" as const,
             capabilities: capabilities.success ? capabilities.data : [],
             revokedAt: host.revokedAt?.toISOString() ?? null,
             lastSeenAt: host.lastSeenAt?.toISOString() ?? null,
