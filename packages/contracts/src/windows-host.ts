@@ -84,6 +84,21 @@ export type WindowsHostRevocation = z.infer<typeof WindowsHostRevocationSchema>;
 
 export const WindowsHostCommandRequestSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("identity.get") }),
+  z.object({
+    kind: z.literal("process.list"),
+    limit: z.number().int().min(1).max(100).default(50),
+  }),
+  z.object({
+    kind: z.literal("files.list"),
+    botId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
+    directory: z.string().max(4_096),
+  }),
+  z.object({
+    kind: z.literal("files.read"),
+    botId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
+    path: z.string().min(1).max(4_096),
+    maxBytes: z.number().int().min(1).max(65_536).default(32_768),
+  }),
 ]);
 
 export type WindowsHostCommandRequest = z.infer<typeof WindowsHostCommandRequestSchema>;
@@ -99,10 +114,35 @@ export const WindowsHostCommandResultSchema = z.discriminatedUnion("ok", [
   z.object({
     id: z.string().uuid(),
     ok: z.literal(true),
-    result: z.object({
-      kind: z.literal("identity"),
-      identity: WindowsHostIdentitySchema,
-    }),
+    result: z.discriminatedUnion("kind", [
+      z.object({
+        kind: z.literal("identity"),
+        identity: WindowsHostIdentitySchema,
+      }),
+      z.object({
+        kind: z.literal("processes"),
+        processes: z.array(
+          z.object({
+            pid: z.number().int().positive(),
+            name: z.string().trim().min(1).max(256),
+          }),
+        ).max(100),
+      }),
+      z.object({
+        kind: z.literal("files"),
+        entries: z.array(
+          z.object({
+            path: z.string().max(4_096),
+            kind: z.enum(["file", "dir"]),
+            size: z.number().int().nonnegative(),
+          }),
+        ).max(128),
+      }),
+      z.object({
+        kind: z.literal("file"),
+        contentBase64: z.string().max(90_000),
+      }),
+    ]),
   }),
   z.object({
     id: z.string().uuid(),
