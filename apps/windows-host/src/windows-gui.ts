@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import type { WindowsHostGuiRequest, WindowsHostGuiResult } from "@rakazo/contracts";
+import { WindowsHostGuiRequestSchema, WindowsHostGuiResultSchema, type WindowsHostGuiRequest, type WindowsHostGuiResult } from "@rakazo/contracts";
 
 const GUI_SCRIPT = fileURLToPath(new URL("../scripts/windows-gui.ps1", import.meta.url));
 const MAX_GUI_BYTES = 8 * 1024 * 1024;
@@ -73,24 +73,27 @@ export async function runWindowsGui(request: WindowsHostGuiRequest): Promise<Win
         return;
       }
       try {
-        finish(undefined, JSON.parse(stdout.trim()) as WindowsHostGuiResult);
+        finish(undefined, WindowsHostGuiResultSchema.parse(JSON.parse(stdout.trim())));
       } catch {
         finish(new Error("Windows GUI returned invalid JSON"));
       }
     });
-    child.stdin.end(JSON.stringify(request), "utf8");
+    child.stdin.end(JSON.stringify(WindowsHostGuiRequestSchema.parse(request)), "utf8");
   });
 }
 
 export class WindowsGuiBackend {
-  constructor(private readonly runner: WindowsGuiRunner = runWindowsGui) {}
+  constructor(
+    private readonly runner: WindowsGuiRunner = runWindowsGui,
+    private readonly isAvailable: () => boolean = windowsGuiAvailable,
+  ) {}
 
   available(): boolean {
-    return windowsGuiAvailable();
+    return this.isAvailable();
   }
 
   async execute(request: WindowsHostGuiRequest): Promise<WindowsHostGuiResult> {
     if (!this.available()) throw new Error("Physical Windows GUI is not enabled");
-    return this.runner(request);
+    return WindowsHostGuiResultSchema.parse(await this.runner(WindowsHostGuiRequestSchema.parse(request)));
   }
 }
