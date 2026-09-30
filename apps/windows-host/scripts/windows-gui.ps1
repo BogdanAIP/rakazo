@@ -142,7 +142,7 @@ function Invoke-DesktopAction($action) {
 $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
 switch ([string]$request.command) {
     "observe" {
-        $result = Get-DesktopSnapshot
+        $result = @{ kind = "observation"; observation = Get-DesktopSnapshot }
     }
     "act" {
         if ($request.actions.Count -gt 24) { throw "Too many Windows desktop actions" }
@@ -154,7 +154,7 @@ switch ([string]$request.command) {
         if ($request.settleMs) {
             Start-Sleep -Milliseconds ([Math]::Min([Math]::Max([int]$request.settleMs, 0), 5000))
         }
-        $result = @{ completed = $completed }
+        $result = @{ kind = "actions"; completed = $completed }
         if ($request.observe -ne $false) {
             $result.observation = Get-DesktopSnapshot
         }
