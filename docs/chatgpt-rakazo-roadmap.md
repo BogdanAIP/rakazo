@@ -986,11 +986,16 @@ Already implemented on `feature/chatgpt-mcp-upstream-2026-09-29`:
 - scoped host credential issuance, hashing, revocation and heartbeat replay protection;
 - outbound host heartbeat;
 - DPAPI-protected credential persistence and restart restoration;
-- API/DB wiring and focused unit tests for transport and credential-source behavior.
+- API/DB wiring and focused unit tests for transport and credential-source behavior;
+- outbound long-poll `identity.get` command channel with per-host credential authentication and result correlation;
+- opt-in `WindowsHostSandboxProvider` using the existing `desktop` computer kind, with identity verification in `prepare()`;
+- explicit fail-closed protection for unsupported process/files/GUI/snapshot operations and non-memory worker deployments.
+
+**Deployment boundary:** the current command hub is API-process-local. `RAKAZO_WINDOWS_HOST_ENABLED=true` is permitted only with `WAKEUP_DRIVER=memory` (single-process proof); the standalone Graphile worker rejects that flag. This prevents a remote Windows computer from silently being routed to the worker's local desktop. Do not claim cross-process production readiness until the command channel is shared through Rakazo's existing job/worker layer.
 
 Still required for this phase:
 
-- map the paired host into Rakazo's normal computer/provider contract;
+- implement the shared API↔worker command channel and host routing before enabling the normal Graphile deployment;
 - add bounded process execution and output;
 - add bounded file list/read/write;
 - prove cancellation and reconnect on a physical Windows host through Plugin R.
@@ -1315,10 +1320,10 @@ Completed evidence:
 
 The next implementation sequence should be:
 
-1. connect the existing paired Windows host runtime to Rakazo as a normal computer/provider path;
-2. add bounded process execution, stdout/stderr collection, timeout and cancellation;
-3. add bounded file list/read/write under explicit allowed roots;
-4. prove identity + process + files end to end through Plugin R on the physical Windows host;
+1. close the remaining CI lint/typecheck gaps and verify the memory-mode `identity.get` path on a physical Windows host;
+2. add cross-process command mediation through Rakazo's existing job/worker system; never route Graphile worker calls to its local `desktop` by accident;
+3. add bounded process execution, stdout/stderr collection, timeout and cancellation;
+4. add bounded file list/read/write under explicit allowed roots and prove identity + process + files through Plugin R on the physical Windows host;
 5. add durable host jobs and reconnect reconciliation;
 6. select/integrate the browser backend;
 7. move the proven UFO execution layer behind Rakazo `observe/act`, with visual fallback;
