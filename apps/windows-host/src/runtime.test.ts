@@ -9,7 +9,7 @@ import type {
   StoredWindowsHostCredential,
   WindowsHostCredentialStore,
 } from "./credential-store.js";
-import { resolveWindowsHostCredential } from "./runtime.js";
+import { executeWindowsHostCommand, resolveWindowsHostCredential } from "./runtime.js";
 import type { WindowsHostTransport } from "./transport.js";
 
 const advertisement: WindowsHostAdvertisement = {
@@ -147,5 +147,24 @@ describe("resolveWindowsHostCredential", () => {
         new MemoryCredentialStore(),
       ),
     ).rejects.toThrow("must be provided together");
+  });
+});
+
+
+describe("executeWindowsHostCommand", () => {
+  it("returns the physical host identity without invoking another agent runtime", () => {
+    const result = executeWindowsHostCommand(
+      {
+        id: "35633dcb-8c94-4f55-9517-8b76f28676df",
+        request: { kind: "identity.get" },
+      },
+      advertisement,
+    );
+
+    expect(result).toEqual({
+      id: "35633dcb-8c94-4f55-9517-8b76f28676df",
+      ok: true,
+      result: { kind: "identity", identity: advertisement.identity },
+    });
   });
 });
