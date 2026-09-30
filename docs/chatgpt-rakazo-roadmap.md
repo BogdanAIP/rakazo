@@ -22,6 +22,8 @@ Rakazo
 
 ChatGPT is the reasoning layer. Rakazo is the durable execution/control layer. The normal path must not require Codex, Work, CAP, OpenResearch, or another LLM.
 
+Ordinary ChatGPT chat is the default reasoning surface. Work remains an optional escalation for long or strongly agentic tasks, and Codex remains an optional specialized coding escalation; neither is infrastructure and neither may be a silent fallback.
+
 ---
 
 ## 1. Why this roadmap exists
@@ -213,9 +215,35 @@ Also, the deployed API/worker run inside Linux containers. Merely selecting `des
 
 ### 3.7 Direct browser/GUI prototypes are evidence, not final architecture
 
-Previous local experiments with OpenCLI and Microsoft UFO are valuable for capability discovery. They must be recovered and re-verified before reuse.
+Previous local experiments with OpenCLI and Microsoft UFO are valuable for capability discovery. They are implementation candidates behind Rakazo, not new public control planes.
 
-They are implementation candidates behind Rakazo, not new public control planes.
+### 3.8 Microsoft UFO execution layer is now physically verified
+
+On 2026-09-30 the UFO GUI path was re-verified on the physical Windows host without using UFO's HostAgent/AppAgent LLM hierarchy.
+
+A temporary external FastMCP gateway mounted only these existing UFO execution components:
+
+- `UICollector`;
+- `HostUIExecutor`;
+- `AppUIExecutor`.
+
+The proof used no UFO LLM, planner, model API key, memory agent, or independent task loop.
+
+Verified over real Streamable HTTP MCP:
+
+- enumerate live Windows desktop windows;
+- capture a real all-screen PNG screenshot;
+- focus a selected application window;
+- enumerate UI Automation controls;
+- drive a disposable Notepad file semantically through the editor control;
+- send keyboard input including `Ctrl+S`;
+- independently verify the saved file content.
+
+The Notepad proof returned 54 UIA controls and persisted the exact test value `UFO_CHATGPT_WEB_OK`.
+
+A real limitation was also observed: the modern Windows Settings `ApplicationFrameWindow` could be discovered and focused, but its control enumeration returned an empty list. The final GUI backend therefore needs a deterministic fallback from semantic UIA actions to screenshot/vision plus bounded coordinate input when UIA is unavailable.
+
+This gateway is proof evidence only. It is not the final host transport, is not a second control plane, and has not replaced OpenResearch in the live deployment. The final implementation must put the UFO execution layer behind Rakazo's existing computer semantics and Rakazo-owned host authority.
 
 ---
 
@@ -423,15 +451,18 @@ Acceptance:
 
 After process/files/browser work, add physical desktop observation and input.
 
-Candidate implementation layers:
+Primary implementation candidate, now physically proven:
 
-- Windows Graphics Capture / screenshot APIs;
-- UI Automation;
-- SendInput or equivalent bounded input;
-- selected Microsoft UFO execution components;
-- another maintained Windows executor.
+- Microsoft UFO execution components: `UICollector`, `HostUIExecutor`, and `AppUIExecutor`.
 
-If UFO is used, reuse execution components only. Do **not** embed UFO's agent hierarchy or require another LLM.
+Required supporting/fallback layers:
+
+- Windows Graphics Capture / screenshot APIs where needed;
+- UI Automation for semantic control discovery/actions;
+- SendInput or equivalent bounded input for controlled visual fallback;
+- screenshot/vision + bounded coordinate action when an application exposes insufficient UIA state.
+
+Reuse UFO execution components only. Do **not** embed UFO's agent hierarchy or require another LLM. UFO must remain an implementation detail behind Rakazo's computer contract, not a ChatGPT-visible tool namespace.
 
 Target:
 
@@ -914,6 +945,8 @@ For GUI/browser operations:
 
 ### Phase 0 — documentation and baseline
 
+Status: **substantially complete as of 2026-09-30**.
+
 Deliverables:
 
 - this document;
@@ -979,6 +1012,8 @@ Exit:
 - no OpenResearch tool involved.
 
 ### Phase 4 — physical Windows GUI
+
+Status: **execution-backend proof complete; Rakazo contract integration outstanding**.
 
 Implement real `observe/act` behind the Rakazo computer contract.
 
@@ -1226,19 +1261,26 @@ Unless new evidence invalidates them:
 
 ## 17. Immediate next work
 
+Completed evidence:
+
+- the OpenCLI/UFO role has been recovered and re-evaluated;
+- UFO's LLM hierarchy is not required for our architecture;
+- the physical Windows GUI execution path has been proven through an external MCP prototype using only UFO execution components;
+- semantic UIA editing and keyboard input have been independently verified on a disposable Notepad file;
+- a visual fallback requirement has been demonstrated by the Windows Settings UIA edge case.
+
 The next implementation sequence should be:
 
-1. recover and document the existing OpenCLI/UFO proof evidence;
-2. define the minimal Windows host protocol and pairing contract;
-3. add a native Windows host skeleton with health/heartbeat;
-4. connect it to Rakazo as a normal computer/provider path;
-5. prove process + files end to end through Plugin R;
-6. add durable host jobs and reconnect reconciliation;
-7. add browser backend;
-8. add GUI observe/act;
-9. modernize R with hot paths and MCP Apps UI;
-10. add MCP Events;
-11. cut over from OpenResearch only after the parity matrix passes.
+1. define the minimal Windows host protocol and pairing/revocation contract;
+2. add a native `apps/windows-host` skeleton with identity, health, heartbeat, and reconnect state;
+3. connect it to Rakazo as a normal computer/provider path;
+4. prove process + bounded files end to end through Plugin R;
+5. add durable host jobs and reconnect reconciliation;
+6. select/integrate the browser backend;
+7. move the proven UFO execution layer behind Rakazo `observe/act`, with visual fallback;
+8. modernize R with hot paths and MCP Apps UI;
+9. add MCP Events;
+10. cut over from OpenResearch only after the parity matrix passes.
 
 The important sequencing rule is:
 
