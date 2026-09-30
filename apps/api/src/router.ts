@@ -2631,6 +2631,81 @@ export function createRouter(deps: RouterDeps) {
         }
         return { path: input.path, content };
       }),
+      exec: authed.computer.exec.handler(async ({ context, input }) => {
+        let bot = await repos.getBot(context.actor, input.botId);
+        if (await expireStaleComputerControl(deps, bot.computer)) {
+          bot = await repos.getBot(context.actor, input.botId);
+        }
+        const computer = bot.computer;
+        if (!computer?.providerRef || computer.state !== "running") {
+          throw new ORPCError("BAD_REQUEST", { message: "computer must be running" });
+        }
+        if (computer.kind !== "desktop") {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Direct host execution requires a physical desktop computer",
+          });
+        }
+        if (!hasActiveComputerControl(computer) || computer.controlBotId !== bot.id) {
+          throw new ORPCError("FORBIDDEN", { message: "Take control first." });
+        }
+
+        let stdout = "";
+        let stderr = "";
+        let code = -1;
+        for await (const event of deps.sandbox.execute(
+          toComputerRef(computer),
+          {
+            argv: input.argv,
+            cwd: input.cwd,
+            timeoutMs: input.timeoutMs,
+          },
+          computerContext(context.actor, bot.id, "exec"),
+        )) {
+          if (event.type === "stdout") stdout += event.data;
+          else if (event.type === "stderr") stderr += event.data;
+          else code = event.code;
+          if (Buffer.byteLength(stdout, "utf8") + Buffer.byteLength(stderr, "utf8") > 65_536) {
+            throw new ORPCError("BAD_REQUEST", { message: "Process output exceeded 64 KiB" });
+          }
+        }
+        await keepComputerAwake(deps, computer.id);
+        return { stdout, stderr, code };
+      }),
+      browser: authed.computer.browser.handler(async ({ context, input }) => {
+        let bot = await repos.getBot(context.actor, input.botId);
+        if (await expireStaleComputerControl(deps, bot.computer)) {
+          bot = await repos.getBot(context.actor, input.botId);
+        }
+        const computer = bot.computer;
+        if (!computer?.providerRef || computer.state !== "running") {
+          throw new ORPCError("BAD_REQUEST", { message: "computer must be running" });
+        }
+        if (computer.kind !== "desktop" || !deps.sandbox.pageBrowser) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Direct signed-in browser access requires a physical desktop computer",
+          });
+        }
+        if (!hasActiveComputerControl(computer) || computer.controlBotId !== bot.id) {
+          throw new ORPCError("FORBIDDEN", { message: "Take control first." });
+        }
+
+        const result = await deps.sandbox.pageBrowser(
+          toComputerRef(computer),
+          input.request,
+          computerContext(context.actor, bot.id, "browser"),
+        );
+        await keepComputerAwake(deps, computer.id);
+        return {
+          ok: result.ok,
+          ...(result.completed === undefined ? {} : { completed: result.completed }),
+          ...(result.uncertain === undefined ? {} : { uncertain: result.uncertain }),
+          ...(result.url === undefined ? {} : { url: result.url }),
+          ...(result.title === undefined ? {} : { title: result.title }),
+          ...(result.tree === undefined ? {} : { tree: result.tree }),
+          ...(result.elements === undefined ? {} : { elements: result.elements }),
+          ...(result.error === undefined ? {} : { error: result.error }),
+        };
+      }),
       observe: authed.computer.observe.handler(async ({ context, input }) => {
         let bot = await repos.getBot(context.actor, input.botId);
         if (await expireStaleComputerControl(deps, bot.computer)) {
