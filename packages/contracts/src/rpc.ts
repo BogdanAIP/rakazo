@@ -81,7 +81,6 @@ import {
   VoiceStatusSchema,
 } from "./domain.js";
 import { ComputerCommandSchema, ProductEventSchema } from "./events.js";
-import { WindowsHostCapabilitySchema } from "./windows-host.js";
 import { Id, IsoDate } from "./ids.js";
 import {
   IntegrationProviderConfigSchema,
@@ -89,12 +88,13 @@ import {
 } from "./integration-settings.js";
 import { MessageReactionSchema } from "./reactions.js";
 import { RunsListOutputSchema } from "./runs.js";
+import { SearchQueryOutputSchema } from "./search.js";
 import {
   WindowsHostBrowserRequestSchema,
   WindowsHostBrowserResultSchema,
+  WindowsHostCapabilitySchema,
   WindowsHostProcessResultSchema,
 } from "./windows-host.js";
-import { SearchQueryOutputSchema } from "./search.js";
 
 const botId = z.object({ botId: Id });
 const groupId = z.object({ groupId: Id });
@@ -215,7 +215,16 @@ export const appContract = {
       ),
     ),
     createPairing: oc
-      .input(z.object({ ttlMs: z.number().int().min(1_000).max(30 * 60_000).optional() }))
+      .input(
+        z.object({
+          ttlMs: z
+            .number()
+            .int()
+            .min(1_000)
+            .max(30 * 60_000)
+            .optional(),
+        }),
+      )
       .output(
         z.object({
           pairingId: z.string().min(1).max(200),
