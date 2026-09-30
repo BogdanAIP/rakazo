@@ -50,7 +50,11 @@ export async function runOpenCliProcess(entry: string, argv: string[]): Promise<
       windowsHide: true,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, OPENCLI_BROWSER_COMMAND_TIMEOUT: "10" },
+      env: {
+        ...process.env,
+        OPENCLI_BROWSER_COMMAND_TIMEOUT: "10",
+        OPENCLI_WINDOW: process.env.RAKAZO_OPENCLI_WINDOW?.trim() || "foreground",
+      },
     });
     let output = "";
     let errors = "";
