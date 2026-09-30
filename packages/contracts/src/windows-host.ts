@@ -121,22 +121,26 @@ export const WindowsHostCommandResultSchema = z.discriminatedUnion("ok", [
       }),
       z.object({
         kind: z.literal("processes"),
-        processes: z.array(
-          z.object({
-            pid: z.number().int().positive(),
-            name: z.string().trim().min(1).max(256),
-          }),
-        ).max(100),
+        processes: z
+          .array(
+            z.object({
+              pid: z.number().int().positive(),
+              name: z.string().trim().min(1).max(256),
+            }),
+          )
+          .max(100),
       }),
       z.object({
         kind: z.literal("files"),
-        entries: z.array(
-          z.object({
-            path: z.string().max(4_096),
-            kind: z.enum(["file", "dir"]),
-            size: z.number().int().nonnegative(),
-          }),
-        ).max(128),
+        entries: z
+          .array(
+            z.object({
+              path: z.string().max(4_096),
+              kind: z.enum(["file", "dir"]),
+              size: z.number().int().nonnegative(),
+            }),
+          )
+          .max(128),
       }),
       z.object({
         kind: z.literal("file"),
