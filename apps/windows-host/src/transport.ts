@@ -11,6 +11,13 @@ import {
   WindowsHostPairingResultSchema,
 } from "@rakazo/contracts";
 
+export class WindowsHostAuthorizationError extends Error {
+  constructor(readonly status: 401 | 403) {
+    super("Windows host credential was rejected by Rakazo");
+    this.name = "WindowsHostAuthorizationError";
+  }
+}
+
 type FetchLike = typeof fetch;
 
 export interface WindowsHostTransport {
@@ -110,6 +117,9 @@ export class HttpWindowsHostTransport implements WindowsHostTransport {
 }
 
 async function parseJsonResponse(response: Response) {
+  if (response.status === 401 || response.status === 403) {
+    throw new WindowsHostAuthorizationError(response.status);
+  }
   const body = await response.text();
   if (!response.ok) {
     throw new Error(`Windows host request failed (${response.status})`);
