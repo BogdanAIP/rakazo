@@ -19,6 +19,10 @@ describe("ChatGPT Rakazo procedure projection", () => {
     expect(procedures).toContain("threads/subscribe");
     expect(procedures).toContain("computer/input");
     expect(procedures).toContain("computer/observe");
+    expect(procedures).toContain("computer/exec");
+    expect(procedures).toContain("computer/browser");
+    expect(procedures).toContain("windowsHosts/list");
+    expect(procedures).toContain("windowsHosts/createPairing");
     expect(procedures).toContain("memory/update");
     expect(procedures).toContain("routines/create");
     expect(procedures).toContain("mcp/servers/create");
@@ -181,6 +185,10 @@ describe("ChatGPT Rakazo procedure projection", () => {
   it("separates read, write, destructive, and stream calls", () => {
     expect(classifyProcedure("bots/list")).toBe("read");
     expect(classifyProcedure("computer/observe")).toBe("read");
+    expect(classifyProcedure("computer/downloadFile")).toBe("read");
+    expect(classifyProcedure("computer/uploadFile")).toBe("write");
+    expect(classifyProcedure("computer/exec")).toBe("destructive");
+    expect(classifyProcedure("computer/browser")).toBe("destructive");
     expect(classifyProcedure("threads/send")).toBe("write");
     expect(classifyProcedure("bots/remove")).toBe("destructive");
     expect(classifyProcedure("bots/rotateWebhookSecret")).toBe("destructive");
