@@ -45,7 +45,7 @@ async function listNativeProcesses(): Promise<WindowsProcessEntry[]> {
     maxBuffer: MAX_TASKLIST_OUTPUT_BYTES,
     encoding: "utf8",
   });
-  return parseTasklistCsv(typeof stdout === "string" ? stdout : stdout.toString("utf8"), 100);
+  return parseTasklistCsv(stdout, 100);
 }
 
 /**
