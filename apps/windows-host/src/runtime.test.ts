@@ -9,10 +9,7 @@ import type {
   StoredWindowsHostCredential,
   WindowsHostCredentialStore,
 } from "./credential-store.js";
-import {
-  executeWindowsHostCommand,
-  resolveWindowsHostCredential,
-} from "./runtime.js";
+import { executeWindowsHostCommand, resolveWindowsHostCredential } from "./runtime.js";
 import type { WindowsHostTransport } from "./transport.js";
 
 const advertisement: WindowsHostAdvertisement = {
