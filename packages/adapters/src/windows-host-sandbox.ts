@@ -10,8 +10,8 @@ import type {
   SandboxProvider,
   ScreenRequest,
 } from "@rakazo/adapter-kit";
-import type { PrismaClient } from "@rakazo/db";
 import type { WindowsHostCommandRequest, WindowsHostCommandResult } from "@rakazo/contracts";
+import type { PrismaClient } from "@rakazo/db";
 
 export interface WindowsHostCommandDispatcher {
   dispatch(
