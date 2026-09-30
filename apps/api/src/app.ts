@@ -170,7 +170,9 @@ export async function createApp(
   } = overrides;
   const env = { ...loadEnv(process.env), ...envOverrides };
   if (process.env.RAKAZO_WINDOWS_HOST_ENABLED === "true" && env.wakeupDriver !== "memory") {
-    throw new Error("Physical Windows host requires the in-process memory worker until cross-process command routing is implemented");
+    throw new Error(
+      "Physical Windows host requires the in-process memory worker until cross-process command routing is implemented",
+    );
   }
   const logger = loggerOverride ?? createServiceLogger({ service: SERVICE_NAMES.api });
   installLogger(logger);
