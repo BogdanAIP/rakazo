@@ -25,6 +25,7 @@ const READ_ACTIONS = new Set([
   "catalogSearch",
   "check",
   "credentials",
+  "downloadFile",
   "exportMarkdown",
   "files",
   "get",
@@ -105,6 +106,7 @@ const WRITE_ACTIONS = new Set([
   "update",
   "updateDraft",
   "updatePolicy",
+  "uploadFile",
 ]);
 
 const DESTRUCTIVE_ACTIONS = new Set([
