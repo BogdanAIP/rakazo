@@ -134,12 +134,22 @@ describe("WindowsHostSandboxProvider", () => {
     ).rejects.toThrow("64 KiB");
   });
 
-  it("only permits read-only tasklist and denies arbitrary process execution", async () => {
-    const dispatch = vi.fn().mockResolvedValue({
-      id: "35633dcb-8c94-4f55-9517-8b76f28676df",
-      ok: true,
-      result: { kind: "processes", processes: [{ pid: 123, name: "notepad.exe" }] },
-    });
+  it("routes tasklist and bounded argv execution through the paired Windows host", async () => {
+    const dispatch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: "35633dcb-8c94-4f55-9517-8b76f28676df",
+        ok: true,
+        result: { kind: "processes", processes: [{ pid: 123, name: "notepad.exe" }] },
+      })
+      .mockResolvedValueOnce({
+        id: "35633dcb-8c94-4f55-9517-8b76f28676df",
+        ok: true,
+        result: {
+          kind: "process",
+          value: { stdout: "hello\n", stderr: "", code: 0 },
+        },
+      });
     const provider = new WindowsHostSandboxProvider({} as PrismaClient, { dispatch });
     const computer = {
       id: "desktop-bot-1",
@@ -148,20 +158,40 @@ describe("WindowsHostSandboxProvider", () => {
       providerRef: "host-1",
     };
 
-    const allowed = [];
+    const inventory = [];
     for await (const event of provider.execute(computer, { argv: ["tasklist"] }, context)) {
-      allowed.push(event);
+      inventory.push(event);
     }
-    expect(allowed).toEqual([
+    expect(inventory).toEqual([
       { type: "stdout", data: '[{"pid":123,"name":"notepad.exe"}]' },
       { type: "exit", code: 0 },
     ]);
 
-    const denied = [];
-    for await (const event of provider.execute(computer, { argv: ["powershell.exe"] }, context)) {
-      denied.push(event);
+    const executed = [];
+    for await (const event of provider.execute(
+      computer,
+      { argv: ["cmd.exe", "/d", "/c", "echo", "hello"], timeoutMs: 5_000 },
+      context,
+    )) {
+      executed.push(event);
     }
-    expect(denied.at(-1)).toEqual({ type: "exit", code: 1 });
-    expect(dispatch).toHaveBeenCalledOnce();
+    expect(executed).toEqual([
+      { type: "stdout", data: "hello\n" },
+      { type: "exit", code: 0 },
+    ]);
+    expect(dispatch).toHaveBeenNthCalledWith(
+      2,
+      "host-1",
+      {
+        kind: "process.run",
+        botId: "bot-1",
+        argv: ["cmd.exe", "/d", "/c", "echo", "hello"],
+        cwd: undefined,
+        timeoutMs: 5_000,
+      },
+      context.signal,
+      30_000,
+      "owner-1",
+    );
   });
 });
