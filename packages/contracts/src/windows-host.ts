@@ -120,6 +120,68 @@ export const WindowsHostBrowserResultSchema = z.object({
 
 export type WindowsHostBrowserResult = z.infer<typeof WindowsHostBrowserResultSchema>;
 
+export const WindowsHostGuiActionSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("key"),
+    key: z.string().min(1).max(100),
+    modifiers: z.array(z.string().min(1).max(32)).max(4).optional(),
+  }),
+  z.object({
+    kind: z.literal("pointer"),
+    x: z.number().int().min(0).max(10_000),
+    y: z.number().int().min(0).max(10_000),
+    button: z.enum(["left", "right"]).optional(),
+    type: z.enum(["move", "down", "up", "click"]),
+  }),
+  z.object({ kind: z.literal("clipboard"), text: z.string().max(100_000) }),
+  z.object({
+    kind: z.literal("scroll"),
+    direction: z.enum(["up", "down"]),
+    amount: z.number().int().min(1).max(20).optional(),
+  }),
+  z.object({ kind: z.literal("wait"), ms: z.number().int().min(0).max(5_000) }),
+]);
+
+export type WindowsHostGuiAction = z.infer<typeof WindowsHostGuiActionSchema>;
+
+export const WindowsHostGuiRequestSchema = z.discriminatedUnion("command", [
+  z.object({ command: z.literal("observe") }),
+  z.object({
+    command: z.literal("act"),
+    actions: z.array(WindowsHostGuiActionSchema).min(1).max(24),
+    observe: z.boolean().default(true),
+    settleMs: z.number().int().min(0).max(5_000).optional(),
+  }),
+]);
+
+export type WindowsHostGuiRequest = z.infer<typeof WindowsHostGuiRequestSchema>;
+
+export const WindowsHostGuiObservationSchema = z.object({
+  imageBase64: z.string().min(1).max(8_000_000),
+  mimeType: z.literal("image/png"),
+  width: z.number().int().min(1).max(10_000),
+  height: z.number().int().min(1).max(10_000),
+  cursor: z.object({ x: z.number(), y: z.number() }).optional(),
+  activeWindow: z.object({
+    id: z.string().max(100),
+    title: z.string().max(512).optional(),
+  }).optional(),
+});
+
+export const WindowsHostGuiResultSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("observation"),
+    observation: WindowsHostGuiObservationSchema,
+  }),
+  z.object({
+    kind: z.literal("actions"),
+    completed: z.number().int().min(0).max(24),
+    observation: WindowsHostGuiObservationSchema.optional(),
+  }),
+]);
+
+export type WindowsHostGuiResult = z.infer<typeof WindowsHostGuiResultSchema>;
+
 export const WindowsHostCommandRequestSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("identity.get") }),
   z.object({
@@ -141,6 +203,17 @@ export const WindowsHostCommandRequestSchema = z.discriminatedUnion("kind", [
     kind: z.literal("browser.call"),
     botId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
     request: WindowsHostBrowserRequestSchema,
+  }),
+  z.object({
+    kind: z.literal("screen.observe"),
+    botId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
+  }),
+  z.object({
+    kind: z.literal("screen.act"),
+    botId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
+    actions: z.array(WindowsHostGuiActionSchema).min(1).max(24),
+    observe: z.boolean().default(true),
+    settleMs: z.number().int().min(0).max(5_000).optional(),
   }),
 ]);
 
@@ -192,6 +265,15 @@ export const WindowsHostCommandResultSchema = z.discriminatedUnion("ok", [
       z.object({
         kind: z.literal("browser"),
         response: WindowsHostBrowserResultSchema,
+      }),
+      z.object({
+        kind: z.literal("screen"),
+        observation: WindowsHostGuiObservationSchema,
+      }),
+      z.object({
+        kind: z.literal("actions"),
+        completed: z.number().int().min(0).max(24),
+        observation: WindowsHostGuiObservationSchema.optional(),
       }),
     ]),
   }),
