@@ -8,7 +8,9 @@ const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
   await Promise.all(
-    temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
+    temporaryDirectories
+      .splice(0)
+      .map((directory) => rm(directory, { recursive: true, force: true })),
   );
 });
 
@@ -32,9 +34,7 @@ describe("WindowsHostReadOnlyBackend", () => {
       { pid: 1234, name: "notepad.exe" },
       { pid: 4321, name: "test.exe" },
     ]);
-    await expect(backend.listProcesses(1)).resolves.toEqual([
-      { pid: 1234, name: "notepad.exe" },
-    ]);
+    await expect(backend.listProcesses(1)).resolves.toEqual([{ pid: 1234, name: "notepad.exe" }]);
     await expect(backend.listProcesses(101)).rejects.toThrow("limit");
   });
 
