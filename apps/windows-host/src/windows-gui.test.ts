@@ -30,9 +30,13 @@ describe("WindowsGuiBackend", () => {
   it("validates the action count and does not invoke an unavailable GUI", async () => {
     const runner = vi.fn(async () => ({ kind: "actions" as const, completed: 1 }));
     const backend = new WindowsGuiBackend(runner, () => false);
-    await expect(backend.execute({
-      command: "act", actions: [{ kind: "key", key: "Return" }], observe: false,
-    })).rejects.toThrow("not enabled");
+    await expect(
+      backend.execute({
+        command: "act",
+        actions: [{ kind: "key", key: "Return" }],
+        observe: false,
+      }),
+    ).rejects.toThrow("not enabled");
     expect(runner).not.toHaveBeenCalled();
   });
 
@@ -45,7 +49,8 @@ describe("WindowsGuiBackend", () => {
       observe: false,
     };
     await expect(backend.execute(request)).resolves.toMatchObject({
-      kind: "actions", completed: 1,
+      kind: "actions",
+      completed: 1,
     });
     expect(runner).toHaveBeenCalledWith(request);
   });
