@@ -42,6 +42,7 @@ describe("HttpWindowsHostTransport", () => {
     );
     await transport.pair(advertisement, "pairing-secret");
     expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain("/api/windows-host/pair");
   });
 
   it("keeps the host credential out of the heartbeat body", async () => {
@@ -74,5 +75,39 @@ describe("HttpWindowsHostTransport", () => {
     );
     await transport.heartbeat(heartbeat, credential);
     expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain("/api/windows-host/heartbeat");
+  });
+
+  it("long-polls for a command and reports the typed result", async () => {
+    const credential = "c".repeat(32);
+    const commandId = "35633dcb-8c94-4f55-9517-8b76f28676df";
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: commandId, request: { kind: "identity.get" } }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 202 }));
+
+    const transport = new HttpWindowsHostTransport(
+      "http://127.0.0.1:3100",
+      fetchImpl,
+    );
+    const command = await transport.poll("host-1", credential);
+    expect(command).toEqual({ id: commandId, request: { kind: "identity.get" } });
+
+    await transport.report(
+      "host-1",
+      {
+        id: commandId,
+        ok: true,
+        result: { kind: "identity", identity: advertisement.identity },
+      },
+      credential,
+    );
+
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain("/api/windows-host/commands/next");
+    expect(String(fetchImpl.mock.calls[1]?.[0])).toContain("/api/windows-host/commands/result");
   });
 });
