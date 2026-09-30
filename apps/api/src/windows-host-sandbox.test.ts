@@ -99,10 +99,7 @@ describe("WindowsHostSandboxProvider", () => {
         ok: true,
         result: { kind: "file", contentBase64: Buffer.from("HELLO").toString("base64") },
       });
-    const provider = new WindowsHostSandboxProvider(
-      {} as PrismaClient,
-      { dispatch },
-    );
+    const provider = new WindowsHostSandboxProvider({} as PrismaClient, { dispatch });
     const computer = {
       id: "desktop-bot-1",
       botId: "bot-1",
@@ -113,9 +110,9 @@ describe("WindowsHostSandboxProvider", () => {
     await expect(provider.listFiles(computer, ".", context)).resolves.toEqual([
       { path: "sample.txt", kind: "file", size: 5 },
     ]);
-    await expect(provider.readFile(computer, "sample.txt", context, { maxBytes: 5 })).resolves.toEqual(
-      new Uint8Array(Buffer.from("HELLO")),
-    );
+    await expect(
+      provider.readFile(computer, "sample.txt", context, { maxBytes: 5 }),
+    ).resolves.toEqual(new Uint8Array(Buffer.from("HELLO")));
     expect(dispatch).toHaveBeenNthCalledWith(
       1,
       "host-1",
@@ -132,9 +129,9 @@ describe("WindowsHostSandboxProvider", () => {
       undefined,
       "owner-1",
     );
-    await expect(provider.readFile(computer, "sample.txt", context, { maxBytes: 65_537 })).rejects.toThrow(
-      "64 KiB",
-    );
+    await expect(
+      provider.readFile(computer, "sample.txt", context, { maxBytes: 65_537 }),
+    ).rejects.toThrow("64 KiB");
   });
 
   it("only permits read-only tasklist and denies arbitrary process execution", async () => {
@@ -167,5 +164,4 @@ describe("WindowsHostSandboxProvider", () => {
     expect(denied.at(-1)).toEqual({ type: "exit", code: 1 });
     expect(dispatch).toHaveBeenCalledOnce();
   });
-
 });
