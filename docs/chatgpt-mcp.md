@@ -1,5 +1,8 @@
 # ChatGPT MCP integration
 
+> **Architecture roadmap:** [ChatGPT + Rakazo roadmap](./chatgpt-rakazo-roadmap.md) is the authoritative plan for the direct `ChatGPT Plus -> Plugin R -> Rakazo -> physical Windows` architecture, Plugin Extensions/MCP Apps UI, MCP Events, persistent jobs, Plus/Codex usage policy, and the staged removal of OpenResearch from the runtime path.
+
+
 Rakazo can be used as a full ChatGPT plugin surface through OpenAI Secure MCP Tunnel without exposing the Rakazo API publicly.
 
 ## Architecture
