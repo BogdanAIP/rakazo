@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { hostname, platform, release, arch } from "node:os";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { arch, hostname, platform, release } from "node:os";
 import path from "node:path";
 import {
-  WindowsHostIdentitySchema,
   type WindowsHostIdentity,
+  WindowsHostIdentitySchema,
 } from "@rakazo/contracts";
 
 const IDENTITY_FILE = "identity.json";
