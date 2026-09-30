@@ -111,9 +111,9 @@ import {
 } from "./team-chat-startup.js";
 import { mountVoiceHttpRoutes } from "./voice.js";
 import { mountWebhookHttpRoutes } from "./webhook.js";
+import { mountWindowsHostRoutes } from "./windows-host.js";
 import { WindowsHostCommandHub } from "./windows-host-command-hub.js";
 import { WindowsHostSandboxProvider } from "./windows-host-sandbox.js";
-import { mountWindowsHostRoutes } from "./windows-host.js";
 
 /**
  * Native clients always send the app scheme, including in Expo Go, so no
