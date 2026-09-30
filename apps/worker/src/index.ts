@@ -39,6 +39,7 @@ import {
   pipedreamConfigFromEnv,
   reconcileCloudAgents,
   reconcileComputerUpdates,
+  RemoteWindowsHostCommandDispatcher,
   resolveDeploymentModel,
   resolvePiSessionRoot,
   resolveSandboxProvider,
