@@ -81,6 +81,7 @@ import {
   VoiceStatusSchema,
 } from "./domain.js";
 import { ComputerCommandSchema, ProductEventSchema } from "./events.js";
+import { WindowsHostCapabilitySchema } from "./windows-host.js";
 import { Id, IsoDate } from "./ids.js";
 import {
   IntegrationProviderConfigSchema,
@@ -187,6 +188,39 @@ export const appContract = {
         }),
       )
       .output(DeploymentSettingsSchema),
+  },
+  windowsHosts: {
+    list: oc.output(
+      z.array(
+        z.object({
+          id: z.string().min(1).max(200),
+          installationId: z.string().uuid(),
+          hostname: z.string().min(1).max(255),
+          platform: z.literal("win32"),
+          release: z.string().min(1).max(128),
+          arch: z.string().min(1).max(32),
+          protocolVersion: z.string().min(1).max(64),
+          runtimeVersion: z.string().min(1).max(64),
+          capabilities: z.array(WindowsHostCapabilitySchema).max(32),
+          revokedAt: IsoDate.nullable(),
+          lastSeenAt: IsoDate.nullable(),
+          createdAt: IsoDate,
+          updatedAt: IsoDate,
+        }),
+      ),
+    ),
+    createPairing: oc
+      .input(z.object({ ttlMs: z.number().int().min(1_000).max(30 * 60_000).optional() }))
+      .output(
+        z.object({
+          pairingId: z.string().min(1).max(200),
+          pairingToken: z.string().min(32).max(4096),
+          expiresAt: IsoDate,
+        }),
+      ),
+    revoke: oc
+      .input(z.object({ hostId: z.string().min(1).max(200) }))
+      .output(z.object({ ok: z.literal(true) })),
   },
   /**
    * Deployment-owner product updates. When the Compose updater sidecar is reachable, these proxy
