@@ -41,6 +41,9 @@ importers:
 
   apps/windows-host:
     dependencies:
+      '@rakazo/adapters':
+        specifier: workspace:*
+        version: link:../../packages/adapters
       '@rakazo/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
