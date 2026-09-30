@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { WindowsOpenCliBackend, type OpenCliRunner } from "./opencli.js";
+import { type OpenCliRunner, WindowsOpenCliBackend } from "./opencli.js";
 
 function fixture(profile = "quxmf8xh") {
   let tree = '[1] button "Save"\n[2] textbox "Name"';
@@ -17,7 +17,13 @@ function fixture(profile = "quxmf8xh") {
     throw new Error("Unexpected OpenCLI request");
   });
   const backend = new WindowsOpenCliBackend({ entry: process.execPath, profile }, runner);
-  return { backend, runner, changeTree: (value: string) => { tree = value; } };
+  return {
+    backend,
+    runner,
+    changeTree: (value: string) => {
+      tree = value;
+    },
+  };
 }
 
 describe("WindowsOpenCliBackend", () => {
@@ -25,7 +31,9 @@ describe("WindowsOpenCliBackend", () => {
     const { runner } = fixture("");
     const backend = new WindowsOpenCliBackend({ entry: process.execPath, profile: "" }, runner);
     expect(backend.available()).toBe(false);
-    await expect(backend.browser("bot-a", { command: "snapshot" })).rejects.toThrow("OpenCLI is unavailable");
+    await expect(backend.browser("bot-a", { command: "snapshot" })).rejects.toThrow(
+      "OpenCLI is unavailable",
+    );
     expect(runner).not.toHaveBeenCalled();
   });
 
@@ -45,28 +53,42 @@ describe("WindowsOpenCliBackend", () => {
       ],
     });
     expect(runner).toHaveBeenCalledWith(process.execPath, [
-      "--profile", "quxmf8xh", "browser", "rakazo-bot-a", "open", "https://example.com/form",
+      "--profile",
+      "quxmf8xh",
+      "browser",
+      "rakazo-bot-a",
+      "open",
+      "https://example.com/form",
     ]);
   });
 
   it("rejects unsafe navigation and malformed bot identifiers", async () => {
     const { backend, runner } = fixture();
     await expect(backend.browser("../escape", { command: "snapshot" })).rejects.toThrow("identity");
-    await expect(backend.browser("bot-a", {
-      command: "navigate", url: "file:///C:/Users/secret",
-    })).rejects.toThrow("HTTP(S)");
+    await expect(
+      backend.browser("bot-a", {
+        command: "navigate",
+        url: "file:///C:/Users/secret",
+      }),
+    ).rejects.toThrow("HTTP(S)");
     expect(runner).not.toHaveBeenCalled();
   });
 
   it("performs bounded browser actions only after a fresh observation", async () => {
     const { backend, runner } = fixture();
     await backend.browser("bot-a", { command: "snapshot" });
-    const result = await backend.browser("bot-a", { command: "act", actions: [
-      { kind: "click", ref: "e1" },
-    ] });
+    const result = await backend.browser("bot-a", {
+      command: "act",
+      actions: [{ kind: "click", ref: "e1" }],
+    });
     expect(result).toMatchObject({ ok: true, completed: 1 });
     expect(runner).toHaveBeenCalledWith(process.execPath, [
-      "--profile", "quxmf8xh", "browser", "rakazo-bot-a", "click", "1",
+      "--profile",
+      "quxmf8xh",
+      "browser",
+      "rakazo-bot-a",
+      "click",
+      "1",
     ]);
   });
 
@@ -74,9 +96,10 @@ describe("WindowsOpenCliBackend", () => {
     const { backend, runner, changeTree } = fixture();
     await backend.browser("bot-a", { command: "snapshot" });
     changeTree('[1] button "Delete"');
-    const result = await backend.browser("bot-a", { command: "act", actions: [
-      { kind: "click", ref: "e1" },
-    ] });
+    const result = await backend.browser("bot-a", {
+      command: "act",
+      actions: [{ kind: "click", ref: "e1" }],
+    });
     expect(result).toMatchObject({ ok: false, completed: 0, uncertain: false });
     expect(runner.mock.calls.some(([, argv]) => argv.includes("click"))).toBe(false);
   });
@@ -84,9 +107,10 @@ describe("WindowsOpenCliBackend", () => {
   it("enforces origin checks before entering content", async () => {
     const { backend, runner } = fixture();
     await backend.browser("bot-a", { command: "snapshot" });
-    const result = await backend.browser("bot-a", { command: "act", actions: [
-      { kind: "fill", ref: "e2", text: "harmless", origin: "https://other.example" },
-    ] });
+    const result = await backend.browser("bot-a", {
+      command: "act",
+      actions: [{ kind: "fill", ref: "e2", text: "harmless", origin: "https://other.example" }],
+    });
     expect(result).toMatchObject({ ok: false, completed: 0 });
     expect(runner.mock.calls.some(([, argv]) => argv.includes("fill"))).toBe(false);
   });
