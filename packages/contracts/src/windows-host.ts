@@ -182,6 +182,13 @@ export const WindowsHostGuiResultSchema = z.discriminatedUnion("kind", [
 
 export type WindowsHostGuiResult = z.infer<typeof WindowsHostGuiResultSchema>;
 
+export const WindowsHostProcessResultSchema = z.object({
+  stdout: z.string().max(65_536),
+  stderr: z.string().max(65_536),
+  code: z.number().int().min(-1).max(65_535),
+});
+export type WindowsHostProcessResult = z.infer<typeof WindowsHostProcessResultSchema>;
+
 export const WindowsHostCommandRequestSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("identity.get") }),
   z.object({
@@ -203,6 +210,13 @@ export const WindowsHostCommandRequestSchema = z.discriminatedUnion("kind", [
     kind: z.literal("browser.call"),
     botId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
     request: WindowsHostBrowserRequestSchema,
+  }),
+  z.object({
+    kind: z.literal("process.run"),
+    botId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
+    argv: z.array(z.string().min(1).max(4096)).min(1).max(16),
+    cwd: z.string().max(4096).optional(),
+    timeoutMs: z.number().int().min(100).max(18_000).default(10_000),
   }),
   z.object({
     kind: z.literal("screen.observe"),
@@ -265,6 +279,10 @@ export const WindowsHostCommandResultSchema = z.discriminatedUnion("ok", [
       z.object({
         kind: z.literal("browser"),
         response: WindowsHostBrowserResultSchema,
+      }),
+      z.object({
+        kind: z.literal("process"),
+        value: WindowsHostProcessResultSchema,
       }),
       z.object({
         kind: z.literal("screen"),
