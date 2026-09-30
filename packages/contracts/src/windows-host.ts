@@ -82,6 +82,44 @@ export const WindowsHostRevocationSchema = z.object({
 
 export type WindowsHostRevocation = z.infer<typeof WindowsHostRevocationSchema>;
 
+export const WindowsHostBrowserActionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("click"), ref: z.string().regex(/^e\\d{1,6}$/u) }),
+  z.object({
+    kind: z.enum(["fill", "type"]),
+    ref: z.string().regex(/^e\\d{1,6}$/u),
+    text: z.string().max(10_000),
+    origin: z.string().url().optional(),
+  }),
+]);
+
+export const WindowsHostBrowserRequestSchema = z.discriminatedUnion("command", [
+  z.object({ command: z.literal("navigate"), url: z.string().url().max(4_096) }),
+  z.object({ command: z.literal("snapshot") }),
+  z.object({
+    command: z.literal("act"),
+    actions: z.array(WindowsHostBrowserActionSchema).min(1).max(4),
+  }),
+]);
+
+export type WindowsHostBrowserRequest = z.infer<typeof WindowsHostBrowserRequestSchema>;
+
+export const WindowsHostBrowserResultSchema = z.object({
+  ok: z.boolean(),
+  completed: z.number().int().min(0).max(4).optional(),
+  uncertain: z.boolean().optional(),
+  url: z.string().max(4_096).optional(),
+  title: z.string().max(2_048).optional(),
+  tree: z.string().max(65_536).optional(),
+  elements: z.array(z.object({
+    ref: z.string().regex(/^e\\d{1,6}$/u),
+    role: z.string().max(200),
+    name: z.string().max(200),
+  })).max(500).optional(),
+  error: z.string().max(500).optional(),
+});
+
+export type WindowsHostBrowserResult = z.infer<typeof WindowsHostBrowserResultSchema>;
+
 export const WindowsHostCommandRequestSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("identity.get") }),
   z.object({
@@ -98,6 +136,11 @@ export const WindowsHostCommandRequestSchema = z.discriminatedUnion("kind", [
     botId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
     path: z.string().min(1).max(4_096),
     maxBytes: z.number().int().min(1).max(65_536).default(32_768),
+  }),
+  z.object({
+    kind: z.literal("browser.call"),
+    botId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
+    request: WindowsHostBrowserRequestSchema,
   }),
 ]);
 
@@ -145,6 +188,10 @@ export const WindowsHostCommandResultSchema = z.discriminatedUnion("ok", [
       z.object({
         kind: z.literal("file"),
         contentBase64: z.string().max(90_000),
+      }),
+      z.object({
+        kind: z.literal("browser"),
+        response: WindowsHostBrowserResultSchema,
       }),
     ]),
   }),
