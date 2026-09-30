@@ -23,7 +23,11 @@ import {
 
 export const WINDOWS_HOST_RUNTIME_VERSION = "0.1.0";
 
-const INITIAL_CAPABILITIES = ["identity", "process", "files"] as const satisfies readonly WindowsHostCapability[];
+const INITIAL_CAPABILITIES = [
+  "identity",
+  "process",
+  "files",
+] as const satisfies readonly WindowsHostCapability[];
 
 interface ResolvedWindowsHostCredential {
   hostId: string;
