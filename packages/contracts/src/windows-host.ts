@@ -110,11 +110,16 @@ export const WindowsHostBrowserResultSchema = z.object({
   url: z.string().max(4_096).optional(),
   title: z.string().max(2_048).optional(),
   tree: z.string().max(65_536).optional(),
-  elements: z.array(z.object({
-    ref: z.string().regex(/^e\d{1,6}$/u),
-    role: z.string().max(200),
-    name: z.string().max(200),
-  })).max(500).optional(),
+  elements: z
+    .array(
+      z.object({
+        ref: z.string().regex(/^e\d{1,6}$/u),
+        role: z.string().max(200),
+        name: z.string().max(200),
+      }),
+    )
+    .max(500)
+    .optional(),
   error: z.string().max(500).optional(),
 });
 
@@ -162,10 +167,12 @@ export const WindowsHostGuiObservationSchema = z.object({
   width: z.number().int().min(1).max(10_000),
   height: z.number().int().min(1).max(10_000),
   cursor: z.object({ x: z.number(), y: z.number() }).optional(),
-  activeWindow: z.object({
-    id: z.string().max(100),
-    title: z.string().max(512).optional(),
-  }).optional(),
+  activeWindow: z
+    .object({
+      id: z.string().max(100),
+      title: z.string().max(512).optional(),
+    })
+    .optional(),
 });
 
 export const WindowsHostGuiResultSchema = z.discriminatedUnion("kind", [
