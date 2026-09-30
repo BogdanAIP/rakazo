@@ -1,7 +1,12 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { WindowsHostGuiRequestSchema, WindowsHostGuiResultSchema, type WindowsHostGuiRequest, type WindowsHostGuiResult } from "@rakazo/contracts";
+import {
+  type WindowsHostGuiRequest,
+  WindowsHostGuiRequestSchema,
+  type WindowsHostGuiResult,
+  WindowsHostGuiResultSchema,
+} from "@rakazo/contracts";
 
 const GUI_SCRIPT = fileURLToPath(new URL("../scripts/windows-gui.ps1", import.meta.url));
 const MAX_GUI_BYTES = 8 * 1024 * 1024;
@@ -30,13 +35,15 @@ export async function runWindowsGui(request: WindowsHostGuiRequest): Promise<Win
     }
   }
   return new Promise<WindowsHostGuiResult>((resolve, reject) => {
-    const child = spawn("powershell.exe", [
-      "-NoProfile", "-NonInteractive", "-Sta", "-ExecutionPolicy", "Bypass", "-File", GUI_SCRIPT,
-    ], {
-      shell: false,
-      windowsHide: true,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    const child = spawn(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Sta", "-ExecutionPolicy", "Bypass", "-File", GUI_SCRIPT],
+      {
+        shell: false,
+        windowsHide: true,
+        stdio: ["pipe", "pipe", "pipe"],
+      },
+    );
     let stdout = "";
     let stderr = "";
     let byteCount = 0;
@@ -69,7 +76,7 @@ export async function runWindowsGui(request: WindowsHostGuiRequest): Promise<Win
     child.on("close", (code) => {
       if (settled) return;
       if (code !== 0) {
-        finish(new Error("Windows GUI failed (" + String(code) + "): " + stderr.slice(0, 500)));
+        finish(new Error(`Windows GUI failed (${String(code)}): ${stderr.slice(0, 500)}`));
         return;
       }
       try {
@@ -94,6 +101,8 @@ export class WindowsGuiBackend {
 
   async execute(request: WindowsHostGuiRequest): Promise<WindowsHostGuiResult> {
     if (!this.available()) throw new Error("Physical Windows GUI is not enabled");
-    return WindowsHostGuiResultSchema.parse(await this.runner(WindowsHostGuiRequestSchema.parse(request)));
+    return WindowsHostGuiResultSchema.parse(
+      await this.runner(WindowsHostGuiRequestSchema.parse(request)),
+    );
   }
 }
