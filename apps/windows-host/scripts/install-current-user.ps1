@@ -93,7 +93,7 @@ try {
     }
     finally {
       if ($pairProcess -and -not $pairProcess.HasExited) {
-        Stop-Process -Id $pairProcess.Id -Force -ErrorAction SilentlyContinue
+        & "$env:SystemRoot\System32\taskkill.exe" /PID $pairProcess.Id /T /F 2>$null | Out-Null
         try { $pairProcess.WaitForExit(5000) | Out-Null } catch {}
       }
       Restore-ScopedEnvironment $previous
