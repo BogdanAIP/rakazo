@@ -120,4 +120,5 @@ export * from "./web-limits.js";
 export * from "./web-provider-factory.js";
 export * from "./web-ssrf.js";
 export * from "./web-tools.js";
+export * from "./windows-host-remote-dispatcher.js";
 export * from "./windows-host-sandbox.js";
