@@ -103,6 +103,28 @@ describe("host-aware sandbox", () => {
     await desktop.destroy(computer, ctx);
   });
 
+  it("uses an injected physical host provider for this-mac", async () => {
+    const host = new DesktopSandboxProvider();
+    const provision = vi.spyOn(host, "provision");
+    const sandbox = createRunSandbox("docker", {
+      prisma: {
+        deploymentSettings: {
+          findUnique: vi.fn().mockResolvedValue({ computerHost: "this-mac" }),
+        },
+      } as unknown as PrismaClient,
+      hostProvider: host,
+    });
+
+    const computer = await sandbox.provision(
+      { botId: "injected-host", homePath: "/tmp/injected-host" },
+      ctx,
+    );
+
+    expect(provision).toHaveBeenCalledOnce();
+    expect(computer.kind).toBe("desktop");
+    await sandbox.destroy(computer, ctx);
+  });
+
   it("provisions on the host provider when enabled", async () => {
     const isolated = new FakeSandboxProvider();
     const host = new DesktopSandboxProvider();
