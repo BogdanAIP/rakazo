@@ -5,6 +5,8 @@ import {
   WindowsHostHeartbeatSchema,
   type WindowsHostAdvertisement,
   type WindowsHostCapability,
+  type WindowsHostCommandEnvelope,
+  type WindowsHostCommandResult,
 } from "@rakazo/contracts";
 import type { WindowsHostConfig } from "./config.js";
 import {
@@ -126,7 +128,31 @@ export class WindowsHostRuntime {
       signal,
     );
 
-    while (!signal?.aborted) {
+    const controller = new AbortController();
+    const onAbort = () => controller.abort();
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) controller.abort();
+
+    const heartbeat = this.runHeartbeatLoop(advertisement, resolved, controller.signal);
+    const commands = this.runCommandLoop(advertisement, resolved, controller.signal);
+
+    try {
+      await Promise.race([heartbeat, commands]);
+    } finally {
+      controller.abort();
+      signal?.removeEventListener("abort", onAbort);
+      await Promise.allSettled([heartbeat, commands]);
+    }
+
+    throw new Error("Windows host runtime stopped");
+  }
+
+  private async runHeartbeatLoop(
+    advertisement: WindowsHostAdvertisement,
+    resolved: ResolvedWindowsHostCredential,
+    signal: AbortSignal,
+  ) {
+    while (!signal.aborted) {
       try {
         const heartbeat = WindowsHostHeartbeatSchema.parse({
           protocolVersion: WINDOWS_HOST_PROTOCOL_VERSION,
@@ -136,7 +162,7 @@ export class WindowsHostRuntime {
           sentAt: new Date().toISOString(),
           advertisement,
         });
-        const result = await this.transport.heartbeat(
+        const result = await this.transport!.heartbeat(
           heartbeat,
           resolved.credential,
           signal,
@@ -147,14 +173,73 @@ export class WindowsHostRuntime {
         }
         await sleep(resolved.heartbeatIntervalMs, signal);
       } catch (error) {
-        if (signal?.aborted) break;
+        if (signal.aborted) return;
         if (error instanceof Error && error.message.includes("revoked")) throw error;
         await sleep(Math.min(resolved.heartbeatIntervalMs, 30_000), signal);
       }
     }
-
-    throw new Error("Windows host runtime stopped");
   }
+
+  private async runCommandLoop(
+    advertisement: WindowsHostAdvertisement,
+    resolved: ResolvedWindowsHostCredential,
+    signal: AbortSignal,
+  ) {
+    while (!signal.aborted) {
+      try {
+        const command = await this.transport!.poll(
+          resolved.hostId,
+          resolved.credential,
+          signal,
+        );
+        if (!command) continue;
+
+        let result: WindowsHostCommandResult;
+        try {
+          result = executeWindowsHostCommand(command, advertisement);
+        } catch (error) {
+          result = {
+            id: command.id,
+            ok: false,
+            error: boundedCommandError(error),
+          };
+        }
+
+        await this.transport!.report(
+          resolved.hostId,
+          result,
+          resolved.credential,
+          signal,
+        );
+      } catch {
+        if (signal.aborted) return;
+        await sleep(1_000, signal);
+      }
+    }
+  }
+}
+
+
+export function executeWindowsHostCommand(
+  command: WindowsHostCommandEnvelope,
+  advertisement: WindowsHostAdvertisement,
+): WindowsHostCommandResult {
+  switch (command.request.kind) {
+    case "identity.get":
+      return {
+        id: command.id,
+        ok: true,
+        result: {
+          kind: "identity",
+          identity: advertisement.identity,
+        },
+      };
+  }
+}
+
+function boundedCommandError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.slice(0, 2_000) || "Windows host command failed";
 }
 
 function sleep(ms: number, signal?: AbortSignal) {
