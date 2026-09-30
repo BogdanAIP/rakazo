@@ -121,6 +121,7 @@ import {
   IntegrationProviderIdSchema,
   OPENAI_COMPATIBLE_PROVIDER_ID,
   usableModelId,
+  WindowsHostCapabilitySchema,
 } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
@@ -147,6 +148,7 @@ import {
   createRepos,
   createSpaceForMember,
   createThreadMessageInTransaction,
+  createWindowsHostPairing,
   defaultModelCredentialCandidates,
   deleteEmptySpaceForMember,
   deleteUnreferencedCredentialSecret,
@@ -158,6 +160,7 @@ import {
   InvalidSpaceNameError,
   IsolationError,
   issueMessagingLinkCode,
+  listWindowsHosts,
   lockOwnedGroup,
   newestModelCredentialOrder,
   newestVoiceCredentialOrder,
@@ -174,6 +177,8 @@ import {
   selectSpaceModelPreference,
   selectSpaceVoicePreference,
   touchGroupUpdatedAt,
+  revokeWindowsHost,
+  WindowsHostPairingError,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { deleteAgentSecret, listAgentSecrets, putAgentSecret } from "./agent-secrets.js";
@@ -902,6 +907,51 @@ export function createRouter(deps: RouterDeps) {
           },
         });
         return deploymentDto(deps.prisma, deps.env.sandboxProvider);
+      }),
+    },
+    windowsHosts: {
+      list: authed.windowsHosts.list.handler(async ({ context }) => {
+        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
+        const hosts = await listWindowsHosts(deps.prisma, context.actor.userId);
+        return hosts.map((host) => {
+          const capabilities = WindowsHostCapabilitySchema.array().safeParse(host.capabilities);
+          return {
+            ...host,
+            capabilities: capabilities.success ? capabilities.data : [],
+            revokedAt: host.revokedAt?.toISOString() ?? null,
+            lastSeenAt: host.lastSeenAt?.toISOString() ?? null,
+            createdAt: host.createdAt.toISOString(),
+            updatedAt: host.updatedAt.toISOString(),
+          };
+        });
+      }),
+      createPairing: authed.windowsHosts.createPairing.handler(async ({ context, input }) => {
+        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
+        try {
+          const pairing = await createWindowsHostPairing(deps.prisma, {
+            ownerUserId: context.actor.userId,
+            ...(input.ttlMs === undefined ? {} : { ttlMs: input.ttlMs }),
+          });
+          return {
+            pairingId: pairing.pairingId,
+            pairingToken: pairing.pairingToken,
+            expiresAt: pairing.expiresAt.toISOString(),
+          };
+        } catch (error) {
+          if (error instanceof WindowsHostPairingError) {
+            throw new ORPCError("BAD_REQUEST", { message: error.message });
+          }
+          throw error;
+        }
+      }),
+      revoke: authed.windowsHosts.revoke.handler(async ({ context, input }) => {
+        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
+        const revoked = await revokeWindowsHost(deps.prisma, {
+          ownerUserId: context.actor.userId,
+          hostId: input.hostId,
+        });
+        if (!revoked) throw new ORPCError("NOT_FOUND");
+        return { ok: true as const };
       }),
     },
     updater: {
