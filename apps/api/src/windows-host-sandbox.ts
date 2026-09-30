@@ -167,11 +167,8 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
     throw new Error("Physical Windows workspace import is not enabled yet");
   }
 
-  async snapshot(computer: ComputerRef, _context: AdapterContext) {
-    return {
-      id: `windows-host-${computer.providerRef}-${Date.now()}`,
-      createdAt: new Date().toISOString(),
-    };
+  async snapshot(_computer: ComputerRef, _context: AdapterContext) {
+    throw new Error("Physical Windows snapshots are not enabled yet");
   }
 
   async stop(_computer: ComputerRef, _context: AdapterContext): Promise<void> {}
