@@ -41,6 +41,18 @@ describe("WindowsHostCommandHub", () => {
     await expect(pending).rejects.toThrow("closed");
   });
 
+  it("rejects an already-aborted dispatch before it enters the queue", async () => {
+    const hub = new WindowsHostCommandHub();
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      hub.dispatch("host-a", { kind: "identity.get" }, controller.signal),
+    ).rejects.toThrow("aborted");
+    await expect(hub.poll("host-a", 1)).resolves.toBeNull();
+    hub.close();
+  });
+
   it("removes an aborted command before delivery", async () => {
     const hub = new WindowsHostCommandHub();
     const controller = new AbortController();
