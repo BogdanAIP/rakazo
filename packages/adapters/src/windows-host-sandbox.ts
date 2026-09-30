@@ -19,6 +19,7 @@ export interface WindowsHostCommandDispatcher {
     request: WindowsHostCommandRequest,
     signal?: AbortSignal,
     timeoutMs?: number,
+    ownerUserId?: string,
   ): Promise<WindowsHostCommandResult>;
 }
 
@@ -96,6 +97,8 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
       computer.providerRef,
       { kind: "identity.get" },
       context.signal,
+      undefined,
+      context.userId,
     );
     if (!result.ok) throw new Error(result.error);
     if (result.result.kind !== "identity") {
