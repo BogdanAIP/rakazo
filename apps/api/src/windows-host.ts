@@ -1,4 +1,3 @@
-import type { Hono } from "hono";
 import {
   WindowsHostCommandPollSchema,
   WindowsHostCommandReportSchema,
@@ -17,6 +16,7 @@ import {
   WindowsHostPairingError,
   WindowsHostReplayError,
 } from "@rakazo/db";
+import type { Hono } from "hono";
 import type { WindowsHostCommandHub } from "./windows-host-command-hub.js";
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
@@ -216,10 +216,7 @@ async function optionalJson(request: Request): Promise<unknown> {
   return requiredJson(request);
 }
 
-function readOptionalPositiveInteger(
-  value: unknown,
-  key: string,
-): number | undefined | null {
+function readOptionalPositiveInteger(value: unknown, key: string): number | undefined | null {
   if (typeof value !== "object" || value === null) return null;
   const candidate = (value as Record<string, unknown>)[key];
   if (candidate === undefined) return undefined;
