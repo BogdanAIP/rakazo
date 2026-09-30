@@ -15,6 +15,7 @@ import {
 } from "./credential-store.js";
 import { loadOrCreateWindowsHostIdentity } from "./identity.js";
 import { WindowsProcessBackend } from "./native-process.js";
+import { WindowsHostFileMutationBackend } from "./windows-files.js";
 import { WindowsOpenCliBackend } from "./opencli.js";
 import { WindowsHostReadOnlyBackend } from "./readonly.js";
 import {
@@ -134,6 +135,8 @@ export class WindowsHostRuntime {
     private readonly processBackend: WindowsProcessBackend = new WindowsProcessBackend(
       config.stateDir,
     ),
+    private readonly fileMutationBackend: WindowsHostFileMutationBackend =
+      new WindowsHostFileMutationBackend(config.stateDir),
   ) {}
 
   async probe() {
@@ -231,6 +234,7 @@ export class WindowsHostRuntime {
             this.browserBackend,
             this.guiBackend,
             this.processBackend,
+            this.fileMutationBackend,
           );
         } catch (error) {
           result = {
@@ -260,6 +264,7 @@ export async function executeWindowsHostCommand(
   browserBackend: WindowsOpenCliBackend = new WindowsOpenCliBackend(),
   guiBackend: WindowsGuiBackend = new WindowsGuiBackend(),
   processBackend: WindowsProcessBackend = new WindowsProcessBackend("."),
+  fileMutationBackend: WindowsHostFileMutationBackend = new WindowsHostFileMutationBackend("."),
 ): Promise<WindowsHostCommandResult> {
   switch (command.request.kind) {
     case "identity.get":
@@ -349,6 +354,23 @@ export async function executeWindowsHostCommand(
           ).toString("base64"),
         },
       };
+    case "files.write": {
+      const content = Buffer.from(command.request.contentBase64, "base64");
+      if (content.toString("base64").replace(/=+$/u, "") !== command.request.contentBase64.replace(/=+$/u, "")) {
+        throw new Error("Windows host received invalid base64 file content");
+      }
+      const result = await fileMutationBackend.writeFile(
+        command.request.botId,
+        command.request.path,
+        content,
+        command.request.executable,
+      );
+      return {
+        id: command.id,
+        ok: true,
+        result: { kind: "file-write", path: result.path, bytesWritten: result.bytesWritten },
+      };
+    }
   }
 }
 
