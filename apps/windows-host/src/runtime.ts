@@ -15,6 +15,7 @@ import {
 } from "./credential-store.js";
 import { loadOrCreateWindowsHostIdentity } from "./identity.js";
 import { WindowsOpenCliBackend } from "./opencli.js";
+import { WindowsProcessBackend } from "./native-process.js";
 import { WindowsGuiBackend } from "./windows-gui.js";
 import { WindowsHostReadOnlyBackend } from "./readonly.js";
 import {
@@ -43,6 +44,7 @@ export async function buildAdvertisement(
   startedAt = new Date().toISOString(),
   browserAvailable = false,
   guiAvailable = false,
+  processEnabled = false,
 ): Promise<WindowsHostAdvertisement> {
   const identity = await loadOrCreateWindowsHostIdentity(stateDir);
   return WindowsHostAdvertisementSchema.parse({
@@ -53,6 +55,7 @@ export async function buildAdvertisement(
       ...INITIAL_CAPABILITIES,
       ...(browserAvailable ? ["browser" as const] : []),
       ...(guiAvailable ? (["screen", "input"] as const) : []),
+      ...(processEnabled ? (["terminal"] as const) : []),
     ],
     startedAt,
   });
@@ -128,6 +131,7 @@ export class WindowsHostRuntime {
     ),
     private readonly browserBackend: WindowsOpenCliBackend = new WindowsOpenCliBackend(),
     private readonly guiBackend: WindowsGuiBackend = new WindowsGuiBackend(),
+    private readonly processBackend: WindowsProcessBackend = new WindowsProcessBackend(config.stateDir),
   ) {}
 
   async probe() {
@@ -136,6 +140,7 @@ export class WindowsHostRuntime {
       undefined,
       this.browserBackend.available(),
       this.guiBackend.available(),
+      this.processBackend.available(),
     );
   }
 
@@ -223,6 +228,7 @@ export class WindowsHostRuntime {
             this.readOnlyBackend,
             this.browserBackend,
             this.guiBackend,
+            this.processBackend,
           );
         } catch (error) {
           result = {
@@ -251,6 +257,7 @@ export async function executeWindowsHostCommand(
   backend: WindowsHostReadOnlyBackend = new WindowsHostReadOnlyBackend("."),
   browserBackend: WindowsOpenCliBackend = new WindowsOpenCliBackend(),
   guiBackend: WindowsGuiBackend = new WindowsGuiBackend(),
+  processBackend: WindowsProcessBackend = new WindowsProcessBackend("."),
 ): Promise<WindowsHostCommandResult> {
   switch (command.request.kind) {
     case "identity.get":
@@ -289,6 +296,15 @@ export async function executeWindowsHostCommand(
           response: await browserBackend.browser(command.request.botId, command.request.request),
         },
       };
+    case "process.run": {
+      const value = await processBackend.execute(
+        command.request.botId,
+        command.request.argv,
+        command.request.cwd,
+        command.request.timeoutMs,
+      );
+      return { id: command.id, ok: true, result: { kind: "process", value } };
+    }
     case "screen.observe": {
       const result = await guiBackend.execute({ command: "observe" });
       if (result.kind !== "observation") throw new Error("Unexpected Windows GUI observation");
