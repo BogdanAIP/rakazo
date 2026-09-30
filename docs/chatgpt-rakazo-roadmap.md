@@ -989,13 +989,17 @@ Already implemented on `feature/chatgpt-mcp-upstream-2026-09-29`:
 - API/DB wiring and focused unit tests for transport and credential-source behavior;
 - outbound long-poll `identity.get` command channel with per-host credential authentication and result correlation;
 - opt-in `WindowsHostSandboxProvider` using the existing `desktop` computer kind, with identity verification in `prepare()`;
-- explicit fail-closed protection for unsupported process/files/GUI/snapshot operations and non-memory worker deployments.
+- a shared provider implementation in `packages/adapters`, used by both API and Graphile worker;
+- a typed worker→API relay at `/api/windows-host/internal/dispatch` protected by a dedicated 32+ character token, owner check, non-revoked pairing and recent heartbeat;
+- Compose worker routing to the private `http://api:3100` address;
+- explicit rejection of remote host IDs by the local desktop provider; unsupported process/files/GUI/snapshot operations remain fail-closed;
+- restoration of DPAPI credentials before considering the original single-use pairing token, including after restart.
 
-**Deployment boundary:** the current command hub is API-process-local. `RAKAZO_WINDOWS_HOST_ENABLED=true` is permitted only with `WAKEUP_DRIVER=memory` (single-process proof); the standalone Graphile worker rejects that flag. This prevents a remote Windows computer from silently being routed to the worker's local desktop. Do not claim cross-process production readiness until the command channel is shared through Rakazo's existing job/worker layer.
+**Deployment boundary:** worker→API relay is implemented for the idempotent `identity.get` proof only; the API's host command hub is still process-local and its pending requests do not survive API restart. This is a transport bridge, **not a second durable-job store** and not yet a production-ready physical-host feature. `RAKAZO_WINDOWS_HOST_ENABLED` must remain off until the latest checks and a physical end-to-end test succeed; when enabled, both API and worker must share `RAKAZO_WINDOWS_HOST_INTERNAL_TOKEN`.
 
 Still required for this phase:
 
-- implement the shared API↔worker command channel and host routing before enabling the normal Graphile deployment;
+- validate the cross-process `identity.get` route on the target Windows machine via Plugin R;
 - add bounded process execution and output;
 - add bounded file list/read/write;
 - prove cancellation and reconnect on a physical Windows host through Plugin R.
@@ -1320,10 +1324,10 @@ Completed evidence:
 
 The next implementation sequence should be:
 
-1. close the remaining CI lint/typecheck gaps and verify the memory-mode `identity.get` path on a physical Windows host;
-2. add cross-process command mediation through Rakazo's existing job/worker system; never route Graphile worker calls to its local `desktop` by accident;
-3. add bounded process execution, stdout/stderr collection, timeout and cancellation;
-4. add bounded file list/read/write under explicit allowed roots and prove identity + process + files through Plugin R on the physical Windows host;
+1. finish the current CI fixes and prove the Graphile worker→API→Windows `identity.get` route on the physical host;
+2. add bounded process execution, stdout/stderr collection, timeout and cancellation;
+3. add bounded file list/read/write under explicit allowed roots and prove process + files through Plugin R;
+4. make dispatched work durable through Rakazo's existing jobs and reconcile uncertain results after API or host restart;
 5. add durable host jobs and reconnect reconciliation;
 6. select/integrate the browser backend;
 7. move the proven UFO execution layer behind Rakazo `observe/act`, with visual fallback;
