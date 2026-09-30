@@ -1,8 +1,8 @@
 import type { PrismaClient } from "@rakazo/db";
 import { Hono } from "hono";
 import { describe, expect, it, vi } from "vitest";
-import { WindowsHostCommandHub } from "./windows-host-command-hub.js";
 import { mountWindowsHostRoutes } from "./windows-host.js";
+import { WindowsHostCommandHub } from "./windows-host-command-hub.js";
 
 const internalToken = "t".repeat(48);
 const body = {
