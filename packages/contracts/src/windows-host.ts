@@ -81,3 +81,47 @@ export const WindowsHostRevocationSchema = z.object({
 });
 
 export type WindowsHostRevocation = z.infer<typeof WindowsHostRevocationSchema>;
+
+export const WindowsHostCommandRequestSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("identity.get") }),
+]);
+
+export type WindowsHostCommandRequest = z.infer<typeof WindowsHostCommandRequestSchema>;
+
+export const WindowsHostCommandEnvelopeSchema = z.object({
+  id: z.string().uuid(),
+  request: WindowsHostCommandRequestSchema,
+});
+
+export type WindowsHostCommandEnvelope = z.infer<typeof WindowsHostCommandEnvelopeSchema>;
+
+export const WindowsHostCommandResultSchema = z.discriminatedUnion("ok", [
+  z.object({
+    id: z.string().uuid(),
+    ok: z.literal(true),
+    result: z.object({
+      kind: z.literal("identity"),
+      identity: WindowsHostIdentitySchema,
+    }),
+  }),
+  z.object({
+    id: z.string().uuid(),
+    ok: z.literal(false),
+    error: z.string().trim().min(1).max(2_000),
+  }),
+]);
+
+export type WindowsHostCommandResult = z.infer<typeof WindowsHostCommandResultSchema>;
+
+export const WindowsHostCommandPollSchema = z.object({
+  hostId: z.string().min(1).max(200),
+});
+
+export type WindowsHostCommandPoll = z.infer<typeof WindowsHostCommandPollSchema>;
+
+export const WindowsHostCommandReportSchema = z.object({
+  hostId: z.string().min(1).max(200),
+  result: WindowsHostCommandResultSchema,
+});
+
+export type WindowsHostCommandReport = z.infer<typeof WindowsHostCommandReportSchema>;
