@@ -21,11 +21,22 @@ export type OpenCliRunner = (entry: string, argv: string[]) => Promise<string>;
  * current Node executable with argv avoids cmd.exe, PowerShell interpolation
  * and exposing the daemon's protected HTTP endpoint over the network.
  */
-export function loadOpenCliConfiguration(env: NodeJS.ProcessEnv = process.env): OpenCliConfiguration {
+export function loadOpenCliConfiguration(
+  env: NodeJS.ProcessEnv = process.env,
+): OpenCliConfiguration {
   const profile = env.RAKAZO_OPENCLI_PROFILE?.trim() ?? "";
-  const entry = env.RAKAZO_OPENCLI_ENTRY?.trim() ||
-    path.join(env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"),
-      "npm", "node_modules", "@jackwener", "opencli", "dist", "src", "main.js");
+  const entry =
+    env.RAKAZO_OPENCLI_ENTRY?.trim() ||
+    path.join(
+      env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"),
+      "npm",
+      "node_modules",
+      "@jackwener",
+      "opencli",
+      "dist",
+      "src",
+      "main.js",
+    );
   return { entry, profile };
 }
 
@@ -71,7 +82,7 @@ export async function runOpenCliProcess(entry: string, argv: string[]): Promise<
     child.on("error", (error: Error) => finish(error));
     child.on("close", (code) => {
       if (code !== 0) {
-        finish(new Error("OpenCLI exited with code " + String(code) + ": " + errors.slice(0, 500)));
+        finish(new Error(`OpenCLI exited with code ${String(code)}: ${errors.slice(0, 500)}`));
       } else finish();
     });
   });
@@ -90,7 +101,7 @@ function parseElements(tree: string): BrowserObservation["elements"] {
   for (const line of tree.split(/\r?\n/u)) {
     const match = /^\s*\[(\d{1,6})\]\s*(\S*)\s*(.*)$/u.exec(line);
     if (!match) continue;
-    const ref = "e" + match[1];
+    const ref = `e${match[1]}`;
     if (seen.has(ref)) continue;
     seen.add(ref);
     elements.push({
@@ -118,14 +129,25 @@ export class WindowsOpenCliBackend {
     return openCliAvailable(this.config);
   }
 
-  async browser(botId: string, request: WindowsHostBrowserRequest): Promise<WindowsHostBrowserResult> {
+  async browser(
+    botId: string,
+    request: WindowsHostBrowserRequest,
+  ): Promise<WindowsHostBrowserResult> {
     if (!SAFE_BOT_ID.test(botId)) throw new Error("Invalid browser bot identity");
     if (!this.available()) {
-      throw new Error("OpenCLI is unavailable: set RAKAZO_OPENCLI_PROFILE and a valid RAKAZO_OPENCLI_ENTRY");
+      throw new Error(
+        "OpenCLI is unavailable: set RAKAZO_OPENCLI_PROFILE and a valid RAKAZO_OPENCLI_ENTRY",
+      );
     }
-    const session = "rakazo-" + botId;
+    const session = `rakazo-${botId}`;
     const invoke = (...args: string[]) =>
-      this.runner(this.config.entry, ["--profile", this.config.profile, "browser", session, ...args]);
+      this.runner(this.config.entry, [
+        "--profile",
+        this.config.profile,
+        "browser",
+        session,
+        ...args,
+      ]);
 
     const observe = async (): Promise<BrowserObservation> => {
       const tree = (await invoke("state")).slice(0, MAX_OUTPUT_BYTES);
@@ -159,12 +181,20 @@ export class WindowsOpenCliBackend {
         const current = await observe();
         const expected = previous.elements.find((element) => element.ref === action.ref);
         const actual = current.elements.find((element) => element.ref === action.ref);
-        if (!expected || !actual || expected.role !== actual.role || expected.name !== actual.name ||
-          current.url !== previous.url) {
+        if (
+          !expected ||
+          !actual ||
+          expected.role !== actual.role ||
+          expected.name !== actual.name ||
+          current.url !== previous.url
+        ) {
           throw new Error("Stale browser reference; take a fresh snapshot");
         }
-        if (action.kind !== "click" && action.origin &&
-          new URL(current.url).origin !== action.origin) {
+        if (
+          action.kind !== "click" &&
+          action.origin &&
+          new URL(current.url).origin !== action.origin
+        ) {
           throw new Error("Browser origin changed; action rejected");
         }
         const target = action.ref.slice(1);
@@ -178,7 +208,8 @@ export class WindowsOpenCliBackend {
       return {
         ok: false,
         completed,
-        uncertain: completed > 0 || (error instanceof Error && /outcome is uncertain/u.test(error.message)),
+        uncertain:
+          completed > 0 || (error instanceof Error && /outcome is uncertain/u.test(error.message)),
         error: error instanceof Error ? error.message.slice(0, 500) : "Browser action failed",
       };
     }
