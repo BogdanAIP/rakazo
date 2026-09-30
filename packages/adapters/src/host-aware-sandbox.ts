@@ -23,22 +23,20 @@ export function sandboxKindForBot(envKind: string, computerHost: string | null |
 
 export function createRunSandbox(
   kind: string,
-  opts: SandboxProviderOptions & { prisma?: PrismaClient },
+  opts: SandboxProviderOptions & { prisma?: PrismaClient; hostProvider?: SandboxProvider },
 ): SandboxProvider {
-  if (kind === "desktop") {
-    return new DesktopSandboxProvider({
+  const hostProvider =
+    opts.hostProvider ??
+    new DesktopSandboxProvider({
       root: opts.dataDir,
       hostRoots: [homedir()],
     });
-  }
+  if (kind === "desktop") return hostProvider;
   const primary = createSandboxProvider(kind, opts);
   if (kind !== "docker" || !opts.prisma) return primary;
   return new HostAwareSandbox(
     primary,
-    new DesktopSandboxProvider({
-      root: opts.dataDir,
-      hostRoots: [homedir()],
-    }),
+    hostProvider,
     async () => {
       const settings = await opts.prisma!.deploymentSettings.findUnique({
         where: { id: "default" },
