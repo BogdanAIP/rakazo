@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { DpapiWindowsSecretProtector } from "./credential-store.js";
 import { WindowsHostReadOnlyBackend } from "./readonly.js";
+import { WindowsHostFileMutationBackend } from "./windows-files.js";
 
 if (process.platform !== "win32") {
   throw new Error("Native Windows smoke must run on a Windows machine");
@@ -32,7 +33,21 @@ try {
   assert.equal(Buffer.from(file).toString("utf8"), "RAKAZO_WINDOWS_FILE_SMOKE");
   await assert.rejects(() => backend.readFile("smoke-bot", "../probe.txt", 64));
 
-  console.log("Windows native DPAPI, tasklist and bounded workspace smoke passed");
+  const writer = new WindowsHostFileMutationBackend(stateDir, true);
+  assert.equal(writer.available(), true, "Win32 relative-handle file writes are unavailable");
+  const writeResult = await writer.writeFile(
+    "smoke-bot",
+    "nested/written.txt",
+    Buffer.from("RAKAZO_WINDOWS_WRITE_SMOKE", "utf8"),
+  );
+  assert.deepEqual(writeResult, { path: "nested/written.txt", bytesWritten: 26 });
+  const written = await backend.readFile("smoke-bot", "nested/written.txt", 64);
+  assert.equal(Buffer.from(written).toString("utf8"), "RAKAZO_WINDOWS_WRITE_SMOKE");
+  await assert.rejects(() =>
+    writer.writeFile("smoke-bot", "../escape.txt", Buffer.from("NO", "utf8")),
+  );
+
+  console.log("Windows native DPAPI, tasklist and bounded workspace read/write smoke passed");
 } finally {
   await rm(stateDir, { recursive: true, force: true });
 }
