@@ -14,15 +14,15 @@ import {
   type WindowsHostCredentialStore,
 } from "./credential-store.js";
 import { loadOrCreateWindowsHostIdentity } from "./identity.js";
-import { WindowsOpenCliBackend } from "./opencli.js";
 import { WindowsProcessBackend } from "./native-process.js";
-import { WindowsGuiBackend } from "./windows-gui.js";
+import { WindowsOpenCliBackend } from "./opencli.js";
 import { WindowsHostReadOnlyBackend } from "./readonly.js";
 import {
   HttpWindowsHostTransport,
   WindowsHostAuthorizationError,
   type WindowsHostTransport,
 } from "./transport.js";
+import { WindowsGuiBackend } from "./windows-gui.js";
 
 export const WINDOWS_HOST_RUNTIME_VERSION = "0.1.0";
 
@@ -131,7 +131,9 @@ export class WindowsHostRuntime {
     ),
     private readonly browserBackend: WindowsOpenCliBackend = new WindowsOpenCliBackend(),
     private readonly guiBackend: WindowsGuiBackend = new WindowsGuiBackend(),
-    private readonly processBackend: WindowsProcessBackend = new WindowsProcessBackend(config.stateDir),
+    private readonly processBackend: WindowsProcessBackend = new WindowsProcessBackend(
+      config.stateDir,
+    ),
   ) {}
 
   async probe() {
@@ -308,7 +310,11 @@ export async function executeWindowsHostCommand(
     case "screen.observe": {
       const result = await guiBackend.execute({ command: "observe" });
       if (result.kind !== "observation") throw new Error("Unexpected Windows GUI observation");
-      return { id: command.id, ok: true, result: { kind: "screen", observation: result.observation } };
+      return {
+        id: command.id,
+        ok: true,
+        result: { kind: "screen", observation: result.observation },
+      };
     }
     case "screen.act": {
       const result = await guiBackend.execute({
