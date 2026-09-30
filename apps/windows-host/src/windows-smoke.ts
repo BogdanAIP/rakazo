@@ -1,7 +1,10 @@
 import { strict as assert } from "node:assert";
+import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { DpapiWindowsSecretProtector } from "./credential-store.js";
 import { WindowsHostReadOnlyBackend } from "./readonly.js";
 import { WindowsHostFileMutationBackend } from "./windows-files.js";
@@ -9,6 +12,21 @@ import { WindowsHostFileMutationBackend } from "./windows-files.js";
 if (process.platform !== "win32") {
   throw new Error("Native Windows smoke must run on a Windows machine");
 }
+
+const execFileAsync = promisify(execFile);
+const installerPath = fileURLToPath(new URL("../scripts/install-current-user.ps1", import.meta.url));
+const installerLiteral = JSON.stringify(installerPath);
+await execFileAsync(
+  "powershell.exe",
+  [
+    "-NoLogo",
+    "-NoProfile",
+    "-NonInteractive",
+    "-Command",
+    `$errors=@();$tokens=@();[void][System.Management.Automation.Language.Parser]::ParseFile(${installerLiteral},[ref]$tokens,[ref]$errors);if($errors.Count){$errors|ForEach-Object{[Console]::Error.WriteLine($_.Message)};exit 1}`,
+  ],
+  { windowsHide: true, timeout: 10_000 },
+);
 
 const stateDir = await mkdtemp(path.join(os.tmpdir(), "rakazo-windows-native-smoke-"));
 try {
@@ -47,7 +65,9 @@ try {
     writer.writeFile("smoke-bot", "../escape.txt", Buffer.from("NO", "utf8")),
   );
 
-  console.log("Windows native DPAPI, tasklist and bounded workspace read/write smoke passed");
+  console.log(
+    "Windows native DPAPI, tasklist, installer syntax and bounded workspace read/write smoke passed",
+  );
 } finally {
   await rm(stateDir, { recursive: true, force: true });
 }
