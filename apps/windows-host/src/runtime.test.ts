@@ -140,6 +140,27 @@ describe("resolveWindowsHostCredential", () => {
     });
   });
 
+  it("restarts with a saved credential even if the one-use pairing token remains configured", async () => {
+    const store = new MemoryCredentialStore({
+      hostId: "stored-host",
+      hostCredential: "s".repeat(48),
+    });
+    const client = transport();
+    const resolved = await resolveWindowsHostCredential(
+      baseConfig({ pairingToken: "already-consumed" }),
+      advertisement,
+      client,
+      store,
+    );
+
+    expect(resolved).toMatchObject({
+      hostId: "stored-host",
+      credential: "s".repeat(48),
+      source: "store",
+    });
+    expect(client.pair).not.toHaveBeenCalled();
+  });
+
   it("rejects a partial environment override instead of mixing credential sources", async () => {
     await expect(
       resolveWindowsHostCredential(
