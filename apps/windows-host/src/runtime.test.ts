@@ -1,15 +1,18 @@
-import { describe, expect, it, vi } from "vitest";
 import {
   WINDOWS_HOST_PROTOCOL_VERSION,
   type WindowsHostAdvertisement,
   type WindowsHostPairingResult,
 } from "@rakazo/contracts";
+import { describe, expect, it, vi } from "vitest";
 import type { WindowsHostConfig } from "./config.js";
 import type {
   StoredWindowsHostCredential,
   WindowsHostCredentialStore,
 } from "./credential-store.js";
-import { executeWindowsHostCommand, resolveWindowsHostCredential } from "./runtime.js";
+import {
+  executeWindowsHostCommand,
+  resolveWindowsHostCredential,
+} from "./runtime.js";
 import type { WindowsHostTransport } from "./transport.js";
 
 const advertisement: WindowsHostAdvertisement = {
@@ -149,7 +152,6 @@ describe("resolveWindowsHostCredential", () => {
     ).rejects.toThrow("must be provided together");
   });
 });
-
 
 describe("executeWindowsHostCommand", () => {
   it("returns the physical host identity without invoking another agent runtime", () => {
