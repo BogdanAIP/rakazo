@@ -992,17 +992,21 @@ Already implemented on `feature/chatgpt-mcp-upstream-2026-09-29`:
 - a shared provider implementation in `packages/adapters`, used by both API and Graphile worker;
 - a typed worker→API relay at `/api/windows-host/internal/dispatch` protected by a dedicated 32+ character token, owner check, non-revoked pairing and recent heartbeat;
 - Compose worker routing to the private `http://api:3100` address;
-- explicit rejection of remote host IDs by the local desktop provider; unsupported process/files/GUI/snapshot operations remain fail-closed;
-- restoration of DPAPI credentials before considering the original single-use pairing token, including after restart.
+- explicit rejection of remote host IDs by the local desktop provider; arbitrary process execution, file writes, GUI and snapshots remain fail-closed;
+- restoration of DPAPI credentials before considering the original single-use pairing token, including after restart;
+- read-only typed `process.list`, `files.list`, and `files.read` commands, with a maximum of 100 process entries, 128 directory entries, and 64 KiB per file read;
+- a dedicated per-bot workspace under `stateDir/workspaces/<botId>`; normal Windows files and DPAPI credentials are not addressable by this API;
+- focused tests for traversal, symlinks, read-size limits, unauthorized internal dispatch, command correlation and the read-only provider;
+- a separate Windows-path typecheck CI job to distinguish Windows implementation failures from the existing mobile Expo version mismatch.
 
 **Deployment boundary:** worker→API relay is implemented for the idempotent `identity.get` proof only; the API's host command hub is still process-local and its pending requests do not survive API restart. This is a transport bridge, **not a second durable-job store** and not yet a production-ready physical-host feature. `RAKAZO_WINDOWS_HOST_ENABLED` must remain off until the latest checks and a physical end-to-end test succeed; when enabled, both API and worker must share `RAKAZO_WINDOWS_HOST_INTERNAL_TOKEN`.
 
 Still required for this phase:
 
-- validate the cross-process `identity.get` route on the target Windows machine via Plugin R;
-- add bounded process execution and output;
-- add bounded file list/read/write;
-- prove cancellation and reconnect on a physical Windows host through Plugin R.
+- verify the latest focused typecheck, lint and unit tests, then validate `identity.get` plus read-only process/files on the target Windows machine through Plugin R;
+- use the existing Win32 handle-relative containment implementation for race-resistant mutating filesystem access;
+- add durable operation receipts, bounded process execution/output, cancellation and bounded file writes;
+- prove cancellation and restart reconciliation on the physical Windows host through Plugin R.
 
 Implement:
 
@@ -1324,16 +1328,15 @@ Completed evidence:
 
 The next implementation sequence should be:
 
-1. finish the current CI fixes and prove the Graphile worker→API→Windows `identity.get` route on the physical host;
-2. add bounded process execution, stdout/stderr collection, timeout and cancellation;
-3. add bounded file list/read/write under explicit allowed roots and prove process + files through Plugin R;
-4. make dispatched work durable through Rakazo's existing jobs and reconcile uncertain results after API or host restart;
-5. add durable host jobs and reconnect reconciliation;
-6. select/integrate the browser backend;
-7. move the proven UFO execution layer behind Rakazo `observe/act`, with visual fallback;
-8. modernize R with hot paths and MCP Apps UI;
-9. add MCP Events;
-10. cut over from OpenResearch only after the parity matrix passes.
+1. finish the focused CI gates and physically test Graphile worker→API→Windows identity and bounded read-only commands through Plugin R;
+2. integrate durable operation receipts with Rakazo's existing jobs; reconcile command delivery/results after API or host restart;
+3. add bounded process execution, stdout/stderr, timeout and cancellation;
+4. add race-resistant, bounded file writes via native Win32 containment and prove process + files through Plugin R;
+5. select/integrate the browser backend;
+6. move the proven UFO execution layer behind Rakazo `observe/act`, with visual fallback;
+7. modernize R with hot paths and MCP Apps UI;
+8. add MCP Events;
+9. cut over from OpenResearch only after the parity matrix passes.
 
 The important sequencing rule is:
 
