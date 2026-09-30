@@ -7,6 +7,10 @@ import {
   type WindowsHostCapability,
 } from "@rakazo/contracts";
 import type { WindowsHostConfig } from "./config.js";
+import {
+  ProtectedWindowsHostCredentialStore,
+  type WindowsHostCredentialStore,
+} from "./credential-store.js";
 import { loadOrCreateWindowsHostIdentity } from "./identity.js";
 import {
   HttpWindowsHostTransport,
@@ -16,6 +20,13 @@ import {
 export const WINDOWS_HOST_RUNTIME_VERSION = "0.1.0";
 
 const INITIAL_CAPABILITIES = ["identity"] as const satisfies readonly WindowsHostCapability[];
+
+interface ResolvedWindowsHostCredential {
+  hostId: string;
+  credential: string;
+  heartbeatIntervalMs: number;
+  source: "env" | "pairing" | "store";
+}
 
 export async function buildAdvertisement(
   stateDir: string,
@@ -31,6 +42,59 @@ export async function buildAdvertisement(
   });
 }
 
+export async function resolveWindowsHostCredential(
+  config: WindowsHostConfig,
+  advertisement: WindowsHostAdvertisement,
+  transport: WindowsHostTransport,
+  credentialStore: WindowsHostCredentialStore,
+  signal?: AbortSignal,
+): Promise<ResolvedWindowsHostCredential> {
+  const hasConfiguredHostId = Boolean(config.hostId);
+  const hasConfiguredCredential = Boolean(config.hostCredential);
+  if (hasConfiguredHostId !== hasConfiguredCredential) {
+    throw new Error(
+      "RAKAZO_WINDOWS_HOST_ID and RAKAZO_WINDOWS_HOST_CREDENTIAL must be provided together",
+    );
+  }
+
+  if (config.hostId && config.hostCredential) {
+    return {
+      hostId: config.hostId,
+      credential: config.hostCredential,
+      heartbeatIntervalMs: 15_000,
+      source: "env",
+    };
+  }
+
+  if (config.pairingToken) {
+    const paired = await transport.pair(advertisement, config.pairingToken, signal);
+    await credentialStore.save({
+      hostId: paired.hostId,
+      hostCredential: paired.hostCredential,
+    });
+    return {
+      hostId: paired.hostId,
+      credential: paired.hostCredential,
+      heartbeatIntervalMs: paired.heartbeatIntervalMs,
+      source: "pairing",
+    };
+  }
+
+  const stored = await credentialStore.load();
+  if (stored) {
+    return {
+      hostId: stored.hostId,
+      credential: stored.hostCredential,
+      heartbeatIntervalMs: 15_000,
+      source: "store",
+    };
+  }
+
+  throw new Error(
+    "Provide a short-lived pairing token or an existing host id/credential",
+  );
+}
+
 export class WindowsHostRuntime {
   private readonly connectionId = randomUUID();
   private sequence = 0;
@@ -40,6 +104,8 @@ export class WindowsHostRuntime {
     private readonly transport: WindowsHostTransport | null = config.origin
       ? new HttpWindowsHostTransport(config.origin)
       : null,
+    private readonly credentialStore: WindowsHostCredentialStore =
+      new ProtectedWindowsHostCredentialStore(config.stateDir),
   ) {}
 
   async probe() {
@@ -52,46 +118,38 @@ export class WindowsHostRuntime {
     }
 
     const advertisement = await this.probe();
-    let hostId = this.config.hostId;
-    let credential = this.config.hostCredential;
-    let heartbeatIntervalMs = 15_000;
-
-    if ((!hostId || !credential) && this.config.pairingToken) {
-      const paired = await this.transport.pair(
-        advertisement,
-        this.config.pairingToken,
-        signal,
-      );
-      hostId = paired.hostId;
-      credential = paired.hostCredential;
-      heartbeatIntervalMs = paired.heartbeatIntervalMs;
-    }
-
-    if (!hostId || !credential) {
-      throw new Error(
-        "Provide a short-lived pairing token or an existing host id/credential",
-      );
-    }
+    const resolved = await resolveWindowsHostCredential(
+      this.config,
+      advertisement,
+      this.transport,
+      this.credentialStore,
+      signal,
+    );
 
     while (!signal?.aborted) {
       try {
         const heartbeat = WindowsHostHeartbeatSchema.parse({
           protocolVersion: WINDOWS_HOST_PROTOCOL_VERSION,
-          hostId,
+          hostId: resolved.hostId,
           connectionId: this.connectionId,
           sequence: this.sequence++,
           sentAt: new Date().toISOString(),
           advertisement,
         });
-        const result = await this.transport.heartbeat(heartbeat, credential, signal);
+        const result = await this.transport.heartbeat(
+          heartbeat,
+          resolved.credential,
+          signal,
+        );
         if (result.revoked) {
+          if (resolved.source !== "env") await this.credentialStore.clear();
           throw new Error("Windows host credential was revoked");
         }
-        await sleep(heartbeatIntervalMs, signal);
+        await sleep(resolved.heartbeatIntervalMs, signal);
       } catch (error) {
         if (signal?.aborted) break;
         if (error instanceof Error && error.message.includes("revoked")) throw error;
-        await sleep(Math.min(heartbeatIntervalMs, 30_000), signal);
+        await sleep(Math.min(resolved.heartbeatIntervalMs, 30_000), signal);
       }
     }
 
