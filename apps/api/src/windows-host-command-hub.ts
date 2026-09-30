@@ -30,6 +30,7 @@ export class WindowsHostCommandHub {
     timeoutMs = DEFAULT_DISPATCH_TIMEOUT_MS,
   ): Promise<WindowsHostCommandResult> {
     if (this.closed) throw new Error("Windows host command hub is closed");
+    if (signal?.aborted) throw new Error("Windows host command aborted");
     if (this.pendingForHost(hostId) >= MAX_PENDING_PER_HOST) {
       throw new Error("Windows host command queue is full");
     }
