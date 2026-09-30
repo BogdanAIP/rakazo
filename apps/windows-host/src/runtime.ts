@@ -15,6 +15,7 @@ import {
 } from "./credential-store.js";
 import { loadOrCreateWindowsHostIdentity } from "./identity.js";
 import { WindowsOpenCliBackend } from "./opencli.js";
+import { WindowsGuiBackend } from "./windows-gui.js";
 import { WindowsHostReadOnlyBackend } from "./readonly.js";
 import {
   HttpWindowsHostTransport,
@@ -41,13 +42,18 @@ export async function buildAdvertisement(
   stateDir: string,
   startedAt = new Date().toISOString(),
   browserAvailable = false,
+  guiAvailable = false,
 ): Promise<WindowsHostAdvertisement> {
   const identity = await loadOrCreateWindowsHostIdentity(stateDir);
   return WindowsHostAdvertisementSchema.parse({
     protocolVersion: WINDOWS_HOST_PROTOCOL_VERSION,
     runtimeVersion: WINDOWS_HOST_RUNTIME_VERSION,
     identity,
-    capabilities: [...INITIAL_CAPABILITIES, ...(browserAvailable ? ["browser" as const] : [])],
+    capabilities: [
+      ...INITIAL_CAPABILITIES,
+      ...(browserAvailable ? ["browser" as const] : []),
+      ...(guiAvailable ? (["screen", "input"] as const) : []),
+    ],
     startedAt,
   });
 }
@@ -121,10 +127,16 @@ export class WindowsHostRuntime {
       config.stateDir,
     ),
     private readonly browserBackend: WindowsOpenCliBackend = new WindowsOpenCliBackend(),
+    private readonly guiBackend: WindowsGuiBackend = new WindowsGuiBackend(),
   ) {}
 
   async probe() {
-    return buildAdvertisement(this.config.stateDir, undefined, this.browserBackend.available());
+    return buildAdvertisement(
+      this.config.stateDir,
+      undefined,
+      this.browserBackend.available(),
+      this.guiBackend.available(),
+    );
   }
 
   async run(signal?: AbortSignal): Promise<never> {
@@ -205,7 +217,13 @@ export class WindowsHostRuntime {
 
         let result: WindowsHostCommandResult;
         try {
-          result = await executeWindowsHostCommand(command, advertisement, this.readOnlyBackend, this.browserBackend);
+          result = await executeWindowsHostCommand(
+            command,
+            advertisement,
+            this.readOnlyBackend,
+            this.browserBackend,
+            this.guiBackend,
+          );
         } catch (error) {
           result = {
             id: command.id,
@@ -232,6 +250,7 @@ export async function executeWindowsHostCommand(
   advertisement: WindowsHostAdvertisement,
   backend: WindowsHostReadOnlyBackend = new WindowsHostReadOnlyBackend("."),
   browserBackend: WindowsOpenCliBackend = new WindowsOpenCliBackend(),
+  guiBackend: WindowsGuiBackend = new WindowsGuiBackend(),
 ): Promise<WindowsHostCommandResult> {
   switch (command.request.kind) {
     case "identity.get":
@@ -270,6 +289,29 @@ export async function executeWindowsHostCommand(
           response: await browserBackend.browser(command.request.botId, command.request.request),
         },
       };
+    case "screen.observe": {
+      const result = await guiBackend.execute({ command: "observe" });
+      if (result.kind !== "observation") throw new Error("Unexpected Windows GUI observation");
+      return { id: command.id, ok: true, result: { kind: "screen", observation: result.observation } };
+    }
+    case "screen.act": {
+      const result = await guiBackend.execute({
+        command: "act",
+        actions: command.request.actions,
+        observe: command.request.observe,
+        settleMs: command.request.settleMs,
+      });
+      if (result.kind !== "actions") throw new Error("Unexpected Windows GUI action result");
+      return {
+        id: command.id,
+        ok: true,
+        result: {
+          kind: "actions",
+          completed: result.completed,
+          ...(result.observation ? { observation: result.observation } : {}),
+        },
+      };
+    }
     case "files.read":
       return {
         id: command.id,
