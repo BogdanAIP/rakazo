@@ -15,7 +15,6 @@ import {
 } from "./credential-store.js";
 import { loadOrCreateWindowsHostIdentity } from "./identity.js";
 import { WindowsProcessBackend } from "./native-process.js";
-import { WindowsHostFileMutationBackend } from "./windows-files.js";
 import { WindowsOpenCliBackend } from "./opencli.js";
 import { WindowsHostReadOnlyBackend } from "./readonly.js";
 import {
@@ -23,6 +22,7 @@ import {
   WindowsHostAuthorizationError,
   type WindowsHostTransport,
 } from "./transport.js";
+import { WindowsHostFileMutationBackend } from "./windows-files.js";
 import { WindowsGuiBackend } from "./windows-gui.js";
 
 export const WINDOWS_HOST_RUNTIME_VERSION = "0.1.0";
@@ -135,8 +135,9 @@ export class WindowsHostRuntime {
     private readonly processBackend: WindowsProcessBackend = new WindowsProcessBackend(
       config.stateDir,
     ),
-    private readonly fileMutationBackend: WindowsHostFileMutationBackend =
-      new WindowsHostFileMutationBackend(config.stateDir),
+    private readonly fileMutationBackend: WindowsHostFileMutationBackend = new WindowsHostFileMutationBackend(
+      config.stateDir,
+    ),
   ) {}
 
   async probe() {
@@ -356,7 +357,10 @@ export async function executeWindowsHostCommand(
       };
     case "files.write": {
       const content = Buffer.from(command.request.contentBase64, "base64");
-      if (content.toString("base64").replace(/=+$/u, "") !== command.request.contentBase64.replace(/=+$/u, "")) {
+      if (
+        content.toString("base64").replace(/=+$/u, "") !==
+        command.request.contentBase64.replace(/=+$/u, "")
+      ) {
         throw new Error("Windows host received invalid base64 file content");
       }
       const result = await fileMutationBackend.writeFile(
