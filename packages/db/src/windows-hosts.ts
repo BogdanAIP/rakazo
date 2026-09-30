@@ -219,6 +219,31 @@ export async function recordWindowsHostHeartbeat(
   );
 }
 
+export async function authenticateWindowsHost(
+  prisma: Pick<PrismaClient, "windowsHost">,
+  input: { hostId: string; credential: string },
+) {
+  const credentialHash = hashWindowsHostSecret(input.credential);
+  const host = await prisma.windowsHost.findFirst({
+    where: {
+      id: input.hostId,
+      credentialHash,
+    },
+    select: {
+      id: true,
+      ownerUserId: true,
+      installationId: true,
+      revokedAt: true,
+      lastSeenAt: true,
+    },
+  });
+  if (!host) throw new WindowsHostAuthenticationError();
+  return {
+    ...host,
+    revoked: host.revokedAt !== null,
+  };
+}
+
 export async function revokeWindowsHost(
   prisma: Pick<PrismaClient, "windowsHost">,
   input: { ownerUserId: string; hostId: string; now?: Date },
