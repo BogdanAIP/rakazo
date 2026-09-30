@@ -111,6 +111,7 @@ import {
 } from "./team-chat-startup.js";
 import { mountVoiceHttpRoutes } from "./voice.js";
 import { mountWebhookHttpRoutes } from "./webhook.js";
+import { mountWindowsHostRoutes } from "./windows-host.js";
 
 /**
  * Native clients always send the app scheme, including in Expo Go, so no
@@ -548,6 +549,23 @@ export async function createApp(
     return auth.handler(c.req.raw);
   });
   mountLocalSettings(app, { token: env.desktopStackToken, prisma, rpc });
+  mountWindowsHostRoutes(app, {
+    prisma,
+    resolveOwner: async (request) => {
+      const session = await auth.api.getSession({ headers: sessionHeaders(request) });
+      if (!session?.user) return null;
+      const actor = await requireMembership(
+        prisma,
+        session.user.id,
+        request.headers.get("x-rakazo-space-id") ?? undefined,
+      ).catch(() => null);
+      if (!actor) return null;
+      return {
+        userId: actor.userId,
+        isDeploymentOwner: actor.isDeploymentOwner,
+      };
+    },
+  });
   app.use("/rpc/*", async (c, next) => {
     const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
     const requestedSpaceId = c.req.header("x-rakazo-space-id");
