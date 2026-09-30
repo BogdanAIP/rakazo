@@ -143,30 +143,41 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
     request: CommandRequest,
     context: AdapterContext,
   ): AsyncIterable<ProcessEvent> {
-    if (
-      request.argv.length !== 1 ||
-      request.argv[0] !== "tasklist" ||
-      request.cwd !== undefined ||
-      request.env !== undefined ||
-      request.pty
-    ) {
-      yield { type: "stderr", data: "Physical Windows command execution is not enabled yet." };
+    if (request.pty || request.env || request.argv.length === 0 || request.argv.length > 16) {
+      yield { type: "stderr", data: "Windows processes require bounded argv and no PTY/environment override" };
       yield { type: "exit", code: 1 };
       return;
     }
+    const inventory = request.argv.length === 1 && request.argv[0] === "tasklist" &&
+      request.cwd === undefined;
+    const command: WindowsHostCommandRequest = inventory
+      ? { kind: "process.list", limit: 100 }
+      : {
+          kind: "process.run",
+          botId: computer.botId,
+          argv: request.argv,
+          cwd: request.cwd,
+          timeoutMs: Math.min(Math.max(request.timeoutMs ?? 10_000, 100), 18_000),
+        };
     const result = await this.commands.dispatch(
       computer.providerRef,
-      { kind: "process.list", limit: 100 },
+      command,
       context.signal,
-      undefined,
+      30_000,
       context.userId,
     );
     if (!result.ok) throw new Error(result.error);
-    if (result.result.kind !== "processes") {
+    if (result.result.kind === "processes" && inventory) {
+      yield { type: "stdout", data: JSON.stringify(result.result.processes) };
+      yield { type: "exit", code: 0 };
+      return;
+    }
+    if (result.result.kind !== "process") {
       throw new Error("Windows host returned an unexpected process response");
     }
-    yield { type: "stdout", data: JSON.stringify(result.result.processes) };
-    yield { type: "exit", code: 0 };
+    if (result.result.value.stdout) yield { type: "stdout", data: result.result.value.stdout };
+    if (result.result.value.stderr) yield { type: "stderr", data: result.result.value.stderr };
+    yield { type: "exit", code: result.result.value.code };
   }
 
   async connectScreen(_computer: ComputerRef, _request: ScreenRequest, _context: AdapterContext) {
