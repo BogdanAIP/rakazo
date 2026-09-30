@@ -7,8 +7,8 @@ import {
   openChildDirectoryViaDirectoryFdWin32,
   openExistingChildViaDirectoryFdWin32,
   pathFromDirectoryFd,
-  win32NtRelativeAvailable,
   type Win32FileHandle,
+  win32NtRelativeAvailable,
 } from "@rakazo/adapters/win32-relative-path";
 
 const MAX_WRITE_BYTES = 2 * 1024 * 1024;
@@ -61,7 +61,7 @@ async function validateDirectoryHandle(handle: Win32FileHandle, root: string) {
 
 async function validateFileHandle(handle: Win32FileHandle, root: string) {
   const info = await handle.stat({ bigint: true });
-  if (!info.isFile() || info.nlink !== 1n) {
+  if (!info.isFile() || info.nlink !== 1) {
     throw new Error("Workspace target is not a regular single-link file");
   }
   const heldPath = pathFromDirectoryFd(handle.fd);
