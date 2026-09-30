@@ -111,6 +111,8 @@ import {
 } from "./team-chat-startup.js";
 import { mountVoiceHttpRoutes } from "./voice.js";
 import { mountWebhookHttpRoutes } from "./webhook.js";
+import { WindowsHostCommandHub } from "./windows-host-command-hub.js";
+import { WindowsHostSandboxProvider } from "./windows-host-sandbox.js";
 import { mountWindowsHostRoutes } from "./windows-host.js";
 
 /**
@@ -176,6 +178,11 @@ export async function createApp(
         applicationName: "rakazo-api",
       });
   const { prisma } = created;
+  const windowsHostCommandHub = new WindowsHostCommandHub();
+  const windowsHostSandbox =
+    process.env.RAKAZO_WINDOWS_HOST_ENABLED === "true"
+      ? new WindowsHostSandboxProvider(prisma, windowsHostCommandHub)
+      : undefined;
   const realtime =
     realtimeOverride ??
     (created.pool
@@ -262,6 +269,7 @@ export async function createApp(
       boxApiUrl: env.boxApiUrl,
       dataDir: env.dataDir,
       prisma,
+      hostProvider: windowsHostSandbox,
     });
   const mcpOAuth = new McpOAuthBroker(
     prisma,
@@ -551,6 +559,7 @@ export async function createApp(
   mountLocalSettings(app, { token: env.desktopStackToken, prisma, rpc });
   mountWindowsHostRoutes(app, {
     prisma,
+    commandHub: windowsHostCommandHub,
     resolveOwner: async (request) => {
       const session = await auth.api.getSession({ headers: sessionHeaders(request) });
       if (!session?.user) return null;
@@ -913,6 +922,7 @@ export async function createApp(
       await jobs.close();
       await realtime.close();
       await connector.stop();
+      windowsHostCommandHub.close();
       await mcp.close();
       await prisma.$disconnect().catch(() => undefined);
       await created.pool?.end().catch(() => undefined);
