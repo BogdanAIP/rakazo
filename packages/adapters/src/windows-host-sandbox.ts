@@ -7,10 +7,10 @@ import type {
   ComputerObservation,
   ComputerRef,
   ControlLeaseRef,
-  PortableFile,
-  ProcessEvent,
   PageBrowserCommand,
   PageBrowserResult,
+  PortableFile,
+  ProcessEvent,
   SandboxProvider,
   ScreenRequest,
   SnapshotRef,
@@ -20,8 +20,8 @@ import type {
   WindowsHostCommandResult,
   WindowsHostGuiAction,
 } from "@rakazo/contracts";
-import { computerObservation } from "./computer-support.js";
 import type { PrismaClient } from "@rakazo/db";
+import { computerObservation } from "./computer-support.js";
 
 export interface WindowsHostCommandDispatcher {
   dispatch(
@@ -144,12 +144,15 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
     context: AdapterContext,
   ): AsyncIterable<ProcessEvent> {
     if (request.pty || request.env || request.argv.length === 0 || request.argv.length > 16) {
-      yield { type: "stderr", data: "Windows processes require bounded argv and no PTY/environment override" };
+      yield {
+        type: "stderr",
+        data: "Windows processes require bounded argv and no PTY/environment override",
+      };
       yield { type: "exit", code: 1 };
       return;
     }
-    const inventory = request.argv.length === 1 && request.argv[0] === "tasklist" &&
-      request.cwd === undefined;
+    const inventory =
+      request.argv.length === 1 && request.argv[0] === "tasklist" && request.cwd === undefined;
     const command: WindowsHostCommandRequest = inventory
       ? { kind: "process.list", limit: 100 }
       : {
@@ -257,18 +260,20 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
     const observation = result.result.observation;
     return {
       completed: result.result.completed,
-      ...(observation ? {
-        observation: computerObservation(
-          Uint8Array.from(Buffer.from(observation.imageBase64, "base64")),
-          {
-            mimeType: observation.mimeType,
-            width: observation.width,
-            height: observation.height,
-            cursor: observation.cursor,
-            activeWindow: observation.activeWindow,
-          },
-        ),
-      } : {}),
+      ...(observation
+        ? {
+            observation: computerObservation(
+              Uint8Array.from(Buffer.from(observation.imageBase64, "base64")),
+              {
+                mimeType: observation.mimeType,
+                width: observation.width,
+                height: observation.height,
+                cursor: observation.cursor,
+                activeWindow: observation.activeWindow,
+              },
+            ),
+          }
+        : {}),
     };
   }
 
