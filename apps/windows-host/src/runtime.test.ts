@@ -174,8 +174,8 @@ describe("resolveWindowsHostCredential", () => {
 });
 
 describe("executeWindowsHostCommand", () => {
-  it("returns the physical host identity without invoking another agent runtime", () => {
-    const result = executeWindowsHostCommand(
+  it("returns the physical host identity without invoking another agent runtime", async () => {
+    const result = await executeWindowsHostCommand(
       {
         id: "35633dcb-8c94-4f55-9517-8b76f28676df",
         request: { kind: "identity.get" },
