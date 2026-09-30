@@ -9,6 +9,8 @@ import type {
   ControlLeaseRef,
   PortableFile,
   ProcessEvent,
+  PageBrowserCommand,
+  PageBrowserResult,
   SandboxProvider,
   ScreenRequest,
   SnapshotRef,
@@ -48,6 +50,25 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
         multiScreen: false,
       },
     };
+  }
+
+  async pageBrowser(
+    computer: ComputerRef,
+    request: PageBrowserCommand,
+    context: AdapterContext,
+  ): Promise<PageBrowserResult> {
+    const result = await this.commands.dispatch(
+      computer.providerRef,
+      { kind: "browser.call", botId: computer.botId, request },
+      context.signal,
+      30_000,
+      context.userId,
+    );
+    if (!result.ok) throw new Error(result.error);
+    if (result.result.kind !== "browser") {
+      throw new Error("Windows host returned an unexpected browser response");
+    }
+    return result.result.response;
   }
 
   async provision(
