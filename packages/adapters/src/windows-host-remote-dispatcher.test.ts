@@ -30,11 +30,7 @@ describe("RemoteWindowsHostCommandDispatcher", () => {
       );
     });
 
-    const dispatcher = new RemoteWindowsHostCommandDispatcher(
-      "http://api:3100",
-      token,
-      fetchImpl,
-    );
+    const dispatcher = new RemoteWindowsHostCommandDispatcher("http://api:3100", token, fetchImpl);
     const result = await dispatcher.dispatch(
       "host-a",
       { kind: "identity.get" },
@@ -50,9 +46,9 @@ describe("RemoteWindowsHostCommandDispatcher", () => {
   });
 
   it("refuses a missing owner and invalid internal credentials", async () => {
-    expect(
-      () => new RemoteWindowsHostCommandDispatcher("http://api:3100", "short"),
-    ).toThrow("at least 32");
+    expect(() => new RemoteWindowsHostCommandDispatcher("http://api:3100", "short")).toThrow(
+      "at least 32",
+    );
     const dispatcher = new RemoteWindowsHostCommandDispatcher(
       "http://api:3100",
       "t".repeat(48),
@@ -68,9 +64,11 @@ describe("RemoteWindowsHostCommandDispatcher", () => {
     const dispatcher = new RemoteWindowsHostCommandDispatcher(
       "http://api:3100",
       token,
-      vi.fn<typeof fetch>().mockResolvedValue(
-        new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }),
-      ),
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }),
+        ),
     );
     await expect(
       dispatcher.dispatch("host-a", { kind: "identity.get" }, undefined, undefined, "owner-a"),
