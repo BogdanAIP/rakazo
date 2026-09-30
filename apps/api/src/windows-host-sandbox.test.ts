@@ -83,7 +83,7 @@ describe("WindowsHostSandboxProvider", () => {
       provider.provision({ botId: "bot-1", homePath: "/home/rakazo" }, context),
     ).rejects.toThrow("No connected Windows host");
   });
-  it("routes bounded workspace reads with bot and owner identity", async () => {
+  it("routes bounded workspace reads and writes with bot and owner identity", async () => {
     const dispatch = vi
       .fn()
       .mockResolvedValueOnce({
@@ -98,6 +98,11 @@ describe("WindowsHostSandboxProvider", () => {
         id: "35633dcb-8c94-4f55-9517-8b76f28676df",
         ok: true,
         result: { kind: "file", contentBase64: Buffer.from("HELLO").toString("base64") },
+      })
+      .mockResolvedValueOnce({
+        id: "35633dcb-8c94-4f55-9517-8b76f28676df",
+        ok: true,
+        result: { kind: "file-write", path: "nested/output.txt", bytesWritten: 5 },
       });
     const provider = new WindowsHostSandboxProvider({} as PrismaClient, { dispatch });
     const computer = {
@@ -113,6 +118,13 @@ describe("WindowsHostSandboxProvider", () => {
     await expect(
       provider.readFile(computer, "sample.txt", context, { maxBytes: 5 }),
     ).resolves.toEqual(new Uint8Array(Buffer.from("HELLO")));
+    await expect(
+      provider.writeFile(
+        computer,
+        { path: "nested/output.txt", content: new Uint8Array(Buffer.from("WORLD")) },
+        context,
+      ),
+    ).resolves.toBeUndefined();
     expect(dispatch).toHaveBeenNthCalledWith(
       1,
       "host-1",
@@ -127,6 +139,20 @@ describe("WindowsHostSandboxProvider", () => {
       { kind: "files.read", botId: "bot-1", path: "sample.txt", maxBytes: 5 },
       context.signal,
       undefined,
+      "owner-1",
+    );
+    expect(dispatch).toHaveBeenNthCalledWith(
+      3,
+      "host-1",
+      {
+        kind: "files.write",
+        botId: "bot-1",
+        path: "nested/output.txt",
+        contentBase64: Buffer.from("WORLD").toString("base64"),
+        executable: false,
+      },
+      context.signal,
+      30_000,
       "owner-1",
     );
     await expect(
