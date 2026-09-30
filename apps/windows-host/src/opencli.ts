@@ -164,10 +164,10 @@ export class WindowsOpenCliBackend {
         throw new Error("Only HTTP(S) browser navigation is allowed");
       }
       await invoke("open", url.href);
-      return { ok: true, ...await observe() };
+      return { ok: true, ...(await observe()) };
     }
     if (request.command === "snapshot") {
-      return { ok: true, ...await observe() };
+      return { ok: true, ...(await observe()) };
     }
 
     if (request.actions.length > MAX_ACTIONS) {
@@ -202,7 +202,7 @@ export class WindowsOpenCliBackend {
         else await invoke(action.kind, target, action.text);
         completed += 1;
       }
-      return { ok: true, completed, ...await observe() };
+      return { ok: true, completed, ...(await observe()) };
     } catch (error) {
       this.observations.delete(botId);
       return {
