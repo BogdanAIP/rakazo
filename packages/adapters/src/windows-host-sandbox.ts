@@ -15,7 +15,12 @@ import type {
   ScreenRequest,
   SnapshotRef,
 } from "@rakazo/adapter-kit";
-import type { WindowsHostCommandRequest, WindowsHostCommandResult } from "@rakazo/contracts";
+import type {
+  WindowsHostCommandRequest,
+  WindowsHostCommandResult,
+  WindowsHostGuiAction,
+} from "@rakazo/contracts";
+import { computerObservation } from "./computer-support.js";
 import type { PrismaClient } from "@rakazo/db";
 
 export interface WindowsHostCommandDispatcher {
@@ -42,10 +47,10 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
       contractVersion: "1",
       adapterVersion: "0.1.0",
       capabilities: {
-        graphical: false,
+        graphical: true,
         pty: false,
         snapshots: false,
-        takeover: false,
+        takeover: true,
         persistentHome: true,
         multiScreen: false,
       },
@@ -173,24 +178,87 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
   }
 
   async sendInput(
-    _computer: ComputerRef,
-    _input: ComputerInput,
+    computer: ComputerRef,
+    input: ComputerInput,
     _lease: ControlLeaseRef,
-    _context: AdapterContext,
+    context: AdapterContext,
   ) {
-    throw new Error("Physical Windows input is not enabled yet");
+    const result = await this.commands.dispatch(
+      computer.providerRef,
+      { kind: "screen.act", botId: computer.botId, actions: [input], observe: false },
+      context.signal,
+      30_000,
+      context.userId,
+    );
+    if (!result.ok) throw new Error(result.error);
+    if (result.result.kind !== "actions" || result.result.completed !== 1) {
+      throw new Error("Windows host did not confirm the input action");
+    }
   }
 
-  async observe(_computer: ComputerRef, _context: AdapterContext): Promise<ComputerObservation> {
-    throw new Error("Physical Windows observation is not enabled yet");
+  async observe(computer: ComputerRef, context: AdapterContext): Promise<ComputerObservation> {
+    const result = await this.commands.dispatch(
+      computer.providerRef,
+      { kind: "screen.observe", botId: computer.botId },
+      context.signal,
+      30_000,
+      context.userId,
+    );
+    if (!result.ok) throw new Error(result.error);
+    if (result.result.kind !== "screen") {
+      throw new Error("Windows host returned an unexpected screen response");
+    }
+    const observation = result.result.observation;
+    return computerObservation(Uint8Array.from(Buffer.from(observation.imageBase64, "base64")), {
+      mimeType: observation.mimeType,
+      width: observation.width,
+      height: observation.height,
+      cursor: observation.cursor,
+      activeWindow: observation.activeWindow,
+    });
   }
 
   async act(
-    _computer: ComputerRef,
-    _request: ComputerActionRequest,
-    _context: AdapterContext,
+    computer: ComputerRef,
+    request: ComputerActionRequest,
+    context: AdapterContext,
   ): Promise<ComputerActionResult> {
-    throw new Error("Physical Windows actions are not enabled yet");
+    if (request.actions.some((action) => action.kind === "open" || action.kind === "launch")) {
+      throw new Error("Opening paths and launching apps require an explicit process operation");
+    }
+    const result = await this.commands.dispatch(
+      computer.providerRef,
+      {
+        kind: "screen.act",
+        botId: computer.botId,
+        actions: request.actions as WindowsHostGuiAction[],
+        observe: request.observe !== false,
+        settleMs: request.settleMs,
+      },
+      context.signal,
+      30_000,
+      context.userId,
+    );
+    if (!result.ok) throw new Error(result.error);
+    if (result.result.kind !== "actions") {
+      throw new Error("Windows host returned an unexpected action response");
+    }
+    const observation = result.result.observation;
+    return {
+      completed: result.result.completed,
+      ...(observation ? {
+        observation: computerObservation(
+          Uint8Array.from(Buffer.from(observation.imageBase64, "base64")),
+          {
+            mimeType: observation.mimeType,
+            width: observation.width,
+            height: observation.height,
+            cursor: observation.cursor,
+            activeWindow: observation.activeWindow,
+          },
+        ),
+      } : {}),
+    };
   }
 
   async listFiles(computer: ComputerRef, directory: string, context: AdapterContext) {
