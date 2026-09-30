@@ -117,13 +117,19 @@ function nt(): NtFns {
  * After a rename/junction swap of the original pathname, this still returns the
  * path of the held inode.
  */
+function koffiPointer(value: number | bigint): bigint {
+  const pointer = typeof value === "bigint" ? value : BigInt(value);
+  if (pointer === -1n || pointer === 0n) escapeWorkspace();
+  return pointer;
+}
+
 export function pathFromDirectoryFd(fd: number): string {
   return pathFromWindowsHandle(nt().getOsFhandle(fd) as number | bigint);
 }
 
 export function pathFromWindowsHandle(handle: number | bigint): string {
   const api = nt();
-  if (handle === -1n || handle === -1) escapeWorkspace();
+  const pointer = koffiPointer(handle);
 
   const flags = 0; // VOLUME_NAME_DOS
   // Some Koffi/Windows combinations do not support the documented null-buffer
@@ -131,7 +137,7 @@ export function pathFromWindowsHandle(handle: number | bigint): string {
   // while still failing closed on truncation.
   const capacity = 32_768;
   const buf = Buffer.alloc(capacity * 2);
-  const written = api.GetFinalPathNameByHandleW(handle, buf, capacity, flags) as number;
+  const written = api.GetFinalPathNameByHandleW(pointer, buf, capacity, flags) as number;
   if (written === 0 || written >= capacity) escapeWorkspace();
 
   let resolved = buf.toString("utf16le", 0, written * 2);
@@ -154,8 +160,7 @@ function ntCreateRelative(
 ): { fd: number; status: number } {
   assertLeafName(name);
   const api = nt();
-  const root = api.getOsFhandle(parentFd) as number | bigint;
-  if (root === -1 || root === -1n) escapeWorkspace();
+  const root = koffiPointer(api.getOsFhandle(parentFd) as number | bigint);
 
   const nameBuf = Buffer.from(`${name}\0`, "utf16le");
   const uni = {};
