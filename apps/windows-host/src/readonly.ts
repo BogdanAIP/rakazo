@@ -67,6 +67,14 @@ export class WindowsHostReadOnlyBackend {
     return (await this.processes()).slice(0, limit);
   }
 
+  async workspaceDirectory(botId: string, directory = "."): Promise<string> {
+    const { target } = await this.resolveTarget(botId, directory);
+    if (!(await lstat(target)).isDirectory()) {
+      throw new Error("Windows workspace path is not a directory");
+    }
+    return target;
+  }
+
   async listFiles(botId: string, directory: string): Promise<WindowsFileEntry[]> {
     const { target, segments } = await this.resolveTarget(botId, directory);
     const information = await lstat(target);
