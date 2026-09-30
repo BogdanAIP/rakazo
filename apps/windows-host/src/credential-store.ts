@@ -28,6 +28,7 @@ export class DpapiWindowsSecretProtector implements WindowsSecretProtector {
     return runPowerShell(
       [
         "$ErrorActionPreference='Stop'",
+        "Add-Type -AssemblyName System.Security",
         "$value=[Console]::In.ReadToEnd()",
         "$bytes=[Text.Encoding]::UTF8.GetBytes($value)",
         "$protected=[Security.Cryptography.ProtectedData]::Protect($bytes,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)",
@@ -42,6 +43,7 @@ export class DpapiWindowsSecretProtector implements WindowsSecretProtector {
     return runPowerShell(
       [
         "$ErrorActionPreference='Stop'",
+        "Add-Type -AssemblyName System.Security",
         "$value=[Console]::In.ReadToEnd()",
         "$bytes=[Convert]::FromBase64String($value)",
         "$plain=[Security.Cryptography.ProtectedData]::Unprotect($bytes,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)",
@@ -121,7 +123,7 @@ function runPowerShell(script: string, stdin: string): Promise<string> {
       { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] },
     );
     let stdout = "";
-    let stderrBytes = 0;
+    let stderr = "";
     let settled = false;
 
     const fail = (error: Error) => {
@@ -138,9 +140,10 @@ function runPowerShell(script: string, stdin: string): Promise<string> {
         fail(new Error("Windows credential protector output exceeded its limit"));
       }
     });
-    child.stderr.on("data", (chunk: Buffer | string) => {
-      stderrBytes += Buffer.byteLength(chunk);
-      if (stderrBytes > MAX_PROTECTOR_OUTPUT_BYTES) {
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+      if (Buffer.byteLength(stderr, "utf8") > MAX_PROTECTOR_OUTPUT_BYTES) {
         fail(new Error("Windows credential protector error output exceeded its limit"));
       }
     });
@@ -149,7 +152,14 @@ function runPowerShell(script: string, stdin: string): Promise<string> {
       if (settled) return;
       settled = true;
       if (code !== 0) {
-        reject(new Error("Windows credential protector failed"));
+        const diagnostic = sanitizePowerShellDiagnostic(stderr);
+        reject(
+          new Error(
+            diagnostic
+              ? `Windows credential protector failed: ${diagnostic}`
+              : "Windows credential protector failed",
+          ),
+        );
         return;
       }
       resolve(stdout);
@@ -157,6 +167,15 @@ function runPowerShell(script: string, stdin: string): Promise<string> {
 
     child.stdin.end(stdin);
   });
+}
+
+
+function sanitizePowerShellDiagnostic(value: string) {
+  return value
+    .replace(/[\r\n]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .slice(0, 500);
 }
 
 function hasCode(error: unknown, code: string) {
