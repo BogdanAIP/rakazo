@@ -23,7 +23,7 @@ function Get-DesktopSnapshot {
     if ($screen.Width -lt 1 -or $screen.Height -lt 1 -or $screen.Width -gt 10000 -or $screen.Height -gt 10000) {
         throw "Invalid Windows virtual-screen dimensions"
     }
-    $bitmap = New-Object System.Drawing.Bitmap($screen.Width, $screen.Height)
+    $bitmap = [System.Drawing.Bitmap]::new($screen.Width, $screen.Height)
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
     $buffer = New-Object System.IO.MemoryStream
     try {
@@ -65,8 +65,9 @@ function Set-DesktopKey($action) {
     }
     else { throw "Unsupported Windows key" }
     $modifiers = @()
-    foreach ($name in @($action.modifiers)) {
-        switch ([string]$name) {
+    if ($action.modifiers) {
+        foreach ($name in @($action.modifiers)) {
+            switch ([string]$name) {
             "Control" { $modifiers += 17 }
             "Ctrl" { $modifiers += 17 }
             "Shift" { $modifiers += 16 }
@@ -74,6 +75,7 @@ function Set-DesktopKey($action) {
             "Meta" { $modifiers += 91 }
             "Win" { $modifiers += 91 }
             default { throw "Unsupported Windows modifier" }
+            }
         }
     }
     try {
