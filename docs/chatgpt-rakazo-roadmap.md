@@ -20,7 +20,7 @@ Rakazo
     +--> physical Windows host
 ```
 
-ChatGPT is the reasoning layer. Rakazo is the durable execution/control layer. The normal path must not require Codex, Work, CAP, OpenResearch, or another LLM.
+ChatGPT is the reasoning layer. Rakazo is the durable execution/control layer. The normal path must not require Codex, Work, CAP, OpenResearch, or another LLM. Ordinary Chat is the default reasoning surface; Work remains an optional escalation surface for long or strongly agentic tasks, never an infrastructure dependency or silent fallback.
 
 Ordinary ChatGPT chat is the default reasoning surface. Work remains an optional escalation for long or strongly agentic tasks, and Codex remains an optional specialized coding escalation; neither is infrastructure and neither may be a silent fallback.
 
@@ -109,7 +109,7 @@ not:
 ChatGPT -> R -> Rakazo -> OpenResearch -> Windows
 ```
 
-### 2.5 Codex is escalation, not infrastructure
+### 2.5 Work/Codex are escalation surfaces, not infrastructure
 
 The project exists partly because Plus users can exhaust Codex/Work agentic allowance quickly.
 
@@ -119,7 +119,7 @@ Default:
 ChatGPT -> R -> Rakazo -> local compute
 ```
 
-Use Codex only when its specialized coding harness or cloud execution is materially valuable, for example:
+Use Work or Codex only when their agentic execution model is materially valuable. Work is appropriate for long multi-step ChatGPT tasks; Codex is appropriate when its specialized coding harness or cloud execution is materially valuable, for example:
 
 - a very large repository-wide refactor;
 - a long autonomous coding task whose value justifies agentic allowance;
@@ -357,6 +357,19 @@ Do not make an unrestricted public Windows HTTP listener the final design.
 A private/loopback HTTP prototype is acceptable only for early proof.
 
 ### A3. Add host pairing and revocation
+
+Status: **core pairing/revocation and restart credential persistence implemented on the integration branch; physical end-to-end validation remains.**
+
+Implemented evidence:
+
+- short-lived single-use pairing records are persisted server-side;
+- only deployment owners can create/list/revoke host pairings;
+- host credentials are stored server-side only as hashes;
+- heartbeat credentials are replay-fenced by connection id + monotonic sequence;
+- the native runtime persists its paired credential using Windows DPAPI (`CurrentUser`) rather than a plaintext config file;
+- pairing secrets and host credentials stay out of normal JSON request bodies;
+- persisted credentials are restored automatically after host-process restart and cleared on explicit revocation.
+
 
 Pairing flow:
 
@@ -962,6 +975,26 @@ Exit criteria:
 
 ### Phase 1 — Windows host proof: identity/process/files
 
+Status: **in progress as of 2026-09-30**.
+
+Already implemented on `feature/chatgpt-mcp-upstream-2026-09-29`:
+
+- `apps/windows-host` native runtime skeleton;
+- stable Windows installation identity;
+- protocol advertisement and capability schema;
+- owner-created short-lived pairing;
+- scoped host credential issuance, hashing, revocation and heartbeat replay protection;
+- outbound host heartbeat;
+- DPAPI-protected credential persistence and restart restoration;
+- API/DB wiring and focused unit tests for transport and credential-source behavior.
+
+Still required for this phase:
+
+- map the paired host into Rakazo's normal computer/provider contract;
+- add bounded process execution and output;
+- add bounded file list/read/write;
+- prove cancellation and reconnect on a physical Windows host through Plugin R.
+
 Implement:
 
 - native Windows host process;
@@ -1014,6 +1047,17 @@ Exit:
 ### Phase 4 — physical Windows GUI
 
 Status: **execution-backend proof complete; Rakazo contract integration outstanding**.
+
+Physical proof completed on the target Windows machine:
+
+- external MCP gateway mounted UFO `UICollector`, `HostUIExecutor`, and `AppUIExecutor` without UFO HostAgent/AppAgent or any second LLM;
+- the gateway enumerated real desktop windows and returned an all-screen PNG screenshot;
+- semantic UIA selection focused a specific application window;
+- a disposable Notepad file exposed 54 UIA controls, including the text editor;
+- UFO semantic edit + keyboard save changed that disposable file to the independently verified value `UFO_CHATGPT_WEB_OK`;
+- Windows Settings demonstrated a genuine UIA edge case (window selection worked while the controls list was empty), establishing the need for screenshot/vision + bounded coordinate fallback.
+
+This proof selects UFO execution components as the current preferred GUI backend candidate. They remain an implementation detail behind Rakazo `observe/act`, not a public tool namespace or agent runtime.
 
 Implement real `observe/act` behind the Rakazo computer contract.
 
@@ -1271,10 +1315,10 @@ Completed evidence:
 
 The next implementation sequence should be:
 
-1. define the minimal Windows host protocol and pairing/revocation contract;
-2. add a native `apps/windows-host` skeleton with identity, health, heartbeat, and reconnect state;
-3. connect it to Rakazo as a normal computer/provider path;
-4. prove process + bounded files end to end through Plugin R;
+1. connect the existing paired Windows host runtime to Rakazo as a normal computer/provider path;
+2. add bounded process execution, stdout/stderr collection, timeout and cancellation;
+3. add bounded file list/read/write under explicit allowed roots;
+4. prove identity + process + files end to end through Plugin R on the physical Windows host;
 5. add durable host jobs and reconnect reconciliation;
 6. select/integrate the browser backend;
 7. move the proven UFO execution layer behind Rakazo `observe/act`, with visual fallback;
