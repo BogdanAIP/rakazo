@@ -89,6 +89,11 @@ import {
 } from "./integration-settings.js";
 import { MessageReactionSchema } from "./reactions.js";
 import { RunsListOutputSchema } from "./runs.js";
+import {
+  WindowsHostBrowserRequestSchema,
+  WindowsHostBrowserResultSchema,
+  WindowsHostProcessResultSchema,
+} from "./windows-host.js";
 import { SearchQueryOutputSchema } from "./search.js";
 
 const botId = z.object({ botId: Id });
@@ -434,6 +439,24 @@ export const appContract = {
     readFile: oc
       .input(z.object({ botId: Id, path: z.string() }))
       .output(z.object({ path: z.string(), content: z.string() })),
+    exec: oc
+      .input(
+        z.object({
+          botId: Id,
+          argv: z.array(z.string().min(1).max(4_096)).min(1).max(16),
+          cwd: z.string().max(4_096).optional(),
+          timeoutMs: z.number().int().min(100).max(18_000).default(10_000),
+        }),
+      )
+      .output(WindowsHostProcessResultSchema),
+    browser: oc
+      .input(
+        z.object({
+          botId: Id,
+          request: WindowsHostBrowserRequestSchema,
+        }),
+      )
+      .output(WindowsHostBrowserResultSchema),
     observe: oc.input(botId).output(
       z.object({
         frameId: z.string(),
