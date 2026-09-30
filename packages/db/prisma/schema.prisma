@@ -265,6 +265,41 @@ model DeploymentSettings {
   @@map("deployment_settings")
 }
 
+model WindowsHost {
+  id               String   @id @default(cuid())
+  installationId   String   @unique
+  ownerUserId      String
+  hostname         String
+  platform         String
+  release          String
+  arch             String
+  protocolVersion  String
+  runtimeVersion   String
+  capabilities     Json
+  credentialHash   String   @unique
+  revokedAt        DateTime?
+  lastSeenAt       DateTime?
+  lastConnectionId String?
+  lastSequence     Int      @default(-1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([ownerUserId, revokedAt, lastSeenAt])
+  @@map("windows_hosts")
+}
+
+model WindowsHostPairing {
+  id          String    @id @default(cuid())
+  ownerUserId String
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([ownerUserId, expiresAt])
+  @@map("windows_host_pairings")
+}
+
 model UserModelCredential {
   id          String                 @id @default(cuid())
   userId      String
