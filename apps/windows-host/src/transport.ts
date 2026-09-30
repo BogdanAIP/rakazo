@@ -1,14 +1,14 @@
 import {
-  WindowsHostCommandEnvelopeSchema,
-  WindowsHostCommandReportSchema,
-  WindowsHostHeartbeatResultSchema,
-  WindowsHostPairingResultSchema,
   type WindowsHostAdvertisement,
   type WindowsHostCommandEnvelope,
+  WindowsHostCommandEnvelopeSchema,
+  WindowsHostCommandReportSchema,
   type WindowsHostCommandResult,
   type WindowsHostHeartbeat,
   type WindowsHostHeartbeatResult,
+  WindowsHostHeartbeatResultSchema,
   type WindowsHostPairingResult,
+  WindowsHostPairingResultSchema,
 } from "@rakazo/contracts";
 
 type FetchLike = typeof fetch;
@@ -43,11 +43,7 @@ export class HttpWindowsHostTransport implements WindowsHostTransport {
     private readonly fetchImpl: FetchLike = fetch,
   ) {}
 
-  async pair(
-    advertisement: WindowsHostAdvertisement,
-    pairingToken: string,
-    signal?: AbortSignal,
-  ) {
+  async pair(advertisement: WindowsHostAdvertisement, pairingToken: string, signal?: AbortSignal) {
     const response = await this.fetchImpl(this.url("/api/windows-host/pair"), {
       method: "POST",
       headers: {
@@ -61,11 +57,7 @@ export class HttpWindowsHostTransport implements WindowsHostTransport {
     return WindowsHostPairingResultSchema.parse(await parseJsonResponse(response));
   }
 
-  async heartbeat(
-    heartbeat: WindowsHostHeartbeat,
-    credential: string,
-    signal?: AbortSignal,
-  ) {
+  async heartbeat(heartbeat: WindowsHostHeartbeat, credential: string, signal?: AbortSignal) {
     const response = await this.fetchImpl(this.url("/api/windows-host/heartbeat"), {
       method: "POST",
       headers: {
