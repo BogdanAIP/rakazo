@@ -14,7 +14,9 @@ if (process.platform !== "win32") {
 }
 
 const execFileAsync = promisify(execFile);
-const installerPath = fileURLToPath(new URL("../scripts/install-current-user.ps1", import.meta.url));
+const installerPath = fileURLToPath(
+  new URL("../scripts/install-current-user.ps1", import.meta.url),
+);
 const installerLiteral = JSON.stringify(installerPath);
 await execFileAsync(
   "powershell.exe",
