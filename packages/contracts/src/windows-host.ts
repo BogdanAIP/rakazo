@@ -113,6 +113,14 @@ export const WindowsHostCommandResultSchema = z.discriminatedUnion("ok", [
 
 export type WindowsHostCommandResult = z.infer<typeof WindowsHostCommandResultSchema>;
 
+export const WindowsHostInternalDispatchSchema = z.object({
+  hostId: z.string().trim().min(1).max(200),
+  ownerUserId: z.string().trim().min(1).max(200),
+  request: WindowsHostCommandRequestSchema,
+});
+
+export type WindowsHostInternalDispatch = z.infer<typeof WindowsHostInternalDispatchSchema>;
+
 export const WindowsHostCommandPollSchema = z.object({
   hostId: z.string().min(1).max(200),
 });
