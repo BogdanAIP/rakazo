@@ -293,7 +293,11 @@ export const WindowsHostCommandResultSchema = z.discriminatedUnion("ok", [
       z.object({
         kind: z.literal("file-write"),
         path: z.string().max(4_096),
-        bytesWritten: z.number().int().nonnegative().max(2 * 1024 * 1024),
+        bytesWritten: z
+          .number()
+          .int()
+          .nonnegative()
+          .max(2 * 1024 * 1024),
       }),
       z.object({
         kind: z.literal("browser"),
