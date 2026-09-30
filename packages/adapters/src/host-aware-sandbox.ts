@@ -34,16 +34,12 @@ export function createRunSandbox(
   if (kind === "desktop") return hostProvider;
   const primary = createSandboxProvider(kind, opts);
   if (kind !== "docker" || !opts.prisma) return primary;
-  return new HostAwareSandbox(
-    primary,
-    hostProvider,
-    async () => {
-      const settings = await opts.prisma!.deploymentSettings.findUnique({
-        where: { id: "default" },
-      });
-      return settings?.computerHost === "this-mac";
-    },
-  );
+  return new HostAwareSandbox(primary, hostProvider, async () => {
+    const settings = await opts.prisma!.deploymentSettings.findUnique({
+      where: { id: "default" },
+    });
+    return settings?.computerHost === "this-mac";
+  });
 }
 
 export class HostAwareSandbox implements SandboxProvider {
