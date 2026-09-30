@@ -1,12 +1,6 @@
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
-import {
-  lstat,
-  mkdir,
-  open,
-  readdir,
-  realpath,
-} from "node:fs/promises";
+import { lstat, mkdir, open, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -51,7 +45,7 @@ async function listNativeProcesses(): Promise<WindowsProcessEntry[]> {
     maxBuffer: MAX_TASKLIST_OUTPUT_BYTES,
     encoding: "utf8",
   });
-  return parseTasklistCsv(stdout, 100);
+  return parseTasklistCsv(typeof stdout === "string" ? stdout : stdout.toString("utf8"), 100);
 }
 
 /**
@@ -158,7 +152,7 @@ export class WindowsHostReadOnlyBackend {
 function workspaceSegments(relative: string): string[] {
   if (
     relative.length > 4_096 ||
-    relative.includes("\\0") ||
+    relative.includes("\0") ||
     path.isAbsolute(relative) ||
     /^[a-zA-Z]:/u.test(relative) ||
     relative.startsWith("\\\\")
