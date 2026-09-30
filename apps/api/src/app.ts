@@ -169,9 +169,15 @@ export async function createApp(
     ...envOverrides
   } = overrides;
   const env = { ...loadEnv(process.env), ...envOverrides };
-  if (process.env.RAKAZO_WINDOWS_HOST_ENABLED === "true" && env.wakeupDriver !== "memory") {
+  const windowsHostEnabled = process.env.RAKAZO_WINDOWS_HOST_ENABLED === "true";
+  const windowsHostInternalToken = process.env.RAKAZO_WINDOWS_HOST_INTERNAL_TOKEN?.trim();
+  if (
+    windowsHostEnabled &&
+    env.wakeupDriver !== "memory" &&
+    (!windowsHostInternalToken || windowsHostInternalToken.length < 32)
+  ) {
     throw new Error(
-      "Physical Windows host requires the in-process memory worker until cross-process command routing is implemented",
+      "RAKAZO_WINDOWS_HOST_INTERNAL_TOKEN (at least 32 characters) is required for Graphile worker dispatch",
     );
   }
   const logger = loggerOverride ?? createServiceLogger({ service: SERVICE_NAMES.api });
@@ -185,7 +191,7 @@ export async function createApp(
   const { prisma } = created;
   const windowsHostCommandHub = new WindowsHostCommandHub();
   const windowsHostSandbox =
-    process.env.RAKAZO_WINDOWS_HOST_ENABLED === "true"
+    windowsHostEnabled
       ? new WindowsHostSandboxProvider(prisma, windowsHostCommandHub)
       : undefined;
   const realtime =
@@ -565,6 +571,7 @@ export async function createApp(
   mountWindowsHostRoutes(app, {
     prisma,
     commandHub: windowsHostCommandHub,
+    internalToken: windowsHostEnabled ? windowsHostInternalToken : undefined,
     resolveOwner: async (request) => {
       const session = await auth.api.getSession({ headers: sessionHeaders(request) });
       if (!session?.user) return null;
