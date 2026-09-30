@@ -14,6 +14,7 @@ import {
   type WindowsHostCredentialStore,
 } from "./credential-store.js";
 import { loadOrCreateWindowsHostIdentity } from "./identity.js";
+import { WindowsOpenCliBackend } from "./opencli.js";
 import { WindowsHostReadOnlyBackend } from "./readonly.js";
 import {
   HttpWindowsHostTransport,
@@ -39,13 +40,14 @@ interface ResolvedWindowsHostCredential {
 export async function buildAdvertisement(
   stateDir: string,
   startedAt = new Date().toISOString(),
+  browserAvailable = false,
 ): Promise<WindowsHostAdvertisement> {
   const identity = await loadOrCreateWindowsHostIdentity(stateDir);
   return WindowsHostAdvertisementSchema.parse({
     protocolVersion: WINDOWS_HOST_PROTOCOL_VERSION,
     runtimeVersion: WINDOWS_HOST_RUNTIME_VERSION,
     identity,
-    capabilities: [...INITIAL_CAPABILITIES],
+    capabilities: [...INITIAL_CAPABILITIES, ...(browserAvailable ? ["browser" as const] : [])],
     startedAt,
   });
 }
@@ -118,10 +120,11 @@ export class WindowsHostRuntime {
     private readonly readOnlyBackend: WindowsHostReadOnlyBackend = new WindowsHostReadOnlyBackend(
       config.stateDir,
     ),
+    private readonly browserBackend: WindowsOpenCliBackend = new WindowsOpenCliBackend(),
   ) {}
 
   async probe() {
-    return buildAdvertisement(this.config.stateDir);
+    return buildAdvertisement(this.config.stateDir, undefined, this.browserBackend.available());
   }
 
   async run(signal?: AbortSignal): Promise<never> {
@@ -202,7 +205,7 @@ export class WindowsHostRuntime {
 
         let result: WindowsHostCommandResult;
         try {
-          result = await executeWindowsHostCommand(command, advertisement, this.readOnlyBackend);
+          result = await executeWindowsHostCommand(command, advertisement, this.readOnlyBackend, this.browserBackend);
         } catch (error) {
           result = {
             id: command.id,
@@ -228,6 +231,7 @@ export async function executeWindowsHostCommand(
   command: WindowsHostCommandEnvelope,
   advertisement: WindowsHostAdvertisement,
   backend: WindowsHostReadOnlyBackend = new WindowsHostReadOnlyBackend("."),
+  browserBackend: WindowsOpenCliBackend = new WindowsOpenCliBackend(),
 ): Promise<WindowsHostCommandResult> {
   switch (command.request.kind) {
     case "identity.get":
@@ -255,6 +259,15 @@ export async function executeWindowsHostCommand(
         result: {
           kind: "files",
           entries: await backend.listFiles(command.request.botId, command.request.directory),
+        },
+      };
+    case "browser.call":
+      return {
+        id: command.id,
+        ok: true,
+        result: {
+          kind: "browser",
+          response: await browserBackend.browser(command.request.botId, command.request.request),
         },
       };
     case "files.read":
