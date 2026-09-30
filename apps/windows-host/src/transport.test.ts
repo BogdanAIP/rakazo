@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
 import {
   WINDOWS_HOST_PROTOCOL_VERSION,
   type WindowsHostAdvertisement,
   type WindowsHostHeartbeat,
 } from "@rakazo/contracts";
+import { describe, expect, it, vi } from "vitest";
 import { HttpWindowsHostTransport } from "./transport.js";
 
 const advertisement: WindowsHostAdvertisement = {
@@ -90,10 +90,7 @@ describe("HttpWindowsHostTransport", () => {
       )
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 202 }));
 
-    const transport = new HttpWindowsHostTransport(
-      "http://127.0.0.1:3100",
-      fetchImpl,
-    );
+    const transport = new HttpWindowsHostTransport("http://127.0.0.1:3100", fetchImpl);
     const command = await transport.poll("host-1", credential);
     expect(command).toEqual({ id: commandId, request: { kind: "identity.get" } });
 
