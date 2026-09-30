@@ -61,7 +61,9 @@ const logger = createRootLogger(SERVICE_NAMES.worker);
 
 async function main() {
   if (process.env.RAKAZO_WINDOWS_HOST_ENABLED === "true") {
-    throw new Error("Physical Windows host is not supported by the separate worker until cross-process command routing is implemented");
+    throw new Error(
+      "Physical Windows host is not supported by the separate worker until cross-process command routing is implemented",
+    );
   }
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) throw new Error("DATABASE_URL is required");
