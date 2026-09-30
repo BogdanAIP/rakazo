@@ -14,6 +14,7 @@ import {
   type WindowsHostCredentialStore,
 } from "./credential-store.js";
 import { loadOrCreateWindowsHostIdentity } from "./identity.js";
+import { WindowsHostReadOnlyBackend } from "./readonly.js";
 import {
   HttpWindowsHostTransport,
   WindowsHostAuthorizationError,
@@ -22,7 +23,7 @@ import {
 
 export const WINDOWS_HOST_RUNTIME_VERSION = "0.1.0";
 
-const INITIAL_CAPABILITIES = ["identity"] as const satisfies readonly WindowsHostCapability[];
+const INITIAL_CAPABILITIES = ["identity", "process", "files"] as const satisfies readonly WindowsHostCapability[];
 
 interface ResolvedWindowsHostCredential {
   hostId: string;
@@ -110,6 +111,9 @@ export class WindowsHostRuntime {
     private readonly credentialStore: WindowsHostCredentialStore = new ProtectedWindowsHostCredentialStore(
       config.stateDir,
     ),
+    private readonly readOnlyBackend: WindowsHostReadOnlyBackend = new WindowsHostReadOnlyBackend(
+      config.stateDir,
+    ),
   ) {}
 
   async probe() {
@@ -194,7 +198,7 @@ export class WindowsHostRuntime {
 
         let result: WindowsHostCommandResult;
         try {
-          result = executeWindowsHostCommand(command, advertisement);
+          result = await executeWindowsHostCommand(command, advertisement, this.readOnlyBackend);
         } catch (error) {
           result = {
             id: command.id,
@@ -216,10 +220,11 @@ export class WindowsHostRuntime {
   }
 }
 
-export function executeWindowsHostCommand(
+export async function executeWindowsHostCommand(
   command: WindowsHostCommandEnvelope,
   advertisement: WindowsHostAdvertisement,
-): WindowsHostCommandResult {
+  backend: WindowsHostReadOnlyBackend = new WindowsHostReadOnlyBackend("."),
+): Promise<WindowsHostCommandResult> {
   switch (command.request.kind) {
     case "identity.get":
       return {
@@ -228,6 +233,39 @@ export function executeWindowsHostCommand(
         result: {
           kind: "identity",
           identity: advertisement.identity,
+        },
+      };
+    case "process.list":
+      return {
+        id: command.id,
+        ok: true,
+        result: {
+          kind: "processes",
+          processes: await backend.listProcesses(command.request.limit),
+        },
+      };
+    case "files.list":
+      return {
+        id: command.id,
+        ok: true,
+        result: {
+          kind: "files",
+          entries: await backend.listFiles(command.request.botId, command.request.directory),
+        },
+      };
+    case "files.read":
+      return {
+        id: command.id,
+        ok: true,
+        result: {
+          kind: "file",
+          contentBase64: Buffer.from(
+            await backend.readFile(
+              command.request.botId,
+              command.request.path,
+              command.request.maxBytes,
+            ),
+          ).toString("base64"),
         },
       };
   }
