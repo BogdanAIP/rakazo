@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import {
   WINDOWS_HOST_PROTOCOL_VERSION,
-  WindowsHostAdvertisementSchema,
-  WindowsHostHeartbeatSchema,
   type WindowsHostAdvertisement,
+  WindowsHostAdvertisementSchema,
   type WindowsHostCapability,
   type WindowsHostCommandEnvelope,
   type WindowsHostCommandResult,
+  WindowsHostHeartbeatSchema,
 } from "@rakazo/contracts";
 import type { WindowsHostConfig } from "./config.js";
 import {
@@ -14,10 +14,7 @@ import {
   type WindowsHostCredentialStore,
 } from "./credential-store.js";
 import { loadOrCreateWindowsHostIdentity } from "./identity.js";
-import {
-  HttpWindowsHostTransport,
-  type WindowsHostTransport,
-} from "./transport.js";
+import { HttpWindowsHostTransport, type WindowsHostTransport } from "./transport.js";
 
 export const WINDOWS_HOST_RUNTIME_VERSION = "0.1.0";
 
@@ -92,9 +89,7 @@ export async function resolveWindowsHostCredential(
     };
   }
 
-  throw new Error(
-    "Provide a short-lived pairing token or an existing host id/credential",
-  );
+  throw new Error("Provide a short-lived pairing token or an existing host id/credential");
 }
 
 export class WindowsHostRuntime {
@@ -106,8 +101,9 @@ export class WindowsHostRuntime {
     private readonly transport: WindowsHostTransport | null = config.origin
       ? new HttpWindowsHostTransport(config.origin)
       : null,
-    private readonly credentialStore: WindowsHostCredentialStore =
-      new ProtectedWindowsHostCredentialStore(config.stateDir),
+    private readonly credentialStore: WindowsHostCredentialStore = new ProtectedWindowsHostCredentialStore(
+      config.stateDir,
+    ),
   ) {}
 
   async probe() {
@@ -162,11 +158,7 @@ export class WindowsHostRuntime {
           sentAt: new Date().toISOString(),
           advertisement,
         });
-        const result = await this.transport!.heartbeat(
-          heartbeat,
-          resolved.credential,
-          signal,
-        );
+        const result = await this.transport!.heartbeat(heartbeat, resolved.credential, signal);
         if (result.revoked) {
           if (resolved.source !== "env") await this.credentialStore.clear();
           throw new Error("Windows host credential was revoked");
@@ -187,11 +179,7 @@ export class WindowsHostRuntime {
   ) {
     while (!signal.aborted) {
       try {
-        const command = await this.transport!.poll(
-          resolved.hostId,
-          resolved.credential,
-          signal,
-        );
+        const command = await this.transport!.poll(resolved.hostId, resolved.credential, signal);
         if (!command) continue;
 
         let result: WindowsHostCommandResult;
@@ -205,12 +193,7 @@ export class WindowsHostRuntime {
           };
         }
 
-        await this.transport!.report(
-          resolved.hostId,
-          result,
-          resolved.credential,
-          signal,
-        );
+        await this.transport!.report(resolved.hostId, result, resolved.credential, signal);
       } catch {
         if (signal.aborted) return;
         await sleep(1_000, signal);
@@ -218,7 +201,6 @@ export class WindowsHostRuntime {
     }
   }
 }
-
 
 export function executeWindowsHostCommand(
   command: WindowsHostCommandEnvelope,
