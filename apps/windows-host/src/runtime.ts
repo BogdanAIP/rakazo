@@ -69,6 +69,18 @@ export async function resolveWindowsHostCredential(
     };
   }
 
+  // Pairing capabilities are single-use. Prefer the DPAPI-backed credential on
+  // every subsequent start, even if the original pairing token remains in env.
+  const stored = await credentialStore.load();
+  if (stored) {
+    return {
+      hostId: stored.hostId,
+      credential: stored.hostCredential,
+      heartbeatIntervalMs: 15_000,
+      source: "store",
+    };
+  }
+
   if (config.pairingToken) {
     const paired = await transport.pair(advertisement, config.pairingToken, signal);
     await credentialStore.save({
@@ -80,16 +92,6 @@ export async function resolveWindowsHostCredential(
       credential: paired.hostCredential,
       heartbeatIntervalMs: paired.heartbeatIntervalMs,
       source: "pairing",
-    };
-  }
-
-  const stored = await credentialStore.load();
-  if (stored) {
-    return {
-      hostId: stored.hostId,
-      credential: stored.hostCredential,
-      heartbeatIntervalMs: 15_000,
-      source: "store",
     };
   }
 
