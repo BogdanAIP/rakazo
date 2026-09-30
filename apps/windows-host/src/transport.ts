@@ -1,7 +1,11 @@
 import {
+  WindowsHostCommandEnvelopeSchema,
+  WindowsHostCommandReportSchema,
   WindowsHostHeartbeatResultSchema,
   WindowsHostPairingResultSchema,
   type WindowsHostAdvertisement,
+  type WindowsHostCommandEnvelope,
+  type WindowsHostCommandResult,
   type WindowsHostHeartbeat,
   type WindowsHostHeartbeatResult,
   type WindowsHostPairingResult,
@@ -20,6 +24,17 @@ export interface WindowsHostTransport {
     credential: string,
     signal?: AbortSignal,
   ): Promise<WindowsHostHeartbeatResult>;
+  poll(
+    hostId: string,
+    credential: string,
+    signal?: AbortSignal,
+  ): Promise<WindowsHostCommandEnvelope | null>;
+  report(
+    hostId: string,
+    result: WindowsHostCommandResult,
+    credential: string,
+    signal?: AbortSignal,
+  ): Promise<void>;
 }
 
 export class HttpWindowsHostTransport implements WindowsHostTransport {
@@ -33,7 +48,7 @@ export class HttpWindowsHostTransport implements WindowsHostTransport {
     pairingToken: string,
     signal?: AbortSignal,
   ) {
-    const response = await this.fetchImpl(this.url("/api/v1/windows-host/pair"), {
+    const response = await this.fetchImpl(this.url("/api/windows-host/pair"), {
       method: "POST",
       headers: {
         authorization: `Bearer ${pairingToken}`,
@@ -51,7 +66,7 @@ export class HttpWindowsHostTransport implements WindowsHostTransport {
     credential: string,
     signal?: AbortSignal,
   ) {
-    const response = await this.fetchImpl(this.url("/api/v1/windows-host/heartbeat"), {
+    const response = await this.fetchImpl(this.url("/api/windows-host/heartbeat"), {
       method: "POST",
       headers: {
         authorization: `Bearer ${credential}`,
@@ -62,6 +77,39 @@ export class HttpWindowsHostTransport implements WindowsHostTransport {
     });
 
     return WindowsHostHeartbeatResultSchema.parse(await parseJsonResponse(response));
+  }
+
+  async poll(hostId: string, credential: string, signal?: AbortSignal) {
+    const response = await this.fetchImpl(this.url("/api/windows-host/commands/next"), {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${credential}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ hostId }),
+      signal,
+    });
+    if (response.status === 204) return null;
+    return WindowsHostCommandEnvelopeSchema.parse(await parseJsonResponse(response));
+  }
+
+  async report(
+    hostId: string,
+    result: WindowsHostCommandResult,
+    credential: string,
+    signal?: AbortSignal,
+  ) {
+    const body = WindowsHostCommandReportSchema.parse({ hostId, result });
+    const response = await this.fetchImpl(this.url("/api/windows-host/commands/result"), {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${credential}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal,
+    });
+    await parseJsonResponse(response);
   }
 
   private url(pathname: string) {
