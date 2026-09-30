@@ -14,7 +14,11 @@ import {
   type WindowsHostCredentialStore,
 } from "./credential-store.js";
 import { loadOrCreateWindowsHostIdentity } from "./identity.js";
-import { HttpWindowsHostTransport, type WindowsHostTransport } from "./transport.js";
+import {
+  HttpWindowsHostTransport,
+  WindowsHostAuthorizationError,
+  type WindowsHostTransport,
+} from "./transport.js";
 
 export const WINDOWS_HOST_RUNTIME_VERSION = "0.1.0";
 
@@ -166,6 +170,10 @@ export class WindowsHostRuntime {
         await sleep(resolved.heartbeatIntervalMs, signal);
       } catch (error) {
         if (signal.aborted) return;
+        if (error instanceof WindowsHostAuthorizationError) {
+          if (resolved.source !== "env") await this.credentialStore.clear();
+          throw error;
+        }
         if (error instanceof Error && error.message.includes("revoked")) throw error;
         await sleep(Math.min(resolved.heartbeatIntervalMs, 30_000), signal);
       }
@@ -194,8 +202,12 @@ export class WindowsHostRuntime {
         }
 
         await this.transport!.report(resolved.hostId, result, resolved.credential, signal);
-      } catch {
+      } catch (error) {
         if (signal.aborted) return;
+        if (error instanceof WindowsHostAuthorizationError) {
+          if (resolved.source !== "env") await this.credentialStore.clear();
+          throw error;
+        }
         await sleep(1_000, signal);
       }
     }
