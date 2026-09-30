@@ -11,6 +11,7 @@
     "test": "vitest run --root ../.. apps/windows-host/src"
   },
   "dependencies": {
+    "@rakazo/adapters": "workspace:*",
     "@rakazo/contracts": "workspace:*"
   },
   "devDependencies": {
