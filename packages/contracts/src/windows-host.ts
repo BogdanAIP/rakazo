@@ -83,10 +83,10 @@ export const WindowsHostRevocationSchema = z.object({
 export type WindowsHostRevocation = z.infer<typeof WindowsHostRevocationSchema>;
 
 export const WindowsHostBrowserActionSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("click"), ref: z.string().regex(/^e\\d{1,6}$/u) }),
+  z.object({ kind: z.literal("click"), ref: z.string().regex(/^e\d{1,6}$/u) }),
   z.object({
     kind: z.enum(["fill", "type"]),
-    ref: z.string().regex(/^e\\d{1,6}$/u),
+    ref: z.string().regex(/^e\d{1,6}$/u),
     text: z.string().max(10_000),
     origin: z.string().url().optional(),
   }),
@@ -111,7 +111,7 @@ export const WindowsHostBrowserResultSchema = z.object({
   title: z.string().max(2_048).optional(),
   tree: z.string().max(65_536).optional(),
   elements: z.array(z.object({
-    ref: z.string().regex(/^e\\d{1,6}$/u),
+    ref: z.string().regex(/^e\d{1,6}$/u),
     role: z.string().max(200),
     name: z.string().max(200),
   })).max(500).optional(),
