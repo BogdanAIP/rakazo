@@ -214,6 +214,13 @@ export const WindowsHostCommandRequestSchema = z.discriminatedUnion("kind", [
     maxBytes: z.number().int().min(1).max(65_536).default(32_768),
   }),
   z.object({
+    kind: z.literal("files.write"),
+    botId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
+    path: z.string().min(1).max(4_096),
+    contentBase64: z.string().max(2_800_000),
+    executable: z.boolean().default(false),
+  }),
+  z.object({
     kind: z.literal("browser.call"),
     botId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
     request: WindowsHostBrowserRequestSchema,
@@ -282,6 +289,11 @@ export const WindowsHostCommandResultSchema = z.discriminatedUnion("ok", [
       z.object({
         kind: z.literal("file"),
         contentBase64: z.string().max(90_000),
+      }),
+      z.object({
+        kind: z.literal("file-write"),
+        path: z.string().max(4_096),
+        bytesWritten: z.number().int().nonnegative().max(2 * 1024 * 1024),
       }),
       z.object({
         kind: z.literal("browser"),
