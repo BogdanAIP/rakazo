@@ -1,7 +1,9 @@
+import { timingSafeEqual } from "node:crypto";
 import {
   WindowsHostCommandPollSchema,
   WindowsHostCommandReportSchema,
   WindowsHostHeartbeatSchema,
+  WindowsHostInternalDispatchSchema,
   WindowsHostPairingClaimSchema,
 } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
@@ -31,6 +33,7 @@ export function mountWindowsHostRoutes(
   deps: {
     prisma: PrismaClient;
     commandHub: WindowsHostCommandHub;
+    internalToken?: string;
     resolveOwner: (request: Request) => Promise<OwnerIdentity | null>;
   },
 ) {
@@ -117,6 +120,48 @@ export function mountWindowsHostRoutes(
     }
   });
 
+  // A private worker-to-API hop. The physical Windows host still connects outbound
+  // to Rakazo; the worker never addresses Windows or possesses a host credential.
+  if (deps.internalToken) {
+    app.post("/api/windows-host/internal/dispatch", async (c) => {
+      if (!constantTimeTokenMatch(bearerToken(c.req.header("authorization")), deps.internalToken)) {
+        return c.json({ error: "Unauthorized" }, 401);
+      }
+
+      const parsed = WindowsHostInternalDispatchSchema.safeParse(await requiredJson(c.req.raw));
+      if (!parsed.success) return c.json({ error: "Invalid command dispatch" }, 400);
+
+      const recent = new Date(Date.now() - 60_000);
+      const host = await deps.prisma.windowsHost.findFirst({
+        where: {
+          id: parsed.data.hostId,
+          ownerUserId: parsed.data.ownerUserId,
+          revokedAt: null,
+          lastSeenAt: { gte: recent },
+        },
+        select: { id: true },
+      });
+      if (!host) return c.json({ error: "Windows host is not connected or authorized" }, 404);
+
+      try {
+        const result = await deps.commandHub.dispatch(
+          host.id,
+          parsed.data.request,
+          c.req.raw.signal,
+        );
+        return c.json(result);
+      } catch (error) {
+        if (error instanceof Error && error.message === "Windows host command timed out") {
+          return c.json({ error: "Windows host command timed out" }, 504);
+        }
+        if (error instanceof Error && error.message === "Windows host command aborted") {
+          return c.json({ error: "Windows host command aborted" }, 409);
+        }
+        throw error;
+      }
+    });
+  }
+
   app.post("/api/windows-host/commands/next", async (c) => {
     const credential = bearerToken(c.req.header("authorization"));
     if (!credential) return c.json({ error: "Unauthorized" }, 401);
@@ -195,6 +240,13 @@ export function mountWindowsHostRoutes(
       throw error;
     }
   });
+}
+
+function constantTimeTokenMatch(received: string | null, expected: string | undefined) {
+  if (!received || !expected) return false;
+  const a = Buffer.from(received);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 function bearerToken(header: string | undefined): string | null {
