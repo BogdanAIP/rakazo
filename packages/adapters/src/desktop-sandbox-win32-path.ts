@@ -126,12 +126,13 @@ export function pathFromWindowsHandle(handle: number | bigint): string {
   if (handle === -1n || handle === -1) escapeWorkspace();
 
   const flags = 0; // VOLUME_NAME_DOS
-  const size = api.GetFinalPathNameByHandleW(handle, null, 0, flags) as number;
-  if (size === 0) escapeWorkspace();
-
-  const buf = Buffer.alloc((size + 1) * 2);
-  const written = api.GetFinalPathNameByHandleW(handle, buf, size + 1, flags) as number;
-  if (written === 0) escapeWorkspace();
+  // Some Koffi/Windows combinations do not support the documented null-buffer
+  // size probe reliably. A fixed maximum Win32 path buffer avoids that probe
+  // while still failing closed on truncation.
+  const capacity = 32_768;
+  const buf = Buffer.alloc(capacity * 2);
+  const written = api.GetFinalPathNameByHandleW(handle, buf, capacity, flags) as number;
+  if (written === 0 || written >= capacity) escapeWorkspace();
 
   let resolved = buf.toString("utf16le", 0, written * 2);
   if (resolved.startsWith("\\\\?\\UNC\\"))
