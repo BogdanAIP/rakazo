@@ -235,6 +235,10 @@ try {
     }
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
+    # Do not offer half-cutover: the original registered tunnel is still controlled
+    # by the legacy V4 launcher, and CLI remote ready is not local process ownership.
+    # Implement and physically verify same-alias start/stop + guarded ownership first.
+    throw 'Manual launcher pilot: existing R tunnel ownership handoff is pending. No services started.'
     if (-not ($before.NativeCheckoutExists -and $before.ExistingAliasMatches -and
         $before.ExistingMcpUsesNewCheckout -and $before.DatabaseIsCloned -and
         $before.HostFeatureInEnv -and $before.WorkerDispatchConfigured -and
