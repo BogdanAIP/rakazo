@@ -4108,3 +4108,7 @@ msgstr "Adın"
 #: src/pages/Welcome.tsx
 msgid "Your team of always-on agents<0/>that you can give real work to."
 msgstr "Gerçek işler verebileceğin,<0/>her zaman açık agent takımın."
+
+#: src/pages/ResizableSidePanel.tsx
+msgid "Resize panel"
+msgstr "Paneli yeniden boyutlandır"

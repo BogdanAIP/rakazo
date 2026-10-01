@@ -4108,3 +4108,7 @@ msgstr "Tu nombre"
 #: src/pages/Welcome.tsx
 msgid "Your team of always-on agents<0/>that you can give real work to."
 msgstr "Tu equipo de agentes siempre activos<0/>a los que puedes dar trabajo real."
+
+#: src/pages/ResizableSidePanel.tsx
+msgid "Resize panel"
+msgstr "Cambiar tamaño del panel"

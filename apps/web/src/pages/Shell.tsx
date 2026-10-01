@@ -241,6 +241,7 @@ import { ActivityList } from "./ActivityList";
 import type { ContextMenuPosition } from "./BotContextMenu";
 import { CreateGroupForm, GroupSettings, memberName } from "./GroupPanel";
 import { HostComputerPrompt } from "./HostComputerPrompt";
+import { ResizableSidePanel } from "./ResizableSidePanel";
 import {
   draftFromRoutine,
   emptyRoutineDraft,
@@ -3698,17 +3699,13 @@ export function ShellPage() {
 
       <CallCard onSettings={() => openSettings("voice")} />
 
-      <aside
-        data-testid="side-panel"
-        data-panel={panel ?? "closed"}
-        className={`absolute inset-y-0 end-0 z-20 flex min-h-0 shrink-0 flex-col overflow-hidden bg-background transition-[width] duration-150 ease-out md:relative ${
-          panel && (active || activeGroup || panel === "create")
-            ? "w-full max-w-[384px] border-s border-sidebar-border md:w-[384px] md:max-w-none"
-            : "pointer-events-none w-0"
-        }`}
+      <ResizableSidePanel
+        botsSidebarCollapsed={botsSidebarCollapsed}
+        open={Boolean(panel && (active || activeGroup || panel === "create"))}
+        panel={panel ?? "closed"}
       >
         {panel && (active || activeGroup || panel === "create") ? (
-          <div className="rk-scroll h-full w-full overflow-y-auto px-5 py-[17px] md:w-[384px]">
+          <div className="rk-scroll h-full w-full overflow-y-auto px-5 py-[17px]">
             {panel !== "routine" &&
             panel !== "create" &&
             panel !== "create-group" &&
@@ -4085,7 +4082,7 @@ export function ShellPage() {
             ) : null}
           </div>
         ) : null}
-      </aside>
+      </ResizableSidePanel>
 
       <Suspense fallback={null}>
         {contextChat && botMenu ? (
