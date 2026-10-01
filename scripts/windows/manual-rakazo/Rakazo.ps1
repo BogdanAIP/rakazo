@@ -16,6 +16,7 @@ $client = Join-Path $env:LOCALAPPDATA 'RakazoTunnel\bin\tunnel-client.exe'
 $credential = Join-Path $env:LOCALAPPDATA 'Rakazo\windows-host\host-credential.dpapi'
 $stateDir = Join-Path $env:LOCALAPPDATA 'Rakazo\manual-launcher'
 $owned = [System.Collections.Generic.List[object]]::new()
+$script:tunnelOwnership = $null
 . (Join-Path $PSScriptRoot 'Tunnel.Diagnostics.ps1')
 . (Join-Path $PSScriptRoot 'Tunnel.Control.ps1')
 
@@ -141,6 +142,70 @@ function Get-Preflight {
             $cmd = ([string]$_.CommandLine).Replace('\', '/')
             $_.Name -eq 'node.exe' -and ($cmd.Contains('/apps/windows-host/') -or $cmd.Contains('@rakazo/windows-host'))
         }).Count)
+    }
+}
+function Get-ExistingTunnelSpec {
+    $configPath = Join-Path $launcherRoot 'config.json'
+    $cfg = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json -ErrorAction Stop
+    if ($cfg.Version -ne 4 -or $cfg.Alias -cne 'rakazo' -or
+        ([string]$cfg.TunnelId) -notmatch '^tunnel_[A-Za-z0-9_-]+$' -or
+        -not [string]::Equals([IO.Path]::GetFullPath([string]$cfg.TunnelClient),
+            [IO.Path]::GetFullPath($client), [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Original R identity or client path changed; refusing lifecycle operation.'
+    }
+    $mcp = ([string]$cfg.McpCommand).Replace('\', '/')
+    if ($mcp.IndexOf(($repo.Replace('\', '/') + '/'), [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        throw 'Original R MCP no longer points at the canonical native checkout.'
+    }
+    return [pscustomobject]@{
+        ClientPath = $client
+        TunnelId = [string]$cfg.TunnelId
+        McpCommand = [string]$cfg.McpCommand
+        KeyPath = Join-Path $env:LOCALAPPDATA 'RakazoTunnel\secrets\runtime-key.dpapi'
+        SessionPath = Join-Path $env:LOCALAPPDATA 'RakazoTunnel\secrets\session-token.dpapi'
+    }
+}
+function Start-ControllerTunnel {
+    $spec = Get-ExistingTunnelSpec
+    $before = Get-TunnelState
+    if (-not ($before.CliOk -and $before.IdentityMatches) -or
+        $before.ProcessRunning -or $before.VerifiedLocalProcess -or
+        $before.LiveHealth -or $before.Ready -or $before.Healthy) {
+        throw 'The existing R is already live or cannot be proved stopped. No duplicate runtime will start.'
+    }
+    [void](Invoke-RakazoRegisteredRuntimeOperation -Operation connect -ClientPath $spec.ClientPath -TunnelId $spec.TunnelId -McpCommand $spec.McpCommand -KeyPath $spec.KeyPath -SessionPath $spec.SessionPath)
+    $deadline = [DateTime]::UtcNow.AddSeconds(30)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        try {
+            $result = Get-RakazoAuthenticatedTunnelStatus -ClientPath $spec.ClientPath -Alias 'rakazo' -EncryptedKeyPath $spec.KeyPath
+            if ([string]::Equals([string]$result.tunnel_id, $spec.TunnelId, [StringComparison]::Ordinal) -and
+                $result.ready -eq $true -and $result.healthy -eq $true -and
+                (Test-RakazoExistingTunnelHealthEndpoint -Url ([string]$result.health_url)) -and
+                (Test-RakazoExistingTunnelProcessEvidence -Runtime $result -ClientPath $client)) {
+                $script:tunnelOwnership = [pscustomobject]@{
+                    Pid = [int]$result.process.pid
+                    StartedAt = [string]$result.process.started_at
+                    TunnelId = $spec.TunnelId
+                }
+                return
+            }
+        } catch { }
+        Start-Sleep -Seconds 1
+    }
+    throw 'Existing R connect succeeded but exact local process ownership could not be verified. Leave tunnel untouched for manual recovery.'
+}
+function Stop-ControllerTunnel {
+    if ($null -eq $script:tunnelOwnership) { return }
+    try {
+        $spec = Get-ExistingTunnelSpec
+        if (-not [string]::Equals($spec.TunnelId, $script:tunnelOwnership.TunnelId, [StringComparison]::Ordinal)) {
+            throw 'Registered tunnel identity changed since controller start.'
+        }
+        [void](Invoke-RakazoRegisteredRuntimeOperation -Operation stop -ClientPath $spec.ClientPath -TunnelId $spec.TunnelId -McpCommand $spec.McpCommand -KeyPath $spec.KeyPath -SessionPath $spec.SessionPath -ExpectedStopPid $script:tunnelOwnership.Pid -ExpectedStopStart $script:tunnelOwnership.StartedAt)
+    } catch {
+        Write-Warning 'Could not verify exclusive R ownership at exit. Existing tunnel was left untouched.'
+    } finally {
+        $script:tunnelOwnership = $null
     }
 }
 function Wait-Http([string]$url, [int]$seconds) {
