@@ -149,6 +149,7 @@ function Get-Preflight {
         HostFeatureInEnv = $hostFlag
         WorkerDispatchConfigured = $workerDispatchConfigured
         ProtectedHostCredentialExists = Test-Path -LiteralPath $credential
+        ProtectedTunnelSessionExists = Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'RakazoTunnel\secrets\session-token.dpapi')
         CorepackAvailable = [bool](Get-Command corepack -ErrorAction SilentlyContinue)
         ApiHealthy = Test-Http "$origin/health"
         WebHealthy = Test-Http $webUrl
@@ -384,6 +385,7 @@ try {
         $before.ExistingMcpUsesNewCheckout -and $before.DatabaseIsCloned -and
         $before.HostFeatureInEnv -and $before.WorkerDispatchConfigured -and
         $before.ProtectedHostCredentialExists -and
+        $before.ProtectedTunnelSessionExists -and
         $before.CorepackAvailable)) {
         throw 'Preflight failed. Run Rakazo.ps1 -Action Preflight before activating.'
     }
