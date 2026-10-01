@@ -197,6 +197,12 @@ import { markAfterPaint, markOnce } from "../lib/performance";
 import { quoteDraftForSelection } from "../lib/quote-selection";
 import { getResponseStreamingEnabled, subscribeResponseStreaming } from "../lib/response-streaming";
 import { rosterWorkStatusLabel } from "../lib/roster-status";
+import type { Panel, RightPanelState } from "../lib/right-panel-state";
+import {
+  readRightPanelState,
+  rightPanelStorageKey,
+  writeRightPanelState,
+} from "../lib/right-panel-state";
 import { clearSpaceSelection, rpc, selectedSpaceId, selectSpace } from "../lib/rpc";
 import { readSeenRunErrorIds, rememberSeenRunErrorId } from "../lib/run-error-storage";
 import { sharedInflight } from "../lib/shared-inflight";
@@ -287,15 +293,6 @@ const PluginsOverlay = lazy(() =>
 const McpServersOverlay = lazy(() =>
   import("./McpServersOverlay").then((module) => ({ default: module.McpServersOverlay })),
 );
-
-type Panel =
-  | "computer"
-  | "settings"
-  | "routine"
-  | "create"
-  | "create-group"
-  | "group-settings"
-  | null;
 
 type PendingAttachment = {
   id: string;
@@ -440,7 +437,28 @@ export function ShellPage() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [panel, setPanel] = useState<Panel>(null);
+  const [panel, setPanelState] = useState<Panel>(null);
+  const [restoredPanelKey, setRestoredPanelKey] = useState<string | null>(null);
+  const panelStorageKeyRef = useRef<string | null>(null);
+  const observedPanelKey = useRef<string | null>(null);
+  const explicitPanelTarget = useRef<string | null>(null);
+  const pendingPanelRestore = useRef<RightPanelState | null>(null);
+  const pendingExplicitPanel = useRef(false);
+  const panelSearch = useRef({ searchParams, setSearchParams });
+  panelSearch.current = { searchParams, setSearchParams };
+  const setPanel = useCallback((next: Panel | ((current: Panel) => Panel)) => {
+    // A user navigation wins over a saved routine still waiting for its list.
+    pendingPanelRestore.current = null;
+    pendingExplicitPanel.current = panelStorageKeyRef.current === null;
+    setRestoredPanelKey(panelStorageKeyRef.current);
+    setPanelState(next);
+    const currentSearch = panelSearch.current;
+    if (currentSearch.searchParams.has("routine")) {
+      const params = new URLSearchParams(currentSearch.searchParams);
+      params.delete("routine");
+      currentSearch.setSearchParams(params, { replace: true });
+    }
+  }, []);
   const [peerConversation, setPeerConversation] = useState<{
     peerBotId: string;
     peerBotName: string;
@@ -750,6 +768,12 @@ export function ShellPage() {
     [active?.id, groupId, inGroup, pendingAttachments],
   );
   const activeRoutines = !inGroup && routinesBotId === active?.id ? routines : [];
+  const panelTarget = inGroup ? activeGroup?.id : active?.id;
+  const panelStorageKey =
+    userId && bootstrapMe?.spaceId && panelTarget
+      ? rightPanelStorageKey(userId, bootstrapMe.spaceId, inGroup ? "group" : "bot", panelTarget)
+      : null;
+  panelStorageKeyRef.current = panelStorageKey;
   const activeTaughtSkills = taughtSkillsBotId === active?.id ? taughtSkills : [];
   const recordingSkill = activeTaughtSkills.find((skill) => skill.status === "recording") ?? null;
   const routeBotId = useRef<string | undefined>(botId);
@@ -1726,6 +1750,15 @@ export function ShellPage() {
     }
   }
 
+  // The routine panel copies a routine's data into local draft state at click time
+  // rather than deriving it from `active`, so it goes stale across a bot switch —
+  // without this, Save on bot B could silently update bot A's routine.
+  useEffect(() => {
+    setEditingRoutine(null);
+    setDeleteRoutineTarget(null);
+    setPanelState((current) => (current === "routine" ? null : current));
+  }, [active?.id]);
+
   useEffect(() => {
     const messageId = searchParams.get("m");
     const routineId = searchParams.get("routine");
@@ -2529,14 +2562,61 @@ export function ShellPage() {
     }
   }, [panel]);
 
-  // The routine panel copies a routine's data into local draft state at click time
-  // rather than deriving it from `active`, so it goes stale across a bot switch —
-  // without this, Save on bot B could silently update bot A's routine.
   useEffect(() => {
-    setEditingRoutine(null);
-    setDeleteRoutineTarget(null);
-    setPanel((current) => (current === "routine" ? null : current));
-  }, [active?.id]);
+    if (!panelStorageKey) return;
+    if (observedPanelKey.current !== panelStorageKey) {
+      observedPanelKey.current = panelStorageKey;
+      if (pendingExplicitPanel.current || explicitPanelTarget.current === panelStorageKey) {
+        pendingExplicitPanel.current = false;
+        explicitPanelTarget.current = null;
+        pendingPanelRestore.current = null;
+        setRestoredPanelKey(panelStorageKey);
+        return;
+      }
+      explicitPanelTarget.current = null;
+      // Reload starts with panel=null so storage restores. In-session chat switches used to
+      // keep computer/settings open; only routine was cleared (handled above). Carry is
+      // session-only — do not write the carried panel onto the destination's saved prefs.
+      if (panel === "computer" || panel === "settings" || panel === "group-settings") {
+        const carried = panel === "computer" ? "computer" : inGroup ? "group-settings" : "settings";
+        pendingPanelRestore.current = null;
+        if (carried !== panel) setPanelState(carried);
+        setRestoredPanelKey(null);
+        return;
+      }
+      pendingPanelRestore.current = readRightPanelState(panelStorageKey);
+    }
+    const saved = pendingPanelRestore.current;
+    if (!saved) return;
+    // Explicit routine links take precedence over a local layout preference.
+    if (searchParams.has("routine")) {
+      pendingPanelRestore.current = null;
+      return;
+    }
+    if (saved.panel === "routine" && saved.routineId && routinesBotId !== active?.id) return;
+    let next = saved.panel;
+    if (next === "routine") {
+      const routine = saved.routineId
+        ? routines.find((item) => item.id === saved.routineId)
+        : undefined;
+      if (saved.routineId && !routine) next = "computer";
+      setEditingRoutine(routine ?? null);
+      setRoutineDraft(routine ? draftFromRoutine(routine) : emptyRoutineDraft());
+      setRoutineWebhookSecret(null);
+    }
+    pendingPanelRestore.current = null;
+    setPanelState(next);
+    setRestoredPanelKey(panelStorageKey);
+  }, [panelStorageKey, active?.id, inGroup, panel, routinesBotId, routines, searchParams]);
+
+  useEffect(() => {
+    // Do not gate writes on ?routine= staying in the URL — a stuck/failed routine
+    // list would freeze layout prefs. Deep-link handling uses setPanelState for the
+    // bot-switch close so restoredPanelKey stays unset until an intentional setPanel.
+    if (!panelStorageKey || restoredPanelKey !== panelStorageKey || pendingPanelRestore.current)
+      return;
+    writeRightPanelState(panelStorageKey, panel, editingRoutine?.id);
+  }, [panelStorageKey, restoredPanelKey, panel, editingRoutine?.id]);
 
   useEffect(() => {
     const threadKey = inGroup ? groupId : active?.id;
@@ -4068,8 +4148,21 @@ export function ShellPage() {
               setBotMenu(null);
             }}
             onEdit={() => {
+              const destKey =
+                userId && bootstrapMe?.spaceId
+                  ? rightPanelStorageKey(
+                      userId,
+                      bootstrapMe.spaceId,
+                      contextBot ? "bot" : "group",
+                      contextChat.id,
+                    )
+                  : null;
+              explicitPanelTarget.current = destKey;
+              pendingPanelRestore.current = null;
               navigate(contextBot ? `/app/${contextBot.id}` : `/app/g/${contextGroup!.id}`);
-              setPanel(contextBot ? "settings" : "group-settings");
+              // Mark the destination key restored so we do not write settings onto the source chat.
+              setPanelState(contextBot ? "settings" : "group-settings");
+              setRestoredPanelKey(destKey);
               setBotMenu(null);
             }}
             onDuplicate={() => {
