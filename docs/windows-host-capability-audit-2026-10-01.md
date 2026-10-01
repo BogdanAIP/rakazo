@@ -74,6 +74,12 @@ User confirmed the exact current process chain by command-line classification: `
 
 Read-only search below `%LOCALAPPDATA%\\RakazoTunnel` for small text configurations containing `chatgpt-mcp` or either repo string returned `No matching configuration files found`; this is limited to that directory/extension/size search and **does not prove** there is no tunnel configuration stored elsewhere or remotely. Do not overwrite/delete configs or kill multiple tunnels speculatively. Determine the process chain's owning launcher and path classifications only; then update the existing registered tunnel's child command/cwd (or its actual source configuration), not another tunnel.
 
+## 2g. Existing desktop launcher identified from prior setup (revalidate before modifying)
+
+Earlier documented setup of this **same** existing Plugin R tunnel placed the launcher in `C:\\Users\\eahra\\Desktop\\Rakazo Tunnel`, with `config.json` (Version 3, Alias `rakazo`, TunnelId `tunnel_6ab92d0eedb4819197f652016f6adaf1`, `Repo`, `McpCommand`) and scripts including `Rakazo.Common.ps1`, `Rakazo.Action.ps1`, `Rakazo.Session.ps1`, and `Restart Tunnel.cmd`. Its previous configuration pointed to the original `C:\\Users\\eahra\\rakazo` checkout. Its executable `tunnel-client.exe` and DPAPI secrets are under `%LOCALAPPDATA%\\RakazoTunnel`, explaining why searching only there for the text launcher config was inconclusive. **This is historical setup context and must be rechecked read-only against today's file before writes.**
+
+Crucial: desktop launcher `config.json` and tunnel-client's *registered runtime command* are distinct persistence surfaces. Updating just `Repo`/`McpCommand` and clicking `Restart Tunnel.cmd` need not update the persisted stdio command. Read current `config.json`, validate launcher script behavior and `tunnel-client runtimes connect --help` locally without exposing tokens. Plan one controlled update of the existing alias/tunnel ID to a direct Node/tsx MCP command in the **new** checkout, never duplicate a tunnel/profile, and verify after restart that R's `windowsHosts` catalog is populated.
+
 ## 3. Physical host gating sequence (evidence-required)
 
 1. **Completed:** restore only the experimental UCRT edit locally from the saved backup, verify the restored file matches HEAD and preserve unrelated `docker-cli.ts` modification. Stop on nonzero exit *within one guarded script*, not separate paste submissions.
