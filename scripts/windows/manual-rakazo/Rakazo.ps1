@@ -36,9 +36,12 @@ function Test-TunnelReady {
         $cfg = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
         if ($cfg.Alias -ne 'rakazo' -or [string]::IsNullOrWhiteSpace([string]$cfg.TunnelId)) { return $false }
         $output = & $client runtimes status rakazo 2>$null
+        $statusExit = $LASTEXITCODE
         $line = [string]($output -join ' ')
-        if ($LASTEXITCODE -ne 0 -or $line -notmatch '^\s*rakazo\s+ready\s+(\S+)') { return $false }
-        return $Matches[1] -ceq [string]$cfg.TunnelId
+        $line = [regex]::Replace($line, '\x1B\[[0-9;]*[ -/]*[@-~]', '')
+        $ready = [regex]::Match($line, '^\s*rakazo\s+ready\s+(tunnel_[A-Za-z0-9_-]+)(?:\s|$)', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+        if ($statusExit -ne 0 -or -not $ready.Success) { return $false }
+        return [string]::Equals($ready.Groups[1].Value, [string]$cfg.TunnelId, [StringComparison]::Ordinal)
     } catch { return $false }
 }
 function Get-Preflight {
