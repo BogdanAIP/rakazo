@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -54,14 +54,24 @@ describe("WindowsHostReadOnlyBackend", () => {
 
   it("rejects traversal, absolute paths and links outside the workspace", async () => {
     const { stateDir, root } = await testWorkspace();
-    const secret = path.join(stateDir, "secret.txt");
+    const outsideDir = path.join(stateDir, "outside");
+    await mkdir(outsideDir);
+    const secret = path.join(outsideDir, "secret.txt");
     await writeFile(secret, "NOT_FOR_HOST_TOOLS");
-    await symlink(secret, path.join(root, "link.txt"));
+    // Windows directory junctions do not require Developer Mode or SeCreateSymbolicLinkPrivilege.
+    // A junction is still a reparse-point escape and must be rejected as a link.
+    await symlink(
+      outsideDir,
+      path.join(root, "link-dir"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
     const backend = new WindowsHostReadOnlyBackend(stateDir, async () => []);
 
     await expect(backend.readFile("bot-a", "../secret.txt", 128)).rejects.toThrow();
     await expect(backend.readFile("bot-a", secret, 128)).rejects.toThrow();
-    await expect(backend.readFile("bot-a", "link.txt", 128)).rejects.toThrow("links");
+    await expect(backend.readFile("bot-a", "link-dir/secret.txt", 128)).rejects.toThrow("links");
     await expect(backend.listFiles("bot-a", ".")).resolves.toEqual([]);
+    // Rejected access must not change any file outside the bot workspace.
+    await expect(readFile(secret, "utf8")).resolves.toBe("NOT_FOR_HOST_TOOLS");
   });
 });
