@@ -110,6 +110,9 @@ function Get-Preflight {
         }
     }
     $tunnel = Get-TunnelState
+    $tunnelColdStartAllowed = $tunnel.CliOk -and $tunnel.IdentityMatches -and
+        -not ($tunnel.ProcessRunning -or $tunnel.VerifiedLocalProcess -or $tunnel.LiveHealth -or
+            $tunnel.Ready -or $tunnel.Healthy)
     return [pscustomobject]@{
         NativeCheckoutExists = $hasRepo
         ExistingAliasMatches = $identityMatches
@@ -131,6 +134,7 @@ function Get-Preflight {
         ExistingTunnelReady = $tunnel.Ready -and $tunnel.IdentityMatches -and $tunnel.CliOk
         ExistingTunnelHealthy = $tunnel.Healthy
         ExistingTunnelRuntimeState = $tunnel.RuntimeState
+        ExistingTunnelColdStartAllowed = $tunnelColdStartAllowed
         OldTrayRunning = [bool](@(Get-CimInstance Win32_Process | Where-Object {
             $_.Name -in @('powershell.exe', 'pwsh.exe') -and
             ([string]$_.CommandLine).Contains('Rakazo.Tray.ps1')
