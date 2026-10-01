@@ -47,6 +47,7 @@ No verified automatic discovery of arbitrary locally installed Windows programs 
 - Exact source defect in `apps/windows-host/src/windows-files.ts`: `handle.stat({ bigint: true })` gives `BigIntStats.nlink` as a bigint, but guard compared `info.nlink !== 1` (number). Even `1n !== 1` is true, so this branch rejects a normal single-link file. The preceding `!info.isFile()` was not separately logged; full smoke will confirm the corrected full guard.
 - Fix: `isSingleLinkRegularFile` keeps `isFile()` and checks `BigInt(info.nlink) === 1n`. Unit regression tests cover number/bigint `1` acceptance, `0`/`2` rejection, and directories. No NT handle, path/reparse, link-count restriction or opt-in capability was loosened.
 - **Unverified until next local run:** Windows Host unit tests + typecheck + full native smoke; do not proceed to pairing until all pass.
+- Subsequent user terminal: fast-forward to `6fd8f598` **succeeded** and Windows Host TypeScript check passed. Targeted `vitest run ... windows-files-validation.test.ts` did not execute because root `vitest.config.ts` omitted `apps/windows-host/src/**/*.test.ts` in `test.include`; Vitest reported **No test files found**, exit 1, so full smoke was correctly skipped. Fix now committed: add that existing package test directory to Vitest discovery. This is a test harness configuration gap, **not** evidence that the BigInt guard fix failed or passed.
 
 ## 3. Physical host gating sequence (evidence-required)
 
