@@ -36,6 +36,8 @@ function Get-TunnelState {
         CliOk = $false
         IdentityMatches = $false
         ProcessRunning = $false
+        VerifiedLocalProcess = $false
+        LiveHealth = $false
         Ready = $false
         Healthy = $false
         RuntimeState = 'unknown'
@@ -49,15 +51,15 @@ function Get-TunnelState {
             ([string]$cfg.TunnelId) -notmatch '^tunnel_[A-Za-z0-9_-]+$') {
             return [pscustomobject]$state
         }
-        $raw = @(& $client runtimes status rakazo --json 2>$null)
-        $exitCode = $LASTEXITCODE
-        if ($exitCode -ne 0 -or $raw.Count -eq 0) { return [pscustomobject]$state }
-        $data = ($raw -join [Environment]::NewLine) | ConvertFrom-Json -ErrorAction Stop
+        $protectedKey = Join-Path $env:LOCALAPPDATA 'RakazoTunnel\secrets\runtime-key.dpapi'
+        $data = Get-RakazoAuthenticatedTunnelStatus -ClientPath $client -Alias 'rakazo' -EncryptedKeyPath $protectedKey
         $state.CliOk = $true
         $state.IdentityMatches = [string]::Equals(
             [string]$data.tunnel_id, [string]$cfg.TunnelId, [StringComparison]::Ordinal
         )
         $state.ProcessRunning = $data.process_running -eq $true
+        $state.VerifiedLocalProcess = Test-RakazoExistingTunnelProcessEvidence -Runtime $data -ClientPath $client
+        $state.LiveHealth = Test-RakazoExistingTunnelHealthEndpoint -Url ([string]$data.health_url)
         $state.Ready = $data.ready -eq $true
         $state.Healthy = $data.healthy -eq $true
         $runtime = [string]$data.runtime_state
@@ -121,6 +123,8 @@ function Get-Preflight {
         ExistingTunnelCliOk = $tunnel.CliOk
         ExistingTunnelIdMatches = $tunnel.IdentityMatches
         ExistingTunnelProcessRunning = $tunnel.ProcessRunning
+        ExistingTunnelProcessVerified = $tunnel.VerifiedLocalProcess
+        ExistingTunnelLiveHealth = $tunnel.LiveHealth
         ExistingTunnelReady = $tunnel.Ready -and $tunnel.IdentityMatches -and $tunnel.CliOk
         ExistingTunnelHealthy = $tunnel.Healthy
         ExistingTunnelRuntimeState = $tunnel.RuntimeState
