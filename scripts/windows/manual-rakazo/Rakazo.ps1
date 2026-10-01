@@ -68,7 +68,8 @@ function Get-Preflight {
         $internal = @($lines | Where-Object { $_ -match '^\s*RAKAZO_WINDOWS_HOST_INTERNAL_TOKEN\s*=' })
         $internalUrl = @($lines | Where-Object { $_ -match '^\s*RAKAZO_WINDOWS_HOST_API_INTERNAL_URL\s*=' })
         if ($internal.Count -eq 1 -and $internalUrl.Count -eq 1) {
-            $tokenLength = (($internal[0] -replace '^\s*RAKAZO_WINDOWS_HOST_INTERNAL_TOKEN\s*=\s*', '').Trim('"', "'")).Length
+            $tokenText = $internal[0] -replace '^\s*RAKAZO_WINDOWS_HOST_INTERNAL_TOKEN\s*=\s*', ''
+            $tokenLength = ($tokenText.Trim([char[]]@('"', "'"))).Length
             $workerDispatchConfigured = $tokenLength -ge 32 -and
                 ($internalUrl[0] -match '127[.]0[.]0[.]1:3100|localhost:3100')
         }
@@ -185,7 +186,7 @@ $before = Get-Preflight
 if ($Action -eq 'Preflight') {
     $before | Format-List
     Write-Host 'READ-ONLY PREFLIGHT COMPLETE. No services started, stopped or installed.'
-    exit 0
+    return
 }
 $mutex = [Threading.Mutex]::new($false, 'Local\RakazoNativeManualController')
 $acquired = $false
@@ -195,7 +196,7 @@ try {
     try { $acquired = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $acquired = $true }
     if (-not $acquired) {
         if ($before.WebHealthy) { Start-Process $webUrl }
-        exit 0
+        return
     }
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
