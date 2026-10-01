@@ -209,6 +209,47 @@ function Stop-ControllerTunnel {
         $script:tunnelOwnership = $null
     }
 }
+function Ensure-ExistingPostgres {
+    # Docker is allowed here only as the dependency for the pre-existing database.
+    $docker = Get-Command docker -ErrorAction SilentlyContinue
+    if (-not $docker) { throw 'Docker Desktop is required for the existing PostgreSQL dependency.' }
+    $dockerInfo = & $docker.Source info --format '{{.ServerVersion}}' 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        $desktopExe = Join-Path $env:ProgramFiles 'Docker\Docker\Docker Desktop.exe'
+        if (-not (Test-Path -LiteralPath $desktopExe -PathType Leaf)) {
+            throw 'Docker Engine is stopped, and the installed Docker Desktop was not found.'
+        }
+        if (-not (Get-Process -Name 'Docker Desktop' -ErrorAction SilentlyContinue)) {
+            Start-Process -FilePath $desktopExe | Out-Null
+        }
+        $deadline = [DateTime]::UtcNow.AddSeconds(120)
+        do {
+            Start-Sleep -Seconds 3
+            $dockerInfo = & $docker.Source info --format '{{.ServerVersion}}' 2>$null
+            if ($LASTEXITCODE -eq 0) { break }
+        } while ([DateTime]::UtcNow -lt $deadline)
+        if ($LASTEXITCODE -ne 0) { throw 'Docker Engine did not become ready.' }
+    }
+    $container = 'compose-postgres-1'
+    $service = & $docker.Source inspect --format '{{index .Config.Labels "com.docker.compose.service"}}' $container 2>$null
+    if ($LASTEXITCODE -ne 0 -or ([string]$service).Trim() -cne 'postgres') {
+        throw 'The existing PostgreSQL container identity could not be verified; no container was created.'
+    }
+    $running = & $docker.Source inspect --format '{{.State.Running}}' $container 2>$null
+    if ($LASTEXITCODE -ne 0) { throw 'Existing PostgreSQL container inspect failed.' }
+    if (([string]$running).Trim() -cne 'true') {
+        & $docker.Source start $container | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'Existing PostgreSQL container failed to start.' }
+    }
+    $deadline = [DateTime]::UtcNow.AddSeconds(90)
+    do {
+        $health = & $docker.Source inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' $container 2>$null
+        if ($LASTEXITCODE -ne 0) { throw 'Existing PostgreSQL health inspection failed.' }
+        if (([string]$health).Trim() -ceq 'healthy') { return }
+        Start-Sleep -Seconds 2
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw 'Existing PostgreSQL did not become healthy. It was not recreated or reset.'
+}
 function Wait-Http([string]$url, [int]$seconds) {
     $deadline = [DateTime]::UtcNow.AddSeconds($seconds)
     while ([DateTime]::UtcNow -lt $deadline) {
@@ -328,13 +369,7 @@ try {
         $before.ExistingTunnelLiveHealth -or $before.ExistingTunnelReady -or $before.ExistingTunnelHealthy) {
         throw 'The original R is already active or not conclusively stopped. Planned handoff required; no duplicate connect.'
     }
-    # Only reuse the already existing shared PostgreSQL container.
-    $docker = Get-Command docker -ErrorAction SilentlyContinue
-    if (-not $docker) { throw 'Docker CLI unavailable: shared PostgreSQL prerequisite.' }
-    $postgres = & $docker.Source inspect --format '{{.State.Running}}' compose-postgres-1 2>$null
-    if ($LASTEXITCODE -ne 0 -or ([string]$postgres).Trim() -ne 'true') {
-        throw 'Existing PostgreSQL container is not running. No new stack was created.'
-    }
+    Ensure-ExistingPostgres
     New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
     $api = Start-OwnedRole 'api'
     if (-not (Wait-Http "$origin/health" 60)) { throw 'Native API startup failed; inspect manual-launcher logs.' }
