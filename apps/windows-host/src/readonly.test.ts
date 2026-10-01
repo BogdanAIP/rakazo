@@ -70,6 +70,12 @@ describe("WindowsHostReadOnlyBackend", () => {
     await expect(backend.readFile("bot-a", "../secret.txt", 128)).rejects.toThrow();
     await expect(backend.readFile("bot-a", secret, 128)).rejects.toThrow();
     await expect(backend.readFile("bot-a", "link-dir/secret.txt", 128)).rejects.toThrow("links");
+    // Retain the direct file-symlink assertion on platforms that permit its creation
+    // without special privileges. Windows still exercises the directory junction above.
+    if (process.platform !== "win32") {
+      await symlink(secret, path.join(root, "link.txt"));
+      await expect(backend.readFile("bot-a", "link.txt", 128)).rejects.toThrow("links");
+    }
     await expect(backend.listFiles("bot-a", ".")).resolves.toEqual([]);
     // Rejected access must not change any file outside the bot workspace.
     await expect(readFile(secret, "utf8")).resolves.toBe("NOT_FOR_HOST_TOOLS");
