@@ -21,6 +21,10 @@ From a regular (non-administrator) PowerShell in the source checkout:
 
 Both commands must complete before trying Run. This pilot is expected to report API/Web occupied while the current manual service windows are still open: **do not close them merely to make the status green**. First validate remaining tunnel lifecycle behavior, backup the launcher, and agree on an explicit handoff. Do not use Run as a repair for a yellow legacy tray.
 
+## First local read-only evidence
+
+On 2026-10-01 the canonical checkout fast-forwarded to the first pilot revision while preserving the unrelated local desktop edit. `Validate.ps1` returned `STATIC MANUAL LAUNCHER GATE PASSED`; `-Action Preflight` reported the correct checkout, cloned database, Host flag, worker dispatcher config, protected credential, Corepack, healthy API and Web. It also reported both ports in use, old tray/foreground Worker/Host running, so **Run must not be invoked over these live services**. `ExistingTunnelReady=False` disagreed with contemporaneous successful Plugin R calls (`health` and one Windows Host with a fresh heartbeat), so status parsing was revised to use an explicit bounded regex, ANSI-stripping and comparison to the ID loaded from the existing local launcher config (not from public source). This fix **still requires a local retest**. `runtimes connect --help` exposes `--alias`, `--tunnel-id`, `--mcp-command` and `--runtime-api-key`; inspect the existing V4 protected-key flow before wiring same-alias cold start. Never persist or paste a key into public source.
+
 ## Remaining gates before retiring the old launcher
 
 1. Port exact existing R start/stop/recovery semantics from the current V4 controller without changing its registered tunnel or credentials. Prove start-after-full-exit and stop of just that alias.
