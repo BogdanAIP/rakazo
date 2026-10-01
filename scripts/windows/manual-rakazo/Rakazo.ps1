@@ -76,6 +76,30 @@ function Test-TunnelReady {
     return ($state.CliOk -and $state.IdentityMatches -and $state.Ready -and
         $state.Healthy -and ($state.LiveHealth -or $state.VerifiedLocalProcess))
 }
+function Get-ExistingPostgresDiagnostic {
+    $state = [ordered]@{
+        DockerEngineReady = $false
+        ExistingPostgresIdentityVerified = $false
+        ExistingPostgresHealthy = $false
+    }
+    $docker = Get-Command docker -ErrorAction SilentlyContinue
+    if (-not $docker) { return [pscustomobject]$state }
+    try {
+        $info = & $docker.Source info --format '{{.ServerVersion}}' 2>$null
+        if ($LASTEXITCODE -ne 0) { return [pscustomobject]$state }
+        $state.DockerEngineReady = $true
+        $service = & $docker.Source inspect --format '{{index .Config.Labels "com.docker.compose.service"}}' compose-postgres-1 2>$null
+        if ($LASTEXITCODE -ne 0 -or ([string]$service).Trim() -cne 'postgres') {
+            return [pscustomobject]$state
+        }
+        $state.ExistingPostgresIdentityVerified = $true
+        $health = & $docker.Source inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' compose-postgres-1 2>$null
+        $state.ExistingPostgresHealthy = $LASTEXITCODE -eq 0 -and ([string]$health).Trim() -ceq 'healthy'
+    } catch {
+        # Read-only diagnostics never print Docker config or credentials.
+    }
+    return [pscustomobject]$state
+}
 function Get-Preflight {
     $envPath = Join-Path $repo '.env'
     $launcherConfig = Join-Path $launcherRoot 'config.json'
@@ -109,11 +133,15 @@ function Get-Preflight {
                 ($internalUrl[0] -match '127[.]0[.]0[.]1:3100|localhost:3100')
         }
     }
+    $database = Get-ExistingPostgresDiagnostic
     $tunnel = Get-TunnelState
     $tunnelColdStartAllowed = $tunnel.CliOk -and $tunnel.IdentityMatches -and
         -not ($tunnel.ProcessRunning -or $tunnel.VerifiedLocalProcess -or $tunnel.LiveHealth -or
             $tunnel.Ready -or $tunnel.Healthy)
     return [pscustomobject]@{
+        DockerEngineReady = $database.DockerEngineReady
+        ExistingPostgresIdentityVerified = $database.ExistingPostgresIdentityVerified
+        ExistingPostgresHealthy = $database.ExistingPostgresHealthy
         NativeCheckoutExists = $hasRepo
         ExistingAliasMatches = $identityMatches
         ExistingMcpUsesNewCheckout = $mcpPointsNew
