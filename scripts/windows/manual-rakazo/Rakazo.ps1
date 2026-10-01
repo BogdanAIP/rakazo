@@ -28,21 +28,47 @@ function Test-Port([int]$port) {
         Where-Object { $_.LocalAddress -in @('127.0.0.1', '0.0.0.0', '::1', '::') } |
         Select-Object -First 1)
 }
-function Test-TunnelReady {
-    if (-not (Test-Path -LiteralPath $client)) { return $false }
+function Get-TunnelState {
+    # The CLI returns JSON properties ready/healthy/process_running/runtime_state/tunnel_id.
+    # Keep the complete payload private: it also contains connection/profile metadata.
+    $state = [ordered]@{
+        CliOk = $false
+        IdentityMatches = $false
+        ProcessRunning = $false
+        Ready = $false
+        Healthy = $false
+        RuntimeState = 'unknown'
+    }
+    if (-not (Test-Path -LiteralPath $client)) { return [pscustomobject]$state }
     $configPath = Join-Path $launcherRoot 'config.json'
-    if (-not (Test-Path -LiteralPath $configPath)) { return $false }
+    if (-not (Test-Path -LiteralPath $configPath)) { return [pscustomobject]$state }
     try {
-        $cfg = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
-        if ($cfg.Alias -ne 'rakazo' -or [string]::IsNullOrWhiteSpace([string]$cfg.TunnelId)) { return $false }
-        $output = & $client runtimes status rakazo 2>$null
-        $statusExit = $LASTEXITCODE
-        $line = [string]($output -join ' ')
-        $line = [regex]::Replace($line, '\x1B\[[0-9;]*[ -/]*[@-~]', '')
-        $ready = [regex]::Match($line, '^\s*rakazo\s+ready\s+(tunnel_[A-Za-z0-9_-]+)(?:\s|$)', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
-        if ($statusExit -ne 0 -or -not $ready.Success) { return $false }
-        return [string]::Equals($ready.Groups[1].Value, [string]$cfg.TunnelId, [StringComparison]::Ordinal)
-    } catch { return $false }
+        $cfg = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json -ErrorAction Stop
+        if ($cfg.Version -ne 4 -or $cfg.Alias -cne 'rakazo' -or
+            ([string]$cfg.TunnelId) -notmatch '^tunnel_[A-Za-z0-9_-]+$') {
+            return [pscustomobject]$state
+        }
+        $raw = @(& $client runtimes status rakazo --json 2>$null)
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -ne 0 -or $raw.Count -eq 0) { return [pscustomobject]$state }
+        $data = ($raw -join [Environment]::NewLine) | ConvertFrom-Json -ErrorAction Stop
+        $state.CliOk = $true
+        $state.IdentityMatches = [string]::Equals(
+            [string]$data.tunnel_id, [string]$cfg.TunnelId, [StringComparison]::Ordinal
+        )
+        $state.ProcessRunning = $data.process_running -eq $true
+        $state.Ready = $data.ready -eq $true
+        $state.Healthy = $data.healthy -eq $true
+        $runtime = [string]$data.runtime_state
+        if ($runtime -cmatch '^[A-Za-z_-]{1,32}$') { $state.RuntimeState = $runtime }
+    } catch {
+        # Fail closed; never print raw JSON, profile paths or credentials.
+    }
+    return [pscustomobject]$state
+}
+function Test-TunnelReady {
+    $state = Get-TunnelState
+    return ($state.CliOk -and $state.IdentityMatches -and $state.Ready)
 }
 function Get-Preflight {
     $envPath = Join-Path $repo '.env'
@@ -77,6 +103,7 @@ function Get-Preflight {
                 ($internalUrl[0] -match '127[.]0[.]0[.]1:3100|localhost:3100')
         }
     }
+    $tunnel = Get-TunnelState
     return [pscustomobject]@{
         NativeCheckoutExists = $hasRepo
         ExistingAliasMatches = $identityMatches
@@ -90,7 +117,12 @@ function Get-Preflight {
         WebHealthy = Test-Http $webUrl
         ApiPortOccupied = Test-Port 3100
         WebPortOccupied = Test-Port 5173
-        ExistingTunnelReady = Test-TunnelReady
+        ExistingTunnelCliOk = $tunnel.CliOk
+        ExistingTunnelIdMatches = $tunnel.IdentityMatches
+        ExistingTunnelProcessRunning = $tunnel.ProcessRunning
+        ExistingTunnelReady = $tunnel.Ready -and $tunnel.IdentityMatches -and $tunnel.CliOk
+        ExistingTunnelHealthy = $tunnel.Healthy
+        ExistingTunnelRuntimeState = $tunnel.RuntimeState
         OldTrayRunning = [bool](@(Get-CimInstance Win32_Process | Where-Object {
             $_.Name -in @('powershell.exe', 'pwsh.exe') -and
             ([string]$_.CommandLine).Contains('Rakazo.Tray.ps1')
