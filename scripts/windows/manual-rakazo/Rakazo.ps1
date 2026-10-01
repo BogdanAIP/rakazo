@@ -73,7 +73,8 @@ function Get-TunnelState {
 }
 function Test-TunnelReady {
     $state = Get-TunnelState
-    return ($state.CliOk -and $state.IdentityMatches -and $state.Ready)
+    return ($state.CliOk -and $state.IdentityMatches -and $state.Ready -and
+        $state.Healthy -and ($state.LiveHealth -or $state.VerifiedLocalProcess))
 }
 function Get-Preflight {
     $envPath = Join-Path $repo '.env'
@@ -306,10 +307,6 @@ try {
     }
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
-    # Do not offer half-cutover: the original registered tunnel is still controlled
-    # by the legacy V4 launcher, and CLI remote ready is not local process ownership.
-    # Implement and physically verify same-alias start/stop + guarded ownership first.
-    throw 'Manual launcher pilot: existing R tunnel ownership handoff is pending. No services started.'
     if (-not ($before.NativeCheckoutExists -and $before.ExistingAliasMatches -and
         $before.ExistingMcpUsesNewCheckout -and $before.DatabaseIsCloned -and
         $before.HostFeatureInEnv -and $before.WorkerDispatchConfigured -and
@@ -326,8 +323,10 @@ try {
     if ($before.ApiPortOccupied -or $before.WebPortOccupied) {
         throw 'API/Web is already running outside this controller. Close the pilot windows during a planned handoff; never duplicate them.'
     }
-    if (-not $before.ExistingTunnelReady) {
-        throw 'Existing R tunnel not ready. This pilot does not create a replacement tunnel or profile.'
+    if (-not ($before.ExistingTunnelCliOk -and $before.ExistingTunnelIdMatches) -or
+        $before.ExistingTunnelProcessRunning -or $before.ExistingTunnelProcessVerified -or
+        $before.ExistingTunnelLiveHealth -or $before.ExistingTunnelReady -or $before.ExistingTunnelHealthy) {
+        throw 'The original R is already active or not conclusively stopped. Planned handoff required; no duplicate connect.'
     }
     # Only reuse the already existing shared PostgreSQL container.
     $docker = Get-Command docker -ErrorAction SilentlyContinue
@@ -347,6 +346,7 @@ try {
     $host = Start-OwnedRole 'host'
     Start-Sleep -Seconds 3
     if ($host.HasExited) { throw 'Previously paired Windows Host exited early; inspect manual-launcher logs.' }
+    Start-ControllerTunnel
     $tray = [System.Windows.Forms.NotifyIcon]::new()
     $iconFile = Join-Path $repo 'apps\desktop\assets\icon.ico'
     $tray.Icon = if (Test-Path -LiteralPath $iconFile) {
@@ -392,6 +392,7 @@ try {
 } finally {
     if ($timer) { $timer.Stop(); $timer.Dispose() }
     if ($tray) { $tray.Visible = $false; $tray.Dispose() }
+    Stop-ControllerTunnel
     Stop-Owned
     if ($acquired) { $mutex.ReleaseMutex() }
     $mutex.Dispose()
