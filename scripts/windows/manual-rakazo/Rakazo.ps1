@@ -17,6 +17,7 @@ $credential = Join-Path $env:LOCALAPPDATA 'Rakazo\windows-host\host-credential.d
 $stateDir = Join-Path $env:LOCALAPPDATA 'Rakazo\manual-launcher'
 $owned = [System.Collections.Generic.List[object]]::new()
 . (Join-Path $PSScriptRoot 'Tunnel.Diagnostics.ps1')
+. (Join-Path $PSScriptRoot 'Tunnel.Control.ps1')
 
 function Test-Http([string]$url) {
     try {
