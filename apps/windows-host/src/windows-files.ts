@@ -59,9 +59,14 @@ async function validateDirectoryHandle(handle: Win32FileHandle, root: string) {
   return resolved;
 }
 
+/** Node BigIntStats.nlink is bigint; reject zero/multiple links in either stats mode. */
+export function isSingleLinkRegularFile(info: { isFile(): boolean; nlink: number | bigint }): boolean {
+  return info.isFile() && BigInt(info.nlink) === 1n;
+}
+
 async function validateFileHandle(handle: Win32FileHandle, root: string) {
   const info = await handle.stat({ bigint: true });
-  if (!info.isFile() || info.nlink !== 1) {
+  if (!isSingleLinkRegularFile(info)) {
     throw new Error("Workspace target is not a regular single-link file");
   }
   const heldPath = pathFromDirectoryFd(handle.fd);
