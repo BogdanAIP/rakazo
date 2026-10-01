@@ -80,6 +80,12 @@ Earlier documented setup of this **same** existing Plugin R tunnel placed the la
 
 Crucial: desktop launcher `config.json` and tunnel-client's *registered runtime command* are distinct persistence surfaces. Updating just `Repo`/`McpCommand` and clicking `Restart Tunnel.cmd` need not update the persisted stdio command. Read current `config.json`, validate launcher script behavior and `tunnel-client runtimes connect --help` locally without exposing tokens. Plan one controlled update of the existing alias/tunnel ID to a direct Node/tsx MCP command in the **new** checkout, never duplicate a tunnel/profile, and verify after restart that R's `windowsHosts` catalog is populated.
 
+## 2i. Existing R plugin switched to new MCP contract (user shell, 14:53 local)
+
+User modified **only** launcher V4 `McpCommand` to the new checkout, preserving `Repo` (old application/Docker checkout), alias `rakazo` and registered TunnelId. Before attempting restart the read-only validation reported `VersionIs4=True`, `AliasIsRakazo=True`, `TunnelIdMatches=True`, `ApplicationRepoUnchanged=True`, `McpReferencesNewRepo=True`, `McpReferencesOldRepo=False`, `McpEntrypointPresent=True`, `BackupExists=True`. Original config backup: `_backup\\config.before-mcp-switch-20261001-142129.json`.
+
+The user then invoked existing `Restart Tunnel.cmd` in a guarded PowerShell block; their last visible output was `=== RESTART EXISTING RAKAZO RUNTIME ===` with no wrapper exit or later shell checks, so **do not claim the PowerShell restart script has completed** and do not invoke it again blindly. Independently, via the **same installed Plugin R**, live `rakazo_procedures(query="windowsHosts")` returned exactly three procedures: `windowsHosts/createPairing` (write), `windowsHosts/list` (read), `windowsHosts/revoke` (destructive). `health` returned `{ok:true,version:"0.1.0"}` and `windowsHosts/list` returned `[]` (not yet paired). Therefore the actual MCP/catalog upgrade worked regardless of the wrapper shell still awaiting completion. Diagnose only possible lingering wrapper/process without touching other tunnel IDs, Docker, API, Worker or credentials; do not pair until launcher state is understood.
+
 ## 3. Physical host gating sequence (evidence-required)
 
 1. **Completed:** restore only the experimental UCRT edit locally from the saved backup, verify the restored file matches HEAD and preserve unrelated `docker-cli.ts` modification. Stop on nonzero exit *within one guarded script*, not separate paste submissions.
