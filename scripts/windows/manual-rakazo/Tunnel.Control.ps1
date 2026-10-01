@@ -34,7 +34,9 @@ function Invoke-RakazoRegisteredRuntimeOperation {
         [Parameter(Mandatory=$true)][string]$TunnelId,
         [Parameter(Mandatory=$true)][string]$McpCommand,
         [Parameter(Mandatory=$true)][string]$KeyPath,
-        [Parameter(Mandatory=$true)][string]$SessionPath
+        [Parameter(Mandatory=$true)][string]$SessionPath,
+        [int]$ExpectedStopPid = 0,
+        [string]$ExpectedStopStart = ''
     )
     if ($TunnelId -cnotmatch '^tunnel_[A-Za-z0-9_-]+$') { throw 'Existing tunnel identity is invalid.' }
     if (-not (Test-Path -LiteralPath $ClientPath -PathType Leaf)) { throw 'Existing client is missing.' }
@@ -49,6 +51,25 @@ function Invoke-RakazoRegisteredRuntimeOperation {
         catch [Threading.AbandonedMutexException] { $taken = $true }
         if (-not $taken) { throw 'Tunnel control is busy.' }
 
+        # Check the authenticated exact alias while holding the original V4 mutex.
+        $before = Get-RakazoAuthenticatedTunnelStatus -ClientPath $ClientPath -Alias 'rakazo' -EncryptedKeyPath $KeyPath
+        if (-not [string]::Equals([string]$before.tunnel_id, $TunnelId, [StringComparison]::Ordinal)) {
+            throw 'The registered tunnel identity changed; operation cancelled.'
+        }
+        $localLive = Test-RakazoExistingTunnelHealthEndpoint -Url ([string]$before.health_url)
+        $verified = Test-RakazoExistingTunnelProcessEvidence -Runtime $before -ClientPath $ClientPath
+        if ($Operation -eq 'connect') {
+            if ($localLive -or $verified -or $before.process_running -eq $true -or
+                $before.ready -eq $true -or $before.healthy -eq $true) {
+                throw 'Existing R is still active or not safely quiesced. No duplicate connect.'
+            }
+        } else {
+            if ($ExpectedStopPid -le 0 -or [string]::IsNullOrWhiteSpace($ExpectedStopStart) -or -not $verified -or
+                [int]$before.process.pid -ne $ExpectedStopPid -or
+                [string]$before.process.started_at -cne $ExpectedStopStart) {
+                throw 'The tunnel is not the exact process started by this controller; stop cancelled.'
+            }
+        }
         $psi = [Diagnostics.ProcessStartInfo]::new()
         $psi.FileName = $ClientPath
         $psi.UseShellExecute = $false
