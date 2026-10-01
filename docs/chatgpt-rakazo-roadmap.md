@@ -1,8 +1,10 @@
 # ChatGPT + Rakazo roadmap
 
 Status: **authoritative architecture and migration plan**  
-Last updated: **2026-09-30**  
+Last updated: **2026-10-01**  
 Primary working branch: `feature/chatgpt-mcp-upstream-2026-09-29`
+
+**Physical-pilot evidence and existing-feature audit (2026-10-01):** [Windows Host capability audit and blocker log](./windows-host-capability-audit-2026-10-01.md). This records actual Agent Skills, Taught Skills, Installed MCP/API/GraphQL connectors and generic computer tools; do not build duplicate registries. API and Worker booted on a clone, but native Windows Host is **blocked** by a failed Windows smoke test and an unverified local CRT edit. The old R MCP catalog does not yet show `windowsHosts`. Treat the physical-host gate sequence in that log as prior to further cutover. In particular, do **not** count the echoed `WINDOWS SMOKE OK` following process exit `3221226505` as success.
 
 This document defines the intended architecture for the ChatGPT integration in this fork of Rakazo. It supersedes ad-hoc plans that treat CAP, OpenResearch, Codex, OpenCLI, UFO, or a second agent runtime as the center of the system.
 
