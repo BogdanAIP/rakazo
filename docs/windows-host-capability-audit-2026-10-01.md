@@ -68,6 +68,12 @@ Read-only `Get-CimInstance Win32_Process` diagnostic returned a specific existin
 
 Prerequisites reported: `corepack.cmd` available, `pnpm.cmd` unavailable, no `%LOCALAPPDATA%\\Rakazo\\windows-host\\host-credential.dpapi`, and no scheduled task `Rakazo Windows Host`. **Do not pair or install a second tunnel.** Next: inspect only the registered launcher/stdio configuration for the 10920 chain with output redacted to process role and path/classification; never print raw process command lines, session tokens, tunnel credentials, or pairing tokens. Once the launch path is confirmed, point/restart that *same* tunnel MCP child to the new worktree and verify `windowsHosts` appears. Then prepare a durable per-user Corepack-compatible `pnpm.cmd` shim for the existing installer.
 
+## 2f. Safe process/config inspection at 12:36 local
+
+User confirmed the exact current process chain by command-line classification: `10920 tunnel-client.exe` (parent 10040); `24440 node.exe` (child of 10920, `chatgpt-mcp` and `tsx` referenced, neither old nor new checkout literal present); `13936 node.exe` (child of 24440, `chatgpt-mcp` and `tsx` referenced, **old** `C:\\Users\\eahra\\rakazo` repo present, new repo absent). This establishes a stale executable/loader path in the existing MCP process lineage, but not where the registered launcher config resides.
+
+Read-only search below `%LOCALAPPDATA%\\RakazoTunnel` for small text configurations containing `chatgpt-mcp` or either repo string returned `No matching configuration files found`; this is limited to that directory/extension/size search and **does not prove** there is no tunnel configuration stored elsewhere or remotely. Do not overwrite/delete configs or kill multiple tunnels speculatively. Determine the process chain's owning launcher and path classifications only; then update the existing registered tunnel's child command/cwd (or its actual source configuration), not another tunnel.
+
 ## 3. Physical host gating sequence (evidence-required)
 
 1. **Completed:** restore only the experimental UCRT edit locally from the saved backup, verify the restored file matches HEAD and preserve unrelated `docker-cli.ts` modification. Stop on nonzero exit *within one guarded script*, not separate paste submissions.
