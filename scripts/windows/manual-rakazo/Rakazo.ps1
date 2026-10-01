@@ -16,6 +16,7 @@ $client = Join-Path $env:LOCALAPPDATA 'RakazoTunnel\bin\tunnel-client.exe'
 $credential = Join-Path $env:LOCALAPPDATA 'Rakazo\windows-host\host-credential.dpapi'
 $stateDir = Join-Path $env:LOCALAPPDATA 'Rakazo\manual-launcher'
 $owned = [System.Collections.Generic.List[object]]::new()
+. (Join-Path $PSScriptRoot 'Tunnel.Diagnostics.ps1')
 
 function Test-Http([string]$url) {
     try {
