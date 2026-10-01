@@ -2,16 +2,19 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $script = Join-Path $PSScriptRoot 'Rakazo.ps1'
-$tokens = $null
-$parseErrors = $null
-$ast = [System.Management.Automation.Language.Parser]::ParseFile(
-    $script, [ref]$tokens, [ref]$parseErrors
-)
-if ($parseErrors.Count -ne 0) {
-    foreach ($problem in $parseErrors) {
-        Write-Host ("Parser error at line {0}: {1}" -f $problem.Extent.StartLineNumber, $problem.Message)
+foreach ($name in @('Rakazo.ps1', 'Tunnel.Diagnostics.ps1', 'Check-ExistingR.ps1')) {
+    $file = Join-Path $PSScriptRoot $name
+    $tokens = $null
+    $parseErrors = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile(
+        $file, [ref]$tokens, [ref]$parseErrors
+    )
+    if ($parseErrors.Count -ne 0) {
+        foreach ($problem in $parseErrors) {
+            Write-Host ("{0}: parse error at line {1}: {2}" -f $name, $problem.Extent.StartLineNumber, $problem.Message)
+        }
+        throw 'Manual launcher PowerShell parsing failed.'
     }
-    throw 'Manual launcher PowerShell parsing failed.'
 }
 $text = [IO.File]::ReadAllText($script)
 foreach ($forbidden in @(
