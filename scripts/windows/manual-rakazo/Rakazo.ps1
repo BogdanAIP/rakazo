@@ -445,21 +445,31 @@ function Start-OwnedRole([string]$role) {
     return $p
 }
 function Stop-Owned {
-    # Never stop an adopted process or another alias. Guard against reused PIDs.
+    # Stop only controller-created launchers with the exact recorded PID/start-time.
+    # Force the VERIFIED launcher tree in one operation: a two-step graceful
+    # taskkill can terminate the launcher first and strand its Node descendants.
+    $taskkill = Join-Path $env:SystemRoot 'System32\taskkill.exe'
     for ($i = $owned.Count - 1; $i -ge 0; $i--) {
         $entry = $owned[$i]
         $p = Get-Process -Id $entry.Pid -ErrorAction SilentlyContinue
-        if (-not $p -or $p.StartTime.ToUniversalTime() -ne $entry.StartTime) { continue }
-        $taskkill = Join-Path $env:SystemRoot 'System32\taskkill.exe'
+        if (-not $p) {
+            Write-RakazoLaunchStage ('owned ' + $entry.Role + ' launcher missing; descendants require separate verification')
+            continue
+        }
         try {
-            & $taskkill /PID $entry.Pid /T 2>$null | Out-Null
-            Start-Sleep -Milliseconds 500
-            $p = Get-Process -Id $entry.Pid -ErrorAction SilentlyContinue
-            if ($p -and $p.StartTime.ToUniversalTime() -eq $entry.StartTime) {
-                & $taskkill /PID $entry.Pid /T /F 2>$null | Out-Null
+            if ($p.StartTime.ToUniversalTime() -ne $entry.StartTime) {
+                Write-Warning ('The recorded ' + $entry.Role + ' launcher PID changed identity. No process was stopped.')
+                continue
+            }
+            Write-RakazoLaunchStage ('stopping verified owned ' + $entry.Role + ' process tree')
+            # /T /F targets descendants of this ONE identity-verified owned
+            # launcher, not all node.exe, Docker, PostgreSQL or the borrowed R.
+            & $taskkill /PID $entry.Pid /T /F 2>$null | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning ('The verified ' + $entry.Role + ' launcher tree reported incomplete shutdown.')
             }
         } catch {
-            # Only the originally created PID is eligible for termination.
+            Write-Warning ('Unable to clean up the verified ' + $entry.Role + ' launcher tree. Inspect its PID before recovery.')
         }
     }
 }
@@ -589,7 +599,7 @@ try {
         [System.Windows.Forms.MessageBox]::Show($message, 'Rakazo status') | Out-Null
     })
     $ctx = [System.Windows.Forms.ApplicationContext]::new()
-    $quit.add_Click({ $ctx.ExitThread() })
+    $quit.add_Click({ Write-RakazoLaunchStage 'tray quit requested'; $ctx.ExitThread() })
     $tray.ContextMenuStrip = $menu
     $tray.Visible = $true
     $timer = [System.Windows.Forms.Timer]::new()
@@ -612,10 +622,31 @@ try {
     Write-RakazoLaunchStage ('FAILED at ' + $script:launchStage)
     throw
 } finally {
-    if ($timer) { $timer.Stop(); $timer.Dispose() }
-    if ($tray) { $tray.Visible = $false; $tray.Dispose() }
-    Stop-ControllerTunnel
-    Stop-Owned
-    if ($acquired) { $mutex.ReleaseMutex() }
-    $mutex.Dispose()
+    if ($acquired) { Write-RakazoLaunchStage 'controller shutdown cleanup started' }
+    try {
+        if ($timer) { $timer.Stop(); $timer.Dispose() }
+        if ($tray) { $tray.Visible = $false; $tray.Dispose() }
+        Stop-ControllerTunnel
+        Stop-Owned
+        if ($acquired) {
+            # These ports belonged to this controller at startup; do not kill
+            # anything new that might subsequently bind them.
+            $portsFree = $false
+            $deadline = [DateTime]::UtcNow.AddSeconds(10)
+            do {
+                $portsFree = -not (Test-Port 3100) -and -not (Test-Port 5173)
+                if ($portsFree) { break }
+                Start-Sleep -Milliseconds 500
+            } while ([DateTime]::UtcNow -lt $deadline)
+            if (-not $portsFree) {
+                Write-Warning 'Native API/Web ports remain occupied after owned-tree cleanup. No unverified process will be stopped.'
+                Write-RakazoLaunchStage 'controller cleanup incomplete; native ports still occupied'
+            } else {
+                Write-RakazoLaunchStage 'controller shutdown completed; native ports free'
+            }
+        }
+    } finally {
+        if ($acquired) { $mutex.ReleaseMutex() }
+        $mutex.Dispose()
+    }
 }
