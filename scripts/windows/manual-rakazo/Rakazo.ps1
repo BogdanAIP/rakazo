@@ -495,177 +495,18 @@ if ($Action -eq 'Child') {
         # Windows Host. Import ONLY the chosen OpenCLI profile, never the other
         # private settings. A configured profile has precedence over inheritance.
         $openCliProfileLines = @(Get-Content -LiteralPath (Join-Path $repo '.env') -ErrorAction Stop |
-            Where-Object { $_ -match '^\\s*RAKAZO_OPENCLI_PROFILE\\s*=' })
+            Where-Object { $_ -match '^\s*RAKAZO_OPENCLI_PROFILE\s*=' })
         if ($openCliProfileLines.Count -gt 1) {
             throw 'Duplicate private OpenCLI profile settings; refusing ambiguous browser selection.'
         }
         if ($openCliProfileLines.Count -eq 1) {
-            $rawProfile = ($openCliProfileLines[0] -replace '^\\s*RAKAZO_OPENCLI_PROFILE\\s*=\\s*', '').Trim()
+            $rawProfile = ($openCliProfileLines[0] -replace '^\s*RAKAZO_OPENCLI_PROFILE\s*=\s*', '').Trim()
             if ($rawProfile.Length -ge 2 -and
                 (($rawProfile.StartsWith('"') -and $rawProfile.EndsWith('"')) -or
                  ($rawProfile.StartsWith("'") -and $rawProfile.EndsWith("'")))) {
                 $rawProfile = $rawProfile.Substring(1, $rawProfile.Length - 2)
             }
-            if ($rawProfile -cnotmatch '^[A-Za-z0-9_-]{1,100}    }
-    $packages = @{
-        api = '@rakazo/api'
-        worker = '@rakazo/worker'
-        web = '@rakazo/web'
-        host = '@rakazo/windows-host'
-    }
-    $package = $packages[$Role]
-    $verb = if ($Role -eq 'web') { 'dev' } else { 'start' }
-    & corepack pnpm --filter $package $verb
-    exit $LASTEXITCODE
-}
-$before = Get-Preflight
-if ($Action -eq 'Preflight') {
-    $before | Format-List
-    Write-Host 'READ-ONLY PREFLIGHT COMPLETE. No services started, stopped or installed.'
-    return
-}
-$mutex = [Threading.Mutex]::new($false, 'Local\RakazoNativeManualController')
-$acquired = $false
-$tray = $null
-$timer = $null
-try {
-    try { $acquired = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $acquired = $true }
-    if (-not $acquired) {
-        Write-Warning 'Rakazo controller mutex is busy. Another Run is active or awaiting an error dialog; no duplicate was started.'
-        if ($before.WebHealthy) { Start-Process $webUrl }
-        return
-    }
-    Write-RakazoLaunchStage 'controller acquired'
-    Add-Type -AssemblyName System.Windows.Forms
-    Add-Type -AssemblyName System.Drawing
-    if (-not ($before.NativeCheckoutExists -and $before.ExistingAliasMatches -and
-        $before.ExistingMcpUsesNewCheckout -and $before.DatabaseIsCloned -and
-        $before.DatabaseEndpointMatches -and $before.NativePostgresRuntimePresent -and
-        $before.NativePostgresClusterVerified -and
-        $before.HostFeatureInEnv -and $before.WorkerDispatchConfigured -and
-        $before.ProtectedHostCredentialExists -and
-        $before.ProtectedTunnelSessionExists -and
-        $before.CorepackAvailable)) {
-        throw 'Preflight failed. Run Rakazo.ps1 -Action Preflight before activating.'
-    }
-    if ($before.OldTrayRunning) {
-        throw 'Old Rakazo tray is still open. Close only the old indicator before cutover; do not stop its existing tunnel.'
-    }
-    if ($before.ExternalWorkerDetected -or $before.ExternalHostDetected) {
-        throw 'A manually launched Worker or Windows Host was detected. Do not launch a duplicate.'
-    }
-    if ($before.ApiPortOccupied -or $before.WebPortOccupied) {
-        throw 'API/Web is already running outside this controller. Close the pilot windows during a planned handoff; never duplicate them.'
-    }
-    if (-not ($before.ExistingTunnelColdStartAllowed -or $before.ExistingTunnelAttachAllowed)) {
-        throw 'Existing R is neither conclusively stopped nor fully verified for read-only reuse. No duplicate connect.'
-    }
-    $borrowedTunnel = $null
-    if ($before.ExistingTunnelAttachAllowed) {
-        # Recheck under the controller mutex and pin exact identity before other startup work.
-        $borrowedTunnel = Get-VerifiedRunningTunnelIdentity
-        Write-RakazoLaunchStage 'existing R verified for read-only reuse (unowned)'
-    }
-    Write-RakazoLaunchStage 'native postgres check/start'
-    Ensure-NativePostgres
-    Write-RakazoLaunchStage 'native postgres ready'
-    $api = Start-OwnedRole 'api'
-    Write-RakazoLaunchStage 'api child started; waiting for health'
-    # Bounded cold start; fail early if the directly owned launcher process exits.
-    if (-not (Wait-Http "$origin/health" 360 $api)) { throw 'Native API startup failed or timed out; inspect manual-launcher logs.' }
-    Write-RakazoLaunchStage 'api ready'
-    $worker = Start-OwnedRole 'worker'
-    Write-RakazoLaunchStage 'worker child started'
-    Start-Sleep -Seconds 3
-    $worker.Refresh()
-    if ($worker.HasExited) { throw 'Worker exited early; inspect manual-launcher logs.' }
-    $web = Start-OwnedRole 'web'
-    Write-RakazoLaunchStage 'web child started; waiting for health'
-    if (-not (Wait-Http $webUrl 60 $web)) { throw 'Native Web startup failed or timed out; inspect manual-launcher logs.' }
-    Write-RakazoLaunchStage 'web ready'
-    $windowsHostProcess = Start-OwnedRole 'host'
-    Write-RakazoLaunchStage 'host child started'
-    Start-Sleep -Seconds 3
-    $windowsHostProcess.Refresh()
-    if ($windowsHostProcess.HasExited) { throw 'Previously paired Windows Host exited early; inspect manual-launcher logs.' }
-    if ($null -ne $borrowedTunnel) {
-        Assert-SameBorrowedTunnel $borrowedTunnel
-        Write-RakazoLaunchStage 'existing R reused read-only; creating tray (R unowned)'
-    } else {
-        Write-RakazoLaunchStage 'connecting existing registered R'
-        Start-ControllerTunnel
-        Write-RakazoLaunchStage 'existing R connected; creating tray (R owned)'
-    }
-    $tray = [System.Windows.Forms.NotifyIcon]::new()
-    $iconFile = Join-Path $repo 'apps\desktop\assets\icon.ico'
-    $tray.Icon = if (Test-Path -LiteralPath $iconFile) {
-        [System.Drawing.Icon]::new($iconFile)
-    } else { [System.Drawing.SystemIcons]::Application }
-    $tray.Text = 'Rakazo - checking local services'
-    $menu = [System.Windows.Forms.ContextMenuStrip]::new()
-    $open = $menu.Items.Add('Open Rakazo')
-    $status = $menu.Items.Add('Status')
-    $quit = $menu.Items.Add('Quit Rakazo')
-    $open.add_Click({ Start-Process $webUrl })
-    $status.add_Click({
-        $s = Get-Preflight
-        $message = 'API: {0}; Web: {1}; R: {2}; host credential: {3}. Verify host heartbeat through R.' -f
-            $s.ApiHealthy, $s.WebHealthy, $s.ExistingTunnelReady, $s.ProtectedHostCredentialExists
-        [System.Windows.Forms.MessageBox]::Show($message, 'Rakazo status') | Out-Null
-    })
-    $ctx = [System.Windows.Forms.ApplicationContext]::new()
-    $quit.add_Click({ Write-RakazoLaunchStage 'tray quit requested'; $ctx.ExitThread() })
-    $tray.ContextMenuStrip = $menu
-    $tray.Visible = $true
-    $timer = [System.Windows.Forms.Timer]::new()
-    $timer.Interval = 10000
-    $timer.add_Tick({
-        $healthy = (Test-Http "$origin/health") -and (Test-Http $webUrl) -and (Test-TunnelReady)
-        $tray.Icon = if ($healthy) { [System.Drawing.SystemIcons]::Information } else { [System.Drawing.SystemIcons]::Warning }
-        # This local indicator does not claim end-to-end Host verification.
-        $tray.Text = if ($healthy) {
-            'Rakazo locally ready; verify physical host via R'
-        } else { 'Rakazo - local service or tunnel needs attention' }
-    })
-    $timer.Start()
-    Write-RakazoLaunchStage 'tray active'
-    Start-Process $webUrl
-    [System.Windows.Forms.Application]::Run($ctx)
-} catch {
-    # An indefinite modal MessageBox hid the startup error and held the controller mutex.
-    # Report the stage in console and local stage log; never log secrets from exception text.
-    Write-RakazoLaunchStage ('FAILED at ' + $script:launchStage)
-    throw
-} finally {
-    if ($acquired) { Write-RakazoLaunchStage 'controller shutdown cleanup started' }
-    try {
-        if ($timer) { $timer.Stop(); $timer.Dispose() }
-        if ($tray) { $tray.Visible = $false; $tray.Dispose() }
-        Stop-ControllerTunnel
-        Stop-Owned
-        if ($acquired) {
-            # These ports belonged to this controller at startup; do not kill
-            # anything new that might subsequently bind them.
-            $portsFree = $false
-            $deadline = [DateTime]::UtcNow.AddSeconds(10)
-            do {
-                $portsFree = -not (Test-Port 3100) -and -not (Test-Port 5173)
-                if ($portsFree) { break }
-                Start-Sleep -Milliseconds 500
-            } while ([DateTime]::UtcNow -lt $deadline)
-            if (-not $portsFree) {
-                Write-Warning 'Native API/Web ports remain occupied after owned-tree cleanup. No unverified process will be stopped.'
-                Write-RakazoLaunchStage 'controller cleanup incomplete; native ports still occupied'
-            } else {
-                Write-RakazoLaunchStage 'controller shutdown completed; native ports free'
-            }
-        }
-    } finally {
-        if ($acquired) { $mutex.ReleaseMutex() }
-        $mutex.Dispose()
-    }
-}
-) {
+            if ($rawProfile -cnotmatch '^[A-Za-z0-9_-]{1,100}$') {
                 throw 'Private OpenCLI profile is invalid; refusing browser selection.'
             }
             $env:RAKAZO_OPENCLI_PROFILE = $rawProfile
