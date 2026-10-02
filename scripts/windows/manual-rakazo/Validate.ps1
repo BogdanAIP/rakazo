@@ -30,6 +30,12 @@ foreach ($forbidden in @(
 )) {
     if ($text.Contains($forbidden)) { throw "Forbidden action present: $forbidden" }
 }
+if ($text -match '(?i)\$host\b') {
+    throw 'Reserved PowerShell automatic variable $Host must not be used as a launcher process variable.'
+}
+foreach ($needed in @('$windowsHostProcess = Start-OwnedRole', '$windowsHostProcess.Refresh()')) {
+    if (-not $text.Contains($needed)) { throw "Windows Host process tracking guard absent: $needed" }
+}
 foreach ($needed in @(
     'rakazo_next', 'ExistingTunnelReady', 'Owned', 'RAKAZO_WINDOWS_PROCESS_ENABLED',
     'Write-RakazoLaunchStage', 'launcher-stage.log', 'native postgres ready',
