@@ -17,6 +17,20 @@ $credential = Join-Path $env:LOCALAPPDATA 'Rakazo\windows-host\host-credential.d
 $stateDir = Join-Path $env:LOCALAPPDATA 'Rakazo\manual-launcher'
 $owned = [System.Collections.Generic.List[object]]::new()
 $script:tunnelOwnership = $null
+$script:launchStage = 'initial'
+function Write-RakazoLaunchStage([string]$stage) {
+    $script:launchStage = $stage
+    # Log only a fixed startup stage; never write environment values or CLI output.
+    Write-Host ('[Rakazo] ' + $stage)
+    try {
+        New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
+        Add-Content -LiteralPath (Join-Path $stateDir 'launcher-stage.log') -Encoding UTF8 -Value (
+            '{0:u} {1}' -f [DateTime]::UtcNow, $stage
+        )
+    } catch {
+        Write-Warning 'Could not write the stage log; console status remains available.'
+    }
+}
 . (Join-Path $PSScriptRoot 'Tunnel.Diagnostics.ps1')
 . (Join-Path $PSScriptRoot 'Tunnel.Control.ps1')
 
@@ -329,10 +343,13 @@ function Ensure-NativePostgres {
     $pgCtl = Join-Path $spec.Bin 'pg_ctl.exe'
     & $pgCtl -D $spec.Data -l $spec.Log -o '-h 127.0.0.1 -p 5434' -w -t 60 start | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Native PostgreSQL did not start successfully.' }
-    $after = Get-NativePostgresDiagnostic
-    if (-not ($after.NativePostgresProcessVerified -and $after.NativePostgresReady)) {
-        throw 'Native PostgreSQL started but exact process identity/readiness could not be verified.'
-    }
+    $deadline = [DateTime]::UtcNow.AddSeconds(20)
+    do {
+        $after = Get-NativePostgresDiagnostic
+        if ($after.NativePostgresProcessVerified -and $after.NativePostgresReady) { return }
+        Start-Sleep -Seconds 1
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw 'Native PostgreSQL started but exact process identity/readiness could not be verified.'
     # Intentionally keep this durable database running on Quit; never stop shared processes.
 }
 function Wait-Http([string]$url, [int]$seconds, [Diagnostics.Process]$ownedProcess = $null) {
@@ -432,9 +449,11 @@ $timer = $null
 try {
     try { $acquired = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $acquired = $true }
     if (-not $acquired) {
+        Write-Warning 'Rakazo controller mutex is busy. Another Run is active or awaiting an error dialog; no duplicate was started.'
         if ($before.WebHealthy) { Start-Process $webUrl }
         return
     }
+    Write-RakazoLaunchStage 'controller acquired'
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
     if (-not ($before.NativeCheckoutExists -and $before.ExistingAliasMatches -and
@@ -461,21 +480,31 @@ try {
         $before.ExistingTunnelLiveHealth -or $before.ExistingTunnelReady -or $before.ExistingTunnelHealthy) {
         throw 'The original R is already active or not conclusively stopped. Planned handoff required; no duplicate connect.'
     }
+    Write-RakazoLaunchStage 'native postgres check/start'
     Ensure-NativePostgres
-    New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
+    Write-RakazoLaunchStage 'native postgres ready'
     $api = Start-OwnedRole 'api'
-    # A cold native Windows/tsx API startup was observed to exceed the former 60s gate.
-    # Bounded wait, fail early if the directly owned launcher process exits.
+    Write-RakazoLaunchStage 'api child started; waiting for health'
+    # Bounded cold start; fail early if the directly owned launcher process exits.
     if (-not (Wait-Http "$origin/health" 360 $api)) { throw 'Native API startup failed or timed out; inspect manual-launcher logs.' }
+    Write-RakazoLaunchStage 'api ready'
     $worker = Start-OwnedRole 'worker'
+    Write-RakazoLaunchStage 'worker child started'
     Start-Sleep -Seconds 3
+    $worker.Refresh()
     if ($worker.HasExited) { throw 'Worker exited early; inspect manual-launcher logs.' }
     $web = Start-OwnedRole 'web'
-    if (-not (Wait-Http $webUrl 60)) { throw 'Native Web startup failed; inspect manual-launcher logs.' }
+    Write-RakazoLaunchStage 'web child started; waiting for health'
+    if (-not (Wait-Http $webUrl 60 $web)) { throw 'Native Web startup failed or timed out; inspect manual-launcher logs.' }
+    Write-RakazoLaunchStage 'web ready'
     $host = Start-OwnedRole 'host'
+    Write-RakazoLaunchStage 'host child started'
     Start-Sleep -Seconds 3
+    $host.Refresh()
     if ($host.HasExited) { throw 'Previously paired Windows Host exited early; inspect manual-launcher logs.' }
+    Write-RakazoLaunchStage 'connecting existing registered R'
     Start-ControllerTunnel
+    Write-RakazoLaunchStage 'existing R connected; creating tray'
     $tray = [System.Windows.Forms.NotifyIcon]::new()
     $iconFile = Join-Path $repo 'apps\desktop\assets\icon.ico'
     $tray.Icon = if (Test-Path -LiteralPath $iconFile) {
@@ -508,15 +537,13 @@ try {
         } else { 'Rakazo - local service or tunnel needs attention' }
     })
     $timer.Start()
+    Write-RakazoLaunchStage 'tray active'
     Start-Process $webUrl
     [System.Windows.Forms.Application]::Run($ctx)
 } catch {
-    if ($Action -eq 'Run') {
-        try {
-            Add-Type -AssemblyName System.Windows.Forms
-            [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Rakazo launcher') | Out-Null
-        } catch { }
-    }
+    # An indefinite modal MessageBox hid the startup error and held the controller mutex.
+    # Report the stage in console and local stage log; never log secrets from exception text.
+    Write-RakazoLaunchStage ('FAILED at ' + $script:launchStage)
     throw
 } finally {
     if ($timer) { $timer.Stop(); $timer.Dispose() }
