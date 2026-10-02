@@ -40,6 +40,14 @@ foreach ($needed in @(
 if ($text.Contains('[System.Windows.Forms.MessageBox]::Show($_.Exception.Message')) {
     throw 'A blocking error dialog must not retain the controller mutex.'
 }
+if ($text -match '(?m)^\s*&\s*\$pgCtl\b.*\|\s*Out-Null') {
+    throw 'Do not pipe pg_ctl start through PowerShell: the server may retain the native output handle.'
+}
+foreach ($needed in @('$ctlProcess.WaitForExit(70000)', 'pg_ctl returned; verifying native postgres identity')) {
+    if (-not $text.Contains($needed)) {
+        throw "Bounded native PostgreSQL process startup guard absent: $needed"
+    }
+}
 $lifecycle = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Tunnel.Control.ps1'))
 $combined = $text + [Environment]::NewLine + $lifecycle
 foreach ($forbidden in @(
