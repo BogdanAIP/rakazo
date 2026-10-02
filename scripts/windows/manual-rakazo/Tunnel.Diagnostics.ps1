@@ -100,7 +100,14 @@ function Test-RakazoExistingTunnelProcessEvidence {
             [StringComparison]::OrdinalIgnoreCase
         )
         if (-not $pathMatches) { return $false }
-        $expected = [DateTimeOffset]::Parse([string]$record.started_at)
+        # The existing CLI emits UTC started_at without a timezone suffix on Windows.
+        # AssumeUniversal for an unzoned value; preserve any explicit offset if present.
+        # Do not widen the 20-second PID/path/start-time ownership tolerance.
+        $expected = [DateTimeOffset]::Parse(
+            [string]$record.started_at,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::AssumeUniversal
+        )
         $actual = [DateTimeOffset]$p.StartTime
         return [Math]::Abs(($actual - $expected).TotalSeconds) -le 20
     } catch { return $false }
