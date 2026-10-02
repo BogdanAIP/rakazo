@@ -486,11 +486,14 @@ if ($Action -eq 'Child') {
         $env:RAKAZO_WINDOWS_HOST_PAIRING_TOKEN = ''
         $env:RAKAZO_WINDOWS_HOST_ID = ''
         $env:RAKAZO_WINDOWS_HOST_CREDENTIAL = ''
-        $env:RAKAZO_WINDOWS_PROCESS_ENABLED = 'false'
-        $env:RAKAZO_WINDOWS_FILE_WRITE_ENABLED = 'false'
-        $env:RAKAZO_WINDOWS_GUI_ENABLED = 'false'
-        $env:RAKAZO_OPENCLI_PROFILE = ''
-        $env:RAKAZO_OPENCLI_ENTRY = ''
+        # Owner-requested full existing Windows Host capabilities. Keep built-in
+        # bounded command/file/GUI contracts; this does NOT create another pairing.
+        $env:RAKAZO_WINDOWS_PROCESS_ENABLED = 'true'
+        $env:RAKAZO_WINDOWS_FILE_WRITE_ENABLED = 'true'
+        $env:RAKAZO_WINDOWS_GUI_ENABLED = 'true'
+        # Do not blank OpenCLI settings. The Windows Host loads its profile and
+        # optional JS entry from the existing PRIVATE root .env (or inherited env).
+        # Profile names, browser credentials and session material are never committed.
     }
     $packages = @{
         api = '@rakazo/api'
