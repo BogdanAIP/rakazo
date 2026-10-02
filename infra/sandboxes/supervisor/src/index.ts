@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import http from "node:http";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
@@ -135,9 +136,12 @@ export function resolveDockerSocketPath(
   platform: NodeJS.Platform = process.platform,
 ) {
   if (env.DOCKER_HOST) return undefined;
-  return (
-    env.DOCKER_SOCKET ?? (platform === "win32" ? "//./pipe/docker_engine" : "/var/run/docker.sock")
-  );
+  if (env.DOCKER_SOCKET) return env.DOCKER_SOCKET;
+  if (platform === "darwin") {
+    const userSocket = path.join(env.HOME ?? homedir(), ".docker", "run", "docker.sock");
+    if (existsSync(userSocket)) return userSocket;
+  }
+  return platform === "win32" ? "//./pipe/docker_engine" : "/var/run/docker.sock";
 }
 
 app.get("/health", (c) => c.json({ ok: true, image: COMPUTER_IMAGE }));
@@ -494,6 +498,7 @@ app.post("/computers/:id/browser", async (c) => {
           `DISPLAY=${layout.display}`,
           `RAKAZO_CDP_PORT=${layout.debugPort}`,
           "HOME=/home/rakazo",
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
           "RAKAZO_BROWSER_WATCH_STDIN=1",
           "RAKAZO_BROWSER_ARGS_STDIN=1",
         ],
@@ -507,12 +512,16 @@ app.post("/computers/:id/browser", async (c) => {
       throw new Error("Page browser unavailable or interrupted");
     }
     return c.json(JSON.parse(result.stdout));
-  } catch {
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
     return c.json({
       ok: false,
       fallback: "computer_act",
       uncertain: body.command === "act",
-      error: "Page browser unavailable or interrupted. Inspect the screen before continuing.",
+      error:
+        detail && detail !== "Page browser unavailable or interrupted"
+          ? detail
+          : "Page browser unavailable or interrupted. Inspect the screen before continuing.",
     });
   }
 });
@@ -1022,6 +1031,7 @@ async function ensureComputerImage() {
           src: [
             "Dockerfile",
             "start.sh",
+            "user-env.sh",
             "control.py",
             "xcapture.c",
             "rakazo-browser",
@@ -1156,12 +1166,18 @@ async function ensureManagedScreen(
     ensureScreenCommand(index, screenKey, viewToken),
   ]);
   if (ensured.code !== 0) {
+    const browserLog = await runContainerCommand(container, [
+      "bash",
+      "-c",
+      `tail -c 4000 /tmp/rakazo/screen-${layout.displayNumber}-browser.log 2>/dev/null || true`,
+    ]).catch(() => ({ stdout: "", stderr: "", code: 1 }));
     releaseAssignedScreen(assigned, screenKey);
     await teardownReleasedScreen(assigned, screenKey, index, () =>
       runContainerCommand(container, ["bash", "-c", stopExtraScreenCommand(index, screenKey)]),
     );
     if (assigned.size === 0) computerScreens.delete(id);
-    throw new Error(ensured.stderr || `computer screen ${layout.display} failed to start`);
+    const detail = [ensured.stderr, browserLog.stdout].filter(Boolean).join("\n").trim();
+    throw new Error(detail || `computer screen ${layout.display} failed to start`);
   }
   return {
     container,
@@ -1563,7 +1579,11 @@ async function runContainerCommand(
     AttachStderr: true,
     ...(options.signal ? { AttachStdin: true } : {}),
     WorkingDir: options.workingDir ?? "/home/rakazo",
-    Env: options.env ?? ["DISPLAY=:1", "HOME=/home/rakazo"],
+    Env: options.env ?? [
+      "DISPLAY=:1",
+      "HOME=/home/rakazo",
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    ],
   });
   options.signal?.throwIfAborted();
   const stream = await exec.start({ hijack: true, stdin: Boolean(options.signal) });

@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import stat
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -263,6 +264,7 @@ class ControlArgvTest(unittest.TestCase):
 
 
 class ScriptTest(unittest.TestCase):
+    @unittest.skipUnless(sys.platform.startswith("linux"), "requires Linux /proc process arguments")
     def test_window_profile_reads_the_user_data_dir_flag(self):
         # The flag has to stay on this process. A shell would exec the sleep away.
         equals = subprocess.Popen(
@@ -286,6 +288,7 @@ class ScriptTest(unittest.TestCase):
                 proc.kill()
                 proc.wait()
 
+    @unittest.skipUnless(sys.platform.startswith("linux"), "requires Linux /proc process arguments")
     def test_script_raises_the_requested_browser_profile_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             bin_dir = Path(tmp) / "bin"

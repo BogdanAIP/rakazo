@@ -172,32 +172,35 @@ describe("provider focus command", () => {
     expect(readFileSync(recorded, "utf8").trim().split("\n")).toEqual([workspace, "notes.txt"]);
   });
 
-  it("raises the browser window for this screen's profile", async () => {
-    const env = {
-      homeDir: "/home/rakazo",
-      workspaceDir: workspace,
-      browserProfilesDir: "/home/rakazo/.browser-profiles",
-      displayStart: 1,
-    };
-    const mine = browserProfilePathForScreen("bot-1", env);
-    const other = `${mine}-other`;
-    const otherPid = hold(other);
-    const minePid = hold(mine);
-    writeFileSync(
-      windows,
-      [
-        `0x0000000a  0 ${otherPid} chromium.Chromium host Other`,
-        `0x0000000b  0 ${minePid} chromium.Chromium host Mine`,
-        "",
-      ].join("\n"),
-    );
-    const command = await focusCommand({ kind: "focus", application: "chromium" });
-    expect(command).toContain(`CHROME_USER_DATA_DIR='${mine}'`);
-    expect(command).not.toContain(`\ncd '${workspace}'\n`);
-    const result = runFocus(command);
-    expect(result.status, result.stderr).toBe(0);
-    expect(readFileSync(activated, "utf8").trim()).toBe("0x0000000b");
-  });
+  it.skipIf(process.platform !== "linux")(
+    "raises the browser window for this screen's profile",
+    async () => {
+      const env = {
+        homeDir: "/home/rakazo",
+        workspaceDir: workspace,
+        browserProfilesDir: "/home/rakazo/.browser-profiles",
+        displayStart: 1,
+      };
+      const mine = browserProfilePathForScreen("bot-1", env);
+      const other = `${mine}-other`;
+      const otherPid = hold(other);
+      const minePid = hold(mine);
+      writeFileSync(
+        windows,
+        [
+          `0x0000000a  0 ${otherPid} chromium.Chromium host Other`,
+          `0x0000000b  0 ${minePid} chromium.Chromium host Mine`,
+          "",
+        ].join("\n"),
+      );
+      const command = await focusCommand({ kind: "focus", application: "chromium" });
+      expect(command).toContain(`CHROME_USER_DATA_DIR='${mine}'`);
+      expect(command).not.toContain(`\ncd '${workspace}'\n`);
+      const result = runFocus(command);
+      expect(result.status, result.stderr).toBe(0);
+      expect(readFileSync(activated, "utf8").trim()).toBe("0x0000000b");
+    },
+  );
 
   it("raises the Chromium window launch opened for the firefox alias", async () => {
     writeFileSync(
