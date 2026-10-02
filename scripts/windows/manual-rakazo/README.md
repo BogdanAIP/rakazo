@@ -4,11 +4,18 @@ This is a **staged pilot**, not an installed replacement for the currently worki
 
 - Check Rakazo.cmd (or Rakazo.ps1 -Action Preflight) is read-only and prints booleans only; it never prints the local .env, session material or tunnel keys.
 - Validate.ps1 parses the PowerShell script and checks that it does not contain obvious Windows-autostart, remote tunnel creation or destructive Compose commands.
-- Start Rakazo.cmd runs only when prerequisites pass and no existing API/Web, old tray, external Worker or Windows Host is detected. It launches one API, Worker, Web and **already-paired** Windows Host and displays a tray icon. It requires a conclusively stopped existing R before attempting same-alias connection; an already-live or ambiguous R is never taken over or duplicated.
-- Quit Rakazo first requests targeted shutdown of R only when its exact managed process identity was recorded after this controller's own successful connect, then stops its API/Worker/Web/Host child process trees. It never mass-stops tunnel-client.exe, unrelated node.exe processes, PostgreSQL or Docker Engine.
+- Start Rakazo.cmd runs only when prerequisites pass and no existing API/Web, old tray, external Worker or Windows Host is detected. It launches one API, Worker, Web and **already-paired** Windows Host and displays a tray icon. For the existing R it has two disjoint modes: if conclusively stopped, connect the same registered identity and own only its verified newly started process; if fully live (same ID, ready/healthy, live loopback health, exact PID/path/UTC start time), borrow it **without a connect or stop entitlement**. Ambiguous R status fails closed.
+- Quit Rakazo first requests targeted shutdown of R only when its exact managed process identity was recorded after this controller's own successful connect, then stops its API/Worker/Web/Host child process trees. A borrowed already-live R always remains running on Quit or startup failure; the next launch may reverify and borrow it again. It never mass-stops tunnel-client.exe, unrelated node.exe processes, PostgreSQL or Docker Engine.
 - The controller uses the source checkout, Corepack, a locally updated private .env and the existing restored native PostgreSQL cluster. No Docker application stack, Host pairing, API secret or remote tunnel is created.
 - Status is a **local** indicator. An R runtime reporting ready does not prove ChatGPT can see the Host; confirm real Plugin R health, Windows Host list and fresh heartbeat separately.
 - Logs go to the current user's LocalAppData/Rakazo/manual-launcher directory. These logs can contain application details; do not upload or commit them without review.
+
+
+## Live R recovery checkpoint (2026-10-02)
+
+The physical pilot successfully started native PostgreSQL, API, Worker, Web and the previously paired Host. Its first R verification failed because the existing CLI returns an unzoned **UTC** `process.started_at` value, which Windows PowerShell had interpreted as local time (+03:00). A read-only physical check showed the exact client path and process identity matched and the difference fell from 10800.5 to 0.5 seconds when parsed using `AssumeUniversal`. The fix is in `Tunnel.Diagnostics.ps1`, and the user's read-only `Check-ExistingR.ps1` then passed all checks, including local health and identity.
+
+The original registered R was left **running** by that failed attempt. Current `Run` code therefore permits the verified live identity as **borrowed/unowned**, rechecking its exact PID and start record after other local services start. This path never invokes `runtimes connect` or records R stop authority. Its Preflight reports `ExistingTunnelAttachAllowed=True`; `ExistingTunnelColdStartAllowed=False` is expected while R remains live. An ambiguous or changed identity fails closed. This is source-code status; perform local Validate, live Preflight, Run, Plugin R health/Host heartbeat, Quit and repeat Run before calling the pilot complete.
 
 ## Native PostgreSQL cutover checkpoint (2026-10-02; not yet physically tested)
 
