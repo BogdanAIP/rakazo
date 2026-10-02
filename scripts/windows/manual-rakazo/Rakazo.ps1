@@ -341,8 +341,31 @@ function Ensure-NativePostgres {
         throw 'The target PostgreSQL port is occupied by an unverified process.'
     }
     $pgCtl = Join-Path $spec.Bin 'pg_ctl.exe'
-    & $pgCtl -D $spec.Data -l $spec.Log -o '-h 127.0.0.1 -p 5434' -w -t 60 start | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Native PostgreSQL did not start successfully.' }
+    # PostgreSQL can inherit an open native pipeline handle on Windows. Running
+    # pg_ctl through PowerShell's "| Out-Null" may then wait on the *server*
+    # long after pg_ctl has started it. Wait only for the pg_ctl process itself.
+    $psi = [Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName = $pgCtl
+    $psi.Arguments = '-D "' + $spec.Data + '" -l "' + $spec.Log +
+        '" -o "-h 127.0.0.1 -p 5434" -w -t 60 start'
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    # Do not redirect stdout/stderr into a pipe inherited by a long-lived server.
+    $ctlProcess = [Diagnostics.Process]::new()
+    $ctlProcess.StartInfo = $psi
+    try {
+        if (-not $ctlProcess.Start()) { throw 'Could not start native PostgreSQL control process.' }
+        if (-not $ctlProcess.WaitForExit(70000)) {
+            try { $ctlProcess.Kill() } catch { }
+            throw 'Native pg_ctl exceeded its bounded 70-second startup wait. Check cluster state before retrying.'
+        }
+        if ($ctlProcess.ExitCode -ne 0) {
+            throw 'Native pg_ctl reported startup failure. Inspect the dedicated postgres17.log; do not reset data.'
+        }
+    } finally {
+        $ctlProcess.Dispose()
+    }
+    Write-RakazoLaunchStage 'pg_ctl returned; verifying native postgres identity'
     $deadline = [DateTime]::UtcNow.AddSeconds(20)
     do {
         $after = Get-NativePostgresDiagnostic
