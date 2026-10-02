@@ -30,8 +30,15 @@ foreach ($forbidden in @(
 )) {
     if ($text.Contains($forbidden)) { throw "Forbidden action present: $forbidden" }
 }
-foreach ($needed in @('rakazo_next', 'ExistingTunnelReady', 'Owned', 'RAKAZO_WINDOWS_PROCESS_ENABLED')) {
+foreach ($needed in @(
+    'rakazo_next', 'ExistingTunnelReady', 'Owned', 'RAKAZO_WINDOWS_PROCESS_ENABLED',
+    'Write-RakazoLaunchStage', 'launcher-stage.log', 'native postgres ready',
+    'api child started; waiting for health'
+)) {
     if (-not $text.Contains($needed)) { throw "Required pilot guard absent: $needed" }
+}
+if ($text.Contains('[System.Windows.Forms.MessageBox]::Show($_.Exception.Message')) {
+    throw 'A blocking error dialog must not retain the controller mutex.'
 }
 $lifecycle = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Tunnel.Control.ps1'))
 $combined = $text + [Environment]::NewLine + $lifecycle
