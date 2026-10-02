@@ -64,18 +64,18 @@ foreach ($forbidden in @(
 # Physical Host capability regression: the owner enabled the existing host's
 # process, file write and GUI backends; OpenCLI must read PRIVATE configuration.
 foreach ($needed in @(
-    "$env:RAKAZO_WINDOWS_PROCESS_ENABLED = 'true'",
-    "$env:RAKAZO_WINDOWS_FILE_WRITE_ENABLED = 'true'",
-    "$env:RAKAZO_WINDOWS_GUI_ENABLED = 'true'"
+    '$env:RAKAZO_WINDOWS_PROCESS_ENABLED = ''true''',
+    '$env:RAKAZO_WINDOWS_FILE_WRITE_ENABLED = ''true''',
+    '$env:RAKAZO_WINDOWS_GUI_ENABLED = ''true'''
 )) {
     if (-not $text.Contains($needed)) { throw "Windows Host capability flag missing: $needed" }
 }
 foreach ($forbidden in @(
-    "$env:RAKAZO_WINDOWS_PROCESS_ENABLED = 'false'",
-    "$env:RAKAZO_WINDOWS_FILE_WRITE_ENABLED = 'false'",
-    "$env:RAKAZO_WINDOWS_GUI_ENABLED = 'false'",
-    "$env:RAKAZO_OPENCLI_PROFILE = ''",
-    "$env:RAKAZO_OPENCLI_ENTRY = ''"
+    '$env:RAKAZO_WINDOWS_PROCESS_ENABLED = ''false''',
+    '$env:RAKAZO_WINDOWS_FILE_WRITE_ENABLED = ''false''',
+    '$env:RAKAZO_WINDOWS_GUI_ENABLED = ''false''',
+    '$env:RAKAZO_OPENCLI_PROFILE = ''''',
+    '$env:RAKAZO_OPENCLI_ENTRY = '''''
 )) {
     if ($text.Contains($forbidden)) { throw "Windows Host capability disabled by launcher: $forbidden" }
 }
