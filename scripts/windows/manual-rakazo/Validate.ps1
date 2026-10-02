@@ -54,6 +54,28 @@ foreach ($needed in @('$ctlProcess.WaitForExit(70000)', 'pg_ctl returned; verify
         throw "Bounded native PostgreSQL process startup guard absent: $needed"
     }
 }
+# Regression gate: tunnel-client reports an unzoned UTC start timestamp.
+# The ownership check must preserve the existing PID/path/20s guards.
+$diagnostics = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Tunnel.Diagnostics.ps1'))
+foreach ($needed in @(
+    '[Globalization.DateTimeStyles]::AssumeUniversal',
+    '[Globalization.CultureInfo]::InvariantCulture',
+    '[IO.Path]::GetFullPath($ClientPath)',
+    'TotalSeconds) -le 20'
+)) {
+    if (-not $diagnostics.Contains($needed)) {
+        throw "Tunnel identity or UTC timestamp guard absent: $needed"
+    }
+}
+$timestampStyle = [Globalization.DateTimeStyles]::AssumeUniversal
+$culture = [Globalization.CultureInfo]::InvariantCulture
+$sampleUtc = [DateTimeOffset]::Parse('2026-10-02T19:24:58+00:00', $culture)
+$sampleUnzoned = [DateTimeOffset]::Parse('2026-10-02T19:24:58', $culture, $timestampStyle)
+$sampleOffset = [DateTimeOffset]::Parse('2026-10-02T22:24:58+03:00', $culture, $timestampStyle)
+if ($sampleUtc.UtcDateTime.Ticks -ne $sampleUnzoned.UtcDateTime.Ticks -or
+    $sampleUtc.UtcDateTime.Ticks -ne $sampleOffset.UtcDateTime.Ticks) {
+    throw 'Tunnel start timestamp UTC regression failed.'
+}
 $lifecycle = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Tunnel.Control.ps1'))
 $combined = $text + [Environment]::NewLine + $lifecycle
 foreach ($forbidden in @(
