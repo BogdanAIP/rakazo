@@ -27,7 +27,7 @@ foreach ($needed in @(
     'Option Explicit',
     'WScript.ScriptFullName',
     'fs.BuildPath(root, "Rakazo.ps1")',
-    'shell.Run commandLine, 0, False',
+    'controllerExit = shell.Run(commandLine, 0, True)',
     ' -WindowStyle Hidden',
     ' -Action Run'
 )) {
@@ -121,6 +121,24 @@ foreach ($needed in @(
 }
 if ($text -notmatch '(?s)if \(\$null -ne \$borrowedTunnel\) \{\s*Assert-SameBorrowedTunnel \$borrowedTunnel.*?\}\s*else\s*\{.*?Start-ControllerTunnel') {
     throw 'Existing live R and cold-start R paths must remain distinct; never connect the borrowed R.'
+}
+# Verify bounded, identity-scoped cleanup instead of the old graceful
+# taskkill sequence that could strand descendants when the parent exits first.
+foreach ($needed in @(
+    "tray quit requested",
+    "controller shutdown cleanup started",
+    "controller shutdown completed; native ports free",
+    "controller cleanup incomplete; native ports still occupied",
+    '& $taskkill /PID $entry.Pid /T /F',
+    '$p.StartTime.ToUniversalTime() -ne $entry.StartTime'
+)) {
+    if (-not $text.Contains($needed)) { throw "Owned-tree cleanup guard absent: $needed" }
+}
+if ($text.Contains('& $taskkill /PID $entry.Pid /T 2>$null')) {
+    throw 'The old two-phase graceful taskkill can strand descendant Node processes.'
+}
+if (-not $guiText.Contains('gui-exit.log')) {
+    throw 'Invisible launcher must record an exit status for troubleshooting.'
 }
 $lifecycle = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Tunnel.Control.ps1'))
 $combined = $text + [Environment]::NewLine + $lifecycle
