@@ -1,6 +1,6 @@
 # Manually launched native Rakazo (Windows pilot)
 
-This is a **staged pilot**, not an installed replacement for the currently working launcher. It is deliberately fail-closed. Do not run Start Rakazo.cmd until its physical validation gates pass and the foreground API/Worker/Web/Host pilot windows have been deliberately handed off. The existing Plugin R tunnel/alias and Windows Host pairing remain authoritative; this code creates neither.
+This is a **physically exercised manual-launch pilot**, not a reason to delete the rollback launcher. It is deliberately fail-closed. The native Start → Quit → Start sequence, live Plugin R health and one Windows Host heartbeat were physically confirmed on 2026-10-02. The existing Plugin R tunnel/alias and Windows Host pairing remain authoritative; this code creates neither. A console-free shortcut upgrade is pending its physical Windows test.
 
 - Check Rakazo.cmd (or Rakazo.ps1 -Action Preflight) is read-only and prints booleans only; it never prints the local .env, session material or tunnel keys.
 - Validate.ps1 parses the PowerShell script and checks that it does not contain obvious Windows-autostart, remote tunnel creation or destructive Compose commands.
@@ -10,6 +10,14 @@ This is a **staged pilot**, not an installed replacement for the currently worki
 - Status is a **local** indicator. An R runtime reporting ready does not prove ChatGPT can see the Host; confirm real Plugin R health, Windows Host list and fresh heartbeat separately.
 - Logs go to the current user's LocalAppData/Rakazo/manual-launcher directory. These logs can contain application details; do not upload or commit them without review.
 
+
+## Console-free shortcut checkpoint (2026-10-02; physical retest required)
+
+The first canonical `Rakazo.lnk` worked (browser opened, one tray appeared, API/Worker/Web/Host and R healthy), but Windows Terminal still displayed a foreground PowerShell tab despite `-WindowStyle Hidden`. The installed shortcut directly targeted `powershell.exe`, which can be intercepted by the user's default terminal configuration.
+
+`Launch-Rakazo.vbs` is a minimal, standard Windows GUI host entry: `wscript.exe` invokes the **same** guarded `Rakazo.ps1 -Action Run` with `WScript.Shell.Run ... 0, False`, without adding another controller, alias, process manager, service, scheduled task or Startup registration. `Install-Shortcut.ps1 -Install` recognizes and upgrades **only** the exact shortcut created by the previous installer, preserving its name/icon; a different `Rakazo.lnk` is never overwritten. A later invocation is idempotent.
+
+On the laptop, leave the currently running Rakazo alone while fetching new source and running `Validate.ps1` and `Install-Shortcut.ps1` without `-Install` (preview). Then use the tray's `Quit Rakazo`, confirm API/Web ports clear and existing R is eligible for read-only borrow, and invoke `Install-Shortcut.ps1 -Install` exactly once. Double-click the updated desktop icon. Verify **no visible terminal**, one browser page/tray, `launcher-stage.log` reaching `tray active`, Plugin R health and a fresh one-Host heartbeat. If a terminal still appears, retain logs and report it; do not disable the Windows default terminal or mass-close processes to hide this issue. The original V4 shortcut and database rollback remain preserved.
 
 ## Live R recovery checkpoint (2026-10-02)
 
