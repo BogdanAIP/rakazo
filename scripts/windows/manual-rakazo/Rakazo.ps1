@@ -217,6 +217,12 @@ function Get-Preflight {
     $tunnelColdStartAllowed = $tunnel.CliOk -and $tunnel.IdentityMatches -and
         -not ($tunnel.ProcessRunning -or $tunnel.VerifiedLocalProcess -or $tunnel.LiveHealth -or
             $tunnel.Ready -or $tunnel.Healthy)
+    # A fully verified running R may be reused, but is always BORROWED:
+    # this controller must not connect it again or stop it on Quit.
+    $tunnelAttachAllowed = $tunnel.CliOk -and $tunnel.IdentityMatches -and
+        $tunnel.ProcessRunning -and $tunnel.VerifiedLocalProcess -and
+        $tunnel.LiveHealth -and $tunnel.Ready -and $tunnel.Healthy -and
+        $tunnel.RuntimeState -ceq 'ready'
     return [pscustomobject]@{
         NativePostgresRuntimePresent = $database.NativePostgresRuntimePresent
         NativePostgresClusterVerified = $database.NativePostgresClusterVerified
@@ -245,6 +251,7 @@ function Get-Preflight {
         ExistingTunnelHealthy = $tunnel.Healthy
         ExistingTunnelRuntimeState = $tunnel.RuntimeState
         ExistingTunnelColdStartAllowed = $tunnelColdStartAllowed
+        ExistingTunnelAttachAllowed = $tunnelAttachAllowed
         OldTrayRunning = [bool](@(Get-CimInstance Win32_Process | Where-Object {
             $_.Name -in @('powershell.exe', 'pwsh.exe') -and
             ([string]$_.CommandLine).Contains('Rakazo.Tray.ps1')
@@ -278,6 +285,33 @@ function Get-ExistingTunnelSpec {
         McpCommand = [string]$cfg.McpCommand
         KeyPath = Join-Path $env:LOCALAPPDATA 'RakazoTunnel\secrets\runtime-key.dpapi'
         SessionPath = Join-Path $env:LOCALAPPDATA 'RakazoTunnel\secrets\session-token.dpapi'
+    }
+}
+function Get-VerifiedRunningTunnelIdentity {
+    # Returns only identity for the original, live registered R. Does not connect,
+    # create, adopt or grant ownership. The raw authenticated CLI payload stays private.
+    $spec = Get-ExistingTunnelSpec
+    $result = Get-RakazoAuthenticatedTunnelStatus -ClientPath $spec.ClientPath -Alias 'rakazo' -EncryptedKeyPath $spec.KeyPath
+    if (-not [string]::Equals([string]$result.tunnel_id, $spec.TunnelId, [StringComparison]::Ordinal) -or
+        $result.process_running -ne $true -or $result.ready -ne $true -or $result.healthy -ne $true -or
+        [string]$result.runtime_state -cne 'ready' -or
+        -not (Test-RakazoExistingTunnelHealthEndpoint -Url ([string]$result.health_url)) -or
+        -not (Test-RakazoExistingTunnelProcessEvidence -Runtime $result -ClientPath $spec.ClientPath)) {
+        throw 'Existing R is not fully verified for read-only reuse. No connect or takeover.'
+    }
+    return [pscustomobject]@{
+        Pid = [int]$result.process.pid
+        StartedAt = [string]$result.process.started_at
+        TunnelId = $spec.TunnelId
+    }
+}
+function Assert-SameBorrowedTunnel($previous) {
+    if ($null -eq $previous) { throw 'Missing borrowed tunnel identity.' }
+    $current = Get-VerifiedRunningTunnelIdentity
+    if ($current.Pid -ne $previous.Pid -or
+        $current.StartedAt -cne $previous.StartedAt -or
+        $current.TunnelId -cne $previous.TunnelId) {
+        throw 'The existing R identity changed while native services started. Leave its lifecycle untouched.'
     }
 }
 function Start-ControllerTunnel {
@@ -498,10 +532,14 @@ try {
     if ($before.ApiPortOccupied -or $before.WebPortOccupied) {
         throw 'API/Web is already running outside this controller. Close the pilot windows during a planned handoff; never duplicate them.'
     }
-    if (-not ($before.ExistingTunnelCliOk -and $before.ExistingTunnelIdMatches) -or
-        $before.ExistingTunnelProcessRunning -or $before.ExistingTunnelProcessVerified -or
-        $before.ExistingTunnelLiveHealth -or $before.ExistingTunnelReady -or $before.ExistingTunnelHealthy) {
-        throw 'The original R is already active or not conclusively stopped. Planned handoff required; no duplicate connect.'
+    if (-not ($before.ExistingTunnelColdStartAllowed -or $before.ExistingTunnelAttachAllowed)) {
+        throw 'Existing R is neither conclusively stopped nor fully verified for read-only reuse. No duplicate connect.'
+    }
+    $borrowedTunnel = $null
+    if ($before.ExistingTunnelAttachAllowed) {
+        # Recheck under the controller mutex and pin exact identity before other startup work.
+        $borrowedTunnel = Get-VerifiedRunningTunnelIdentity
+        Write-RakazoLaunchStage 'existing R verified for read-only reuse (unowned)'
     }
     Write-RakazoLaunchStage 'native postgres check/start'
     Ensure-NativePostgres
@@ -525,9 +563,14 @@ try {
     Start-Sleep -Seconds 3
     $windowsHostProcess.Refresh()
     if ($windowsHostProcess.HasExited) { throw 'Previously paired Windows Host exited early; inspect manual-launcher logs.' }
-    Write-RakazoLaunchStage 'connecting existing registered R'
-    Start-ControllerTunnel
-    Write-RakazoLaunchStage 'existing R connected; creating tray'
+    if ($null -ne $borrowedTunnel) {
+        Assert-SameBorrowedTunnel $borrowedTunnel
+        Write-RakazoLaunchStage 'existing R reused read-only; creating tray (R unowned)'
+    } else {
+        Write-RakazoLaunchStage 'connecting existing registered R'
+        Start-ControllerTunnel
+        Write-RakazoLaunchStage 'existing R connected; creating tray (R owned)'
+    }
     $tray = [System.Windows.Forms.NotifyIcon]::new()
     $iconFile = Join-Path $repo 'apps\desktop\assets\icon.ico'
     $tray.Icon = if (Test-Path -LiteralPath $iconFile) {
