@@ -114,10 +114,12 @@ function Get-NativePostgresDiagnostic {
             return [pscustomobject]$state
         }
         $pidLines = @(Get-Content -LiteralPath $pidFile)
-        if ($pidLines.Count -lt 5) { return [pscustomobject]$state }
+        # On Windows PostgreSQL may leave postmaster.pid line 5 (listen addresses)
+        # empty even when -h 127.0.0.1 was used. Validate the actual bound TCP
+        # listener below instead of treating this advisory line as authoritative.
+        if ($pidLines.Count -lt 4) { return [pscustomobject]$state }
         $serverPid = [int]$pidLines[0].Trim()
-        if ($serverPid -le 0 -or $pidLines[3].Trim() -cne '5434' -or
-            $pidLines[4].Trim() -cne '127.0.0.1') {
+        if ($serverPid -le 0 -or $pidLines[3].Trim() -cne '5434') {
             return [pscustomobject]$state
         }
         $expectedData = [IO.Path]::GetFullPath($spec.Data).TrimEnd('\', '/')
