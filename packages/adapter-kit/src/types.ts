@@ -275,11 +275,17 @@ export interface MemorySearchResult {
   score: number;
 }
 
+/** A full-document save lost the race to another writer. The caller should read again. */
+export const MEMORY_REVISION_CONFLICT_ERROR =
+  "Shared memory changed since it was read. Read the latest version and save again.";
+
 export interface MemoryCommitRequest {
   scope: "bot" | "user";
   botId?: string;
   path: string;
   content: string;
+  /** When set, commit fails if the live document revision is no longer this value. */
+  expectedRevision?: number;
   sourceRunId?: string;
   sourceThreadId?: string;
 }

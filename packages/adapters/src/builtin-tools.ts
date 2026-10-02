@@ -491,6 +491,19 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    name: "save_shared_memory",
+    description:
+      "Save a Space shared memory document every bot reads. Replaces the full content, so include everything it should keep.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Document name, for example MEMORY.md." },
+        content: { type: "string", description: "The document's complete new content." },
+      },
+      required: ["path", "content"],
+    },
+  },
+  {
     name: "web_search",
     description:
       "Search the public web. Returns titles, URLs, and snippets. Use when you need current information or links; follow with web_fetch to read a page. Does not need a computer.",
@@ -1028,3 +1041,16 @@ export const agentConnectionTools: ConnectorTool[] = [
     },
   },
 ];
+
+/** Shared documents are read by every bot, so a single save stays bounded. */
+export const MAX_SHARED_MEMORY_CHARS = 4_000;
+
+export function sharedMemorySaveError(args: Record<string, unknown>): string | undefined {
+  const path = String(args.path ?? "").trim();
+  if (!path) return "path is required";
+  const content = String(args.content ?? "");
+  if (content.length > MAX_SHARED_MEMORY_CHARS) {
+    return `content exceeds ${MAX_SHARED_MEMORY_CHARS} characters`;
+  }
+  return undefined;
+}

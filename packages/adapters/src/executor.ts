@@ -26,6 +26,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import {
   historyCompactJob,
+  MEMORY_REVISION_CONFLICT_ERROR,
   routineJobKey,
   routineWakeupJob,
   runContinueJob,
@@ -175,7 +176,7 @@ import {
   browserNavigateFromTool,
   browserSnapshotFromTool,
 } from "./browser-tools.js";
-import { agentConnectionTools, builtinAgentTools } from "./builtin-tools.js";
+import { agentConnectionTools, builtinAgentTools, sharedMemorySaveError } from "./builtin-tools.js";
 import { archiveSpawnedBot, spawnBot } from "./child-bots.js";
 import { type CloudAgentConnection, cloudAgentsEnabled } from "./cloud-agent-factory.js";
 import { executeCloudAgentTool } from "./cloud-agent-service.js";
@@ -2830,6 +2831,34 @@ export function createRunExecutor(deps: ExecutorDeps) {
             );
             return finish({ ok: true });
           }
+          if (name === "save_shared_memory") {
+            const invalid = sharedMemorySaveError(args);
+            if (invalid) return finish({ error: invalid });
+            const path = String(args.path ?? "").trim();
+            // The save replaces the whole document. Pass the revision just read so a
+            // concurrent edit is rejected instead of overwritten.
+            const snapshot = await deps.memory.read({ scope: "user", path }, context);
+            const expectedRevision = snapshot.documents[0]?.revision ?? 0;
+            try {
+              const saved = await deps.memory.commit(
+                {
+                  scope: "user",
+                  path,
+                  content: String(args.content ?? ""),
+                  expectedRevision,
+                  sourceRunId: runId,
+                  sourceThreadId: thread.id,
+                },
+                context,
+              );
+              return finish({ ok: true, path: saved.path, revision: saved.revision });
+            } catch (error) {
+              const message =
+                error instanceof Error ? error.message : "Could not save shared memory.";
+              if (message === MEMORY_REVISION_CONFLICT_ERROR) return finish({ error: message });
+              throw error;
+            }
+          }
           if (name === "web_search") {
             return finish(await webSearchFromTool(web, context, args));
           }
@@ -4898,9 +4927,14 @@ export function selectBuiltinToolsForRun(options: {
     (tool) =>
       (options.voiceCall || tool.name !== "end_call") &&
       (!options.messagingChannelRun ||
-        (!["remember", "save_memory", "recall_memory", "forget_memory", "task_catalog"].includes(
-          tool.name,
-        ) &&
+        (![
+          "remember",
+          "save_shared_memory",
+          "save_memory",
+          "recall_memory",
+          "forget_memory",
+          "task_catalog",
+        ].includes(tool.name) &&
           !tool.name.startsWith("scratchpad_"))),
   );
 }
