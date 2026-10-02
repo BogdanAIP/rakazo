@@ -520,11 +520,11 @@ try {
     Write-RakazoLaunchStage 'web child started; waiting for health'
     if (-not (Wait-Http $webUrl 60 $web)) { throw 'Native Web startup failed or timed out; inspect manual-launcher logs.' }
     Write-RakazoLaunchStage 'web ready'
-    $host = Start-OwnedRole 'host'
+    $windowsHostProcess = Start-OwnedRole 'host'
     Write-RakazoLaunchStage 'host child started'
     Start-Sleep -Seconds 3
-    $host.Refresh()
-    if ($host.HasExited) { throw 'Previously paired Windows Host exited early; inspect manual-launcher logs.' }
+    $windowsHostProcess.Refresh()
+    if ($windowsHostProcess.HasExited) { throw 'Previously paired Windows Host exited early; inspect manual-launcher logs.' }
     Write-RakazoLaunchStage 'connecting existing registered R'
     Start-ControllerTunnel
     Write-RakazoLaunchStage 'existing R connected; creating tray'
