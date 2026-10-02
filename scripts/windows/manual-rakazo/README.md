@@ -6,9 +6,20 @@ This is a **staged pilot**, not an installed replacement for the currently worki
 - Validate.ps1 parses the PowerShell script and checks that it does not contain obvious Windows-autostart, remote tunnel creation or destructive Compose commands.
 - Start Rakazo.cmd runs only when prerequisites pass and no existing API/Web, old tray, external Worker or Windows Host is detected. It launches one API, Worker, Web and **already-paired** Windows Host and displays a tray icon. It requires a conclusively stopped existing R before attempting same-alias connection; an already-live or ambiguous R is never taken over or duplicated.
 - Quit Rakazo first requests targeted shutdown of R only when its exact managed process identity was recorded after this controller's own successful connect, then stops its API/Worker/Web/Host child process trees. It never mass-stops tunnel-client.exe, unrelated node.exe processes, PostgreSQL or Docker Engine.
-- The controller uses the source checkout, Corepack, the existing .env and existing PostgreSQL container. No second database, Docker application stack, Host pairing, API secret or remote tunnel.
+- The controller uses the source checkout, Corepack, a locally updated private .env and the existing restored native PostgreSQL cluster. No Docker application stack, Host pairing, API secret or remote tunnel is created.
 - Status is a **local** indicator. An R runtime reporting ready does not prove ChatGPT can see the Host; confirm real Plugin R health, Windows Host list and fresh heartbeat separately.
 - Logs go to the current user's LocalAppData/Rakazo/manual-launcher directory. These logs can contain application details; do not upload or commit them without review.
+
+## Native PostgreSQL cutover checkpoint (2026-10-02; not yet physically tested)
+
+The restored database is now in a **separate native PostgreSQL 17.11** cluster, not the AIHOT instance:
+- Runtime: $HOME/RakazoRuntime/postgresql; data: $HOME/RakazoData/postgres17; loopback port: 5434; database/user: rakazo_next / rakazo
+- Source Docker PostgreSQL 16 and both backups remain untouched for rollback. The source and target have 71 user tables, 458 total rows, 90 finished Prisma migrations, one Windows Host and matching per-table row-count fingerprint; this does not prove byte-for-byte row equality
+- A source archive created on 2026-10-02 has SHA-256 D209391019CF07D213A565E35414D7ED742EA1F1F00E4AD9663B9B857377A974; keep backups and local credentials private
+- Native controller now **requires** DATABASE_URL to name postgresql://rakazo@127.0.0.1:5434/rakazo_next (password omitted here). It must not print connection secrets. The local .env has NOT been switched by a GitHub commit
+- Read-only Preflight checks the expected paths, PG_VERSION, exact live PID/path/start/port evidence and port readiness. When stopped, Run may start only this prepared cluster through pg_ctl. It does not create/reset a database, touch AIHOT, start Docker, register Windows autostart or stop PostgreSQL on Quit
+- Do not click Start until the new code has passed physical Windows Validate and Preflight, the private .env was separately backed up and edited, and no legacy API/Web/Worker/Host/R is live or ambiguous
+- Static code changes in GitHub are **not** evidence of a successful native Run; perform an explicit Start → R health/Host read-only verification → Quit → Start pilot before retiring V4
 
 ## First physical validation
 
@@ -31,7 +42,7 @@ On 2026-10-01 the canonical checkout fast-forwarded to the first pilot revision 
 
 ## Implementation checkpoint — built, not yet physically cut over
 
-The single-click source now includes authenticated status, exact-alias serialized connect/stop, an explicit cold-start gate and process identity evidence for shutdown. It also starts/reuses Docker Desktop only to run the existing named PostgreSQL container, waiting for its health check; never creates or resets the database, starts the old application Compose stack, or stops the shared engine on Quit. Run is **not a live takeover action** and will reject the currently active V4 tray, foreground API/Web, Worker/Host and live tunnel. These new routines still require the current user's Windows parser gate and one planned physical start/stop/restart test. The historical notes above record earlier revisions; they are not the current source behavior.
+The single-click source includes authenticated status, exact-alias serialized connect/stop, an explicit cold-start gate and process identity evidence for shutdown. The earlier Docker-based dependency has now been replaced in GitHub by the native PostgreSQL 17 controller described above; physical testing and local .env cutover are still pending. Run is **not a live takeover action** and will reject the currently active V4 tray, foreground API/Web, Worker/Host and live tunnel. These new routines still require the current user's Windows parser gate and one planned physical start/stop/restart test. The historical notes above record earlier revisions; they are not the current source behavior.
 
 ## One-time physical handoff (not executed)
 
