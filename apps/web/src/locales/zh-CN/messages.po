@@ -1222,6 +1222,10 @@ msgstr "无法加载 MCP 服务器"
 msgid "Could not load model settings"
 msgstr "无法加载模型设置"
 
+#: src/pages/RoutineRunHistory.tsx
+msgid "Could not load run history"
+msgstr "无法加载运行历史记录"
+
 #: src/pages/KnowledgeSection.tsx
 msgid "Could not load skill"
 msgstr "无法加载技能"
@@ -2177,6 +2181,10 @@ msgstr "加载更早的消息"
 msgid "Load more"
 msgstr ""
 
+#: src/pages/RoutineRunHistory.tsx
+msgid "Load older runs"
+msgstr "加载更早的运行记录"
+
 #: src/pages/ActivityList.tsx
 msgid "Loading activity…"
 msgstr "正在加载动态…"
@@ -2214,6 +2222,7 @@ msgstr "正在加载语音提供方…"
 #: src/pages/IntegrationSetup.tsx
 #: src/pages/Onboarding.tsx
 #: src/pages/PeerMessagesOverlay.tsx
+#: src/pages/RoutineRunHistory.tsx
 #: src/pages/Shell.tsx
 msgid "Loading…"
 msgstr "加载中…"
@@ -2610,7 +2619,7 @@ msgstr ""
 msgid "No results"
 msgstr "无结果"
 
-#: src/pages/RoutineEditor.tsx
+#: src/pages/RoutineRunHistory.tsx
 msgid "No runs yet"
 msgstr "还没有运行记录"
 
@@ -2979,6 +2988,10 @@ msgstr ""
 msgid "Recreating the computer"
 msgstr ""
 
+#: src/pages/RoutineRunHistory.tsx
+msgid "Refresh"
+msgstr "刷新"
+
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Refresh view"
 msgstr ""
@@ -3179,7 +3192,7 @@ msgstr "例行任务"
 msgid "Run at"
 msgstr "运行时间"
 
-#: src/pages/RoutineEditor.tsx
+#: src/pages/RoutineRunHistory.tsx
 msgid "Run history"
 msgstr "运行记录"
 
@@ -3872,6 +3885,10 @@ msgstr "正在校验…"
 #: src/pages/Artifacts.tsx
 msgid "Version"
 msgstr ""
+
+#: src/pages/RoutineRunHistory.tsx
+msgid "View chat"
+msgstr "查看聊天"
 
 #: src/pages/SettingsOverlay.tsx
 #: src/pages/Shell.tsx
