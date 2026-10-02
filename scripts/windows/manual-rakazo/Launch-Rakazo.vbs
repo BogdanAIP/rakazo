@@ -16,10 +16,26 @@ If Not fs.FileExists(launcher) Or Not fs.FileExists(powershell) Then
 End If
 
 commandLine = quote & powershell & quote & " -NoLogo -NoProfile -NonInteractive -Sta -WindowStyle Hidden -ExecutionPolicy Bypass -File " & quote & launcher & quote & " -Action Run"
+' Keep the invisible GUI host alive while the controller runs. An asynchronous
+' host exits immediately and gives us no exit code or lifetime evidence.
+Dim controllerExit
 On Error Resume Next
-shell.Run commandLine, 0, False
+controllerExit = shell.Run(commandLine, 0, True)
 If Err.Number <> 0 Then
     WScript.Echo "Rakazo could not start. Check the launcher files."
     WScript.Quit 1
 End If
 On Error GoTo 0
+
+' No secret material or command line is logged. Errors from the controller
+' itself are recorded by its stage logger; this exit code is supplementary.
+Dim stateFolder, exitLog
+stateFolder = shell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Rakazo\manual-launcher"
+On Error Resume Next
+If fs.FolderExists(stateFolder) Then
+    Set exitLog = fs.OpenTextFile(fs.BuildPath(stateFolder, "gui-exit.log"), 8, True)
+    exitLog.WriteLine Now & " GUI controller exit code: " & CStr(controllerExit)
+    exitLog.Close
+End If
+On Error GoTo 0
+WScript.Quit controllerExit
