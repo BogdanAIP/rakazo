@@ -41,7 +41,10 @@ export function loadOpenCliConfiguration(
 }
 
 export function openCliAvailable(config = loadOpenCliConfiguration()): boolean {
-  return Boolean(config.profile && path.isAbsolute(config.entry) && existsSync(config.entry));
+  // A single connected OpenCLI browser profile is resolved by OpenCLI itself.
+  // Multiple profiles without a configured default must fail inside OpenCLI,
+  // never guess a signed-in account in the Rakazo backend.
+  return Boolean(path.isAbsolute(config.entry) && existsSync(config.entry));
 }
 
 export async function runOpenCliProcess(entry: string, argv: string[]): Promise<string> {
@@ -140,14 +143,13 @@ export class WindowsOpenCliBackend {
     if (!SAFE_BOT_ID.test(botId)) throw new Error("Invalid browser bot identity");
     if (!this.available()) {
       throw new Error(
-        "OpenCLI is unavailable: set RAKAZO_OPENCLI_PROFILE and a valid RAKAZO_OPENCLI_ENTRY",
+        "OpenCLI is unavailable: provide a valid RAKAZO_OPENCLI_ENTRY or install the existing OpenCLI entry",
       );
     }
     const session = `rakazo-${botId}`;
     const invoke = (...args: string[]) =>
       this.runner(this.config.entry, [
-        "--profile",
-        this.config.profile,
+        ...(this.config.profile ? ["--profile", this.config.profile] : []),
         "browser",
         session,
         ...args,
