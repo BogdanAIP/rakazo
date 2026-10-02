@@ -76,6 +76,21 @@ if ($sampleUtc.UtcDateTime.Ticks -ne $sampleUnzoned.UtcDateTime.Ticks -or
     $sampleUtc.UtcDateTime.Ticks -ne $sampleOffset.UtcDateTime.Ticks) {
     throw 'Tunnel start timestamp UTC regression failed.'
 }
+# A healthy previously running R is borrowed, never reconnected or given stop ownership.
+foreach ($needed in @(
+    'ExistingTunnelAttachAllowed = $tunnelAttachAllowed',
+    '$borrowedTunnel = Get-VerifiedRunningTunnelIdentity',
+    'Assert-SameBorrowedTunnel $borrowedTunnel',
+    'existing R reused read-only; creating tray (R unowned)',
+    'if ($null -eq $script:tunnelOwnership) { return }',
+    'Get-VerifiedRunningTunnelIdentity',
+    'ProcessRunning -and $tunnel.VerifiedLocalProcess'
+)) {
+    if (-not $text.Contains($needed)) { throw "Read-only R reuse guard absent: $needed" }
+}
+if ($text -notmatch '(?s)if \(\$null -ne \$borrowedTunnel\) \{\s*Assert-SameBorrowedTunnel \$borrowedTunnel.*?\}\s*else\s*\{.*?Start-ControllerTunnel') {
+    throw 'Existing live R and cold-start R paths must remain distinct; never connect the borrowed R.'
+}
 $lifecycle = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Tunnel.Control.ps1'))
 $combined = $text + [Environment]::NewLine + $lifecycle
 foreach ($forbidden in @(
