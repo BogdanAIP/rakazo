@@ -1,6 +1,6 @@
 # Manually launched native Rakazo (Windows pilot)
 
-This is a **physically exercised manual-launch pilot**, not a reason to delete the rollback launcher. It is deliberately fail-closed. The native Start → Quit → Start sequence, live Plugin R health and one Windows Host heartbeat were physically confirmed on 2026-10-02. The existing Plugin R tunnel/alias and Windows Host pairing remain authoritative; this code creates neither. A console-free shortcut upgrade is pending its physical Windows test.
+This is a **physically exercised manual-launch pilot**, not a reason to delete the rollback launcher. It is deliberately fail-closed. The native Start → Quit → Start sequence, live Plugin R health and one Windows Host heartbeat were physically confirmed on 2026-10-02. The existing Plugin R tunnel/alias and Windows Host pairing remain authoritative; this code creates neither. The console-free shortcut and its targeted Quit cleanup passed the physical Windows test on 2026-10-02.
 
 - Check Rakazo.cmd (or Rakazo.ps1 -Action Preflight) is read-only and prints booleans only; it never prints the local .env, session material or tunnel keys.
 - Validate.ps1 parses the PowerShell script and checks that it does not contain obvious Windows-autostart, remote tunnel creation or destructive Compose commands.
@@ -11,7 +11,18 @@ This is a **physically exercised manual-launch pilot**, not a reason to delete t
 - Logs go to the current user's LocalAppData/Rakazo/manual-launcher directory. These logs can contain application details; do not upload or commit them without review.
 
 
-## Orphaned first GUI-launch investigation (2026-10-02; recovery pending)
+## Final manual GUI pilot confirmation (2026-10-02, user local time)
+
+**Confirmed on the physical Windows laptop:**
+- The canonical desktop `Rakazo.lnk` targets `wscript.exe` → `Launch-Rakazo.vbs` → guarded `Rakazo.ps1`. Double-click opened Web and one tray icon **without a new visible terminal window**.
+- The corrected native launch reached `tray active` with native PostgreSQL 17 (127.0.0.1:5434), API, Worker, Web and the **already paired** Windows Host. Existing R was reused as `R unowned` with no duplicate connect, no new alias or pairing.
+- ChatGPT's live Plugin R `health` returned `ok=true`, version `0.1.0`. `windowsHosts/list` returned exactly one non-revoked `win32` Host (ID182019) with a heartbeat ~10 seconds old at the verification time.
+- A GUI-launched tray `Quit Rakazo` recorded `tray quit requested`, `controller shutdown cleanup started`, explicit stop of the **verified owned** host/web/worker/api process trees, followed by `controller shutdown completed; native ports free`. Post-Quit Preflight confirmed API/Web not healthy, ports 3100/5173 free, no external Worker/Host, native PostgreSQL ready, and original R eligible for read-only reuse. `Check-ExistingR.ps1` confirmed original tunnel identity, process and loopback health. The invisible GUI host recorded `02.10.2026 23:43:17 GUI controller exit code: 0`.
+- Before this successful retest, four orphaned native role roots from the earlier failed launch were independently verified (checkout, parent PID, role, creation time) and their exact process trees cleaned up. Subsequent read-only Preflight proved only PG17 listening on 5434. This was **not** a mass node.exe stop.
+
+**Scope and remaining work:** The successful borrowed-R GUI lifecycle does not establish the separate fully cold R reconnect/owned-stop branch, a comprehensive Windows autostart audit, or interactive physical desktop/browser computer control. The old Docker Rakazo application stack was still running separately at last observation (API mapped to 32768, Web to 45173), alongside legacy PostgreSQL 16 and its backups. Do not shut down the Docker Engine or delete legacy data; review and stop **only explicitly identified old application containers** in a separate, reversible operation, preserving PostgreSQL and other applications (including openresearch-mcp-proxy). Original V4 launcher and backups are rollback assets.
+
+## Historical: orphaned first GUI-launch investigation (2026-10-02; recovered)
 
 The user reported that an installed console-free shortcut upgrade was recognized correctly (`ShortcutTargetIsWscript=True`, `UsesGuiLauncher=True`), but before its physical retest the original launch at 22:55 local had left API and Web bound on host ports 3100/5173 while the native controller mutex was **free**. Read-only process trees showed the listener nodes descended from child-role PowerShell runners originally parented by controller PID 17172, which was no longer present. Last stage was `tray active`; there was no logged `FAILED` or Quit stage in that version, so controller's reason for exit is **not proven**. In parallel, the independent OLD Docker Rakazo application stack remained up with API/Web published on different ports (32768/45173), plus original PostgreSQL 16; Docker should NOT be mass-stopped as a substitute for recovering the separate native processes.
 
@@ -19,7 +30,7 @@ Two source-level safeguards were added but are not yet physically tested: the in
 
 **Before rerunning the updated shortcut**, inspect and clean up the pre-existing orphaned native child roots after verifying their original parent PID 17172, role-specific `Rakazo.ps1 -Action Child` commandline, exact checkout path, 22:55 start times, and their listener-descendant relationships. Verify all four expected role roots separately (api/worker/web/host); do not assume Worker/Host merely from the two port trees. Keep exact PID/start evidence and stop only the verified orphaned roots, with explicit user approval. The preserved original R and both PostgreSQL clusters are unrelated and must not be stopped. Re-run `Validate.ps1`, Preflight, and the shortcut only after native API/Web ports and external Worker/Host detection clear. Then test tray Quit, post-Quit Preflight and Plugin R reconnection before declaring console-free handoff finished.
 
-## Console-free shortcut checkpoint (2026-10-02; physical retest required)
+## Historical: console-free shortcut checkpoint (2026-10-02; retest passed)
 
 The first canonical `Rakazo.lnk` worked (browser opened, one tray appeared, API/Worker/Web/Host and R healthy), but Windows Terminal still displayed a foreground PowerShell tab despite `-WindowStyle Hidden`. The installed shortcut directly targeted `powershell.exe`, which can be intercepted by the user's default terminal configuration.
 
