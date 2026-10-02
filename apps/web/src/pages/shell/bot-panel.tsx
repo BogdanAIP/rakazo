@@ -1,4 +1,4 @@
-import { t } from "@lingui/core/macro";
+﻿import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import type {
   AgentSkillCatalogEntry,
@@ -26,6 +26,7 @@ import {
 } from "@rakazo/ui-web";
 import { X } from "lucide-react";
 import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
+import { botProfilePatch } from "../../lib/bot-profile-patch";
 import { rpc } from "../../lib/rpc";
 import { AvatarStudioPopover } from "./avatar-studio-popover";
 import { BotCredentialsSection } from "./bot-credentials";
@@ -181,7 +182,7 @@ export function CreateBotForm({
         disabled={!name.trim() || submitting}
         onClick={() => void handleSubmit()}
       >
-        {submitting ? <Trans>Creating…</Trans> : <Trans>Create</Trans>}
+        {submitting ? <Trans>CreatingвЂ¦</Trans> : <Trans>Create</Trans>}
       </Button>
     </div>
   );
@@ -222,6 +223,11 @@ export function BotSettings({
   const [name, setName] = useState(bot.name);
   const [title, setTitle] = useState(bot.title);
   const [description, setDescription] = useState(bot.description);
+  // A roster refresh can skip replacing bots while a reorder is in flight, so
+  // this prop keeps the description from when the panel opened. Later saves
+  // compare against the description last saved here; otherwise a model or
+  // voice change treats that stale text as an edit and overwrites instructions.
+  const savedDescriptionRef = useRef(bot.description ?? "");
   const [color, setColor] = useState(bot.color);
   const [notifyOnFinish, setNotifyOnFinish] = useState(bot.notifyOnFinish ?? true);
   const [computerMode, setComputerMode] = useState(bot.computerMode);
@@ -259,7 +265,7 @@ export function BotSettings({
         setCredentials(nextCredentials);
         setCatalog(nextCatalog);
         setMe(nextMe);
-        // Only mark ready on success — a failed catalog load must not clear
+        // Only mark ready on success вЂ” a failed catalog load must not clear
         // an existing thinkingLevel override on save.
         setModelMetaReady(true);
       })
@@ -289,14 +295,14 @@ export function BotSettings({
               key: modelOptionKey(credential.provider, credential.modelId),
               provider: credential.provider,
               modelId: credential.modelId,
-              label: `${credential.label} · ${credential.modelId}`,
+              label: `${credential.label} В· ${credential.modelId}`,
             },
           ]
         : providerModels.map((entry) => ({
             key: modelOptionKey(entry.provider, entry.id),
             provider: entry.provider,
             modelId: entry.id,
-            label: `${entry.providerName ?? entry.provider} · ${entry.label}`,
+            label: `${entry.providerName ?? entry.provider} В· ${entry.label}`,
           }));
     for (const option of options) {
       if (seenOptions.has(option.key)) continue;
@@ -354,8 +360,10 @@ export function BotSettings({
       await onSave({
         name: nextName || bot.name,
         title: nextTitle,
-        description: nextDescription,
-        instructions: nextDescription,
+        // One field feeds both, so it only goes on the wire when it changed: a
+        // model, thinking or voice save must not overwrite longer instructions,
+        // nor fail on a description that is already above its own limit.
+        ...botProfilePatch(savedDescriptionRef.current, nextDescription),
         // Unchanged color stays off the wire so a legacy named value cannot fail a name save.
         ...(nextColor !== bot.color ? { color: nextColor } : {}),
         notifyOnFinish: nextNotify,
@@ -373,6 +381,7 @@ export function BotSettings({
             }
           : {}),
       });
+      savedDescriptionRef.current = nextDescription;
     } catch (err) {
       setError(err instanceof Error ? err.message : t`Could not save`);
     } finally {
@@ -481,7 +490,7 @@ export function BotSettings({
             <Trans>Advanced</Trans>
           </span>
           <span aria-hidden="true" className="transition-transform group-open:rotate-90">
-            ›
+            вЂє
           </span>
         </summary>
         <ComputerModePicker value={computerMode} onChange={setComputerMode} />
