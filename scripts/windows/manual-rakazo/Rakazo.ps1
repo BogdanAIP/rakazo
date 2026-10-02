@@ -76,27 +76,76 @@ function Test-TunnelReady {
     return ($state.CliOk -and $state.IdentityMatches -and $state.Ready -and
         $state.Healthy -and ($state.LiveHealth -or $state.VerifiedLocalProcess))
 }
-function Get-ExistingPostgresDiagnostic {
-    $state = [ordered]@{
-        DockerEngineReady = $false
-        ExistingPostgresIdentityVerified = $false
-        ExistingPostgresHealthy = $false
+function Get-NativePostgresSpec {
+    return [pscustomobject]@{
+        Bin = Join-Path $HOME 'RakazoRuntime\postgresql\bin'
+        Data = Join-Path $HOME 'RakazoData\postgres17'
+        Log = Join-Path $HOME 'RakazoData\postgres17.log'
+        Port = 5434
     }
-    $docker = Get-Command docker -ErrorAction SilentlyContinue
-    if (-not $docker) { return [pscustomobject]$state }
+}
+function Get-NativePostgresDiagnostic {
+    # Read-only. The specific cluster, server executable and listening PID must agree.
+    $state = [ordered]@{
+        NativePostgresRuntimePresent = $false
+        NativePostgresClusterVerified = $false
+        NativePostgresProcessVerified = $false
+        NativePostgresReady = $false
+    }
+    $spec = Get-NativePostgresSpec
+    $pgCtl = Join-Path $spec.Bin 'pg_ctl.exe'
+    $pgIsReady = Join-Path $spec.Bin 'pg_isready.exe'
+    $pgExe = Join-Path $spec.Bin 'postgres.exe'
+    if (-not (Test-Path -LiteralPath $pgCtl -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $pgIsReady -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $pgExe -PathType Leaf)) {
+        return [pscustomobject]$state
+    }
+    $state.NativePostgresRuntimePresent = $true
     try {
-        $info = & $docker.Source info --format '{{.ServerVersion}}' 2>$null
-        if ($LASTEXITCODE -ne 0) { return [pscustomobject]$state }
-        $state.DockerEngineReady = $true
-        $service = & $docker.Source inspect --format '{{index .Config.Labels "com.docker.compose.service"}}' compose-postgres-1 2>$null
-        if ($LASTEXITCODE -ne 0 -or ([string]$service).Trim() -cne 'postgres') {
+        $versionFile = Join-Path $spec.Data 'PG_VERSION'
+        if (-not (Test-Path -LiteralPath $versionFile -PathType Leaf) -or
+            (Get-Content -LiteralPath $versionFile -Raw).Trim() -cne '17') {
             return [pscustomobject]$state
         }
-        $state.ExistingPostgresIdentityVerified = $true
-        $health = & $docker.Source inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' compose-postgres-1 2>$null
-        $state.ExistingPostgresHealthy = $LASTEXITCODE -eq 0 -and ([string]$health).Trim() -ceq 'healthy'
+        $state.NativePostgresClusterVerified = $true
+        $pidFile = Join-Path $spec.Data 'postmaster.pid'
+        if (-not (Test-Path -LiteralPath $pidFile -PathType Leaf)) {
+            return [pscustomobject]$state
+        }
+        $pidLines = @(Get-Content -LiteralPath $pidFile)
+        if ($pidLines.Count -lt 5) { return [pscustomobject]$state }
+        $serverPid = [int]$pidLines[0].Trim()
+        if ($serverPid -le 0 -or $pidLines[3].Trim() -cne '5434' -or
+            $pidLines[4].Trim() -cne '127.0.0.1') {
+            return [pscustomobject]$state
+        }
+        $expectedData = [IO.Path]::GetFullPath($spec.Data).TrimEnd('\', '/')
+        $reportedData = [IO.Path]::GetFullPath($pidLines[1].Trim()).TrimEnd('\', '/')
+        if (-not [string]::Equals($expectedData, $reportedData,
+            [StringComparison]::OrdinalIgnoreCase)) {
+            return [pscustomobject]$state
+        }
+        $serverProcess = Get-Process -Id $serverPid -ErrorAction Stop
+        if (-not $serverProcess.Path -or -not [string]::Equals(
+            [IO.Path]::GetFullPath($serverProcess.Path),
+            [IO.Path]::GetFullPath($pgExe),
+            [StringComparison]::OrdinalIgnoreCase)) {
+            return [pscustomobject]$state
+        }
+        $expectedStart = [DateTimeOffset]::FromUnixTimeSeconds([long]$pidLines[2].Trim()).UtcDateTime
+        if ([Math]::Abs(($serverProcess.StartTime.ToUniversalTime() - $expectedStart).TotalSeconds) -gt 20) {
+            return [pscustomobject]$state
+        }
+        $listeners = @(Get-NetTCPConnection -LocalPort $spec.Port -State Listen -ErrorAction SilentlyContinue |
+            Where-Object { $_.OwningProcess -eq $serverPid -and $_.LocalAddress -eq '127.0.0.1' })
+        if ($listeners.Count -eq 0) { return [pscustomobject]$state }
+        $state.NativePostgresProcessVerified = $true
+        # pg_isready tests availability, not authentication. App health checks credentials later.
+        $null = & $pgIsReady -h 127.0.0.1 -p $spec.Port -t 3 2>$null
+        $state.NativePostgresReady = $LASTEXITCODE -eq 0
     } catch {
-        # Read-only diagnostics never print Docker config or credentials.
+        # No raw environment, private data or process command line in diagnostics.
     }
     return [pscustomobject]$state
 }
@@ -115,13 +164,27 @@ function Get-Preflight {
         $mcpPointsNew = $mcp.IndexOf($normalizedRepo, [StringComparison]::OrdinalIgnoreCase) -ge 0
     }
     $correctDatabase = $false
+    $databaseEndpointMatches = $false
     $hostFlag = $false
     $workerDispatchConfigured = $false
     if (Test-Path -LiteralPath $envPath) {
         # Never print .env contents or private connection strings.
         $lines = @(Get-Content -LiteralPath $envPath)
         $db = @($lines | Where-Object { $_ -match '^\s*DATABASE_URL\s*=' })
-        $correctDatabase = $db.Count -eq 1 -and $db[0] -match '/rakazo_next(?:[?''"]|$)'
+        if ($db.Count -eq 1) {
+            try {
+                $databaseUrl = ($db[0] -replace '^\s*DATABASE_URL\s*=\s*', '').Trim().Trim('"', "'")
+                $uri = [Uri]$databaseUrl
+                $username = [Uri]::UnescapeDataString(([string]$uri.UserInfo -split ':', 2)[0])
+                $correctDatabase = $uri.AbsolutePath.TrimStart('/') -ceq 'rakazo_next'
+                $databaseEndpointMatches = $correctDatabase -and
+                    $uri.Scheme -in @('postgresql', 'postgres') -and
+                    $uri.Host -ceq '127.0.0.1' -and $uri.Port -eq 5434 -and
+                    $username -ceq 'rakazo'
+            } catch {
+                # Fail closed; never display DATABASE_URL or its credentials.
+            }
+        }
         $flag = @($lines | Where-Object { $_ -match '^\s*RAKAZO_WINDOWS_HOST_ENABLED\s*=' })
         $hostFlag = $flag.Count -eq 1 -and $flag[0] -match '=\s*["'']?true["'']?\s*$'
         $internal = @($lines | Where-Object { $_ -match '^\s*RAKAZO_WINDOWS_HOST_INTERNAL_TOKEN\s*=' })
@@ -133,15 +196,17 @@ function Get-Preflight {
                 ($internalUrl[0] -match '127[.]0[.]0[.]1:3100|localhost:3100')
         }
     }
-    $database = Get-ExistingPostgresDiagnostic
+    $database = Get-NativePostgresDiagnostic
     $tunnel = Get-TunnelState
     $tunnelColdStartAllowed = $tunnel.CliOk -and $tunnel.IdentityMatches -and
         -not ($tunnel.ProcessRunning -or $tunnel.VerifiedLocalProcess -or $tunnel.LiveHealth -or
             $tunnel.Ready -or $tunnel.Healthy)
     return [pscustomobject]@{
-        DockerEngineReady = $database.DockerEngineReady
-        ExistingPostgresIdentityVerified = $database.ExistingPostgresIdentityVerified
-        ExistingPostgresHealthy = $database.ExistingPostgresHealthy
+        NativePostgresRuntimePresent = $database.NativePostgresRuntimePresent
+        NativePostgresClusterVerified = $database.NativePostgresClusterVerified
+        NativePostgresProcessVerified = $database.NativePostgresProcessVerified
+        NativePostgresReady = $database.NativePostgresReady
+        DatabaseEndpointMatches = $databaseEndpointMatches
         NativeCheckoutExists = $hasRepo
         ExistingAliasMatches = $identityMatches
         ExistingMcpUsesNewCheckout = $mcpPointsNew
@@ -242,46 +307,31 @@ function Stop-ControllerTunnel {
         $script:tunnelOwnership = $null
     }
 }
-function Ensure-ExistingPostgres {
-    # Docker is allowed here only as the dependency for the pre-existing database.
-    $docker = Get-Command docker -ErrorAction SilentlyContinue
-    if (-not $docker) { throw 'Docker Desktop is required for the existing PostgreSQL dependency.' }
-    $dockerInfo = & $docker.Source info --format '{{.ServerVersion}}' 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        $desktopExe = Join-Path $env:ProgramFiles 'Docker\Docker\Docker Desktop.exe'
-        if (-not (Test-Path -LiteralPath $desktopExe -PathType Leaf)) {
-            throw 'Docker Engine is stopped, and the installed Docker Desktop was not found.'
-        }
-        if (-not (Get-Process -Name 'Docker Desktop' -ErrorAction SilentlyContinue)) {
-            Start-Process -FilePath $desktopExe | Out-Null
-        }
-        $deadline = [DateTime]::UtcNow.AddSeconds(120)
-        do {
-            Start-Sleep -Seconds 3
-            $dockerInfo = & $docker.Source info --format '{{.ServerVersion}}' 2>$null
-            if ($LASTEXITCODE -eq 0) { break }
-        } while ([DateTime]::UtcNow -lt $deadline)
-        if ($LASTEXITCODE -ne 0) { throw 'Docker Engine did not become ready.' }
+function Ensure-NativePostgres {
+    # Start/reuse only the already-initialized native Rakazo cluster. Never create or reset it.
+    $spec = Get-NativePostgresSpec
+    $before = Get-NativePostgresDiagnostic
+    if (-not ($before.NativePostgresRuntimePresent -and $before.NativePostgresClusterVerified)) {
+        throw 'Expected native PostgreSQL 17 Rakazo runtime or prepared cluster was not found.'
     }
-    $container = 'compose-postgres-1'
-    $service = & $docker.Source inspect --format '{{index .Config.Labels "com.docker.compose.service"}}' $container 2>$null
-    if ($LASTEXITCODE -ne 0 -or ([string]$service).Trim() -cne 'postgres') {
-        throw 'The existing PostgreSQL container identity could not be verified; no container was created.'
+    if ($before.NativePostgresProcessVerified) {
+        if ($before.NativePostgresReady) { return }
+        throw 'The identified native PostgreSQL is running but not ready. No duplicate start.'
     }
-    $running = & $docker.Source inspect --format '{{.State.Running}}' $container 2>$null
-    if ($LASTEXITCODE -ne 0) { throw 'Existing PostgreSQL container inspect failed.' }
-    if (([string]$running).Trim() -cne 'true') {
-        & $docker.Source start $container | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'Existing PostgreSQL container failed to start.' }
+    if (Test-Path -LiteralPath (Join-Path $spec.Data 'postmaster.pid')) {
+        throw 'The native PostgreSQL PID file exists but ownership cannot be verified. Manual recovery required.'
     }
-    $deadline = [DateTime]::UtcNow.AddSeconds(90)
-    do {
-        $health = & $docker.Source inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' $container 2>$null
-        if ($LASTEXITCODE -ne 0) { throw 'Existing PostgreSQL health inspection failed.' }
-        if (([string]$health).Trim() -ceq 'healthy') { return }
-        Start-Sleep -Seconds 2
-    } while ([DateTime]::UtcNow -lt $deadline)
-    throw 'Existing PostgreSQL did not become healthy. It was not recreated or reset.'
+    if (Test-Port $spec.Port) {
+        throw 'The target PostgreSQL port is occupied by an unverified process.'
+    }
+    $pgCtl = Join-Path $spec.Bin 'pg_ctl.exe'
+    & $pgCtl -D $spec.Data -l $spec.Log -o '-h 127.0.0.1 -p 5434' -w -t 60 start | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Native PostgreSQL did not start successfully.' }
+    $after = Get-NativePostgresDiagnostic
+    if (-not ($after.NativePostgresProcessVerified -and $after.NativePostgresReady)) {
+        throw 'Native PostgreSQL started but exact process identity/readiness could not be verified.'
+    }
+    # Intentionally keep this durable database running on Quit; never stop shared processes.
 }
 function Wait-Http([string]$url, [int]$seconds) {
     $deadline = [DateTime]::UtcNow.AddSeconds($seconds)
@@ -383,6 +433,8 @@ try {
     Add-Type -AssemblyName System.Drawing
     if (-not ($before.NativeCheckoutExists -and $before.ExistingAliasMatches -and
         $before.ExistingMcpUsesNewCheckout -and $before.DatabaseIsCloned -and
+        $before.DatabaseEndpointMatches -and $before.NativePostgresRuntimePresent -and
+        $before.NativePostgresClusterVerified -and
         $before.HostFeatureInEnv -and $before.WorkerDispatchConfigured -and
         $before.ProtectedHostCredentialExists -and
         $before.ProtectedTunnelSessionExists -and
@@ -403,7 +455,7 @@ try {
         $before.ExistingTunnelLiveHealth -or $before.ExistingTunnelReady -or $before.ExistingTunnelHealthy) {
         throw 'The original R is already active or not conclusively stopped. Planned handoff required; no duplicate connect.'
     }
-    Ensure-ExistingPostgres
+    Ensure-NativePostgres
     New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
     $api = Start-OwnedRole 'api'
     if (-not (Wait-Http "$origin/health" 60)) { throw 'Native API startup failed; inspect manual-launcher logs.' }
