@@ -25,7 +25,8 @@ foreach ($forbidden in @(
     'down -v',
     'runtimes create',
     'runtimes rm',
-    'windowsHosts/createPairing'
+    'windowsHosts/createPairing', 'compose-postgres-1',
+    'Docker Desktop', 'Ensure-ExistingPostgres'
 )) {
     if ($text.Contains($forbidden)) { throw "Forbidden action present: $forbidden" }
 }
@@ -42,10 +43,13 @@ foreach ($forbidden in @(
 }
 foreach ($required in @(
     'Start-ControllerTunnel', 'Stop-ControllerTunnel',
-    'Ensure-ExistingPostgres', 'ExternalWorkerDetected',
+    'Ensure-NativePostgres', 'Get-NativePostgresDiagnostic',
+    'DatabaseEndpointMatches', 'NativePostgresProcessVerified',
+    'ExternalWorkerDetected',
     'ExternalHostDetected', 'ExistingTunnelLiveHealth',
     'ExpectedStopPid', 'ExpectedStopStart', 'Local\RakazoTunnelControl',
-    'Get-RakazoAuthenticatedTunnelStatus', 'Test-RakazoExistingTunnelProcessEvidence'
+    'Get-RakazoAuthenticatedTunnelStatus', 'Test-RakazoExistingTunnelProcessEvidence',
+    'NativePostgresClusterVerified'
 )) {
     if (-not $combined.Contains($required)) { throw "Required ownership or cold-start guard absent: $required" }
 }
