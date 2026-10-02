@@ -5,7 +5,7 @@ function fixture(profile = "quxmf8xh") {
   let tree = '[1] button "Save"\n[2] textbox "Name"';
   let url = "https://example.com/form";
   const runner = vi.fn<OpenCliRunner>(async (_entry, argv) => {
-    const command = argv.slice(4);
+    const command = argv.slice(argv.indexOf("browser") + 2);
     if (command[0] === "open") {
       url = command[1]!;
       return "opened";
@@ -27,14 +27,24 @@ function fixture(profile = "quxmf8xh") {
 }
 
 describe("WindowsOpenCliBackend", () => {
-  it("requires an explicit Chrome profile instead of guessing between signed-in users", async () => {
+  it("lets OpenCLI select the sole connected/default profile when none is explicitly configured", async () => {
     const { runner } = fixture("");
     const backend = new WindowsOpenCliBackend({ entry: process.execPath, profile: "" }, runner);
-    expect(backend.available()).toBe(false);
-    await expect(backend.browser("bot-a", { command: "snapshot" })).rejects.toThrow(
-      "OpenCLI is unavailable",
-    );
-    expect(runner).not.toHaveBeenCalled();
+    expect(backend.available()).toBe(true);
+    const response = await backend.browser("bot-a", { command: "snapshot" });
+    expect(response).toMatchObject({ ok: true, url: "https://example.com/form" });
+    expect(runner).toHaveBeenCalledWith(process.execPath, ["browser", "rakazo-bot-a", "state"]);
+    expect(runner.mock.calls.every(([, argv]) => !argv.includes("--profile"))).toBe(true);
+  });
+
+  it("fails without guessing or clicking when OpenCLI reports ambiguous profiles", async () => {
+    const runner = vi.fn<OpenCliRunner>(async () => {
+      throw new Error("Multiple browser profiles connected; choose one first");
+    });
+    const backend = new WindowsOpenCliBackend({ entry: process.execPath, profile: "" }, runner);
+    await expect(backend.browser("bot-a", { command: "snapshot" })).rejects.toThrow("Multiple browser profiles");
+    expect(runner).toHaveBeenCalledTimes(1);
+    expect(runner.mock.calls[0]![1]).toEqual(["browser", "rakazo-bot-a", "state"]);
   });
 
   it("uses a per-bot browser session with explicit profile and returns Rakazo element refs", async () => {
