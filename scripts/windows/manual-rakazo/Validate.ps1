@@ -79,6 +79,20 @@ foreach ($forbidden in @(
 )) {
     if ($text.Contains($forbidden)) { throw "Windows Host capability disabled by launcher: $forbidden" }
 }
+# Windows Host is launched by PowerShell, which does not implicitly import
+# the private root .env. Pin the explicit profile into that owned host child.
+foreach ($needed in @(
+    '$openCliProfileLines = @(Get-Content -LiteralPath (Join-Path $repo ''.env'')',
+    'Duplicate private OpenCLI profile settings;',
+    'Private OpenCLI profile is invalid;',
+    '$env:RAKAZO_OPENCLI_PROFILE = $rawProfile',
+    '^\s*RAKAZO_OPENCLI_PROFILE\s*=\s*'
+)) {
+    if (-not $text.Contains($needed)) { throw "Windows Host profile import guard missing: $needed" }
+}
+if ([regex]::Matches($text, '\$env:RAKAZO_OPENCLI_PROFILE\s*=').Count -ne 1) {
+    throw 'OpenCLI profile must be assigned exactly once within the owned host child.'
+}
 if ($text -match '(?i)\$host\b') {
     throw 'Reserved PowerShell automatic variable $Host must not be used as a launcher process variable.'
 }
