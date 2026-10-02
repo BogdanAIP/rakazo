@@ -335,10 +335,14 @@ function Ensure-NativePostgres {
     }
     # Intentionally keep this durable database running on Quit; never stop shared processes.
 }
-function Wait-Http([string]$url, [int]$seconds) {
+function Wait-Http([string]$url, [int]$seconds, [Diagnostics.Process]$ownedProcess = $null) {
     $deadline = [DateTime]::UtcNow.AddSeconds($seconds)
     while ([DateTime]::UtcNow -lt $deadline) {
         if (Test-Http $url) { return $true }
+        if ($null -ne $ownedProcess) {
+            $ownedProcess.Refresh()
+            if ($ownedProcess.HasExited) { return $false }
+        }
         Start-Sleep -Seconds 1
     }
     return $false
@@ -460,7 +464,9 @@ try {
     Ensure-NativePostgres
     New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
     $api = Start-OwnedRole 'api'
-    if (-not (Wait-Http "$origin/health" 60)) { throw 'Native API startup failed; inspect manual-launcher logs.' }
+    # A cold native Windows/tsx API startup was observed to exceed the former 60s gate.
+    # Bounded wait, fail early if the directly owned launcher process exits.
+    if (-not (Wait-Http "$origin/health" 360 $api)) { throw 'Native API startup failed or timed out; inspect manual-launcher logs.' }
     $worker = Start-OwnedRole 'worker'
     Start-Sleep -Seconds 3
     if ($worker.HasExited) { throw 'Worker exited early; inspect manual-launcher logs.' }
