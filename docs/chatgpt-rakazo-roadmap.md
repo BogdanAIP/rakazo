@@ -1404,20 +1404,20 @@ Verified on physical checkout:
 - Plugin R adapter tests: 6 passed.
 - Contracts, adapter-kit, windows-host, adapters and API typechecks passed
   after separation of the generic and explicit browser contracts.
-- host-aware-sandbox focused runtime test did not produce a terminal result
-  within the Windows Host's 18-second process command boundary. Do not claim
-  that suite passed. Its types were checked successfully.
+- host-aware-sandbox focused runtime test: 1 passed, 10 unrelated tests
+  skipped by the exact test-name filter. The first run revealed a synchronous
+  exception instead of a rejected Promise; the code was corrected and the
+  direct Vitest rerun passed.
 
 Before claiming production completion:
 
-1. Finish a bounded host-aware focused test or capture its CI result.
-2. Coordinate maintenance of the **same registered original R MCP process**
+1. Coordinate maintenance of the **same registered original R MCP process**
    so its statically loaded appContract is refreshed; do not create a second
    R tunnel and do not re-pair Windows Host.
-3. Quit/reopen the existing native Rakazo tray so API/Host run updated code.
-4. Check rakazo_describe("computer/browser") contains open and sessionToken.
-5. Perform live two-token/same-bot A/B navigation, snapshot and scoped close
+2. Quit/reopen the existing native Rakazo tray so API/Host run updated code.
+3. Check rakazo_describe("computer/browser") contains open and sessionToken.
+4. Perform live two-token/same-bot A/B navigation, snapshot and scoped close
    via Plugin R on harmless example pages. Verify B remains after A closes.
-6. Separately test OpenCLI extension group reclamation with genuine ownership
+5. Separately test OpenCLI extension group reclamation with genuine ownership
    evidence; until then close is session-scoped and does not guarantee the
    visual group disappears. Avoid disrupting other active ChatGPT chats.
