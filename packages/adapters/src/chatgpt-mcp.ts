@@ -195,7 +195,7 @@ server.registerTool(
   {
     title: "Rakazo destructive action",
     description:
-      "Call a destructive or high-consequence Rakazo appContract procedure such as remove, revoke, stop, reset, clear, disconnect, archive, or updater apply.",
+      "Call a destructive or high-consequence Rakazo appContract procedure. For concurrent ChatGPT Chrome tasks: use computer/browser with request.command=open to obtain a private sessionToken; pass it on navigate/snapshot/act, then close ONLY that token. Never share botId-only browser sessions or close Chrome groups by title.",
     inputSchema: callSchema,
     annotations: {
       readOnlyHint: false,
