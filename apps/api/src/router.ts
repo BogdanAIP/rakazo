@@ -2684,7 +2684,7 @@ export function createRouter(deps: RouterDeps) {
         if (!computer?.providerRef || computer.state !== "running") {
           throw new ORPCError("BAD_REQUEST", { message: "computer must be running" });
         }
-        if (computer.kind !== "desktop" || !deps.sandbox.pageBrowser) {
+        if (computer.kind !== "desktop" || !deps.sandbox.desktopBrowserSession) {
           throw new ORPCError("BAD_REQUEST", {
             message: "Direct signed-in browser access requires a physical desktop computer",
           });
@@ -2693,7 +2693,7 @@ export function createRouter(deps: RouterDeps) {
           throw new ORPCError("FORBIDDEN", { message: "Take control first." });
         }
 
-        const result = await deps.sandbox.pageBrowser(
+        const result = await deps.sandbox.desktopBrowserSession(
           toComputerRef(computer),
           input.request,
           computerContext(context.actor, bot.id, "browser"),
