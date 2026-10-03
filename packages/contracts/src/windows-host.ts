@@ -95,6 +95,7 @@ export const WindowsHostBrowserActionSchema = z.discriminatedUnion("kind", [
 export const WindowsHostBrowserRequestSchema = z.discriminatedUnion("command", [
   z.object({ command: z.literal("navigate"), url: z.string().url().max(4_096) }),
   z.object({ command: z.literal("snapshot") }),
+  z.object({ command: z.literal("close") }),
   z.object({
     command: z.literal("act"),
     actions: z.array(WindowsHostBrowserActionSchema).min(1).max(4),
