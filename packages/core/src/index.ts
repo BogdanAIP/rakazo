@@ -49,4 +49,6 @@ export * from "./text-direction.js";
 export * from "./thread-message-updates.js";
 export * from "./thread-subscription.js";
 export * from "./tool-activity.js";
+export * from "./trading-market.js";
+export * from "./trading-research.js";
 export * from "./voice-chat-groups.js";

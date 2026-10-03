@@ -20,6 +20,7 @@ const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
 const READ_ACTIONS = new Set([
   "all",
+  "analyze",
   "bootstrap",
   "catalog",
   "catalogSearch",

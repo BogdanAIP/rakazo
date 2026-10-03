@@ -57,6 +57,10 @@ import {
   displayBotWorkspacePath,
   enqueueTakeoverContinuation,
   expireComputerControl,
+  fetchBingxPublicSpotSnapshot,
+  fetchOkxClosedOneHourHistory,
+  fetchOkxPublicCatalog,
+  fetchOkxPublicSpotTickers,
   hasActiveComputerControl,
   isAutoReviewCheckerConfigured,
   isComputerScreenUnavailable,
@@ -133,6 +137,8 @@ import {
   hasMixedOneShotSchedule,
   isOneShotRoutineCrons,
   nextCronDateAcrossStrict,
+  researchClosedHourBreakout,
+  scanTradingMarkets,
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
@@ -660,6 +666,52 @@ export function createRouter(deps: RouterDeps) {
   });
 
   return os.router({
+    trading: {
+      // User-invoked public GET requests only. No exchange keys, wallet or execution capability.
+      list: authed.trading.list.handler(async ({ input }) => {
+        if (input.venue === "okx") {
+          const catalog = await fetchOkxPublicCatalog();
+          const markets = catalog.markets.filter((market) => market.kind === "spot");
+          const tickers = await fetchOkxPublicSpotTickers(markets);
+          return {
+            fetchedAt: new Date().toISOString(),
+            ...scanTradingMarkets(markets, tickers, input, new Date()),
+          };
+        }
+        const snapshot = await fetchBingxPublicSpotSnapshot();
+        return {
+          fetchedAt: snapshot.fetchedAt,
+          ...scanTradingMarkets(snapshot.markets, snapshot.tickers, input, new Date()),
+        };
+      }),
+      catalog: authed.trading.catalog.handler(() => fetchOkxPublicCatalog()),
+      analyze: authed.trading.analyze.handler(async ({ input }) => {
+        const catalog = await fetchOkxPublicCatalog();
+        const market = catalog.markets.find(
+          (candidate) => candidate.symbol === input.symbol && candidate.kind === input.kind,
+        );
+        if (!market)
+          throw new ORPCError("NOT_FOUND", { message: "Public OKX instrument not found" });
+        // Dated futures remain discovery-only pending independent contract sizing
+        // and instrument/risk validation. Fail closed as a NO_TRADE research result.
+        if (market.kind === "dated_future") {
+          const now = new Date();
+          return researchClosedHourBreakout({
+            market,
+            candles: [],
+            fetchedAt: now.toISOString(),
+            now,
+          });
+        }
+        const history = await fetchOkxClosedOneHourHistory(market);
+        return researchClosedHourBreakout({
+          market,
+          candles: history.candles,
+          fetchedAt: history.fetchedAt,
+          now: new Date(),
+        });
+      }),
+    },
     aiConsent: {
       status: authed.aiConsent.status.handler(({ context, input }) =>
         aiConsentStatus(deps, context.actor, input),
