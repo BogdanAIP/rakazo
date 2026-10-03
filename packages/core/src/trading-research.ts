@@ -1,10 +1,10 @@
 import {
-  TradingCandleSchema,
-  TradingResearchOutputSchema,
-  TradingSignalSchema,
   type TradingCandle,
+  TradingCandleSchema,
   type TradingInstrument,
   type TradingResearchOutput,
+  TradingResearchOutputSchema,
+  TradingSignalSchema,
 } from "@rakazo/contracts";
 
 const HOUR = 3_600_000;
@@ -36,7 +36,7 @@ export function researchClosedHourBreakout(input: ResearchInput): TradingResearc
   const closedAt = Number.isFinite(latestOpened) ? latestOpened + HOUR : null;
   const evidenceId = "okx:" + market.symbol + ":1H:" + (latest?.openedAt ?? "no-bars");
   const resultBase = {
-    algorithm: STRATEGY as const,
+    algorithm: STRATEGY,
     venue: "okx" as const,
     market,
     fetchedAt,
@@ -100,8 +100,7 @@ export function researchClosedHourBreakout(input: ResearchInput): TradingResearc
   const latestVolume = Number(last.quoteVolume);
   const highest = Math.max(...prior.map((c) => Number(c.high)));
   const lowest = Math.min(...prior.map((c) => Number(c.low)));
-  const averageRange =
-    prior.reduce((sum, c) => sum + Number(c.high) - Number(c.low), 0) / LOOKBACK;
+  const averageRange = prior.reduce((sum, c) => sum + Number(c.high) - Number(c.low), 0) / LOOKBACK;
   const close = Number(last.close);
   const tick = Number(market.priceIncrement);
   const digits = market.priceIncrement?.split(".")[1]?.length ?? 0;
@@ -129,9 +128,8 @@ export function researchClosedHourBreakout(input: ResearchInput): TradingResearc
   }
 
   const rounding = (value: number, direction: "up" | "down"): string => {
-    const units = direction === "up"
-      ? Math.ceil(value / tick - 1e-9)
-      : Math.floor(value / tick + 1e-9);
+    const units =
+      direction === "up" ? Math.ceil(value / tick - 1e-9) : Math.floor(value / tick + 1e-9);
     return (units * tick).toFixed(digits);
   };
   // Illustrative price levels only; sizing/slippage require authorized account
@@ -165,8 +163,10 @@ export function researchClosedHourBreakout(input: ResearchInput): TradingResearc
     entryTrigger: rounding(entry, long ? "up" : "down"),
     stopLoss: rounding(stop, long ? "down" : "up"),
     takeProfit: [rounding(target, long ? "up" : "down")],
-    invalidation: "Cancel if the price returns into the previous 20-bar range or the signal expires.",
-    rationale: "Illustrative 1H closed-candle breakout with a 20-bar prior range and 1.5x " +
+    invalidation:
+      "Cancel if the price returns into the previous 20-bar range or the signal expires.",
+    rationale:
+      "Illustrative 1H closed-candle breakout with a 20-bar prior range and 1.5x " +
       "quote-volume filter. This is an unvalidated baseline, not an expected-profit estimate.",
     riskBudgetQuote: null,
     maxSlippageBps: null,
