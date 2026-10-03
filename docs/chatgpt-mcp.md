@@ -48,6 +48,53 @@ ChatGPT
 
 `rakazo_computer_act` uses Rakazo's existing `computer/takeover` and `computer/input` authorization path rather than bypassing computer-control leases. Other Rakazo capabilities remain available through the generic tools, so the same ChatGPT conversation can combine the graphical desktop with memory, files, integrations, routines, artifacts, and other appContract procedures.
 
+### Concurrent ChatGPT chats: physical Chrome browser sessions
+
+The previous computer/browser implementation used one OpenCLI session derived
+only from botId. Multiple ChatGPT chats share the ChatGPT Windows bot, so that
+name was unsafe: one chat could navigate or close another chat's active page.
+
+The physical Windows Host now mints a separate **opaque bearer token** for every
+explicit browser task. The current stdio Plugin R transport does NOT provide
+a trusted ChatGPT conversation ID. Never claim automatic per-chat identity
+or construct an OpenCLI session name from botId alone.
+
+For EACH chat/task:
+
+1. Use computer/takeover for the existing ChatGPT Windows bot if its user control
+   lease is not active. Do not create another Host or tunnel.
+2. Call rakazo_destructive with procedure "computer/browser" and an input
+   containing the botId and request { command: "open" }. Retain the returned
+   sessionToken privately in this chat/task.
+3. Pass that same sessionToken inside the request with every navigate,
+   snapshot and act command.
+4. At the end of the task, close using only that sessionToken. Never close
+   by Chrome group title, bot ID, guessed session name or another task's token.
+5. If a token is lost, expires or the Host restarts, open again instead of
+   reconstructing one. Host-side idle-token expiry is 30 minutes; OpenCLI has
+   its own native idle tab expiry. Page persistence past either lifetime is
+   not guaranteed.
+
+Session operations are authorized by the normal Rakazo API actor and user
+computer-control lease. The token provides per-task browser isolation, not
+a platform-attested conversation identity. One physical desktop, cursor and
+keyboard remain shared: chats must coordinate GUI input rather than driving
+mouse/keyboard simultaneously.
+
+The installed OpenCLI Chrome profile is reused. OPENCLI_WINDOW remains
+foreground so the owner can watch navigation. OpenCLI may deliberately keep a
+blank reusable group/tab after close; closing a scoped session does NOT prove
+Chrome removed the visible group. Never delete groups only by title or close
+user tabs. Removing leftover owned empty groups needs a separately verified
+ownership-aware OpenCLI extension lifecycle improvement; global Chrome/group
+cleanup is NOT enabled in Rakazo.
+
+After deploying an appContract change, restart the original registered
+Plugin R MCP process through its existing ownership-controlled lifecycle:
+an already-running borrowed MCP process still has its previous contract in
+memory and may report a stale rakazo_describe schema. Never create a second
+tunnel or re-pair the original physical Host.
+
 ## Local configuration
 
 The server reads configuration only from environment variables. Never commit these values.
