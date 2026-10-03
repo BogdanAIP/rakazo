@@ -814,6 +814,7 @@ export interface BrowserActResult {
 export type PageBrowserCommand =
   | { command: "navigate"; url: string }
   | { command: "snapshot" }
+  | { command: "close" }
   | { command: "act"; actions: BrowserActStep[] };
 
 export type PageBrowserResult = Partial<BrowserSnapshotResult & BrowserActResult> & { ok: boolean };
