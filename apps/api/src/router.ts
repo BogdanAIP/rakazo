@@ -180,6 +180,8 @@ import {
   touchGroupUpdatedAt,
   WindowsHostPairingError,
 } from "@rakazo/db";
+import { fetchBingxPublicSpotSnapshot } from "@rakazo/adapters";
+import { scanTradingMarkets } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
 import { deleteAgentSecret, listAgentSecrets, putAgentSecret } from "./agent-secrets.js";
 import { createAgentSkillsService } from "./agent-skills.js";
@@ -660,6 +662,16 @@ export function createRouter(deps: RouterDeps) {
   });
 
   return os.router({
+    trading: {
+      // User-invoked public GET requests only. No exchange keys, wallet or execution capability.
+      list: authed.trading.list.handler(async ({ input }) => {
+        const snapshot = await fetchBingxPublicSpotSnapshot();
+        return {
+          fetchedAt: snapshot.fetchedAt,
+          ...scanTradingMarkets(snapshot.markets, snapshot.tickers, input, new Date()),
+        };
+      }),
+    },
     aiConsent: {
       status: authed.aiConsent.status.handler(({ context, input }) =>
         aiConsentStatus(deps, context.actor, input),
