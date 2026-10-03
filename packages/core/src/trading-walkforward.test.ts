@@ -85,33 +85,39 @@ describe("point-in-time closed-bar spot walk-forward", () => {
     const target = run({ candles: makeBars({ ...nextBar, low: "105" }) });
     expect(target.executions[0]?.exitReason).toBe("target");
     expect(target.replay?.netPnlQuote).toBeGreaterThan(0);
-    const close = run({ candles: makeBars({
-      open: "108",
-      high: "118",
-      low: "103",
-      close: "110",
-      quoteVolume: "100",
-    }) });
+    const close = run({
+      candles: makeBars({
+        open: "108",
+        high: "118",
+        low: "103",
+        close: "110",
+        quoteVolume: "100",
+      }),
+    });
     expect(close.executions[0]?.exitReason).toBe("next_bar_close");
   });
 
   it("does not force fills if next open is below trigger or beyond gap / target", () => {
-    const low = run({ candles: makeBars({
-      open: "104",
-      high: "120",
-      low: "102",
-      close: "110",
-      quoteVolume: "100",
-    }) });
+    const low = run({
+      candles: makeBars({
+        open: "104",
+        high: "120",
+        low: "102",
+        close: "110",
+        quoteVolume: "100",
+      }),
+    });
     expect(low.skippedEntryCount).toBe(1);
     expect(low.replay).toBeNull();
-    const gap = run({ candles: makeBars({
-      open: "130",
-      high: "135",
-      low: "120",
-      close: "129",
-      quoteVolume: "100",
-    }) });
+    const gap = run({
+      candles: makeBars({
+        open: "130",
+        high: "135",
+        low: "120",
+        close: "129",
+        quoteVolume: "100",
+      }),
+    });
     expect(gap.skippedEntryCount).toBe(1);
     expect(gap.replay).toBeNull();
   });
@@ -134,8 +140,9 @@ describe("point-in-time closed-bar spot walk-forward", () => {
     const mixed = makeBars();
     mixed[2] = TradingCandleSchema.parse({ ...mixed[2], symbol: "BTC-USDT" });
     expect(() => run({ candles: mixed })).toThrow("provenance");
-    expect(() => run({ market: { ...market, kind: "perpetual", symbol: "SOL-USDT-SWAP" } }))
-      .toThrow("spot");
+    expect(() =>
+      run({ market: { ...market, kind: "perpetual", symbol: "SOL-USDT-SWAP" } }),
+    ).toThrow("spot");
     expect(() => run({ datasetSha256: "not-a-hash" })).toThrow();
     expect(() => run({ fixedNotionalQuote: "2001" })).toThrow("borrowing");
     expect(() => run({ adverseSlippageBpsPerSide: undefined })).toThrow();
