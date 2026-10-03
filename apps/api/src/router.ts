@@ -57,6 +57,7 @@ import {
   displayBotWorkspacePath,
   enqueueTakeoverContinuation,
   expireComputerControl,
+  fetchBingxPublicSpotSnapshot,
   hasActiveComputerControl,
   isAutoReviewCheckerConfigured,
   isComputerScreenUnavailable,
@@ -133,6 +134,7 @@ import {
   hasMixedOneShotSchedule,
   isOneShotRoutineCrons,
   nextCronDateAcrossStrict,
+  scanTradingMarkets,
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
@@ -180,8 +182,6 @@ import {
   touchGroupUpdatedAt,
   WindowsHostPairingError,
 } from "@rakazo/db";
-import { fetchBingxPublicSpotSnapshot } from "@rakazo/adapters";
-import { scanTradingMarkets } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
 import { deleteAgentSecret, listAgentSecrets, putAgentSecret } from "./agent-secrets.js";
 import { createAgentSkillsService } from "./agent-skills.js";
