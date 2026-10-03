@@ -1,6 +1,10 @@
 import * as z from "zod";
-import type { TradingInstrument } from "@rakazo/contracts";
-import { TradingInstrumentSchema, TradingPositiveDecimalSchema } from "@rakazo/contracts";
+import type { TradingInstrument, TradingTicker } from "@rakazo/contracts";
+import {
+  TradingInstrumentSchema,
+  TradingPositiveDecimalSchema,
+  TradingTickerSchema,
+} from "@rakazo/contracts";
 
 /**
  * Read-only OKX discovery. No keys, user accounts, orders or ticker-volume
@@ -161,4 +165,75 @@ export async function fetchOkxPublicCatalog(
     }
   }
   return { fetchedAt: (options.now ?? new Date()).toISOString(), markets, excluded };
+}
+
+
+/**
+ * OKX documents volCcy24h as quote-currency volume for SPOT, but base-currency
+ * volume for derivatives. This function deliberately accepts SPOT markets only.
+ * https://www.okx.com/docs-v5/en/#order-book-trading-market-data-get-tickers
+ */
+export async function fetchOkxPublicSpotTickers(
+  markets: readonly TradingInstrument[],
+  options: { fetchImpl?: typeof fetch; now?: Date } = {},
+): Promise<TradingTicker[]> {
+  if (markets.some((market) => market.venue !== "okx" || market.kind !== "spot")) {
+    throw new Error("OKX spot tickers require OKX spot markets only");
+  }
+  const known = new Set(markets.filter((market) => market.status === "active").map((m) => m.symbol));
+  if (new Set(markets.map((market) => market.symbol)).size !== markets.length) {
+    throw new Error("Duplicate OKX spot market");
+  }
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const response = await fetchImpl(ORIGIN + "/api/v5/market/tickers?instType=SPOT", {
+    method: "GET",
+    redirect: "error",
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new Error("OKX public spot ticker HTTP error: " + response.status);
+  const body = await response.text();
+  if (body.length > MAX_BODY_CHARS) throw new Error("OKX public spot ticker response too large");
+  let raw: unknown;
+  try {
+    raw = JSON.parse(body);
+  } catch {
+    throw new Error("OKX public spot ticker response is not JSON");
+  }
+  const data = envelope.parse(raw);
+  if (data.code !== "0") throw new Error("OKX public spot ticker API error: " + data.code);
+  const rawTicker = z.object({
+    instType: z.literal("SPOT"),
+    instId: z.string().min(3),
+    bidPx: z.string(),
+    askPx: z.string(),
+    volCcy24h: z.string(),
+    ts: z.string().regex(/^\d{13}$/),
+  });
+  const tickers: TradingTicker[] = [];
+  const seen = new Set<string>();
+  const fetchedAt = (options.now ?? new Date()).toISOString();
+  for (const value of data.data) {
+    const symbol = typeof value === "object" && value !== null && "instId" in value
+      ? (value as { instId?: unknown }).instId
+      : null;
+    if (typeof symbol !== "string" || !known.has(symbol)) continue;
+    if (seen.has(symbol)) throw new Error("Duplicate OKX public spot ticker");
+    seen.add(symbol);
+    const row = rawTicker.parse(value);
+    const epoch = Number(row.ts);
+    if (!Number.isSafeInteger(epoch)) throw new Error("Invalid OKX ticker timestamp");
+    const observedAt = new Date(epoch).toISOString();
+    tickers.push(TradingTickerSchema.parse({
+      venue: "okx",
+      kind: "spot",
+      symbol,
+      observedAt,
+      fetchedAt,
+      bid: row.bidPx,
+      ask: row.askPx,
+      quoteVolume24h: row.volCcy24h,
+    }));
+  }
+  return tickers;
 }
