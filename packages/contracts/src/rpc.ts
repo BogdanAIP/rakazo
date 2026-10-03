@@ -90,7 +90,9 @@ import { MessageReactionSchema } from "./reactions.js";
 import { RunsListOutputSchema } from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
 import {
+  TradingCandleResearchInputSchema,
   TradingCatalogOutputSchema,
+  TradingResearchOutputSchema,
   TradingScanOutputSchema,
   TradingScanRequestSchema,
 } from "./trading.js";
@@ -166,6 +168,8 @@ export const appContract = {
     list: oc.input(TradingScanRequestSchema).output(TradingScanOutputSchema),
     /** CEX spot, perpetual and dated-future public metadata, not private account instruments. */
     catalog: oc.input(z.object({})).output(TradingCatalogOutputSchema),
+    /** Research-only reproducible proposal / NO_TRADE from confirmed candles. */
+    analyze: oc.input(TradingCandleResearchInputSchema).output(TradingResearchOutputSchema),
   },
   aiConsent: {
     status: oc.input(AiConsentQuerySchema).output(AiConsentStatusSchema),
