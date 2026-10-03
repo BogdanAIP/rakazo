@@ -56,9 +56,8 @@ export async function runOpenCliProcess(entry: string, argv: string[]): Promise<
       env: {
         ...process.env,
         OPENCLI_BROWSER_COMMAND_TIMEOUT: "10",
-        // Keep owned automation tabs out of the user's foreground Chrome window.
-        // An explicit host override can still request foreground for live debugging.
-        OPENCLI_WINDOW: process.env.RAKAZO_OPENCLI_WINDOW?.trim() || "background",
+        // Keep automation visible to the owner; close only owned sessions after tasks.
+        OPENCLI_WINDOW: process.env.RAKAZO_OPENCLI_WINDOW?.trim() || "foreground",
       },
     });
     let output = "";
