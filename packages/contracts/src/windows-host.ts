@@ -92,12 +92,22 @@ export const WindowsHostBrowserActionSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
+// A server-minted bearer capability. It is never derived from botId or a guessed
+// ChatGPT conversation identity, which the current stdio MCP transport does not expose.
+export const WindowsHostBrowserSessionTokenSchema = z.string().uuid();
+
 export const WindowsHostBrowserRequestSchema = z.discriminatedUnion("command", [
-  z.object({ command: z.literal("navigate"), url: z.string().url().max(4_096) }),
-  z.object({ command: z.literal("snapshot") }),
-  z.object({ command: z.literal("close") }),
+  z.object({ command: z.literal("open") }),
+  z.object({
+    command: z.literal("navigate"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    url: z.string().url().max(4_096),
+  }),
+  z.object({ command: z.literal("snapshot"), sessionToken: WindowsHostBrowserSessionTokenSchema }),
+  z.object({ command: z.literal("close"), sessionToken: WindowsHostBrowserSessionTokenSchema }),
   z.object({
     command: z.literal("act"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
     actions: z.array(WindowsHostBrowserActionSchema).min(1).max(4),
   }),
 ]);
