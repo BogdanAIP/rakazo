@@ -27,20 +27,11 @@ const history = (variant: "up" | "flat") =>
   envelope(
     Array.from({ length: 21 }, (_, i) => {
       const recent = i === 20;
-      const p = recent && variant === "up"
-        ? ["99", "110", "98", "108", "200"]
-        : ["97", "100", "95", "98", recent ? "200" : "100"];
-      return [
-        String(start + i * 3_600_000),
-        p[0],
-        p[1],
-        p[2],
-        p[3],
-        "4",
-        "10",
-        p[4],
-        "1",
-      ];
+      const p =
+        recent && variant === "up"
+          ? ["99", "110", "98", "108", "200"]
+          : ["97", "100", "95", "98", recent ? "200" : "100"];
+      return [String(start + i * 3_600_000), p[0], p[1], p[2], p[3], "4", "10", p[4], "1"];
     }).reverse(),
   );
 const catalog = [
@@ -48,12 +39,13 @@ const catalog = [
   envelope([]),
   envelope([]),
 ];
-function setup(
-  {
-    failFirst = false,
-    divergent = false,
-  }: { failFirst?: boolean; divergent?: boolean } = {},
-) {
+function setup({
+  failFirst = false,
+  divergent = false,
+}: {
+  failFirst?: boolean;
+  divergent?: boolean;
+} = {}) {
   const tickerData = envelope([
     ticker("SOL", divergent ? "1" : "108", divergent ? "1.001" : "108.1", "800000"),
     ticker("DOGE", "98", "98.01", "500000"),
@@ -73,8 +65,7 @@ function setup(
   });
   return { mock, fetchImpl: mock as unknown as typeof fetch };
 }
-const policy = (maxInstruments: number) =>
-  TradingSweepRequestSchema.parse({ maxInstruments });
+const policy = (maxInstruments: number) => TradingSweepRequestSchema.parse({ maxInstruments });
 
 describe("bounded OKX multi-altcoin research", () => {
   it("discovers dynamic markets, research-proposes one and abstains on another", async () => {
@@ -120,10 +111,12 @@ describe("bounded OKX multi-altcoin research", () => {
       fetchImpl: fake.fetchImpl,
       now,
     });
-    expect(result.unavailable).toEqual([{
-      symbol: "SOL-USDT",
-      reason: "history_unavailable_or_invalid",
-    }]);
+    expect(result.unavailable).toEqual([
+      {
+        symbol: "SOL-USDT",
+        reason: "history_unavailable_or_invalid",
+      },
+    ]);
     expect(result.analyzed.map((r) => r.market.symbol)).toEqual(["DOGE-USDT"]);
     expect(result.analyzed[0]?.signal.kind).toBe("no_trade");
   });
