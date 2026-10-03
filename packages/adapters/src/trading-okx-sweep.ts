@@ -1,7 +1,7 @@
 import type {
   TradingResearchOutput,
-  TradingSweepRequest,
   TradingSweepOutput,
+  TradingSweepRequest,
 } from "@rakazo/contracts";
 import { TradingSweepOutputSchema } from "@rakazo/contracts";
 import { researchClosedHourBreakout, scanTradingMarkets } from "@rakazo/core";
@@ -21,7 +21,11 @@ export async function sweepOkxSpotResearch(
 ): Promise<TradingSweepOutput> {
   const now = options.now ?? new Date();
   if (!Number.isFinite(now.getTime())) throw new Error("Invalid sweep clock");
-  if (!Number.isInteger(policy.maxInstruments) || policy.maxInstruments < 1 || policy.maxInstruments > 5) {
+  if (
+    !Number.isInteger(policy.maxInstruments) ||
+    policy.maxInstruments < 1 ||
+    policy.maxInstruments > 5
+  ) {
     throw new Error("Sweep must analyze one to five instruments only");
   }
   const fetchImpl = options.fetchImpl;
