@@ -256,7 +256,6 @@ export const TradingSweepOutputSchema = z.object({
 });
 export type TradingSweepOutput = z.infer<typeof TradingSweepOutputSchema>;
 
-
 /** Signed, finite funding rate only; NOT an order-price or quantity schema. */
 export const TradingSignedRateSchema = z
   .string()
@@ -265,7 +264,10 @@ export const TradingSignedRateSchema = z
   .refine((value) => Number.isFinite(Number(value)), "Finite funding rate required");
 
 export const TradingPerpContextInputSchema = z.object({
-  symbol: z.string().regex(/^[A-Z0-9]+-[A-Z0-9]+-SWAP$/).max(128),
+  symbol: z
+    .string()
+    .regex(/^[A-Z0-9]+-[A-Z0-9]+-SWAP$/)
+    .max(128),
 });
 export type TradingPerpContextInput = z.infer<typeof TradingPerpContextInputSchema>;
 
