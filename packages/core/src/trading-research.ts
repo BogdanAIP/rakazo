@@ -32,7 +32,8 @@ export function researchClosedHourBreakout(input: ResearchInput): TradingResearc
   }
   const createdAt = now.toISOString();
   const latest = candles.at(-1);
-  const closedAt = latest ? Date.parse(latest.openedAt) + HOUR : null;
+  const latestOpened = latest ? Date.parse(latest.openedAt) : Number.NaN;
+  const closedAt = Number.isFinite(latestOpened) ? latestOpened + HOUR : null;
   const evidenceId = "okx:" + market.symbol + ":1H:" + (latest?.openedAt ?? "no-bars");
   const resultBase = {
     algorithm: STRATEGY as const,
