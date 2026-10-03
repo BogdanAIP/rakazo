@@ -47,6 +47,9 @@ export function scanTradingMarkets(
   }
 
   const byKey = new Map(tickers.map((ticker) => [key(ticker), ticker] as const));
+  if (byKey.size !== tickers.length || new Set(markets.map(key)).size !== markets.length) {
+    throw new Error("Duplicate trading market or ticker");
+  }
   const allowed = new Set(policy.allowedQuotes);
   const result: MarketScanResult = { candidates: [], excluded: [] };
   const reject = (market: TradingInstrument, reason: MarketExclusionReason) => {
