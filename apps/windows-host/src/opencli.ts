@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -7,6 +8,10 @@ import type { WindowsHostBrowserRequest, WindowsHostBrowserResult } from "@rakaz
 const MAX_OUTPUT_BYTES = 64 * 1024;
 const COMMAND_TIMEOUT_MS = 12_000;
 const MAX_ACTIONS = 4;
+const MAX_ACTIVE_SESSIONS = 32;
+// OpenCLI releases inactive owned tabs itself after ten minutes. A longer
+// host-side TTL bounds abandoned bearer capabilities without racing that cleanup.
+const SESSION_TOKEN_TTL_MS = 30 * 60_000;
 const SAFE_BOT_ID = /^[a-zA-Z0-9_-]{1,100}$/u;
 
 export interface OpenCliConfiguration {
@@ -127,6 +132,7 @@ function parseElements(tree: string): BrowserObservation["elements"] {
  */
 export class WindowsOpenCliBackend {
   private readonly observations = new Map<string, BrowserObservation>();
+  private readonly sessions = new Map<string, { botId: string; lastActivity: number }>();
 
   constructor(
     private readonly config: OpenCliConfiguration = loadOpenCliConfiguration(),
@@ -147,7 +153,38 @@ export class WindowsOpenCliBackend {
         "OpenCLI is unavailable: provide a valid RAKAZO_OPENCLI_ENTRY or install the existing OpenCLI entry",
       );
     }
-    const session = `rakazo-${botId}`;
+
+    // The stdio MCP server currently has no trusted per-chat identity. Mint an
+    // unguessable explicit bearer per browser task, instead of sharing botId.
+    // Never list capabilities or accept a caller-chosen OpenCLI session name.
+    if (request.command === "open") {
+      const now = Date.now();
+      for (const [token, state] of this.sessions) {
+        if (now - state.lastActivity >= SESSION_TOKEN_TTL_MS) {
+          this.sessions.delete(token);
+          this.observations.delete(token);
+        }
+      }
+      if (this.sessions.size >= MAX_ACTIVE_SESSIONS) {
+        throw new Error("Too many live browser sessions; close your own session or wait for expiry");
+      }
+      const sessionToken = randomUUID();
+      this.sessions.set(sessionToken, { botId, lastActivity: now });
+      return { ok: true, sessionToken };
+    }
+
+    const token = request.sessionToken;
+    const owned = this.sessions.get(token);
+    if (!owned || owned.botId !== botId) {
+      throw new Error("Unknown browser session; open a new session first");
+    }
+    if (Date.now() - owned.lastActivity >= SESSION_TOKEN_TTL_MS) {
+      this.sessions.delete(token);
+      this.observations.delete(token);
+      throw new Error("Browser session expired; open a new session first");
+    }
+    owned.lastActivity = Date.now();
+    const session = "rakazo-" + botId + "-" + token.replace(/-/gu, "");
     const invoke = (...args: string[]) =>
       this.runner(this.config.entry, [
         ...(this.config.profile ? ["--profile", this.config.profile] : []),
@@ -161,14 +198,17 @@ export class WindowsOpenCliBackend {
       const url = (await invoke("get", "url")).trim();
       const title = (await invoke("get", "title")).trim();
       const snapshot = { tree, url, title, elements: parseElements(tree) };
-      this.observations.set(botId, snapshot);
+      this.observations.set(token, snapshot);
       return snapshot;
     };
 
     if (request.command === "close") {
-      // Release only this bot's owned OpenCLI session, never the user's Chrome tabs.
+      // An explicit token is required: no global window/profile/tab cleanup.
+      // OpenCLI may retain its OWN reusable blank tab; never remove or ungroup
+      // Chrome tabs by their visible group name, which is not proof of ownership.
       await invoke("close");
-      this.observations.delete(botId);
+      this.observations.delete(token);
+      this.sessions.delete(token);
       return { ok: true };
     }
 
@@ -187,14 +227,14 @@ export class WindowsOpenCliBackend {
     if (request.actions.length > MAX_ACTIONS) {
       throw new Error("At most four browser actions may be executed per command");
     }
-    const previous = this.observations.get(botId);
+    const previous = this.observations.get(token);
     if (!previous) throw new Error("Observe this browser session before acting");
     let completed = 0;
     try {
       for (const action of request.actions) {
         const current = await observe();
         const expected = previous.elements.find((element) => element.ref === action.ref);
-        const actual = current.elements.find((element) => element.ref === action.ref);
+        const actual = current.elements.find((element) => action.ref === element.ref);
         if (
           !expected ||
           !actual ||
@@ -218,7 +258,7 @@ export class WindowsOpenCliBackend {
       }
       return { ok: true, completed, ...(await observe()) };
     } catch (error) {
-      this.observations.delete(botId);
+      this.observations.delete(token);
       return {
         ok: false,
         completed,
