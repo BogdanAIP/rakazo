@@ -223,7 +223,6 @@ export const TradingResearchOutputSchema = z.object({
 });
 export type TradingResearchOutput = z.infer<typeof TradingResearchOutputSchema>;
 
-
 /**
  * User-invoked, bounded cross-altcoin research. Candidate selection is by
  * quote turnover / data quality ONLY, not predicted profitability.
@@ -246,11 +245,13 @@ export const TradingSweepOutputSchema = z.object({
   filteredOutCount: z.number().int().nonnegative(),
   /** Research outputs include proposals AND NO_TRADE, never executable orders. */
   analyzed: z.array(TradingResearchOutputSchema).max(5),
-  unavailable: z.array(
-    z.object({
-      symbol: z.string().min(3).max(128),
-      reason: z.literal("history_unavailable_or_invalid"),
-    }),
-  ).max(5),
+  unavailable: z
+    .array(
+      z.object({
+        symbol: z.string().min(3).max(128),
+        reason: z.literal("history_unavailable_or_invalid"),
+      }),
+    )
+    .max(5),
 });
 export type TradingSweepOutput = z.infer<typeof TradingSweepOutputSchema>;
