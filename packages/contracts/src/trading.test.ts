@@ -80,6 +80,7 @@ describe("trading contracts (research-only)", () => {
       stopLoss: "136",
       takeProfit: ["145", "150"],
       invalidation: "Price closes below support",
+      rationale: "Synthetic fixture; not a live trading signal.",
       riskBudgetQuote: "10",
       maxSlippageBps: 25,
     };
