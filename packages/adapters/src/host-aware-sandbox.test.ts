@@ -165,6 +165,27 @@ describe("host-aware sandbox", () => {
     expect(sandboxKindForBot("fake", "this-mac")).toBe("fake");
   });
 
+  it("routes explicit ChatGPT browser sessions only to the physical Host", async () => {
+    const isolated: SandboxProvider = new FakeSandboxProvider();
+    const host: SandboxProvider = new DesktopSandboxProvider();
+    const dispatch = vi.fn().mockResolvedValue({
+      ok: true, sessionToken: "5dbeaa77-8298-4d12-8127-bcc6d18d0029",
+    });
+    host.desktopBrowserSession = dispatch;
+    const sandbox = new HostAwareSandbox(isolated, host, async () => true);
+    const desktop: ComputerRef = {
+      id: "physical", botId: "bot-a", providerRef: "host-one", kind: "desktop",
+    };
+    expect(await sandbox.desktopBrowserSession!(desktop, { command: "open" }, ctx)).toMatchObject({
+      ok: true, sessionToken: "5dbeaa77-8298-4d12-8127-bcc6d18d0029",
+    });
+    expect(dispatch).toHaveBeenCalledWith(desktop, { command: "open" }, ctx);
+    await expect(sandbox.desktopBrowserSession!(
+      { ...desktop, kind: "docker" }, { command: "open" }, ctx,
+    )).rejects.toThrow("requires a desktop computer");
+    expect(dispatch).toHaveBeenCalledOnce();
+  });
+
   it("forwards pageBrowser to the routed provider", async () => {
     const isolated: SandboxProvider = new FakeSandboxProvider();
     const calls: unknown[] = [];
