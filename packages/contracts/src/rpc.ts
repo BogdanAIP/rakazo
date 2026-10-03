@@ -88,6 +88,7 @@ import {
 } from "./integration-settings.js";
 import { MessageReactionSchema } from "./reactions.js";
 import { RunsListOutputSchema } from "./runs.js";
+import { TradingScanOutputSchema, TradingScanRequestSchema } from "./trading.js";
 import { SearchQueryOutputSchema } from "./search.js";
 import {
   WindowsHostBrowserRequestSchema,
@@ -156,6 +157,10 @@ const threadSendInput = threadTarget
   });
 
 export const appContract = {
+  trading: {
+    /** Public-market shortlist only; no private keys, order placement or account state. */
+    list: oc.input(TradingScanRequestSchema).output(TradingScanOutputSchema),
+  },
   aiConsent: {
     status: oc.input(AiConsentQuerySchema).output(AiConsentStatusSchema),
     allow: oc
