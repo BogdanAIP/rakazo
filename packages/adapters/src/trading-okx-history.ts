@@ -1,8 +1,8 @@
 import {
-  TradingCandleSchema,
-  TradingInstrumentSchema,
   type TradingCandle,
+  TradingCandleSchema,
   type TradingInstrument,
+  TradingInstrumentSchema,
 } from "@rakazo/contracts";
 import * as z from "zod";
 
@@ -18,17 +18,21 @@ const HOUR_MS = 3_600_000;
 const MAX_RESPONSE_CHARS = 256 * 1024;
 const responseSchema = z.object({
   code: z.string(),
-  data: z.array(z.tuple([
-    z.string(),
-    z.string(),
-    z.string(),
-    z.string(),
-    z.string(),
-    z.string(),
-    z.string(),
-    z.string(),
-    z.enum(["0", "1"]),
-  ])).max(100),
+  data: z
+    .array(
+      z.tuple([
+        z.string(),
+        z.string(),
+        z.string(),
+        z.string(),
+        z.string(),
+        z.string(),
+        z.string(),
+        z.string(),
+        z.enum(["0", "1"]),
+      ]),
+    )
+    .max(100),
 });
 export type OkxClosedHistory = {
   fetchedAt: string;
@@ -50,8 +54,11 @@ export async function fetchOkxClosedOneHourHistory(
   const nowMs = (options.now ?? new Date()).getTime();
   if (!Number.isFinite(nowMs)) throw new Error("Invalid history clock");
   const fetchImpl = options.fetchImpl ?? fetch;
-  const url = ORIGIN + "/api/v5/market/history-candles?instId=" +
-    encodeURIComponent(market.symbol) + "&bar=1H&limit=100";
+  const url =
+    ORIGIN +
+    "/api/v5/market/history-candles?instId=" +
+    encodeURIComponent(market.symbol) +
+    "&bar=1H&limit=100";
   const response = await fetchImpl(url, {
     method: "GET",
     redirect: "error",
