@@ -69,7 +69,7 @@ export const TradingPaperAssessmentSchema = z.discriminatedUnion("status", [
     symbol: z.string().min(3),
     quantityBase: TradingPositiveDecimalSchema,
     assumedEntryQuote: TradingPositiveDecimalSchema,
-    estimatedStopLossQuote: TradingPositiveDecimalSchema,
+    estimatedStopProceedsQuote: TradingPositiveDecimalSchema,
     worstCaseStopRiskQuote: TradingPositiveDecimalSchema,
     assumedRoundTripCostQuote: TradingDecimalSchema,
     estimatedNotionalQuote: TradingPositiveDecimalSchema,
