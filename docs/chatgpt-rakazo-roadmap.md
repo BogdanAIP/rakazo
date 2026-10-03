@@ -1362,3 +1362,62 @@ The important sequencing rule is:
 > **Do not spend time polishing Plugin UI while the direct Windows execution path is still missing, and do not delete OpenResearch before direct Windows parity is proven.**
 
 At the same time, all new Windows APIs should be designed so the later UI and MCP Events layers can use them without another backend rewrite.
+
+
+---
+
+## 2026-10-03 — Concurrent ChatGPT / OpenCLI browser session cutover
+
+**Code committed in the native integration branch, NOT yet activated in the running
+API/Host/original borrowed R tunnel.** The running Plugin R still reports the old
+computer/browser schema without an open command or sessionToken. Do not attempt
+live multi-chat tests against that old process.
+
+Implemented:
+
+- Physical Windows Host mints opaque UUID bearer tokens on explicit
+  computer/browser open; all navigate/snapshot/act/close requests require a
+  server-minted token. A second ChatGPT conversation using the same
+  ChatGPT Windows bot obtains a different OpenCLI session and observation map.
+- A close can only release the exact token's session; unknown, foreign-bot,
+  closed and expired tokens fail without issuing CLI commands. Token idle
+  expiry: 30 minutes, native OpenCLI idle tab lifetime remains independent.
+- Generic internal Rakazo pageBrowser is unchanged and uses graphical fallback
+  on Windows instead of silently opening a botId-wide shared tab.
+- Physical direct sessions traverse the separate desktopBrowserSession method
+  through HostAwareSandbox with the existing actor, computer-control and Host
+  dispatcher checks.
+- OPENCLI_WINDOW stays foreground as the owner requested. No second Chrome
+  profile, pairing, plugin tunnel or internal Rakazo model was created.
+- Plugin R tool description and chatgpt-mcp.md specify the open/use/close
+  lifecycle for future chats. Plugin R does not expose an attested chat ID:
+  the returned token is a task-owned bearer capability, not per-chat auth.
+- The OpenCLI extension currently retains a reusable blank group after a
+  scoped close. Removal of a truly empty owned group needs a separately
+  verified change within OpenCLI's extension; Rakazo must NEVER delete
+  Chrome groups by a shared title or touch tabs it cannot prove it owns.
+
+Verified on physical checkout:
+
+- Native windows-host unit tests: 7 files / 32 tests passed.
+- New physical Host dispatcher tests: 2 passed.
+- Plugin R adapter tests: 6 passed.
+- Contracts, adapter-kit, windows-host, adapters and API typechecks passed
+  after separation of the generic and explicit browser contracts.
+- host-aware-sandbox focused runtime test did not produce a terminal result
+  within the Windows Host's 18-second process command boundary. Do not claim
+  that suite passed. Its types were checked successfully.
+
+Before claiming production completion:
+
+1. Finish a bounded host-aware focused test or capture its CI result.
+2. Coordinate maintenance of the **same registered original R MCP process**
+   so its statically loaded appContract is refreshed; do not create a second
+   R tunnel and do not re-pair Windows Host.
+3. Quit/reopen the existing native Rakazo tray so API/Host run updated code.
+4. Check rakazo_describe("computer/browser") contains open and sessionToken.
+5. Perform live two-token/same-bot A/B navigation, snapshot and scoped close
+   via Plugin R on harmless example pages. Verify B remains after A closes.
+6. Separately test OpenCLI extension group reclamation with genuine ownership
+   evidence; until then close is session-scoped and does not guarantee the
+   visual group disappears. Avoid disrupting other active ChatGPT chats.
