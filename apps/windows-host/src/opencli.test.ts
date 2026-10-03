@@ -1,18 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
+import { WindowsHostBrowserRequestSchema } from "@rakazo/contracts";
 import { type OpenCliRunner, WindowsOpenCliBackend } from "./opencli.js";
 
 function fixture(profile = "quxmf8xh") {
   let tree = '[1] button "Save"\n[2] textbox "Name"';
-  let url = "https://example.com/form";
+  const urls = new Map<string, string>();
   const runner = vi.fn<OpenCliRunner>(async (_entry, argv) => {
-    const command = argv.slice(argv.indexOf("browser") + 2);
+    const at = argv.indexOf("browser");
+    const session = argv[at + 1]!;
+    const command = argv.slice(at + 2);
     if (command[0] === "open") {
-      url = command[1]!;
+      urls.set(session, command[1]!);
       return "opened";
     }
-    if (command[0] === "close") return "closed";
+    if (command[0] === "close") {
+      urls.delete(session);
+      return "closed";
+    }
     if (command[0] === "state") return tree;
-    if (command[0] === "get" && command[1] === "url") return url;
+    if (command[0] === "get" && command[1] === "url") {
+      return urls.get(session) ?? "https://example.com/form";
+    }
     if (command[0] === "get" && command[1] === "title") return "Example form";
     if (["click", "fill", "type"].includes(command[0] ?? "")) return "ok";
     throw new Error("Unexpected OpenCLI request");
@@ -27,14 +35,24 @@ function fixture(profile = "quxmf8xh") {
   };
 }
 
+async function openSession(backend: WindowsOpenCliBackend, botId: string): Promise<string> {
+  const opened = await backend.browser(botId, { command: "open" });
+  expect(opened.ok).toBe(true);
+  if (!opened.sessionToken) throw new Error("Host did not mint browser token");
+  return opened.sessionToken;
+}
+
+function sessionName(botId: string, token: string): string {
+  return "rakazo-" + botId + "-" + token.replace(/-/gu, "");
+}
+
 describe("WindowsOpenCliBackend", () => {
-  it("lets OpenCLI select the sole connected/default profile when none is explicitly configured", async () => {
-    const { runner } = fixture("");
-    const backend = new WindowsOpenCliBackend({ entry: process.execPath, profile: "" }, runner);
-    expect(backend.available()).toBe(true);
-    const response = await backend.browser("bot-a", { command: "snapshot" });
+  it("lets OpenCLI resolve the only/default connected Chrome profile", async () => {
+    const { backend, runner } = fixture("");
+    const token = await openSession(backend, "bot-a");
+    const response = await backend.browser("bot-a", { command: "snapshot", sessionToken: token });
     expect(response).toMatchObject({ ok: true, url: "https://example.com/form" });
-    expect(runner).toHaveBeenCalledWith(process.execPath, ["browser", "rakazo-bot-a", "state"]);
+    expect(runner).toHaveBeenCalledWith(process.execPath, ["browser", sessionName("bot-a", token), "state"]);
     expect(runner.mock.calls.every(([, argv]) => !argv.includes("--profile"))).toBe(true);
   });
 
@@ -43,15 +61,20 @@ describe("WindowsOpenCliBackend", () => {
       throw new Error("Multiple browser profiles connected; choose one first");
     });
     const backend = new WindowsOpenCliBackend({ entry: process.execPath, profile: "" }, runner);
-    await expect(backend.browser("bot-a", { command: "snapshot" })).rejects.toThrow("Multiple browser profiles");
+    const token = await openSession(backend, "bot-a");
+    await expect(backend.browser("bot-a", { command: "snapshot", sessionToken: token })).rejects.toThrow("Multiple browser profiles");
     expect(runner).toHaveBeenCalledTimes(1);
-    expect(runner.mock.calls[0]![1]).toEqual(["browser", "rakazo-bot-a", "state"]);
+    expect(runner.mock.calls[0]![1]).toEqual(["browser", sessionName("bot-a", token), "state"]);
   });
 
-  it("uses a per-bot browser session with explicit profile and returns Rakazo element refs", async () => {
+  it("returns opaque unique tokens and uses the explicit Chrome profile", async () => {
     const { backend, runner } = fixture();
+    const token = await openSession(backend, "bot-a");
+    expect(WindowsHostBrowserRequestSchema.safeParse({ command: "snapshot" }).success).toBe(false);
+    expect(WindowsHostBrowserRequestSchema.safeParse({ command: "snapshot", sessionToken: token }).success).toBe(true);
     const result = await backend.browser("bot-a", {
       command: "navigate",
+      sessionToken: token,
       url: "https://example.com/form",
     });
     expect(result).toMatchObject({
@@ -64,80 +87,108 @@ describe("WindowsOpenCliBackend", () => {
       ],
     });
     expect(runner).toHaveBeenCalledWith(process.execPath, [
-      "--profile",
-      "quxmf8xh",
-      "browser",
-      "rakazo-bot-a",
-      "open",
-      "https://example.com/form",
+      "--profile", "quxmf8xh", "browser", sessionName("bot-a", token),
+      "open", "https://example.com/form",
     ]);
   });
 
-  it("rejects unsafe navigation and malformed bot identifiers", async () => {
+  it("rejects malformed bot identity, unknown tokens and unsafe navigation before CLI", async () => {
     const { backend, runner } = fixture();
-    await expect(backend.browser("../escape", { command: "snapshot" })).rejects.toThrow("identity");
-    await expect(
-      backend.browser("bot-a", {
-        command: "navigate",
-        url: "file:///C:/Users/secret",
-      }),
-    ).rejects.toThrow("HTTP(S)");
+    const token = await openSession(backend, "bot-a");
+    await expect(backend.browser("../escape", { command: "snapshot", sessionToken: token })).rejects.toThrow("identity");
+    await expect(backend.browser("bot-b", { command: "snapshot", sessionToken: token })).rejects.toThrow("Unknown browser session");
+    await expect(backend.browser("bot-a", {
+      command: "snapshot",
+      sessionToken: "8defde6b-2123-4659-ac4d-339ad5413d94",
+    })).rejects.toThrow("Unknown browser session");
+    await expect(backend.browser("bot-a", {
+      command: "navigate",
+      sessionToken: token,
+      url: "file:///C:/Users/secret",
+    })).rejects.toThrow("HTTP(S)");
     expect(runner).not.toHaveBeenCalled();
   });
 
-  it("performs bounded browser actions only after a fresh observation", async () => {
+  it("performs bounded actions only after a fresh per-session observation", async () => {
     const { backend, runner } = fixture();
-    await backend.browser("bot-a", { command: "snapshot" });
+    const token = await openSession(backend, "bot-a");
+    await backend.browser("bot-a", { command: "snapshot", sessionToken: token });
     const result = await backend.browser("bot-a", {
-      command: "act",
+      command: "act", sessionToken: token,
       actions: [{ kind: "click", ref: "e1" }],
     });
     expect(result).toMatchObject({ ok: true, completed: 1 });
     expect(runner).toHaveBeenCalledWith(process.execPath, [
-      "--profile",
-      "quxmf8xh",
-      "browser",
-      "rakazo-bot-a",
-      "click",
-      "1",
+      "--profile", "quxmf8xh", "browser", sessionName("bot-a", token), "click", "1",
     ]);
   });
 
   it("fails closed when a numeric reference changes after the snapshot", async () => {
     const { backend, runner, changeTree } = fixture();
-    await backend.browser("bot-a", { command: "snapshot" });
+    const token = await openSession(backend, "bot-a");
+    await backend.browser("bot-a", { command: "snapshot", sessionToken: token });
     changeTree('[1] button "Delete"');
     const result = await backend.browser("bot-a", {
-      command: "act",
+      command: "act", sessionToken: token,
       actions: [{ kind: "click", ref: "e1" }],
     });
     expect(result).toMatchObject({ ok: false, completed: 0, uncertain: false });
     expect(runner.mock.calls.some(([, argv]) => argv.includes("click"))).toBe(false);
   });
 
-  it("closes only the owned per-bot OpenCLI session and clears stale element refs", async () => {
+  it("does not allow closing or navigating another task's session, even on the same bot", async () => {
     const { backend, runner } = fixture();
-    await backend.browser("bot-a", { command: "snapshot" });
-    expect(await backend.browser("bot-a", { command: "close" })).toEqual({ ok: true });
-    expect(runner).toHaveBeenCalledWith(process.execPath, [
-      "--profile",
-      "quxmf8xh",
-      "browser",
-      "rakazo-bot-a",
-      "close",
-    ]);
-    const callsAfterClose = runner.mock.calls.length;
-    await expect(
-      backend.browser("bot-a", { command: "act", actions: [{ kind: "click", ref: "e1" }] }),
-    ).rejects.toThrow("Observe this browser session before acting");
-    expect(runner).toHaveBeenCalledTimes(callsAfterClose);
+    const [a, b] = await Promise.all([openSession(backend, "bot-a"), openSession(backend, "bot-a")]);
+    expect(a).not.toBe(b);
+    expect(sessionName("bot-a", a)).not.toBe(sessionName("bot-a", b));
+    await backend.browser("bot-a", { command: "navigate", sessionToken: a, url: "https://example.com/a" });
+    await backend.browser("bot-a", { command: "navigate", sessionToken: b, url: "https://example.com/b" });
+    expect((await backend.browser("bot-a", { command: "snapshot", sessionToken: a })).url).toBe("https://example.com/a");
+    expect((await backend.browser("bot-a", { command: "snapshot", sessionToken: b })).url).toBe("https://example.com/b");
+    expect(await backend.browser("bot-a", { command: "close", sessionToken: a })).toEqual({ ok: true });
+    expect((await backend.browser("bot-a", { command: "snapshot", sessionToken: b })).url).toBe("https://example.com/b");
+    await expect(backend.browser("bot-a", { command: "snapshot", sessionToken: a })).rejects.toThrow("Unknown browser session");
+    const closeCalls = runner.mock.calls.filter(([, argv]) => argv.at(-1) === "close");
+    expect(closeCalls).toHaveLength(1);
+    expect(closeCalls[0]![1]).toContain(sessionName("bot-a", a));
+    expect(closeCalls[0]![1]).not.toContain(sessionName("bot-a", b));
+  });
+
+  it("clears stale element refs when the owner closes the session", async () => {
+    const { backend, runner } = fixture();
+    const token = await openSession(backend, "bot-a");
+    await backend.browser("bot-a", { command: "snapshot", sessionToken: token });
+    expect(await backend.browser("bot-a", { command: "close", sessionToken: token })).toEqual({ ok: true });
+    const calls = runner.mock.calls.length;
+    await expect(backend.browser("bot-a", {
+      command: "act", sessionToken: token, actions: [{ kind: "click", ref: "e1" }],
+    })).rejects.toThrow("Unknown browser session");
+    expect(runner).toHaveBeenCalledTimes(calls);
+  });
+
+  it("expires forgotten bearer tokens without accepting commands for a stale session", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-10-03T00:00:00Z"));
+      const { backend, runner } = fixture();
+      const token = await openSession(backend, "bot-a");
+      vi.setSystemTime(new Date("2026-10-03T00:31:00Z"));
+      await expect(backend.browser("bot-a", {
+        command: "snapshot", sessionToken: token,
+      })).rejects.toThrow("expired");
+      expect(runner).not.toHaveBeenCalled();
+      expect(await openSession(backend, "bot-a")).not.toBe(token);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("enforces origin checks before entering content", async () => {
     const { backend, runner } = fixture();
-    await backend.browser("bot-a", { command: "snapshot" });
+    const token = await openSession(backend, "bot-a");
+    await backend.browser("bot-a", { command: "snapshot", sessionToken: token });
     const result = await backend.browser("bot-a", {
-      command: "act",
+      command: "act", sessionToken: token,
       actions: [{ kind: "fill", ref: "e2", text: "harmless", origin: "https://other.example" }],
     });
     expect(result).toMatchObject({ ok: false, completed: 0 });
