@@ -88,8 +88,8 @@ import {
 } from "./integration-settings.js";
 import { MessageReactionSchema } from "./reactions.js";
 import { RunsListOutputSchema } from "./runs.js";
-import { TradingScanOutputSchema, TradingScanRequestSchema } from "./trading.js";
 import { SearchQueryOutputSchema } from "./search.js";
+import { TradingScanOutputSchema, TradingScanRequestSchema } from "./trading.js";
 import {
   WindowsHostBrowserRequestSchema,
   WindowsHostBrowserResultSchema,
