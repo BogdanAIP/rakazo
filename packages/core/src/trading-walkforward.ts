@@ -1,8 +1,8 @@
 import {
   TradingCandleSchema,
   type TradingWalkforwardInput,
-  type TradingWalkforwardOutput,
   TradingWalkforwardInputSchema,
+  type TradingWalkforwardOutput,
   TradingWalkforwardOutputSchema,
 } from "@rakazo/contracts";
 import { replayExplicitTradingFills } from "./trading-replay.js";
