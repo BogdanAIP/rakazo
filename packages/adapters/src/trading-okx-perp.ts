@@ -1,11 +1,11 @@
 import {
+  TradingDecimalSchema,
   type TradingInstrument,
   TradingInstrumentSchema,
-  TradingDecimalSchema,
+  type TradingPerpContext,
   TradingPerpContextSchema,
   TradingPositiveDecimalSchema,
   TradingSignedRateSchema,
-  type TradingPerpContext,
 } from "@rakazo/contracts";
 import * as z from "zod";
 
@@ -78,18 +78,19 @@ export async function fetchOkxPublicPerpContext(
     } catch {
       throw new Error("OKX public perpetual response is not JSON");
     }
-    const decoded = z.object({ code: z.string(), data: z.array(z.unknown()).max(10) }).parse(payload);
+    const decoded = z
+      .object({ code: z.string(), data: z.array(z.unknown()).max(10) })
+      .parse(payload);
     if (decoded.code !== "0") throw new Error("OKX public perpetual API error: " + decoded.code);
-    if (decoded.data.length !== 1) throw new Error("Expected exactly one instrument telemetry record");
+    if (decoded.data.length !== 1)
+      throw new Error("Expected exactly one instrument telemetry record");
     return decoded.data[0];
   };
   const funding = fund.parse(await load("/api/v5/public/funding-rate?instId=" + symbol));
   const interest = oi.parse(
     await load("/api/v5/public/open-interest?instType=SWAP&instId=" + symbol),
   );
-  const marked = mark.parse(
-    await load("/api/v5/public/mark-price?instType=SWAP&instId=" + symbol),
-  );
+  const marked = mark.parse(await load("/api/v5/public/mark-price?instType=SWAP&instId=" + symbol));
   if ([funding.instId, interest.instId, marked.instId].some((id) => id !== market.symbol)) {
     throw new Error("Cross-instrument OKX perpetual telemetry mismatch");
   }
