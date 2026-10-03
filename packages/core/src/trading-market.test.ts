@@ -49,7 +49,9 @@ describe("read-only trading scanner", () => {
     ];
     const result = scanTradingMarkets(markets, ticks, policy, NOW);
     expect(result.candidates.map((item) => item.market.symbol)).toEqual([
-      "SOL-USDT", "ADA-USDT", "DOGE-USDT",
+      "SOL-USDT",
+      "ADA-USDT",
+      "DOGE-USDT",
     ]);
     expect(result.excluded).toEqual([]);
     expect("orders" in result).toBe(false);
@@ -100,18 +102,18 @@ describe("read-only trading scanner", () => {
     ]);
   });
 
-
   it("rejects duplicated observations or market identities instead of selecting the last one", () => {
-    expect(() => scanTradingMarkets(
-      [market("SOL")],
-      [ticker("SOL-USDT"), ticker("SOL-USDT", { bid: "1", ask: "2" })],
-      policy, NOW,
-    )).toThrow("Duplicate");
-    expect(() => scanTradingMarkets(
-      [market("SOL"), market("SOL")],
-      [ticker("SOL-USDT")],
-      policy, NOW,
-    )).toThrow("Duplicate");
+    expect(() =>
+      scanTradingMarkets(
+        [market("SOL")],
+        [ticker("SOL-USDT"), ticker("SOL-USDT", { bid: "1", ask: "2" })],
+        policy,
+        NOW,
+      ),
+    ).toThrow("Duplicate");
+    expect(() =>
+      scanTradingMarkets([market("SOL"), market("SOL")], [ticker("SOL-USDT")], policy, NOW),
+    ).toThrow("Duplicate");
   });
 
   it("rejects unsafe policy instead of silently weakening filters", () => {
