@@ -92,9 +92,9 @@ import { SearchQueryOutputSchema } from "./search.js";
 import {
   TradingCandleResearchInputSchema,
   TradingCatalogOutputSchema,
-  TradingResearchOutputSchema,
   TradingPerpContextInputSchema,
   TradingPerpContextSchema,
+  TradingResearchOutputSchema,
   TradingScanOutputSchema,
   TradingScanRequestSchema,
   TradingSweepOutputSchema,
