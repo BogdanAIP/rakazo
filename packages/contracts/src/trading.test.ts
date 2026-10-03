@@ -43,23 +43,29 @@ describe("trading contracts (research-only)", () => {
 
   it("rejects missing/non-finite/negative precision and malformed tickers", () => {
     expect(TradingInstrumentSchema.safeParse({ ...spot, priceIncrement: "0" }).success).toBe(false);
-    expect(TradingInstrumentSchema.safeParse({ ...spot, priceIncrement: "Infinity" }).success).toBe(false);
-    expect(TradingTickerSchema.safeParse({
-      venue: "bingx",
-      kind: "spot",
-      symbol: "SOL-USDT",
-      observedAt: "2026-10-03T10:00:00.000Z",
-      fetchedAt: "2026-10-03T10:00:00.000Z",
-      bid: "-1",
-      ask: "10",
-      quoteVolume24h: "100000",
-    }).success).toBe(false);
+    expect(TradingInstrumentSchema.safeParse({ ...spot, priceIncrement: "Infinity" }).success).toBe(
+      false,
+    );
+    expect(
+      TradingTickerSchema.safeParse({
+        venue: "bingx",
+        kind: "spot",
+        symbol: "SOL-USDT",
+        observedAt: "2026-10-03T10:00:00.000Z",
+        fetchedAt: "2026-10-03T10:00:00.000Z",
+        bid: "-1",
+        ask: "10",
+        quoteVolume24h: "100000",
+      }).success,
+    ).toBe(false);
   });
 
   it("accepts NO_TRADE and requires a forward expiration", () => {
     const abstain = { ...base, kind: "no_trade", reason: "Data are stale" };
     expect(TradingSignalSchema.parse(abstain).kind).toBe("no_trade");
-    expect(TradingSignalSchema.safeParse({ ...abstain, expiresAt: base.createdAt }).success).toBe(false);
+    expect(TradingSignalSchema.safeParse({ ...abstain, expiresAt: base.createdAt }).success).toBe(
+      false,
+    );
     expect(TradingSignalSchema.safeParse({ ...abstain, evidenceIds: [] }).success).toBe(false);
   });
 
@@ -78,7 +84,9 @@ describe("trading contracts (research-only)", () => {
       maxSlippageBps: 25,
     };
     expect(TradingSignalSchema.parse(proposal).kind).toBe("proposal");
-    expect(TradingSignalSchema.safeParse({ ...proposal, executionStatus: "live" }).success).toBe(false);
+    expect(TradingSignalSchema.safeParse({ ...proposal, executionStatus: "live" }).success).toBe(
+      false,
+    );
     expect(TradingSignalSchema.safeParse({ ...proposal, action: "short" }).success).toBe(false);
     expect(TradingSignalSchema.safeParse({ ...proposal, maxSlippageBps: -1 }).success).toBe(false);
   });
