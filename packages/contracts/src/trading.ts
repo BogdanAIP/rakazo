@@ -76,8 +76,11 @@ export const TradingSignalSchema = z
       stopLoss: TradingPositiveDecimalSchema,
       takeProfit: z.array(TradingPositiveDecimalSchema).min(1).max(8),
       invalidation: z.string().trim().min(1).max(2_000),
-      riskBudgetQuote: TradingPositiveDecimalSchema,
-      maxSlippageBps: z.number().finite().min(0).max(10_000),
+      rationale: z.string().trim().min(1).max(2_000),
+      /** Null until explicitly provisioned from authorized account risk settings. */
+      riskBudgetQuote: TradingPositiveDecimalSchema.nullable(),
+      /** Null until order-book/depth and execution costs are independently checked. */
+      maxSlippageBps: z.number().finite().min(0).max(10_000).nullable(),
     }),
   ])
   .superRefine((signal, ctx) => {
@@ -169,3 +172,51 @@ export const TradingCatalogOutputSchema = z.object({
     }),
   ),
 });
+
+
+/** Exactly one closed 1H source bar; quote volume is normalized by OKX volCcyQuote. */
+export const TradingCandleSchema = z
+  .object({
+    venue: z.literal("okx"),
+    kind: z.enum(["spot", "perpetual", "dated_future"]),
+    symbol: z.string().trim().min(3).max(128),
+    openedAt: IsoDate,
+    durationMs: z.literal(3_600_000),
+    open: TradingPositiveDecimalSchema,
+    high: TradingPositiveDecimalSchema,
+    low: TradingPositiveDecimalSchema,
+    close: TradingPositiveDecimalSchema,
+    quoteVolume: TradingDecimalSchema,
+    confirmed: z.literal(true),
+  })
+  .superRefine((candle, ctx) => {
+    const o = Number(candle.open);
+    const h = Number(candle.high);
+    const l = Number(candle.low);
+    const c = Number(candle.close);
+    if (l > Math.min(o, c) || h < Math.max(o, c) || l > h) {
+      ctx.addIssue({ code: "custom", path: ["high"], message: "Invalid candle OHLC bounds" });
+    }
+    if (Date.parse(candle.openedAt) % candle.durationMs !== 0) {
+      ctx.addIssue({ code: "custom", path: ["openedAt"], message: "Unaligned 1H candle" });
+    }
+  });
+export type TradingCandle = z.infer<typeof TradingCandleSchema>;
+
+export const TradingCandleResearchInputSchema = z.object({
+  symbol: z.string().regex(/^[A-Z0-9]+(?:-[A-Z0-9]+){1,3}$/).max(128),
+  kind: z.enum(["spot", "perpetual", "dated_future"]),
+});
+export type TradingCandleResearchInput = z.infer<typeof TradingCandleResearchInputSchema>;
+
+export const TradingResearchOutputSchema = z.object({
+  algorithm: z.literal("breakout_20_1h_v1"),
+  venue: z.literal("okx"),
+  market: TradingInstrumentSchema,
+  fetchedAt: IsoDate,
+  candleCount: z.number().int().nonnegative().max(100),
+  latestClosedAt: IsoDate.nullable(),
+  /** No live trade authority, with evidence and explicit abstention. */
+  signal: TradingSignalSchema,
+});
+export type TradingResearchOutput = z.infer<typeof TradingResearchOutputSchema>;
