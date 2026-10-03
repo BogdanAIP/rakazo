@@ -812,12 +812,17 @@ export interface BrowserActResult {
 
 /** A sandbox must route these commands through its owned screen, never generic host execution. */
 export type PageBrowserCommand =
-  | { command: "navigate"; url: string }
-  | { command: "snapshot" }
-  | { command: "close" }
-  | { command: "act"; actions: BrowserActStep[] };
+  | { command: "open" }
+  | { command: "navigate"; sessionToken: string; url: string }
+  | { command: "snapshot"; sessionToken: string }
+  | { command: "close"; sessionToken: string }
+  | { command: "act"; sessionToken: string; actions: BrowserActStep[] };
 
-export type PageBrowserResult = Partial<BrowserSnapshotResult & BrowserActResult> & { ok: boolean };
+export type PageBrowserResult = Partial<BrowserSnapshotResult & BrowserActResult> & {
+  ok: boolean;
+  /** Opaque, host-minted capability returned by open; use only in this chat/task. */
+  sessionToken?: string;
+};
 
 /** Vendor-neutral status for a remote cloud coding agent. */
 export type CloudAgentStatus = "running" | "finished" | "failed" | "cancelled";
