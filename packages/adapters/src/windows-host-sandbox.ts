@@ -16,6 +16,8 @@ import type {
   SnapshotRef,
 } from "@rakazo/adapter-kit";
 import type {
+  WindowsHostBrowserRequest,
+  WindowsHostBrowserResult,
   WindowsHostCommandRequest,
   WindowsHostCommandResult,
   WindowsHostGuiAction,
@@ -58,10 +60,25 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
   }
 
   async pageBrowser(
-    computer: ComputerRef,
-    request: PageBrowserCommand,
-    context: AdapterContext,
+    _computer: ComputerRef,
+    _request: PageBrowserCommand,
+    _context: AdapterContext,
   ): Promise<PageBrowserResult> {
+    // Generic internal agent browser callers do not have an explicit session
+    // capability. Fail safely into the existing graphical fallback rather than
+    // leaking their commands into a shared botId OpenCLI session.
+    return {
+      ok: false,
+      fallback: "computer_act",
+      error: "Desktop browser requires an explicitly opened ChatGPT browser session.",
+    };
+  }
+
+  async desktopBrowserSession(
+    computer: ComputerRef,
+    request: WindowsHostBrowserRequest,
+    context: AdapterContext,
+  ): Promise<WindowsHostBrowserResult> {
     const result = await this.commands.dispatch(
       computer.providerRef,
       { kind: "browser.call", botId: computer.botId, request },
