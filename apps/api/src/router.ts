@@ -60,6 +60,7 @@ import {
   fetchBingxPublicSpotSnapshot,
   fetchOkxClosedOneHourHistory,
   fetchOkxPublicCatalog,
+  fetchOkxPublicPerpContext,
   fetchOkxPublicSpotTickers,
   hasActiveComputerControl,
   isAutoReviewCheckerConfigured,
@@ -687,6 +688,14 @@ export function createRouter(deps: RouterDeps) {
       }),
       catalog: authed.trading.catalog.handler(() => fetchOkxPublicCatalog()),
       sweep: authed.trading.sweep.handler(({ input }) => sweepOkxSpotResearch(input)),
+      perpContext: authed.trading.perpContext.handler(async ({ input }) => {
+        const catalog = await fetchOkxPublicCatalog();
+        const market = catalog.markets.find(
+          (item) => item.kind === "perpetual" && item.symbol === input.symbol,
+        );
+        if (!market) throw new ORPCError("NOT_FOUND", { message: "OKX perpetual unavailable" });
+        return fetchOkxPublicPerpContext(market);
+      }),
       analyze: authed.trading.analyze.handler(async ({ input }) => {
         const catalog = await fetchOkxPublicCatalog();
         const market = catalog.markets.find(
