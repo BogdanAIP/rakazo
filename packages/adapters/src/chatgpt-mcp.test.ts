@@ -24,6 +24,7 @@ describe("ChatGPT Rakazo procedure projection", () => {
     expect(procedures).toContain("windowsHosts/list");
     expect(procedures).toContain("trading/list");
     expect(procedures).toContain("trading/catalog");
+    expect(procedures).toContain("trading/analyze");
     expect(procedures).toContain("windowsHosts/createPairing");
     expect(procedures).toContain("memory/update");
     expect(procedures).toContain("routines/create");
@@ -39,6 +40,8 @@ describe("ChatGPT Rakazo procedure projection", () => {
     expect((await describeProcedure("trading/list")).mode).toBe("read");
     expect(classifyProcedure("trading/catalog")).toBe("read");
     expect((await describeProcedure("trading/catalog")).mode).toBe("read");
+    expect(classifyProcedure("trading/analyze")).toBe("read");
+    expect((await describeProcedure("trading/analyze")).mode).toBe("read");
   });
 
   it("returns concrete JSON input schemas from the runtime contract", async () => {
