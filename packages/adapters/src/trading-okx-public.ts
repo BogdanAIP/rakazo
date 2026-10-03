@@ -1,10 +1,10 @@
-import * as z from "zod";
 import type { TradingInstrument, TradingTicker } from "@rakazo/contracts";
 import {
   TradingInstrumentSchema,
   TradingPositiveDecimalSchema,
   TradingTickerSchema,
 } from "@rakazo/contracts";
+import * as z from "zod";
 
 /**
  * Read-only OKX discovery. No keys, user accounts, orders or ticker-volume
@@ -167,7 +167,6 @@ export async function fetchOkxPublicCatalog(
   return { fetchedAt: (options.now ?? new Date()).toISOString(), markets, excluded };
 }
 
-
 /**
  * OKX documents volCcy24h as quote-currency volume for SPOT, but base-currency
  * volume for derivatives. This function deliberately accepts SPOT markets only.
@@ -180,7 +179,9 @@ export async function fetchOkxPublicSpotTickers(
   if (markets.some((market) => market.venue !== "okx" || market.kind !== "spot")) {
     throw new Error("OKX spot tickers require OKX spot markets only");
   }
-  const known = new Set(markets.filter((market) => market.status === "active").map((m) => m.symbol));
+  const known = new Set(
+    markets.filter((market) => market.status === "active").map((m) => m.symbol),
+  );
   if (new Set(markets.map((market) => market.symbol)).size !== markets.length) {
     throw new Error("Duplicate OKX spot market");
   }
@@ -214,9 +215,10 @@ export async function fetchOkxPublicSpotTickers(
   const seen = new Set<string>();
   const fetchedAt = (options.now ?? new Date()).toISOString();
   for (const value of data.data) {
-    const symbol = typeof value === "object" && value !== null && "instId" in value
-      ? (value as { instId?: unknown }).instId
-      : null;
+    const symbol =
+      typeof value === "object" && value !== null && "instId" in value
+        ? (value as { instId?: unknown }).instId
+        : null;
     if (typeof symbol !== "string" || !known.has(symbol)) continue;
     if (seen.has(symbol)) throw new Error("Duplicate OKX public spot ticker");
     seen.add(symbol);
@@ -224,16 +226,18 @@ export async function fetchOkxPublicSpotTickers(
     const epoch = Number(row.ts);
     if (!Number.isSafeInteger(epoch)) throw new Error("Invalid OKX ticker timestamp");
     const observedAt = new Date(epoch).toISOString();
-    tickers.push(TradingTickerSchema.parse({
-      venue: "okx",
-      kind: "spot",
-      symbol,
-      observedAt,
-      fetchedAt,
-      bid: row.bidPx,
-      ask: row.askPx,
-      quoteVolume24h: row.volCcy24h,
-    }));
+    tickers.push(
+      TradingTickerSchema.parse({
+        venue: "okx",
+        kind: "spot",
+        symbol,
+        observedAt,
+        fetchedAt,
+        bid: row.bidPx,
+        ask: row.askPx,
+        quoteVolume24h: row.volCcy24h,
+      }),
+    );
   }
   return tickers;
 }
