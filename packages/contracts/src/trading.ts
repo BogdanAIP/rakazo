@@ -82,29 +82,46 @@ export const TradingSignalSchema = z
   ])
   .superRefine((signal, ctx) => {
     if (Date.parse(signal.expiresAt) <= Date.parse(signal.createdAt)) {
-      ctx.addIssue({ code: "custom", path: ["expiresAt"], message: "Signal must expire after creation" });
+      ctx.addIssue({
+        code: "custom",
+        path: ["expiresAt"],
+        message: "Signal must expire after creation",
+      });
     }
     if (signal.kind === "proposal") {
       if (
         (signal.action === "spot_buy" || signal.action === "spot_sell") &&
-        signal.market.kind !== "spot" && signal.market.kind !== "dex_swap"
+        signal.market.kind !== "spot" &&
+        signal.market.kind !== "dex_swap"
       ) {
-        ctx.addIssue({ code: "custom", path: ["action"], message: "Spot action requires a spot instrument" });
+        ctx.addIssue({
+          code: "custom",
+          path: ["action"],
+          message: "Spot action requires a spot instrument",
+        });
       }
       if (
         (signal.action === "long" || signal.action === "short") &&
-        signal.market.kind !== "perpetual" && signal.market.kind !== "dated_future"
+        signal.market.kind !== "perpetual" &&
+        signal.market.kind !== "dated_future"
       ) {
-        ctx.addIssue({ code: "custom", path: ["action"], message: "Derivative action requires a future" });
+        ctx.addIssue({
+          code: "custom",
+          path: ["action"],
+          message: "Derivative action requires a future",
+        });
       }
     }
   });
 export type TradingSignal = z.infer<typeof TradingSignalSchema>;
 
-
 /** Read-only, user-invoked market prefilter. It creates no orders or buy/sell signals. */
 export const TradingScanRequestSchema = z.object({
-  allowedQuotes: z.array(z.string().regex(/^[A-Z0-9]{2,20}$/)).min(1).max(20).default(["USDT"]),
+  allowedQuotes: z
+    .array(z.string().regex(/^[A-Z0-9]{2,20}$/))
+    .min(1)
+    .max(20)
+    .default(["USDT"]),
   minQuoteVolume24h: z.number().finite().min(0).max(1e15).default(100_000),
   maxSpreadBps: z.number().finite().min(0).max(10_000).default(40),
   maxDataAgeMs: z.number().int().min(1_000).max(300_000).default(60_000),
@@ -123,14 +140,18 @@ export const TradingExclusionReasonSchema = z.enum([
 
 export const TradingScanOutputSchema = z.object({
   fetchedAt: IsoDate,
-  candidates: z.array(z.object({
-    market: TradingInstrumentSchema,
-    ticker: TradingTickerSchema,
-    spreadBps: z.number().finite().nonnegative(),
-  })),
-  excluded: z.array(z.object({
-    market: TradingInstrumentSchema,
-    reason: TradingExclusionReasonSchema,
-  })),
+  candidates: z.array(
+    z.object({
+      market: TradingInstrumentSchema,
+      ticker: TradingTickerSchema,
+      spreadBps: z.number().finite().nonnegative(),
+    }),
+  ),
+  excluded: z.array(
+    z.object({
+      market: TradingInstrumentSchema,
+      reason: TradingExclusionReasonSchema,
+    }),
+  ),
 });
 export type TradingScanOutput = z.infer<typeof TradingScanOutputSchema>;
