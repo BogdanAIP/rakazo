@@ -280,6 +280,8 @@ export class DesktopSandboxProvider implements SandboxProvider {
   }
 
   private boxFor(computer: ComputerRef): DesktopBox | undefined {
+    // Never reinterpret a remote host UUID as a local desktop path or match it by botId.
+    if (!path.isAbsolute(computer.providerRef)) return undefined;
     const existing = this.boxes.get(computer.id);
     if (existing) return existing;
     for (const box of this.boxes.values()) {

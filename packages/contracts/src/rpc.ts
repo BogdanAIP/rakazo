@@ -89,6 +89,12 @@ import {
 import { MessageReactionSchema } from "./reactions.js";
 import { RunsListOutputSchema } from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
+import {
+  WindowsHostBrowserRequestSchema,
+  WindowsHostBrowserResultSchema,
+  WindowsHostCapabilitySchema,
+  WindowsHostProcessResultSchema,
+} from "./windows-host.js";
 
 const botId = z.object({ botId: Id });
 const groupId = z.object({ groupId: Id });
@@ -187,6 +193,48 @@ export const appContract = {
         }),
       )
       .output(DeploymentSettingsSchema),
+  },
+  windowsHosts: {
+    list: oc.output(
+      z.array(
+        z.object({
+          id: z.string().min(1).max(200),
+          installationId: z.string().uuid(),
+          hostname: z.string().min(1).max(255),
+          platform: z.literal("win32"),
+          release: z.string().min(1).max(128),
+          arch: z.string().min(1).max(32),
+          protocolVersion: z.string().min(1).max(64),
+          runtimeVersion: z.string().min(1).max(64),
+          capabilities: z.array(WindowsHostCapabilitySchema).max(32),
+          revokedAt: IsoDate.nullable(),
+          lastSeenAt: IsoDate.nullable(),
+          createdAt: IsoDate,
+          updatedAt: IsoDate,
+        }),
+      ),
+    ),
+    createPairing: oc
+      .input(
+        z.object({
+          ttlMs: z
+            .number()
+            .int()
+            .min(1_000)
+            .max(30 * 60_000)
+            .optional(),
+        }),
+      )
+      .output(
+        z.object({
+          pairingId: z.string().min(1).max(200),
+          pairingToken: z.string().min(32).max(4096),
+          expiresAt: IsoDate,
+        }),
+      ),
+    revoke: oc
+      .input(z.object({ hostId: z.string().min(1).max(200) }))
+      .output(z.object({ ok: z.literal(true) })),
   },
   /**
    * Deployment-owner product updates. When the Compose updater sidecar is reachable, these proxy
@@ -400,6 +448,36 @@ export const appContract = {
     readFile: oc
       .input(z.object({ botId: Id, path: z.string() }))
       .output(z.object({ path: z.string(), content: z.string() })),
+    exec: oc
+      .input(
+        z.object({
+          botId: Id,
+          argv: z.array(z.string().min(1).max(4_096)).min(1).max(16),
+          cwd: z.string().max(4_096).optional(),
+          timeoutMs: z.number().int().min(100).max(18_000).default(10_000),
+        }),
+      )
+      .output(WindowsHostProcessResultSchema),
+    browser: oc
+      .input(
+        z.object({
+          botId: Id,
+          request: WindowsHostBrowserRequestSchema,
+        }),
+      )
+      .output(WindowsHostBrowserResultSchema),
+    observe: oc.input(botId).output(
+      z.object({
+        frameId: z.string(),
+        capturedAt: z.string(),
+        mimeType: z.enum(["image/png", "image/jpeg"]),
+        imageBase64: z.string(),
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+        cursor: z.object({ x: z.number().nonnegative(), y: z.number().nonnegative() }).optional(),
+        activeWindow: z.object({ id: z.string(), title: z.string().optional() }).optional(),
+      }),
+    ),
     downloadFile: oc
       .input(z.object({ botId: Id, path: z.string().min(1) }))
       .output(z.object({ path: z.string(), contentBase64: z.string() })),

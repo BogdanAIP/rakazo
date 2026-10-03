@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { implement, ORPCError } from "@orpc/server";
 import type {
@@ -120,6 +121,7 @@ import {
   IntegrationProviderIdSchema,
   OPENAI_COMPATIBLE_PROVIDER_ID,
   usableModelId,
+  WindowsHostCapabilitySchema,
 } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
@@ -146,6 +148,7 @@ import {
   createRepos,
   createSpaceForMember,
   createThreadMessageInTransaction,
+  createWindowsHostPairing,
   defaultModelCredentialCandidates,
   deleteEmptySpaceForMember,
   deleteUnreferencedCredentialSecret,
@@ -157,6 +160,7 @@ import {
   InvalidSpaceNameError,
   IsolationError,
   issueMessagingLinkCode,
+  listWindowsHosts,
   lockOwnedGroup,
   newestModelCredentialOrder,
   newestVoiceCredentialOrder,
@@ -165,6 +169,7 @@ import {
   releaseSpaceDeletionClaim,
   renewSpaceDeletionClaim,
   restoreBotUnderComputerQuota,
+  revokeWindowsHost,
   SPACE_DELETION_CLAIM_TIMEOUT_MS,
   SpaceDeletionInProgressError,
   SpaceLimitError,
@@ -173,6 +178,7 @@ import {
   selectSpaceModelPreference,
   selectSpaceVoicePreference,
   touchGroupUpdatedAt,
+  WindowsHostPairingError,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { deleteAgentSecret, listAgentSecrets, putAgentSecret } from "./agent-secrets.js";
@@ -901,6 +907,55 @@ export function createRouter(deps: RouterDeps) {
           },
         });
         return deploymentDto(deps.prisma, deps.env.sandboxProvider);
+      }),
+    },
+    windowsHosts: {
+      list: authed.windowsHosts.list.handler(async ({ context }) => {
+        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
+        const hosts = await listWindowsHosts(deps.prisma, context.actor.userId);
+        return hosts.map((host) => {
+          if (host.platform !== "win32") {
+            throw new Error("Stored Windows host platform is invalid");
+          }
+          const capabilities = WindowsHostCapabilitySchema.array().safeParse(host.capabilities);
+          return {
+            ...host,
+            platform: "win32" as const,
+            capabilities: capabilities.success ? capabilities.data : [],
+            revokedAt: host.revokedAt?.toISOString() ?? null,
+            lastSeenAt: host.lastSeenAt?.toISOString() ?? null,
+            createdAt: host.createdAt.toISOString(),
+            updatedAt: host.updatedAt.toISOString(),
+          };
+        });
+      }),
+      createPairing: authed.windowsHosts.createPairing.handler(async ({ context, input }) => {
+        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
+        try {
+          const pairing = await createWindowsHostPairing(deps.prisma, {
+            ownerUserId: context.actor.userId,
+            ...(input.ttlMs === undefined ? {} : { ttlMs: input.ttlMs }),
+          });
+          return {
+            pairingId: pairing.pairingId,
+            pairingToken: pairing.pairingToken,
+            expiresAt: pairing.expiresAt.toISOString(),
+          };
+        } catch (error) {
+          if (error instanceof WindowsHostPairingError) {
+            throw new ORPCError("BAD_REQUEST", { message: error.message });
+          }
+          throw error;
+        }
+      }),
+      revoke: authed.windowsHosts.revoke.handler(async ({ context, input }) => {
+        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
+        const revoked = await revokeWindowsHost(deps.prisma, {
+          ownerUserId: context.actor.userId,
+          hostId: input.hostId,
+        });
+        if (!revoked) throw new ORPCError("NOT_FOUND");
+        return { ok: true as const };
       }),
     },
     updater: {
@@ -2475,7 +2530,14 @@ export function createRouter(deps: RouterDeps) {
             : undefined;
         const mapped = {
           ...(input.kind === "key"
-            ? { kind: "key" as const, key: String(input.payload.key ?? ""), sensitive }
+            ? {
+                kind: "key" as const,
+                key: String(input.payload.key ?? ""),
+                modifiers: Array.isArray(input.payload.modifiers)
+                  ? input.payload.modifiers.map((value) => String(value))
+                  : undefined,
+                sensitive,
+              }
             : input.kind === "clipboard"
               ? {
                   kind: "clipboard" as const,
@@ -2572,6 +2634,120 @@ export function createRouter(deps: RouterDeps) {
           }
         }
         return { path: input.path, content };
+      }),
+      exec: authed.computer.exec.handler(async ({ context, input }) => {
+        let bot = await repos.getBot(context.actor, input.botId);
+        if (await expireStaleComputerControl(deps, bot.computer)) {
+          bot = await repos.getBot(context.actor, input.botId);
+        }
+        const computer = bot.computer;
+        if (!computer?.providerRef || computer.state !== "running") {
+          throw new ORPCError("BAD_REQUEST", { message: "computer must be running" });
+        }
+        if (computer.kind !== "desktop") {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Direct host execution requires a physical desktop computer",
+          });
+        }
+        if (!hasActiveComputerControl(computer) || computer.controlBotId !== bot.id) {
+          throw new ORPCError("FORBIDDEN", { message: "Take control first." });
+        }
+
+        let stdout = "";
+        let stderr = "";
+        let code = -1;
+        for await (const event of deps.sandbox.execute(
+          toComputerRef(computer),
+          {
+            argv: input.argv,
+            cwd: input.cwd,
+            timeoutMs: input.timeoutMs,
+          },
+          computerContext(context.actor, bot.id, "exec"),
+        )) {
+          if (event.type === "stdout") stdout += event.data;
+          else if (event.type === "stderr") stderr += event.data;
+          else code = event.code;
+          if (Buffer.byteLength(stdout, "utf8") + Buffer.byteLength(stderr, "utf8") > 65_536) {
+            throw new ORPCError("BAD_REQUEST", { message: "Process output exceeded 64 KiB" });
+          }
+        }
+        await keepComputerAwake(deps, computer.id);
+        return { stdout, stderr, code };
+      }),
+      browser: authed.computer.browser.handler(async ({ context, input }) => {
+        let bot = await repos.getBot(context.actor, input.botId);
+        if (await expireStaleComputerControl(deps, bot.computer)) {
+          bot = await repos.getBot(context.actor, input.botId);
+        }
+        const computer = bot.computer;
+        if (!computer?.providerRef || computer.state !== "running") {
+          throw new ORPCError("BAD_REQUEST", { message: "computer must be running" });
+        }
+        if (computer.kind !== "desktop" || !deps.sandbox.desktopBrowserSession) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Direct signed-in browser access requires a physical desktop computer",
+          });
+        }
+        if (!hasActiveComputerControl(computer) || computer.controlBotId !== bot.id) {
+          throw new ORPCError("FORBIDDEN", { message: "Take control first." });
+        }
+
+        const result = await deps.sandbox.desktopBrowserSession(
+          toComputerRef(computer),
+          input.request,
+          computerContext(context.actor, bot.id, "browser"),
+        );
+        await keepComputerAwake(deps, computer.id);
+        return {
+          ok: result.ok,
+          ...(result.sessionToken === undefined ? {} : { sessionToken: result.sessionToken }),
+          ...(result.completed === undefined ? {} : { completed: result.completed }),
+          ...(result.uncertain === undefined ? {} : { uncertain: result.uncertain }),
+          ...(result.url === undefined ? {} : { url: result.url }),
+          ...(result.title === undefined ? {} : { title: result.title }),
+          ...(result.tree === undefined ? {} : { tree: result.tree }),
+          ...(result.elements === undefined ? {} : { elements: result.elements }),
+          ...(result.error === undefined ? {} : { error: result.error }),
+        };
+      }),
+      observe: authed.computer.observe.handler(async ({ context, input }) => {
+        let bot = await repos.getBot(context.actor, input.botId);
+        if (await expireStaleComputerControl(deps, bot.computer)) {
+          bot = await repos.getBot(context.actor, input.botId);
+        }
+        if (!bot.computer?.providerRef || bot.computer.state !== "running") {
+          throw new ORPCError("BAD_REQUEST", { message: "computer must be running" });
+        }
+
+        const computer = bot.computer;
+        let observation: Awaited<ReturnType<SandboxProvider["observe"]>>;
+        try {
+          observation = await deps.sandbox.observe(
+            toComputerRef(computer),
+            await computerScreenContext(deps.prisma, context.actor, computer.id, bot.id, "observe"),
+          );
+        } catch (error) {
+          if (isComputerScreenUnavailable(error)) {
+            throw new ORPCError("CONFLICT", {
+              message: error instanceof Error ? error.message : "computer screen unavailable",
+            });
+          }
+          await clearGoneSandbox(deps, computer, error);
+          throw new ORPCError("CONFLICT", { message: "computer is no longer running" });
+        }
+
+        await keepComputerAwake(deps, computer.id);
+        return {
+          frameId: observation.frameId,
+          capturedAt: observation.capturedAt,
+          mimeType: observation.mimeType,
+          imageBase64: Buffer.from(observation.image).toString("base64"),
+          width: observation.width,
+          height: observation.height,
+          cursor: observation.cursor,
+          activeWindow: observation.activeWindow,
+        };
       }),
       downloadFile: authed.computer.downloadFile.handler(async ({ context, input }) => {
         const bot = await repos.getBot(context.actor, input.botId);

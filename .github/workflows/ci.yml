@@ -45,6 +45,43 @@ jobs:
           DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
       - run: pnpm check
 
+  check-windows-host:
+    name: Windows host typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+        env:
+          DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
+      - run: pnpm --filter @rakazo/windows-host check
+      - run: pnpm --filter @rakazo/adapters check
+      - run: pnpm --filter @rakazo/api check
+      - run: pnpm --filter @rakazo/worker check
+
+  smoke-windows-host:
+    name: Windows native host smoke
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @rakazo/windows-host check
+      - run: pnpm --filter @rakazo/windows-host exec tsx src/windows-smoke.ts
+
   build:
     name: Production builds
     runs-on: ubuntu-latest

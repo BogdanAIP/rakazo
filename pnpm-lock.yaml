@@ -39,6 +39,28 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@8.3.0(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.50.0)(tsx@4.23.13)(yaml@2.9.0))
 
+  apps/windows-host:
+    dependencies:
+      '@rakazo/adapters':
+        specifier: workspace:*
+        version: link:../../packages/adapters
+      '@rakazo/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+      tsx:
+        specifier: 4.23.13
+        version: 4.23.13
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@8.3.0(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.50.0)(tsx@4.23.13)(yaml@2.9.0))
+
   apps/api:
     dependencies:
       '@hono/node-server':
@@ -569,6 +591,9 @@ importers:
       '@observablehq/plot':
         specifier: 0.6.17
         version: 0.6.17
+      '@orpc/client':
+        specifier: 1.15.0
+        version: 1.15.0(@opentelemetry/api@1.9.1)
       '@rakazo/adapter-kit':
         specifier: workspace:*
         version: link:../adapter-kit
