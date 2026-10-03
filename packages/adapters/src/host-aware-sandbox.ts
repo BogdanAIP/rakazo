@@ -52,7 +52,7 @@ export class HostAwareSandbox implements SandboxProvider {
     private readonly hostEnabled: () => Promise<boolean>,
   ) {
     if (host.desktopBrowserSession) {
-      this.desktopBrowserSession = (computer, request, context) => {
+      this.desktopBrowserSession = async (computer, request, context) => {
         if (computer.kind !== "desktop") {
           throw new Error("Physical desktop browser session requires a desktop computer");
         }
