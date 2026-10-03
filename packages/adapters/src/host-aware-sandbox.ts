@@ -44,12 +44,21 @@ export function createRunSandbox(
 
 export class HostAwareSandbox implements SandboxProvider {
   readonly pageBrowser?: SandboxProvider["pageBrowser"];
+  readonly desktopBrowserSession?: SandboxProvider["desktopBrowserSession"];
 
   constructor(
     private readonly isolated: SandboxProvider,
     private readonly host: SandboxProvider,
     private readonly hostEnabled: () => Promise<boolean>,
   ) {
+    if (host.desktopBrowserSession) {
+      this.desktopBrowserSession = (computer, request, context) => {
+        if (computer.kind !== "desktop") {
+          throw new Error("Physical desktop browser session requires a desktop computer");
+        }
+        return host.desktopBrowserSession!(computer, request, context);
+      };
+    }
     if (isolated.pageBrowser || host.pageBrowser) {
       this.pageBrowser = (computer, request, context) => {
         const provider = this.route(computer);
