@@ -18,4 +18,5 @@ export * from "./search.js";
 export * from "./terminal.js";
 export * from "./trading.js";
 export * from "./trading-replay.js";
+export * from "./trading-paper.js";
 export * from "./windows-host.js";
