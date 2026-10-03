@@ -255,3 +255,42 @@ export const TradingSweepOutputSchema = z.object({
     .max(5),
 });
 export type TradingSweepOutput = z.infer<typeof TradingSweepOutputSchema>;
+
+/** Signed, finite funding rate only; NOT an order-price or quantity schema. */
+export const TradingSignedRateSchema = z
+  .string()
+  .max(64)
+  .regex(/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/)
+  .refine((value) => Number.isFinite(Number(value)), "Finite funding rate required");
+
+export const TradingPerpContextInputSchema = z.object({
+  symbol: z
+    .string()
+    .regex(/^[A-Z0-9]+-[A-Z0-9]+-SWAP$/)
+    .max(128),
+});
+export type TradingPerpContextInput = z.infer<typeof TradingPerpContextInputSchema>;
+
+/** Read-only derivative telemetry; NOT liquidation price or position sizing. */
+export const TradingPerpContextSchema = z.object({
+  venue: z.literal("okx"),
+  market: TradingInstrumentSchema,
+  fetchedAt: IsoDate,
+  funding: z.object({
+    ratePerSettlement: TradingSignedRateSchema,
+    settlementAt: IsoDate,
+    nextIndicativeRate: TradingSignedRateSchema.nullable(),
+    nextSettlementAt: IsoDate.nullable(),
+  }),
+  openInterest: z.object({
+    contracts: TradingDecimalSchema,
+    baseUnits: TradingDecimalSchema,
+    usdNotional: TradingDecimalSchema,
+    observedAt: IsoDate,
+  }),
+  mark: z.object({
+    price: TradingPositiveDecimalSchema,
+    observedAt: IsoDate,
+  }),
+});
+export type TradingPerpContext = z.infer<typeof TradingPerpContextSchema>;
