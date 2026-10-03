@@ -1,12 +1,12 @@
 import {
+  TradingCandleSchema,
   type TradingWalkforwardInput,
   type TradingWalkforwardOutput,
-  TradingCandleSchema,
   TradingWalkforwardInputSchema,
   TradingWalkforwardOutputSchema,
 } from "@rakazo/contracts";
-import { researchClosedHourBreakout } from "./trading-research.js";
 import { replayExplicitTradingFills } from "./trading-replay.js";
+import { researchClosedHourBreakout } from "./trading-research.js";
 
 const HOUR = 3_600_000;
 
@@ -30,11 +30,8 @@ export function runSpotCandleWalkforward(raw: TradingWalkforwardInput): TradingW
   }
   for (let i = 0; i < candles.length; i++) {
     const bar = TradingCandleSchema.parse(candles[i]);
-    if (
-      bar.venue !== market.venue ||
-      bar.kind !== market.kind ||
-      bar.symbol !== market.symbol
-    ) throw new Error("Mixed instrument or candle provenance");
+    if (bar.venue !== market.venue || bar.kind !== market.kind || bar.symbol !== market.symbol)
+      throw new Error("Mixed instrument or candle provenance");
     if (i && Date.parse(bar.openedAt) - Date.parse(candles[i - 1]!.openedAt) !== HOUR) {
       throw new Error("Walk-forward dataset contains a gap, duplicate or reordered candle");
     }
@@ -74,7 +71,8 @@ export function runSpotCandleWalkforward(raw: TradingWalkforwardInput): TradingW
       continue;
     }
     const signal = result.signal;
-    if (signal.action !== "spot_buy") throw new Error("Unexpected non-spot-buy walk-forward signal");
+    if (signal.action !== "spot_buy")
+      throw new Error("Unexpected non-spot-buy walk-forward signal");
     const open = Number(next.open);
     const trigger = Number(signal.entryTrigger);
     const stop = Number(signal.stopLoss);
@@ -93,7 +91,11 @@ export function runSpotCandleWalkforward(raw: TradingWalkforwardInput): TradingW
     // Conservative within-bar policy: if both levels are touched, stop wins.
     // A take-profit never receives positive opening-gap price improvement.
     const exitReference = hitStop ? stop : hitTarget ? target : Number(next.close);
-    const exitReason = hitStop ? "stop" as const : hitTarget ? "target" as const : "next_bar_close" as const;
+    const exitReason = hitStop
+      ? ("stop" as const)
+      : hitTarget
+        ? ("target" as const)
+        : ("next_bar_close" as const);
     const enteredAt = new Date(Date.parse(next.openedAt) + 1).toISOString();
     const exitedAt = new Date(Date.parse(next.openedAt) + HOUR).toISOString();
     const item = {
