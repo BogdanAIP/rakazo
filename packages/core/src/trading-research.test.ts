@@ -99,10 +99,12 @@ describe("closed 1H breakout research baseline, with no execution capability", (
     });
     expect(run(gaps).signal.kind).toBe("no_trade");
     expect(run(bars("up").slice(1)).signal.kind).toBe("no_trade");
-    expect(run(bars("up"), {
-      now: new Date("2026-10-03T14:15:00.000Z"),
-      fetchedAt: "2026-10-03T14:15:00.000Z",
-    }).signal.kind).toBe("no_trade");
+    expect(
+      run(bars("up"), {
+        now: new Date("2026-10-03T14:15:00.000Z"),
+        fetchedAt: "2026-10-03T14:15:00.000Z",
+      }).signal.kind,
+    ).toBe("no_trade");
     const future = bars("up");
     future[20] = TradingCandleSchema.parse({
       ...future[20],
