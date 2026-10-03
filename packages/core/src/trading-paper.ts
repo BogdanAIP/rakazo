@@ -1,8 +1,8 @@
 import {
-  TradingPaperAssessmentInputSchema,
-  TradingPaperAssessmentSchema,
   type TradingPaperAssessment,
   type TradingPaperAssessmentInput,
+  TradingPaperAssessmentInputSchema,
+  TradingPaperAssessmentSchema,
 } from "@rakazo/contracts";
 
 /**
@@ -17,10 +17,10 @@ export function evaluateTradingPaperRisk(raw: TradingPaperAssessmentInput): Trad
   const now = Date.parse(input.now);
   const sample = Date.parse(observedQuote.observedAt);
   const snapshot = Date.parse(portfolio.snapshotAt);
-  const recent = (at: number): boolean =>
-    at <= now + 2000 && now - at <= policy.maxAgeMs;
+  const recent = (at: number): boolean => at <= now + 2000 && now - at <= policy.maxAgeMs;
 
-  if (!policy.enabled || policy.killSwitch) return deny("Paper risk policy disabled or kill switch active");
+  if (!policy.enabled || policy.killSwitch)
+    return deny("Paper risk policy disabled or kill switch active");
   if (signal.kind !== "proposal") return deny("NO_TRADE never creates a paper candidate");
   if (signal.executionStatus !== "research_only") return deny("Unexpected execution status");
   if (signal.market.kind !== "spot" || signal.action !== "spot_buy") {
@@ -36,8 +36,10 @@ export function evaluateTradingPaperRisk(raw: TradingPaperAssessmentInput): Trad
   if (Date.parse(signal.createdAt) > now + 2000 || Date.parse(signal.expiresAt) <= now) {
     return deny("Signal is future-dated or expired");
   }
-  if (!recent(sample) || !recent(snapshot)) return deny("Market quote or portfolio snapshot is stale");
-  if (portfolio.openPositions >= policy.maxPositions) return deny("Maximum paper positions reached");
+  if (!recent(sample) || !recent(snapshot))
+    return deny("Market quote or portfolio snapshot is stale");
+  if (portfolio.openPositions >= policy.maxPositions)
+    return deny("Maximum paper positions reached");
 
   const amount = (s: string) => Number(s);
   const bid = amount(observedQuote.bid);
@@ -58,15 +60,13 @@ export function evaluateTradingPaperRisk(raw: TradingPaperAssessmentInput): Trad
   if (ask < trigger || ((ask - trigger) / trigger) * 10_000 > policy.maxTriggerDeviationBps) {
     return deny("Spot breakout trigger not crossed or price has moved too far");
   }
-  if (signal.maxSlippageBps !== null &&
-      policy.assumedSlippageBpsPerSide > signal.maxSlippageBps) {
+  if (signal.maxSlippageBps !== null && policy.assumedSlippageBpsPerSide > signal.maxSlippageBps) {
     return deny("Paper slippage assumption exceeds the signal limit");
   }
   if (available <= 0 || exposure >= amount(policy.maxTotalExposureQuote)) {
     return deny("No paper funds or aggregate exposure allowance remains");
   }
-  const dailyRemaining =
-    amount(policy.maxDailyLossQuote) - Math.max(0, -pnlToday) - openRisk;
+  const dailyRemaining = amount(policy.maxDailyLossQuote) - Math.max(0, -pnlToday) - openRisk;
   const openRiskRemaining = amount(policy.maxOpenRiskQuote) - openRisk;
   const riskBudget = Math.min(
     amount(policy.maxPerIdeaRiskQuote),
@@ -89,7 +89,7 @@ export function evaluateTradingPaperRisk(raw: TradingPaperAssessmentInput): Trad
   const fee = policy.assumedFeeBpsPerSide / 10_000;
   const entry = ask * (1 + slippage);
   const stopFill = stop * (1 - slippage);
-  if (!(stopFill > 0 && stopFill < entry)) {
+  if (stop >= ask || !(stopFill > 0 && stopFill < entry)) {
     return deny("Stop-loss must be beneath the assumed entry after trading costs");
   }
   const lossPerUnit = entry - stopFill + fee * (entry + stopFill);
@@ -105,7 +105,7 @@ export function evaluateTradingPaperRisk(raw: TradingPaperAssessmentInput): Trad
   if (!(qty > 0) || !Number.isFinite(qty)) return deny("Paper size below quantity increment");
   const entryNotional = qty * entry;
   const estimatedStopLoss = qty * stopFill;
-  const cost = qty * ((entry - ask) + (stop - stopFill) + fee * (entry + stopFill));
+  const cost = qty * (entry - ask + (stop - stopFill) + fee * (entry + stopFill));
   const risk = qty * lossPerUnit;
   if (
     ![entryNotional, estimatedStopLoss, cost, risk].every(Number.isFinite) ||
