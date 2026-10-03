@@ -166,6 +166,13 @@ export class WindowsOpenCliBackend {
       return snapshot;
     };
 
+    if (request.command === "close") {
+      // Release only this bot's owned OpenCLI session, never the user's Chrome tabs.
+      await invoke("close");
+      this.observations.delete(botId);
+      return { ok: true };
+    }
+
     if (request.command === "navigate") {
       const url = new URL(request.url);
       if (url.protocol !== "https:" && url.protocol !== "http:") {
