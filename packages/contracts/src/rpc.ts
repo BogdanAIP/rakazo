@@ -89,7 +89,11 @@ import {
 import { MessageReactionSchema } from "./reactions.js";
 import { RunsListOutputSchema } from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
-import { TradingScanOutputSchema, TradingScanRequestSchema } from "./trading.js";
+import {
+  TradingCatalogOutputSchema,
+  TradingScanOutputSchema,
+  TradingScanRequestSchema,
+} from "./trading.js";
 import {
   WindowsHostBrowserRequestSchema,
   WindowsHostBrowserResultSchema,
@@ -160,6 +164,8 @@ export const appContract = {
   trading: {
     /** Public-market shortlist only; no private keys, order placement or account state. */
     list: oc.input(TradingScanRequestSchema).output(TradingScanOutputSchema),
+    /** CEX spot, perpetual and dated-future public metadata, not private account instruments. */
+    catalog: oc.input(z.object({})).output(TradingCatalogOutputSchema),
   },
   aiConsent: {
     status: oc.input(AiConsentQuerySchema).output(AiConsentStatusSchema),
