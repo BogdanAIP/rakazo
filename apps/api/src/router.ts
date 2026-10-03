@@ -2701,6 +2701,7 @@ export function createRouter(deps: RouterDeps) {
         await keepComputerAwake(deps, computer.id);
         return {
           ok: result.ok,
+          ...(result.sessionToken === undefined ? {} : { sessionToken: result.sessionToken }),
           ...(result.completed === undefined ? {} : { completed: result.completed }),
           ...(result.uncertain === undefined ? {} : { uncertain: result.uncertain }),
           ...(result.url === undefined ? {} : { url: result.url }),
