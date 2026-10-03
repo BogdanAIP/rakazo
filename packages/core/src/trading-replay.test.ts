@@ -131,7 +131,15 @@ describe("offline explicit-fill replay (research-only)", () => {
       .toThrow("chronological");
     expect(() => check({ trades: [{ ...baseTrade, notionalQuote: "2001" }] }))
       .toThrow("forbids leverage");
-    expect(() => check({ trades: [baseTrade, baseTrade] })).toThrow("Duplicate");
+    expect(() => check({ trades: [
+      baseTrade,
+      {
+        ...baseTrade,
+        decisionAt: "2026-10-03T15:00:00.000Z",
+        enteredAt: "2026-10-03T15:10:00.000Z",
+        exitedAt: "2026-10-03T16:00:00.000Z",
+      },
+    ] })).toThrow("Duplicate");
     expect(() =>
       check({
         trades: [baseTrade, {
