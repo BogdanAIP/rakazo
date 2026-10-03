@@ -112,9 +112,7 @@ describe("BingX public spot snapshot", () => {
     await expect(callWith([new Response("Unavailable", { status: 503 })])).rejects.toThrow(
       "HTTP error",
     );
-    await expect(callWith([new Response("not-json", { status: 200 })])).rejects.toThrow(
-      "not JSON",
-    );
+    await expect(callWith([new Response("not-json", { status: 200 })])).rejects.toThrow("not JSON");
     await expect(
       callWith([symbols, { code: 0, data: [tickers.data[0], tickers.data[0]] }]),
     ).rejects.toThrow("Duplicate");
