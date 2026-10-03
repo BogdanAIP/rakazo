@@ -125,7 +125,7 @@ export function evaluateTradingPaperRisk(raw: TradingPaperAssessmentInput): Trad
     symbol: market.symbol,
     quantityBase: qty.toFixed(decimals),
     assumedEntryQuote: String(entry),
-    estimatedStopLossQuote: String(estimatedStopLoss),
+    estimatedStopProceedsQuote: String(estimatedStopLoss),
     worstCaseStopRiskQuote: String(risk),
     assumedRoundTripCostQuote: String(cost),
     estimatedNotionalQuote: String(entryNotional),
