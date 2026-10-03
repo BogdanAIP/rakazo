@@ -181,6 +181,7 @@ export function discoverProcedurePaths(): string[] {
 export function classifyProcedure(procedure: string): ProcedureMode {
   if (procedure === "threads/subscribe") return "stream";
   if (procedure === "trading/sweep") return "read";
+  if (procedure === "trading/perpContext") return "read";
 
   const action = procedure.split("/").at(-1) ?? "";
   if (DESTRUCTIVE_ACTIONS.has(action)) return "destructive";
