@@ -47,10 +47,7 @@ function mocked(rows: unknown[]) {
   });
   return { mock, fetchImpl: mock as unknown as typeof fetch };
 }
-function call(
-  rows: unknown[],
-  requested = market,
-) {
+function call(rows: unknown[], requested = market) {
   return fetchOkxPublicPerpContext(requested, {
     now,
     fetchImpl: mocked(rows).fetchImpl,
@@ -95,31 +92,29 @@ describe("keyless OKX perpetual risk telemetry", () => {
   });
 
   it("refuses mismatched, stale and implausible telemetry", async () => {
-    await expect(call([
-      wrap(funding),
-      wrap({ ...interest, instId: "BTC-USDT-SWAP" }),
-      wrap(marked),
-    ])).rejects.toThrow("mismatch");
-    await expect(call([
-      wrap(funding),
-      wrap({ ...interest, ts: String(now.getTime() - 300_000) }),
-      wrap(marked),
-    ])).rejects.toThrow("Stale");
-    await expect(call([
-      wrap(funding),
-      wrap({ ...interest, oiUsd: "-10" }),
-      wrap(marked),
-    ])).rejects.toThrow();
-    await expect(call([
-      wrap({ ...funding, fundingTime: String(now.getTime() - 300_000) }),
-      wrap(interest),
-      wrap(marked),
-    ])).rejects.toThrow("Stale");
-    await expect(call([
-      wrap(funding),
-      wrap(interest),
-      wrap({ ...marked, markPx: "0" }),
-    ])).rejects.toThrow();
+    await expect(
+      call([wrap(funding), wrap({ ...interest, instId: "BTC-USDT-SWAP" }), wrap(marked)]),
+    ).rejects.toThrow("mismatch");
+    await expect(
+      call([
+        wrap(funding),
+        wrap({ ...interest, ts: String(now.getTime() - 300_000) }),
+        wrap(marked),
+      ]),
+    ).rejects.toThrow("Stale");
+    await expect(
+      call([wrap(funding), wrap({ ...interest, oiUsd: "-10" }), wrap(marked)]),
+    ).rejects.toThrow();
+    await expect(
+      call([
+        wrap({ ...funding, fundingTime: String(now.getTime() - 300_000) }),
+        wrap(interest),
+        wrap(marked),
+      ]),
+    ).rejects.toThrow("Stale");
+    await expect(
+      call([wrap(funding), wrap(interest), wrap({ ...marked, markPx: "0" })]),
+    ).rejects.toThrow();
   });
 
   it("rejects API failure and non-perpetual instruments before account access", async () => {
