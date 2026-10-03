@@ -690,7 +690,8 @@ export function createRouter(deps: RouterDeps) {
         const market = catalog.markets.find(
           (candidate) => candidate.symbol === input.symbol && candidate.kind === input.kind,
         );
-        if (!market) throw new ORPCError("NOT_FOUND", { message: "Public OKX instrument not found" });
+        if (!market)
+          throw new ORPCError("NOT_FOUND", { message: "Public OKX instrument not found" });
         // Dated futures remain discovery-only pending independent contract sizing
         // and instrument/risk validation. Fail closed as a NO_TRADE research result.
         if (market.kind === "dated_future") {
