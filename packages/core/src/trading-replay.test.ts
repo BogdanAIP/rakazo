@@ -99,57 +99,72 @@ describe("offline explicit-fill replay (research-only)", () => {
     expect(() => check({ trades: [future] })).toThrow("mandatory");
     expect(() =>
       check({
-        trades: [{
-          ...future,
-          fundingCoverage: { ...fund, events: [] },
-        }],
+        trades: [
+          {
+            ...future,
+            fundingCoverage: { ...fund, events: [] },
+          },
+        ],
       }),
     ).toThrow("Missing");
     expect(() =>
       check({
-        trades: [{
-          ...future,
-          fundingCoverage: {
-            ...fund,
-            events: [{ ...fund.events[0], settledAt: "2026-10-03T13:00:00.000Z" }],
+        trades: [
+          {
+            ...future,
+            fundingCoverage: {
+              ...fund,
+              events: [{ ...fund.events[0], settledAt: "2026-10-03T13:00:00.000Z" }],
+            },
           },
-        }],
+        ],
       }),
     ).toThrow("Funding schedule");
     expect(() =>
       check({
-        trades: [{
-          ...future,
-          fundingCoverage: { ...fund, from: "2026-10-03T11:00:00.000Z" },
-        }],
+        trades: [
+          {
+            ...future,
+            fundingCoverage: { ...fund, from: "2026-10-03T11:00:00.000Z" },
+          },
+        ],
       }),
     ).toThrow("span");
   });
 
   it("rejects look-ahead-like timing, mixed currencies, duplicated trades and leverage", () => {
-    expect(() => check({ trades: [{ ...baseTrade, enteredAt: baseTrade.decisionAt }] }))
-      .toThrow("chronological");
-    expect(() => check({ trades: [{ ...baseTrade, notionalQuote: "2001" }] }))
-      .toThrow("forbids leverage");
-    expect(() => check({ trades: [
-      baseTrade,
-      {
-        ...baseTrade,
-        decisionAt: "2026-10-03T15:00:00.000Z",
-        enteredAt: "2026-10-03T15:10:00.000Z",
-        exitedAt: "2026-10-03T16:00:00.000Z",
-      },
-    ] })).toThrow("Duplicate");
+    expect(() => check({ trades: [{ ...baseTrade, enteredAt: baseTrade.decisionAt }] })).toThrow(
+      "chronological",
+    );
+    expect(() => check({ trades: [{ ...baseTrade, notionalQuote: "2001" }] })).toThrow(
+      "forbids leverage",
+    );
     expect(() =>
       check({
-        trades: [baseTrade, {
-          ...baseTrade,
-          tradeId: "sample-2",
-          decisionAt: "2026-10-03T15:00:00.000Z",
-          enteredAt: "2026-10-03T15:10:00.000Z",
-          exitedAt: "2026-10-03T16:00:00.000Z",
-          market: { ...spot, quote: "USDC", symbol: "SOL-USDC" },
-        }],
+        trades: [
+          baseTrade,
+          {
+            ...baseTrade,
+            decisionAt: "2026-10-03T15:00:00.000Z",
+            enteredAt: "2026-10-03T15:10:00.000Z",
+            exitedAt: "2026-10-03T16:00:00.000Z",
+          },
+        ],
+      }),
+    ).toThrow("Duplicate");
+    expect(() =>
+      check({
+        trades: [
+          baseTrade,
+          {
+            ...baseTrade,
+            tradeId: "sample-2",
+            decisionAt: "2026-10-03T15:00:00.000Z",
+            enteredAt: "2026-10-03T15:10:00.000Z",
+            exitedAt: "2026-10-03T16:00:00.000Z",
+            market: { ...spot, quote: "USDC", symbol: "SOL-USDC" },
+          },
+        ],
       }),
     ).toThrow("Mixed quote");
     expect(() => TradingReplayInputSchema.parse({ ...base, feeBpsPerSide: undefined })).toThrow();
