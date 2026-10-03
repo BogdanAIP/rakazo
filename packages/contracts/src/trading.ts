@@ -117,6 +117,7 @@ export type TradingSignal = z.infer<typeof TradingSignalSchema>;
 
 /** Read-only, user-invoked market prefilter. It creates no orders or buy/sell signals. */
 export const TradingScanRequestSchema = z.object({
+  venue: z.enum(["bingx", "okx"]).default("bingx"),
   allowedQuotes: z
     .array(z.string().regex(/^[A-Z0-9]{2,20}$/))
     .min(1)
@@ -155,3 +156,21 @@ export const TradingScanOutputSchema = z.object({
   ),
 });
 export type TradingScanOutput = z.infer<typeof TradingScanOutputSchema>;
+
+
+/** Public metadata only; this response has no order or signing capability. */
+export const TradingCatalogOutputSchema = z.object({
+  fetchedAt: IsoDate,
+  markets: z.array(TradingInstrumentSchema),
+  excluded: z.array(
+    z.object({
+      kind: z.enum(["spot", "perpetual", "dated_future"]),
+      symbol: z.string().min(1).max(128),
+      reason: z.enum([
+        "incomplete_metadata",
+        "pre_market_or_special_contract",
+        "expired_contract",
+      ]),
+    }),
+  ),
+});
