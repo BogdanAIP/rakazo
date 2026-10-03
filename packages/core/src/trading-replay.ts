@@ -1,8 +1,8 @@
 import {
-  TradingReplayInputSchema,
-  TradingReplayOutputSchema,
   type TradingReplayInput,
+  TradingReplayInputSchema,
   type TradingReplayOutput,
+  TradingReplayOutputSchema,
 } from "@rakazo/contracts";
 
 /**
@@ -74,9 +74,7 @@ export function replayExplicitTradingFills(input: TradingReplayInput): TradingRe
     const referenceGross = within(direction * quantityBase * (exitRef - entryRef));
     const grossPnlQuote = within(direction * quantityBase * (exitFill - entryFill));
     const slippageImpactQuote = within(referenceGross - grossPnlQuote);
-    const feeQuote = within(
-      (notional + quantityBase * exitFill) * (data.feeBpsPerSide / 10_000),
-    );
+    const feeQuote = within((notional + quantityBase * exitFill) * (data.feeBpsPerSide / 10_000));
 
     let fundingQuote = 0;
     if (coverage !== null) {
@@ -92,7 +90,9 @@ export function replayExplicitTradingFills(input: TradingReplayInput): TradingRe
         const time = expected[i]!;
         const event = coverage.events[i]!;
         if (time <= prev || time > exited || Date.parse(event.settledAt) !== time) {
-          throw new Error("Funding schedule must be complete, unique, ordered and held-period-only");
+          throw new Error(
+            "Funding schedule must be complete, unique, ordered and held-period-only",
+          );
         }
         const rate = within(Number(event.ratePerSettlement));
         if (Math.abs(rate) > 1) throw new Error("Implausible historical settlement funding rate");
@@ -105,7 +105,8 @@ export function replayExplicitTradingFills(input: TradingReplayInput): TradingRe
     }
     const netPnlQuote = within(grossPnlQuote - feeQuote + fundingQuote);
     equity = within(equity + netPnlQuote);
-    if (equity <= 0) throw new Error("Virtual balance exhausted; experiment needs a liquidation model");
+    if (equity <= 0)
+      throw new Error("Virtual balance exhausted; experiment needs a liquidation model");
     peak = Math.max(peak, equity);
     maxRealizedDrawdownPct = Math.max(maxRealizedDrawdownPct, ((peak - equity) / peak) * 100);
     totalFeesQuote = within(totalFeesQuote + feeQuote);
