@@ -116,6 +116,7 @@ export type WindowsHostBrowserRequest = z.infer<typeof WindowsHostBrowserRequest
 
 export const WindowsHostBrowserResultSchema = z.object({
   ok: z.boolean(),
+  sessionToken: WindowsHostBrowserSessionTokenSchema.optional(),
   completed: z.number().int().min(0).max(4).optional(),
   uncertain: z.boolean().optional(),
   url: z.string().max(4_096).optional(),
