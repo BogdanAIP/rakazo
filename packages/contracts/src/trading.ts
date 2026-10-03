@@ -100,3 +100,37 @@ export const TradingSignalSchema = z
     }
   });
 export type TradingSignal = z.infer<typeof TradingSignalSchema>;
+
+
+/** Read-only, user-invoked market prefilter. It creates no orders or buy/sell signals. */
+export const TradingScanRequestSchema = z.object({
+  allowedQuotes: z.array(z.string().regex(/^[A-Z0-9]{2,20}$/)).min(1).max(20).default(["USDT"]),
+  minQuoteVolume24h: z.number().finite().min(0).max(1e15).default(100_000),
+  maxSpreadBps: z.number().finite().min(0).max(10_000).default(40),
+  maxDataAgeMs: z.number().int().min(1_000).max(300_000).default(60_000),
+});
+export type TradingScanRequest = z.infer<typeof TradingScanRequestSchema>;
+
+export const TradingExclusionReasonSchema = z.enum([
+  "inactive",
+  "quote_not_allowed",
+  "missing_ticker",
+  "stale_or_future_data",
+  "invalid_book",
+  "insufficient_volume",
+  "excessive_spread",
+]);
+
+export const TradingScanOutputSchema = z.object({
+  fetchedAt: IsoDate,
+  candidates: z.array(z.object({
+    market: TradingInstrumentSchema,
+    ticker: TradingTickerSchema,
+    spreadBps: z.number().finite().nonnegative(),
+  })),
+  excluded: z.array(z.object({
+    market: TradingInstrumentSchema,
+    reason: TradingExclusionReasonSchema,
+  })),
+});
+export type TradingScanOutput = z.infer<typeof TradingScanOutputSchema>;
