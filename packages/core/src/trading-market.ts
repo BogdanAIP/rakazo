@@ -74,7 +74,8 @@ export function scanTradingMarkets(
     const observed = Date.parse(ticker.observedAt);
     // Reject clock drift, old exchange observations and cached/replayed responses.
     if (
-      !Number.isFinite(received) || !Number.isFinite(observed) ||
+      !Number.isFinite(received) ||
+      !Number.isFinite(observed) ||
       received > now.getTime() + 2_000 ||
       observed > received + 2_000 ||
       now.getTime() - received > policy.maxDataAgeMs ||
@@ -87,9 +88,13 @@ export function scanTradingMarkets(
     const ask = Number(ticker.ask);
     const volume = Number(ticker.quoteVolume24h);
     if (
-      !Number.isFinite(bid) || !Number.isFinite(ask) ||
-      bid <= 0 || ask <= 0 || bid > ask ||
-      !Number.isFinite(volume) || volume < 0
+      !Number.isFinite(bid) ||
+      !Number.isFinite(ask) ||
+      bid <= 0 ||
+      ask <= 0 ||
+      bid > ask ||
+      !Number.isFinite(volume) ||
+      volume < 0
     ) {
       reject(market, "invalid_book");
       continue;
