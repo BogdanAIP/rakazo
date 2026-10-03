@@ -10,6 +10,7 @@ function fixture(profile = "quxmf8xh") {
       url = command[1]!;
       return "opened";
     }
+    if (command[0] === "close") return "closed";
     if (command[0] === "state") return tree;
     if (command[0] === "get" && command[1] === "url") return url;
     if (command[0] === "get" && command[1] === "title") return "Example form";
@@ -112,6 +113,24 @@ describe("WindowsOpenCliBackend", () => {
     });
     expect(result).toMatchObject({ ok: false, completed: 0, uncertain: false });
     expect(runner.mock.calls.some(([, argv]) => argv.includes("click"))).toBe(false);
+  });
+
+  it("closes only the owned per-bot OpenCLI session and clears stale element refs", async () => {
+    const { backend, runner } = fixture();
+    await backend.browser("bot-a", { command: "snapshot" });
+    expect(await backend.browser("bot-a", { command: "close" })).toEqual({ ok: true });
+    expect(runner).toHaveBeenCalledWith(process.execPath, [
+      "--profile",
+      "quxmf8xh",
+      "browser",
+      "rakazo-bot-a",
+      "close",
+    ]);
+    const callsAfterClose = runner.mock.calls.length;
+    await expect(
+      backend.browser("bot-a", { command: "act", actions: [{ kind: "click", ref: "e1" }] }),
+    ).rejects.toThrow("Observe this browser session before acting");
+    expect(runner).toHaveBeenCalledTimes(callsAfterClose);
   });
 
   it("enforces origin checks before entering content", async () => {
