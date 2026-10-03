@@ -173,7 +173,6 @@ export const TradingCatalogOutputSchema = z.object({
   ),
 });
 
-
 /** Exactly one closed 1H source bar; quote volume is normalized by OKX volCcyQuote. */
 export const TradingCandleSchema = z
   .object({
@@ -204,7 +203,10 @@ export const TradingCandleSchema = z
 export type TradingCandle = z.infer<typeof TradingCandleSchema>;
 
 export const TradingCandleResearchInputSchema = z.object({
-  symbol: z.string().regex(/^[A-Z0-9]+(?:-[A-Z0-9]+){1,3}$/).max(128),
+  symbol: z
+    .string()
+    .regex(/^[A-Z0-9]+(?:-[A-Z0-9]+){1,3}$/)
+    .max(128),
   kind: z.enum(["spot", "perpetual", "dated_future"]),
 });
 export type TradingCandleResearchInput = z.infer<typeof TradingCandleResearchInputSchema>;
