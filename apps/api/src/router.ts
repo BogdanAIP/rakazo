@@ -58,6 +58,8 @@ import {
   enqueueTakeoverContinuation,
   expireComputerControl,
   fetchBingxPublicSpotSnapshot,
+  fetchOkxPublicCatalog,
+  fetchOkxPublicSpotTickers,
   hasActiveComputerControl,
   isAutoReviewCheckerConfigured,
   isComputerScreenUnavailable,
@@ -665,12 +667,22 @@ export function createRouter(deps: RouterDeps) {
     trading: {
       // User-invoked public GET requests only. No exchange keys, wallet or execution capability.
       list: authed.trading.list.handler(async ({ input }) => {
+        if (input.venue === "okx") {
+          const catalog = await fetchOkxPublicCatalog();
+          const markets = catalog.markets.filter((market) => market.kind === "spot");
+          const tickers = await fetchOkxPublicSpotTickers(markets);
+          return {
+            fetchedAt: new Date().toISOString(),
+            ...scanTradingMarkets(markets, tickers, input, new Date()),
+          };
+        }
         const snapshot = await fetchBingxPublicSpotSnapshot();
         return {
           fetchedAt: snapshot.fetchedAt,
           ...scanTradingMarkets(snapshot.markets, snapshot.tickers, input, new Date()),
         };
       }),
+      catalog: authed.trading.catalog.handler(() => fetchOkxPublicCatalog()),
     },
     aiConsent: {
       status: authed.aiConsent.status.handler(({ context, input }) =>
