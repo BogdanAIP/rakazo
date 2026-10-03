@@ -1,5 +1,9 @@
 import * as z from "zod";
-import { TradingCandleSchema, TradingInstrumentSchema, TradingPositiveDecimalSchema } from "./trading.js";
+import {
+  TradingCandleSchema,
+  TradingInstrumentSchema,
+  TradingPositiveDecimalSchema,
+} from "./trading.js";
 import { TradingReplayOutputSchema } from "./trading-replay.js";
 
 export const TradingWalkforwardInputSchema = z.object({
