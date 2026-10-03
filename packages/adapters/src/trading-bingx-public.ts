@@ -52,7 +52,6 @@ export async function fetchBingxPublicSpotSnapshot(
   const now = options.now ?? new Date();
   if (!Number.isFinite(now.getTime())) throw new Error("Invalid snapshot clock");
   const fetchImpl = options.fetchImpl ?? fetch;
-  const fetchedAt = now.toISOString();
   const query = "?timestamp=" + now.getTime();
 
   async function getPublic(path: string): Promise<unknown> {
@@ -86,6 +85,9 @@ export async function fetchBingxPublicSpotSnapshot(
     .array(rawTicker)
     .max(30_000)
     .parse(await getPublic("/openApi/spot/v1/ticker/24hr"));
+  // Timestamp after the network snapshot, not at request start: avoid
+  // incorrectly treating a later exchange observation as future data.
+  const fetchedAt = (options.now ?? new Date()).toISOString();
 
   const markets: TradingInstrument[] = symbols.map((entry) => {
     if (!/^[A-Z0-9]+-[A-Z0-9]+$/.test(entry.symbol)) {
