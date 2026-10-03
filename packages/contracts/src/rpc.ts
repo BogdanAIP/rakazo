@@ -93,6 +93,8 @@ import {
   TradingCandleResearchInputSchema,
   TradingCatalogOutputSchema,
   TradingResearchOutputSchema,
+  TradingPerpContextInputSchema,
+  TradingPerpContextSchema,
   TradingScanOutputSchema,
   TradingScanRequestSchema,
   TradingSweepOutputSchema,
@@ -174,6 +176,8 @@ export const appContract = {
     analyze: oc.input(TradingCandleResearchInputSchema).output(TradingResearchOutputSchema),
     /** A capped public-market research sweep; no orders, account or key access. */
     sweep: oc.input(TradingSweepRequestSchema).output(TradingSweepOutputSchema),
+    /** Public derivative context only; no collateral, leverage or order controls. */
+    perpContext: oc.input(TradingPerpContextInputSchema).output(TradingPerpContextSchema),
   },
   aiConsent: {
     status: oc.input(AiConsentQuerySchema).output(AiConsentStatusSchema),
