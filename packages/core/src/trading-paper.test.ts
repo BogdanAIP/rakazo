@@ -110,11 +110,14 @@ describe("inert independent paper risk preview", () => {
 
   it("rejects expired, stale, non-triggered and excessively deviated quotes", () => {
     expect(
-      assess({ now: "2026-10-03T10:05:01.000Z", portfolio: { ...portfolio,
-        snapshotAt: "2026-10-03T10:05:01.000Z" } }).status,
+      assess({
+        now: "2026-10-03T10:05:01.000Z",
+        portfolio: { ...portfolio, snapshotAt: "2026-10-03T10:05:01.000Z" },
+      }).status,
     ).toBe("deny");
-    expect(assess({ observedQuote: { ...quote, observedAt: "2026-10-03T09:00:00.000Z" } }).status)
-      .toBe("deny");
+    expect(
+      assess({ observedQuote: { ...quote, observedAt: "2026-10-03T09:00:00.000Z" } }).status,
+    ).toBe("deny");
     expect(assess({ observedQuote: { ...quote, bid: "99", ask: "99.1" } }).status).toBe("deny");
     expect(assess({ observedQuote: { ...quote, bid: "110", ask: "110.1" } }).status).toBe("deny");
     expect(assess({ observedQuote: { ...quote, bid: "100", ask: "102" } }).status).toBe("deny");
