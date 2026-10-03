@@ -29,9 +29,7 @@ const bar = (hour: number, confirm: "0" | "1" = "1") => [
 ];
 function transport(value: unknown) {
   const mock = vi.fn(async (_url: unknown, _options: unknown) =>
-    value instanceof Response
-      ? value
-      : new Response(JSON.stringify(value), { status: 200 }),
+    value instanceof Response ? value : new Response(JSON.stringify(value), { status: 200 }),
   );
   return { mock, fetchImpl: mock as unknown as typeof fetch };
 }
@@ -67,27 +65,26 @@ describe("read-only OKX closed 1H history", () => {
   });
 
   it("fails closed on malformed OHLC, timestamps and duplicate confirmed rows", async () => {
-    await expect(history({ code: "0", data: [[...bar(9).slice(0, 2), "80", ...bar(9).slice(3)]] }))
-      .rejects.toThrow();
     await expect(
-      history({ code: "0", data: [bar(9), bar(9)] }),
-    ).rejects.toThrow("Duplicate");
+      history({ code: "0", data: [[...bar(9).slice(0, 2), "80", ...bar(9).slice(3)]] }),
+    ).rejects.toThrow();
+    await expect(history({ code: "0", data: [bar(9), bar(9)] })).rejects.toThrow("Duplicate");
     const future = [...bar(10)];
     await expect(history({ code: "0", data: [future] })).rejects.toThrow(
       "Future or prematurely confirmed",
     );
-    await expect(
-      history({ code: "0", data: [["bad-ts", ...bar(9).slice(1)]] }),
-    ).rejects.toThrow("epoch");
+    await expect(history({ code: "0", data: [["bad-ts", ...bar(9).slice(1)]] })).rejects.toThrow(
+      "epoch",
+    );
   });
 
   it("rejects API errors, non-JSON and wrong provider before network access", async () => {
     await expect(history({ code: "50001", data: [] })).rejects.toThrow("API error");
     await expect(history(new Response("bad-json"))).rejects.toThrow("not JSON");
     await expect(history(new Response("busy", { status: 503 }))).rejects.toThrow("HTTP error");
-    await expect(
-      history({ code: "0", data: [] }, { ...market, venue: "other" }),
-    ).rejects.toThrow("Unsupported");
+    await expect(history({ code: "0", data: [] }, { ...market, venue: "other" })).rejects.toThrow(
+      "Unsupported",
+    );
     await expect(
       history({ code: "0", data: [] }, { ...market, symbol: "DOGE/USDT" }),
     ).rejects.toThrow("Unsupported");
