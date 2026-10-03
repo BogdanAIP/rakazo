@@ -117,6 +117,7 @@ export * from "./third-party-connector-emulator.js";
 export * from "./trading-bingx-public.js";
 export * from "./trading-okx-history.js";
 export * from "./trading-okx-public.js";
+export * from "./trading-okx-sweep.js";
 export * from "./voice-factory.js";
 export * from "./wakeup.js";
 export * from "./web-limits.js";

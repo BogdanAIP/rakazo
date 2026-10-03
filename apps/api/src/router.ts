@@ -98,6 +98,7 @@ import {
   scriptedCatalogEntry,
   selectDefaultCredentialId,
   serializeModelSecret,
+  sweepOkxSpotResearch,
   takeoverLeaseMs,
   toComputerRef,
   touchRunningComputer,
@@ -685,6 +686,7 @@ export function createRouter(deps: RouterDeps) {
         };
       }),
       catalog: authed.trading.catalog.handler(() => fetchOkxPublicCatalog()),
+      sweep: authed.trading.sweep.handler(({ input }) => sweepOkxSpotResearch(input)),
       analyze: authed.trading.analyze.handler(async ({ input }) => {
         const catalog = await fetchOkxPublicCatalog();
         const market = catalog.markets.find(

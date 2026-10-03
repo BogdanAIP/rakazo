@@ -95,6 +95,8 @@ import {
   TradingResearchOutputSchema,
   TradingScanOutputSchema,
   TradingScanRequestSchema,
+  TradingSweepOutputSchema,
+  TradingSweepRequestSchema,
 } from "./trading.js";
 import {
   WindowsHostBrowserRequestSchema,
@@ -170,6 +172,8 @@ export const appContract = {
     catalog: oc.input(z.object({})).output(TradingCatalogOutputSchema),
     /** Research-only reproducible proposal / NO_TRADE from confirmed candles. */
     analyze: oc.input(TradingCandleResearchInputSchema).output(TradingResearchOutputSchema),
+    /** A capped public-market research sweep; no orders, account or key access. */
+    sweep: oc.input(TradingSweepRequestSchema).output(TradingSweepOutputSchema),
   },
   aiConsent: {
     status: oc.input(AiConsentQuerySchema).output(AiConsentStatusSchema),
