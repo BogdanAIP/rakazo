@@ -5,23 +5,43 @@ const now = new Date("2026-10-03T10:00:00.000Z");
 const futureExpiry = "1798790400000";
 function spot(data: Record<string, unknown> = {}) {
   return {
-    instType: "SPOT", instId: "SOL-USDT", state: "live", ruleType: "normal",
-    baseCcy: "SOL", quoteCcy: "USDT", tickSz: "0.01", lotSz: "0.001", minSz: "0.01",
-    expTime: "", ...data,
+    instType: "SPOT",
+    instId: "SOL-USDT",
+    state: "live",
+    ruleType: "normal",
+    baseCcy: "SOL",
+    quoteCcy: "USDT",
+    tickSz: "0.01",
+    lotSz: "0.001",
+    minSz: "0.01",
+    expTime: "",
+    ...data,
   };
 }
 function swap(data: Record<string, unknown> = {}) {
   return {
-    instType: "SWAP", instId: "DOGE-USDT-SWAP", instFamily: "DOGE-USDT",
-    state: "live", ruleType: "normal", tickSz: "0.0001", lotSz: "1", expTime: "",
+    instType: "SWAP",
+    instId: "DOGE-USDT-SWAP",
+    instFamily: "DOGE-USDT",
+    state: "live",
+    ruleType: "normal",
+    tickSz: "0.0001",
+    lotSz: "1",
+    expTime: "",
     ...data,
   };
 }
 function future(data: Record<string, unknown> = {}) {
   return {
-    instType: "FUTURES", instId: "ETH-USDT-270101", instFamily: "ETH-USDT",
-    state: "live", ruleType: "normal", tickSz: "0.01", lotSz: "0.1",
-    expTime: futureExpiry, ...data,
+    instType: "FUTURES",
+    instId: "ETH-USDT-270101",
+    instFamily: "ETH-USDT",
+    state: "live",
+    ruleType: "normal",
+    tickSz: "0.01",
+    lotSz: "0.1",
+    expTime: futureExpiry,
+    ...data,
   };
 }
 function wrap(data: unknown[], code = "0") {
@@ -105,12 +125,22 @@ describe("read-only OKX public catalog", () => {
     const fake = transport([
       wrap([
         {
-          instType: "SPOT", instId: "SOL-USDT", bidPx: "100", askPx: "100.1",
-          volCcy24h: "1234567.89", vol24h: "1000", ts: String(now.getTime()),
+          instType: "SPOT",
+          instId: "SOL-USDT",
+          bidPx: "100",
+          askPx: "100.1",
+          volCcy24h: "1234567.89",
+          vol24h: "1000",
+          ts: String(now.getTime()),
         },
         {
-          instType: "SPOT", instId: "UNKNOWN-USDT", bidPx: "1", askPx: "1.1",
-          volCcy24h: "50", vol24h: "100", ts: String(now.getTime()),
+          instType: "SPOT",
+          instId: "UNKNOWN-USDT",
+          bidPx: "1",
+          askPx: "1.1",
+          volCcy24h: "50",
+          vol24h: "100",
+          ts: String(now.getTime()),
         },
       ]),
     ]);
@@ -124,8 +154,9 @@ describe("read-only OKX public catalog", () => {
     expect(fake.mock.mock.calls.map((call) => String(call[0]))).toEqual([
       "https://www.okx.com/api/v5/market/tickers?instType=SPOT",
     ]);
-    await expect(fetchOkxPublicSpotTickers(catalog.markets, { fetchImpl: fake.fetchImpl, now }))
-      .rejects.toThrow("spot markets only");
+    await expect(
+      fetchOkxPublicSpotTickers(catalog.markets, { fetchImpl: fake.fetchImpl, now }),
+    ).rejects.toThrow("spot markets only");
   });
 
   it("rejects malformed known-market quotes and duplicate spot ticker observations", async () => {
@@ -133,15 +164,27 @@ describe("read-only OKX public catalog", () => {
     await expect(
       fetchOkxPublicSpotTickers(markets, {
         now,
-        fetchImpl: transport([wrap([{
-          instType: "SPOT", instId: "SOL-USDT", bidPx: "", askPx: "1",
-          volCcy24h: "10", ts: String(now.getTime()),
-        }])]).fetchImpl,
+        fetchImpl: transport([
+          wrap([
+            {
+              instType: "SPOT",
+              instId: "SOL-USDT",
+              bidPx: "",
+              askPx: "1",
+              volCcy24h: "10",
+              ts: String(now.getTime()),
+            },
+          ]),
+        ]).fetchImpl,
       }),
     ).rejects.toThrow();
     const duplicate = {
-      instType: "SPOT", instId: "SOL-USDT", bidPx: "1", askPx: "1.1",
-      volCcy24h: "100", ts: String(now.getTime()),
+      instType: "SPOT",
+      instId: "SOL-USDT",
+      bidPx: "1",
+      askPx: "1.1",
+      volCcy24h: "100",
+      ts: String(now.getTime()),
     };
     await expect(
       fetchOkxPublicSpotTickers(markets, {
@@ -150,5 +193,4 @@ describe("read-only OKX public catalog", () => {
       }),
     ).rejects.toThrow("Duplicate");
   });
-
 });
