@@ -58,6 +58,7 @@ import {
   enqueueTakeoverContinuation,
   expireComputerControl,
   fetchBingxPublicSpotSnapshot,
+  fetchOkxClosedOneHourHistory,
   fetchOkxPublicCatalog,
   fetchOkxPublicSpotTickers,
   hasActiveComputerControl,
@@ -136,6 +137,7 @@ import {
   hasMixedOneShotSchedule,
   isOneShotRoutineCrons,
   nextCronDateAcrossStrict,
+  researchClosedHourBreakout,
   scanTradingMarkets,
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
@@ -683,6 +685,31 @@ export function createRouter(deps: RouterDeps) {
         };
       }),
       catalog: authed.trading.catalog.handler(() => fetchOkxPublicCatalog()),
+      analyze: authed.trading.analyze.handler(async ({ input }) => {
+        const catalog = await fetchOkxPublicCatalog();
+        const market = catalog.markets.find(
+          (candidate) => candidate.symbol === input.symbol && candidate.kind === input.kind,
+        );
+        if (!market) throw new ORPCError("NOT_FOUND", { message: "Public OKX instrument not found" });
+        // Dated futures remain discovery-only pending independent contract sizing
+        // and instrument/risk validation. Fail closed as a NO_TRADE research result.
+        if (market.kind === "dated_future") {
+          const now = new Date();
+          return researchClosedHourBreakout({
+            market,
+            candles: [],
+            fetchedAt: now.toISOString(),
+            now,
+          });
+        }
+        const history = await fetchOkxClosedOneHourHistory(market);
+        return researchClosedHourBreakout({
+          market,
+          candles: history.candles,
+          fetchedAt: history.fetchedAt,
+          now: new Date(),
+        });
+      }),
     },
     aiConsent: {
       status: authed.aiConsent.status.handler(({ context, input }) =>
