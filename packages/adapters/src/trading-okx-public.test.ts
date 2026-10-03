@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchOkxPublicCatalog } from "./trading-okx-public.js";
+import { fetchOkxPublicCatalog, fetchOkxPublicSpotTickers } from "./trading-okx-public.js";
 
 const now = new Date("2026-10-03T10:00:00.000Z");
 const futureExpiry = "1798790400000";
@@ -99,4 +99,56 @@ describe("read-only OKX public catalog", () => {
     expect(mismatch.excluded.map((x) => x.reason)).toEqual(["incomplete_metadata"]);
     await expect(run([wrap([spot(), spot()]), wrap([]), wrap([])])).rejects.toThrow("Duplicate");
   });
+
+  it("uses OKX spot quote-currency turnover and rejects derivative input", async () => {
+    const catalog = await run([wrap([spot()]), wrap([swap()]), wrap([future()])]);
+    const fake = transport([
+      wrap([
+        {
+          instType: "SPOT", instId: "SOL-USDT", bidPx: "100", askPx: "100.1",
+          volCcy24h: "1234567.89", vol24h: "1000", ts: String(now.getTime()),
+        },
+        {
+          instType: "SPOT", instId: "UNKNOWN-USDT", bidPx: "1", askPx: "1.1",
+          volCcy24h: "50", vol24h: "100", ts: String(now.getTime()),
+        },
+      ]),
+    ]);
+    const spotMarkets = catalog.markets.filter((market) => market.kind === "spot");
+    const tickers = await fetchOkxPublicSpotTickers(spotMarkets, {
+      fetchImpl: fake.fetchImpl,
+      now,
+    });
+    expect(tickers).toHaveLength(1);
+    expect(tickers[0]?.quoteVolume24h).toBe("1234567.89");
+    expect(fake.mock.mock.calls.map((call) => String(call[0]))).toEqual([
+      "https://www.okx.com/api/v5/market/tickers?instType=SPOT",
+    ]);
+    await expect(fetchOkxPublicSpotTickers(catalog.markets, { fetchImpl: fake.fetchImpl, now }))
+      .rejects.toThrow("spot markets only");
+  });
+
+  it("rejects malformed known-market quotes and duplicate spot ticker observations", async () => {
+    const markets = (await run([wrap([spot()]), wrap([]), wrap([])])).markets;
+    await expect(
+      fetchOkxPublicSpotTickers(markets, {
+        now,
+        fetchImpl: transport([wrap([{
+          instType: "SPOT", instId: "SOL-USDT", bidPx: "", askPx: "1",
+          volCcy24h: "10", ts: String(now.getTime()),
+        }])]).fetchImpl,
+      }),
+    ).rejects.toThrow();
+    const duplicate = {
+      instType: "SPOT", instId: "SOL-USDT", bidPx: "1", askPx: "1.1",
+      volCcy24h: "100", ts: String(now.getTime()),
+    };
+    await expect(
+      fetchOkxPublicSpotTickers(markets, {
+        now,
+        fetchImpl: transport([wrap([duplicate, duplicate])]).fetchImpl,
+      }),
+    ).rejects.toThrow("Duplicate");
+  });
+
 });
