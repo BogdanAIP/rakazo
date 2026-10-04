@@ -59,12 +59,7 @@ export async function readTradingPaperRecoveryStatus(
         const verified = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         const { revision: policyRevision, policy } = verified;
         try {
-          const report = await auditTradingPaperLifecycleInTransaction(
-            tx,
-            owner,
-            ledgerId,
-            now,
-          );
+          const report = await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, now);
           const { state } = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
           const nextAction =
             !policy.enabled && report.openReservations > 0
