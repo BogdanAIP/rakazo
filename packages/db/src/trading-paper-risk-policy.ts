@@ -252,12 +252,7 @@ export async function applyApprovedTradingPaperControl(
         let releaseAuditAvailable = true;
         if (request.action === "disable") {
           try {
-            await auditTradingPaperLifecycleInTransaction(
-              tx,
-              owner,
-              request.ledgerId,
-              new Date(),
-            );
+            await auditTradingPaperLifecycleInTransaction(tx, owner, request.ledgerId, new Date());
           } catch (error) {
             if (
               error instanceof PaperLifecycleAuditError ||
