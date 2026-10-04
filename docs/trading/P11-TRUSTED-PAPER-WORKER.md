@@ -1,6 +1,6 @@
 # P11 — Trusted Paper Worker and independent Risk Manager: implementation gate
 
-Status: **P11A default-deny policy persistence implemented in a stacked DRAFT**, while P11B/P11C remain acceptance contracts. PR #11 / P10 genuine isolated-PostgreSQL race suite passed on exact head `ae49879289dc823e6f2ebf86c381e8adcfcd9ff6`. This document does not install, schedule, activate or authorize any worker. Neither live nor simulated exchange-order execution exists.
+Status: **P11A and P11B-0/1/2/3 deny-only prerequisites are in a stacked DRAFT**, while actual transactional reserve and P11C remain acceptance contracts. PR #11 / P10 genuine isolated-PostgreSQL race suite passed on exact head `ae49879289dc823e6f2ebf86c381e8adcfcd9ff6`. This document does not install, schedule, activate or authorize any worker. Neither live nor simulated exchange-order execution exists.
 
 ## Ownership and trust boundaries
 
@@ -24,6 +24,10 @@ Implemented `estimateExactPaperSpotCapacity` in core: eight-decimal BigInt arith
 ## P11B-2 — source-labeled public observation, without execution authority
 
 The same inert PostgreSQL evidence table additionally supports `public_adapter_observation` with a separately stored normalized market, tick/lot/min-notional metadata and normalized ticker. A SQL CHECK preserves a strict split: `offline_fixture` requires null market metadata, public observations require market metadata. The SHA-256 binds source, market, bid/ask and timestamps; membership, owner and quote-currency match are checked in the DB service. **This is an application-level record of a public API response, not a cryptographic attestation from an exchange.** A DB user with privileged write access can still forge the evidence. No stored quote is an approval or authorization and `preflightTradingPaperReservation` remains deny-only. Market freshness and spread will need re-validation in the eventual transaction-bound decision, using a trusted server clock.
+
+## P11B-3 — exact market revalidation inside the deny-only transaction
+
+The preflight takes an **explicit lookup-only** market-evidence ID (never inferred from an AI signal's evidence IDs), and verifies the public row, owner, source label, integrity SHA and exact market metadata within the SAME serializable P10 replay + policy snapshot. It rejects missing or offline evidence, instrument mismatch, quote staleness (using `Date.now()` at decision time), signal expiry, excessive spread and trigger deviation. Spread/deviation comparisons use bounded BigInt decimal units and conservatively reject unsupported fractional-bps inputs. Even when every check passes the result is always `risk_state_unavailable` (deny): no durable mark-to-market stop-risk, daily-loss reconciliation, authenticated enabling or reserve authorization exists yet. A source label or checksum is not a cryptographic attestation from an exchange. Neither preflight nor evidence reads write an event, reservation or outbox entry.
 
 ## P11B — One serializable **evaluate + reserve** transaction
 

@@ -10,8 +10,7 @@ vi.mock("@rakazo/db", () => ({
 }));
 const owner = { userId: "user-test", spaceId: "space-test" };
 const db = {} as Parameters<typeof capturePublicPaperSpotEvidence>[0];
-const now = () => new Date().getTime();
-const envelope = (data: unknown) => ({ code: "0", data });
+const now = () => Date.now();
 function mockResponses(values: unknown[]) {
   const responses = [...values];
   const fn = vi.fn(async (_url: unknown, _options: unknown) => {

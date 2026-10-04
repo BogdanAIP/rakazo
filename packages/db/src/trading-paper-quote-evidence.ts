@@ -238,24 +238,43 @@ export async function readVerifiedPublicPaperQuoteEvidence(
   return withTransactionRetry(() =>
     prisma.$transaction(
       async (tx) => {
-        await requireOwner(tx, owner, ledgerId);
-        const row = await tx.tradingPaperQuoteEvidence.findFirst({ where: { id, ledgerId } });
-        if (!row || row.source !== PUBLIC_SOURCE) throw new PaperQuoteEvidenceError();
-        const parsedMarket = TradingInstrumentSchema.safeParse(row.market);
-        const parsedTicker = TradingTickerSchema.safeParse(row.payload);
-        if (!parsedMarket.success || !parsedTicker.success) throw new PaperQuoteEvidenceError();
-        const market = parsedMarket.data;
-        const ticker = parsedTicker.data;
-        validatePair(market, ticker);
-        if (
-          row.payloadSha256 !== publicSha(market, ticker) ||
-          row.observedAt.getTime() !== Date.parse(ticker.observedAt) ||
-          row.fetchedAt.getTime() !== Date.parse(ticker.fetchedAt)
-        )
-          throw new PaperQuoteEvidenceError("Public quote digest/timestamps mismatch");
-        return { id, source: PUBLIC_SOURCE, market, ticker };
+        const checked = await verifyPublicPaperQuoteEvidenceInTransaction(tx, owner, ledgerId, id);
+        if (!checked) throw new PaperQuoteEvidenceError();
+        return checked;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
   );
+}
+
+/** Internal reader for the SAME serializable transaction as policy + P10 replay.
+ * Returns null for absent/offline evidence, throws for corrupt public evidence.
+ * Reading a valid row does NOT grant an approval or an allow token. */
+export async function verifyPublicPaperQuoteEvidenceInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  ledgerId: string,
+  id: string,
+): Promise<{
+  id: string;
+  source: typeof PUBLIC_SOURCE;
+  market: TradingInstrument;
+  ticker: TradingTicker;
+} | null> {
+  await requireOwner(tx, owner, ledgerId);
+  const row = await tx.tradingPaperQuoteEvidence.findFirst({ where: { id, ledgerId } });
+  if (!row || row.source !== PUBLIC_SOURCE) return null;
+  const parsedMarket = TradingInstrumentSchema.safeParse(row.market);
+  const parsedTicker = TradingTickerSchema.safeParse(row.payload);
+  if (!parsedMarket.success || !parsedTicker.success) throw new PaperQuoteEvidenceError();
+  const market = parsedMarket.data;
+  const ticker = parsedTicker.data;
+  validatePair(market, ticker);
+  if (
+    row.payloadSha256 !== publicSha(market, ticker) ||
+    row.observedAt.getTime() !== Date.parse(ticker.observedAt) ||
+    row.fetchedAt.getTime() !== Date.parse(ticker.fetchedAt)
+  )
+    throw new PaperQuoteEvidenceError("Public quote digest/timestamps mismatch");
+  return { id, source: PUBLIC_SOURCE, market, ticker };
 }

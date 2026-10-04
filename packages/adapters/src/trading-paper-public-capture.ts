@@ -49,11 +49,5 @@ export async function capturePublicPaperSpotEvidence(
   }
   // All owner, quote-currency, metadata, precision and freshness checks are
   // repeated by the DB service; no later stage may trust this return as allow.
-  return recordPublicAdapterPaperQuoteEvidence(
-    prisma,
-    owner,
-    ledgerId,
-    markets[0],
-    tickers[0],
-  );
+  return recordPublicAdapterPaperQuoteEvidence(prisma, owner, ledgerId, markets[0], tickers[0]);
 }
