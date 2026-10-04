@@ -19,6 +19,7 @@ import {
   recordSyntheticPaperQuoteEvidence,
 } from "./trading-paper-quote-evidence.js";
 import { reconcileTradingPaperReservations } from "./trading-paper-reconciliation.js";
+import { readTradingPaperRecoveryStatus } from "./trading-paper-recovery-status.js";
 import { preflightTradingPaperReservation } from "./trading-paper-reservation-preflight.js";
 import {
   PaperReservationConflictError,
@@ -2412,6 +2413,15 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(1);
     expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(1);
     expect(await first.prisma.tradingPaperReleaseAudit.count({ where: { ledgerId } })).toBe(0);
+    const blockedReport = await readTradingPaperRecoveryStatus(second.prisma, owner, ledgerId);
+    expect(blockedReport).toMatchObject({
+      status: "integrity_blocked",
+      mode: "paper_only",
+      enabled: false,
+      killSwitch: true,
+      nextAction: "inspect_and_restore_independently",
+    });
+    expect("availableQuote" in blockedReport).toBe(false);
     const blockedEnable = await makePaperControlEffect(ledgerId, "c5-corrupt-enable", "enable", 2);
     await expect(
       applyApprovedTradingPaperControl(second.prisma, owner, blockedEnable.id),
@@ -2432,6 +2442,12 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     expect((await auditTradingPaperLifecycle(second.prisma, owner, ledgerId)).status).toBe(
       "verified",
     );
+    expect(await readTradingPaperRecoveryStatus(second.prisma, owner, ledgerId)).toMatchObject({
+      status: "verified",
+      enabled: false,
+      nextAction: "internal_reconcile_holds",
+      openReservations: 1,
+    });
     const prematureEnable = await makePaperControlEffect(
       ledgerId,
       "c5-premature-enable",
@@ -2476,6 +2492,12 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       openReservations: 0,
       releaseAudits: 1,
     });
+    expect(await readTradingPaperRecoveryStatus(second.prisma, owner, ledgerId)).toMatchObject({
+      status: "verified",
+      enabled: false,
+      openReservations: 0,
+      nextAction: "separate_owner_approval_to_enable",
+    });
     // Reconciliation cannot implicitly change the disabled capability.
     expect(await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId)).toMatchObject({
       revision: 2,
@@ -2495,5 +2517,43 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       enabled: true,
       killSwitch: false,
     });
+    expect(await readTradingPaperRecoveryStatus(second.prisma, owner, ledgerId)).toMatchObject({
+      status: "verified",
+      mode: "paper_only",
+      enabled: true,
+      killSwitch: false,
+      openReservations: 0,
+      nextAction: "none",
+    });
+  });
+
+  it("P11C-6 reports only verified finances and respects owner scope", async () => {
+    const closed = await readTradingPaperRecoveryStatus(
+      first.prisma,
+      owner,
+      `paper-c2-stop-${suffix}`,
+    );
+    expect(closed).toMatchObject({
+      status: "verified",
+      openReservations: 0,
+      openPositions: 0,
+    });
+    const damagedLegacy = await readTradingPaperRecoveryStatus(
+      second.prisma,
+      owner,
+      `paper-b8-expired-${suffix}`,
+    );
+    expect(damagedLegacy).toMatchObject({
+      status: "integrity_blocked",
+      nextAction: "inspect_and_restore_independently",
+    });
+    expect("reservedQuote" in damagedLegacy).toBe(false);
+    await expect(
+      readTradingPaperRecoveryStatus(
+        second.prisma,
+        { ...owner, userId: "unrecognized-paper-owner" },
+        `paper-c5-recovery-${suffix}`,
+      ),
+    ).rejects.toBeInstanceOf(PaperRiskPolicyIntegrityError);
   });
 });
