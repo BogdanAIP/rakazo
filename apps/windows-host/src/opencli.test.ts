@@ -18,6 +18,9 @@ function fixture(profile = "quxmf8xh") {
       return "closed";
     }
     if (command[0] === "state") return tree;
+    if (command[0] === "find") return '{"matches_n":1,"entries":[{"role":"button"}]}';
+    if (command[0] === "wait") return '{"found":true}';
+    if (command[0] === "extract") return "# Example content";
     if (command[0] === "get" && command[1] === "url") {
       return urls.get(session) ?? "https://example.com/form";
     }
@@ -47,6 +50,132 @@ function sessionName(botId: string, token: string): string {
 }
 
 describe("WindowsOpenCliBackend", () => {
+  it("exposes bounded read-only find, wait and extract on the owned OpenCLI session", async () => {
+    const { backend, runner } = fixture("");
+    const token = await openSession(backend, "bot-a");
+    const session = sessionName("bot-a", token);
+    expect(
+      WindowsHostBrowserRequestSchema.safeParse({
+        command: "find",
+        sessionToken: token,
+        css: "button.save",
+      }).success,
+    ).toBe(true);
+    expect(
+      WindowsHostBrowserRequestSchema.safeParse({
+        command: "wait",
+        sessionToken: token,
+        kind: "time",
+        value: "100",
+      }).success,
+    ).toBe(false);
+    expect(
+      WindowsHostBrowserRequestSchema.safeParse({
+        command: "wait",
+        sessionToken: token,
+        kind: "selector",
+        value: ".done",
+        timeoutMs: 12000,
+      }).success,
+    ).toBe(false);
+    expect(
+      WindowsHostBrowserRequestSchema.safeParse({
+        command: "find",
+        sessionToken: token,
+        css: "x".repeat(501),
+      }).success,
+    ).toBe(false);
+    expect(
+      WindowsHostBrowserRequestSchema.safeParse({
+        command: "eval",
+        sessionToken: token,
+        js: "document.cookie",
+      }).success,
+    ).toBe(false);
+    expect(
+      await backend.browser("bot-a", {
+        command: "find",
+        sessionToken: token,
+        css: "button.save",
+      }),
+    ).toMatchObject({ ok: true, content: expect.stringContaining('"matches_n":1') });
+    expect(
+      await backend.browser("bot-a", {
+        command: "wait",
+        sessionToken: token,
+        kind: "selector",
+        value: ".done",
+        timeoutMs: 2500,
+      }),
+    ).toMatchObject({ ok: true, content: '{"found":true}' });
+    expect(
+      await backend.browser("bot-a", {
+        command: "extract",
+        sessionToken: token,
+        selector: "main",
+        start: 200,
+      }),
+    ).toMatchObject({ ok: true, content: "# Example content" });
+    expect(runner).toHaveBeenCalledWith(process.execPath, [
+      "browser",
+      session,
+      "find",
+      "--css",
+      "button.save",
+      "--limit",
+      "20",
+      "--text-max",
+      "120",
+    ]);
+    expect(runner).toHaveBeenCalledWith(process.execPath, [
+      "browser",
+      session,
+      "wait",
+      "selector",
+      ".done",
+      "--timeout",
+      "2500",
+    ]);
+    expect(runner).toHaveBeenCalledWith(process.execPath, [
+      "browser",
+      session,
+      "extract",
+      "--chunk-size",
+      "16000",
+      "--selector",
+      "main",
+      "--start",
+      "200",
+    ]);
+  });
+
+  it("denies read-only operations using another task's session token before invoking OpenCLI", async () => {
+    const { backend, runner } = fixture();
+    const token = await openSession(backend, "bot-a");
+    await expect(
+      backend.browser("bot-b", {
+        command: "find",
+        sessionToken: token,
+        css: "button",
+      }),
+    ).rejects.toThrow("Unknown browser session");
+    await expect(
+      backend.browser("bot-b", {
+        command: "extract",
+        sessionToken: token,
+      }),
+    ).rejects.toThrow("Unknown browser session");
+    await expect(
+      backend.browser("bot-b", {
+        command: "wait",
+        sessionToken: token,
+        kind: "text",
+        value: "Ready",
+      }),
+    ).rejects.toThrow("Unknown browser session");
+    expect(runner).not.toHaveBeenCalled();
+  });
+
   it("lets OpenCLI resolve the only/default connected Chrome profile", async () => {
     const { backend, runner } = fixture("");
     const token = await openSession(backend, "bot-a");

@@ -204,6 +204,37 @@ export class WindowsOpenCliBackend {
       return snapshot;
     };
 
+    // No raw eval, arbitrary tab ownership, or shell execution exposed here.
+    // All three read-only operations use this task's server-minted session.
+    if (request.command === "find") {
+      const content = await invoke(
+        "find",
+        "--css",
+        request.css,
+        "--limit",
+        "20",
+        "--text-max",
+        "120",
+      );
+      return { ok: true, content: content.slice(0, MAX_OUTPUT_BYTES) };
+    }
+    if (request.command === "wait") {
+      const content = await invoke(
+        "wait",
+        request.kind,
+        request.value,
+        "--timeout",
+        String(request.timeoutMs ?? 9_000),
+      );
+      return { ok: true, content: content.slice(0, MAX_OUTPUT_BYTES) };
+    }
+    if (request.command === "extract") {
+      const options = ["--chunk-size", "16000"];
+      if (request.selector) options.push("--selector", request.selector);
+      if (request.start !== undefined) options.push("--start", String(request.start));
+      const content = await invoke("extract", ...options);
+      return { ok: true, content: content.slice(0, MAX_OUTPUT_BYTES) };
+    }
     if (request.command === "close") {
       // An explicit token is required: no global window/profile/tab cleanup.
       // OpenCLI may retain its OWN reusable blank tab; never remove or ungroup

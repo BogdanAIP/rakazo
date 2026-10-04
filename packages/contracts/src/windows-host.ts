@@ -104,6 +104,25 @@ export const WindowsHostBrowserRequestSchema = z.discriminatedUnion("command", [
     url: z.string().url().max(4_096),
   }),
   z.object({ command: z.literal("snapshot"), sessionToken: WindowsHostBrowserSessionTokenSchema }),
+  // Read-only OpenCLI capabilities, scoped to the server-minted task session.
+  z.object({
+    command: z.literal("find"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    css: z.string().min(1).max(500),
+  }),
+  z.object({
+    command: z.literal("wait"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    kind: z.enum(["selector", "text"]),
+    value: z.string().min(1).max(500),
+    timeoutMs: z.number().int().min(100).max(9_000).optional(),
+  }),
+  z.object({
+    command: z.literal("extract"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    selector: z.string().min(1).max(500).optional(),
+    start: z.number().int().min(0).max(1_000_000).optional(),
+  }),
   z.object({ command: z.literal("close"), sessionToken: WindowsHostBrowserSessionTokenSchema }),
   z.object({
     command: z.literal("act"),
@@ -122,6 +141,7 @@ export const WindowsHostBrowserResultSchema = z.object({
   url: z.string().max(4_096).optional(),
   title: z.string().max(2_048).optional(),
   tree: z.string().max(65_536).optional(),
+  content: z.string().max(65_536).optional(),
   elements: z
     .array(
       z.object({
