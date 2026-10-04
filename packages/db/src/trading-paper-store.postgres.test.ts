@@ -424,6 +424,18 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
         symbol: "WRONG-USDT",
       }),
     ).rejects.toBeInstanceOf(PaperQuoteEvidenceError);
+    await expect(
+      recordPublicAdapterPaperQuoteEvidence(first.prisma, owner, ledgerId, market, {
+        ...ticker,
+        bid: "101",
+      }),
+    ).rejects.toBeInstanceOf(PaperQuoteEvidenceError);
+    await expect(
+      recordPublicAdapterPaperQuoteEvidence(first.prisma, owner, ledgerId, market, {
+        ...ticker,
+        observedAt: "2020-01-01T00:00:00.000Z",
+      }),
+    ).rejects.toBeInstanceOf(PaperQuoteEvidenceError);
     const saved = await recordPublicAdapterPaperQuoteEvidence(
       first.prisma,
       owner,

@@ -103,6 +103,67 @@ describe("internal, opt-in public spot evidence capture", () => {
     ).rejects.toThrow("unavailable");
     expect(recordPublicAdapterPaperQuoteEvidence).not.toHaveBeenCalled();
   });
+  it("uses only four fixed keyless OKX catalog/ticker endpoints", async () => {
+    const at = now();
+    const fake = mockResponses([
+      {
+        code: "0",
+        data: [
+          {
+            instType: "SPOT",
+            instId: "SOL-USDT",
+            state: "live",
+            ruleType: "normal",
+            baseCcy: "SOL",
+            quoteCcy: "USDT",
+            tickSz: "0.01",
+            lotSz: "0.01",
+            expTime: "",
+          },
+        ],
+      },
+      { code: "0", data: [] },
+      { code: "0", data: [] },
+      {
+        code: "0",
+        data: [
+          {
+            instType: "SPOT",
+            instId: "SOL-USDT",
+            bidPx: "100",
+            askPx: "100.1",
+            volCcy24h: "120000",
+            ts: String(at),
+          },
+        ],
+      },
+    ]);
+    await expect(
+      capturePublicPaperSpotEvidence(db, owner, "paper-test", {
+        venue: "okx",
+        symbol: "SOL-USDT",
+      }),
+    ).resolves.toEqual({ id: "synthetic-stored", source: "public_adapter_observation" });
+    expect(fake.mock.calls.map((args) => String(args[0]))).toEqual([
+      "https://www.okx.com/api/v5/public/instruments?instType=SPOT",
+      "https://www.okx.com/api/v5/public/instruments?instType=SWAP",
+      "https://www.okx.com/api/v5/public/instruments?instType=FUTURES",
+      "https://www.okx.com/api/v5/market/tickers?instType=SPOT",
+    ]);
+    expect(recordPublicAdapterPaperQuoteEvidence).toHaveBeenCalledOnce();
+    expect(vi.mocked(recordPublicAdapterPaperQuoteEvidence).mock.calls[0]?.[3]).toMatchObject({
+      venue: "okx",
+      kind: "spot",
+      symbol: "SOL-USDT",
+      status: "active",
+    });
+    for (const call of fake.mock.calls) {
+      const options = call[1] as RequestInit;
+      expect(options.method).toBe("GET");
+      expect(options.redirect).toBe("error");
+      expect(JSON.stringify(options.headers)).not.toMatch(/api.?key|authorization|signature/i);
+    }
+  });
   it("rejects invalid target without making a public request or DB write", async () => {
     const fake = mockResponses([]);
     await expect(
