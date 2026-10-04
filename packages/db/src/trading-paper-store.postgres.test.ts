@@ -3,6 +3,11 @@ import { TradingInstrumentSchema } from "@rakazo/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb } from "./client.js";
 import {
+  createDisabledTradingPaperRiskPolicy,
+  PaperRiskPolicyIntegrityError,
+  readVerifiedTradingPaperRiskPolicy,
+} from "./trading-paper-risk-policy.js";
+import {
   appendTradingPaperLedgerEvent,
   createTradingPaperLedger,
   readVerifiedTradingPaperLedger,
@@ -188,4 +193,43 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       await restarted.pool.end();
     }
   });
+  it("P11A persists a disabled/killed paper policy and verifies owner/digest", async () => {
+    const ledgerId = `paper-race-${suffix}`;
+    const before = await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } });
+    const policy = await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+      allowedVenues: ["okx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "1500",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    });
+    expect(policy).toMatchObject({ mode: "paper_only", enabled: false, killSwitch: true });
+    const verified = await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId);
+    expect(verified.revision).toBe(0);
+    expect(verified.policy).toEqual(policy);
+    await expect(
+      readVerifiedTradingPaperRiskPolicy(
+        second.prisma,
+        { spaceId: owner.spaceId, userId: "not-owner" },
+        ledgerId,
+      ),
+    ).rejects.toBeInstanceOf(PaperRiskPolicyIntegrityError);
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(before);
+    await first.prisma.tradingPaperRiskPolicy.update({
+      where: { ledgerId },
+      data: { policySha256: "0".repeat(64) },
+    });
+    await expect(
+      readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId),
+    ).rejects.toBeInstanceOf(PaperRiskPolicyIntegrityError);
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(before);
+  });
+
 });
