@@ -54,8 +54,17 @@ function genesis(input: {
   quoteCurrency: string;
   initialBalanceQuote: string;
 }): string {
-  return sha256(JSON.stringify([VERSION, input.ledgerId, input.spaceId, input.userId,
-    input.openedAt, input.quoteCurrency, input.initialBalanceQuote]));
+  return sha256(
+    JSON.stringify([
+      VERSION,
+      input.ledgerId,
+      input.spaceId,
+      input.userId,
+      input.openedAt,
+      input.quoteCurrency,
+      input.initialBalanceQuote,
+    ]),
+  );
 }
 function chained(previous: string, eventSha256: string): string {
   return sha256(JSON.stringify([previous, eventSha256]));
@@ -80,10 +89,7 @@ function header(row: {
 
 /** No authorization here is derived from AI prose; this is a db-only helper.
  * The caller MUST be an authenticated Rakazo service. Never expose as MCP/RPC. */
-async function assertMember(
-  tx: Prisma.TransactionClient,
-  owner: Owner,
-): Promise<void> {
+async function assertMember(tx: Prisma.TransactionClient, owner: Owner): Promise<void> {
   const member = await tx.spaceMember.findFirst({
     where: { spaceId: owner.spaceId, userId: owner.userId },
     select: { id: true },
@@ -121,8 +127,12 @@ async function recover(
   const base = header(row);
   const openedAt = base.openedAt;
   let previous = genesis({
-    ledgerId: row.id, spaceId: row.spaceId, userId: row.ownerUserId, openedAt,
-    quoteCurrency: row.quoteCurrency, initialBalanceQuote: row.initialBalanceQuote,
+    ledgerId: row.id,
+    spaceId: row.spaceId,
+    userId: row.ownerUserId,
+    openedAt,
+    quoteCurrency: row.quoteCurrency,
+    initialBalanceQuote: row.initialBalanceQuote,
   });
   const events: PaperEvent[] = [];
   for (const entry of rows) {
@@ -133,14 +143,16 @@ async function recover(
       event.eventId !== entry.eventId ||
       event.kind !== entry.kind ||
       Date.parse(event.recordedAt) !== entry.recordedAt.getTime()
-    ) throw new PaperLedgerIntegrityError("Paper event metadata mismatch");
+    )
+      throw new PaperLedgerIntegrityError("Paper event metadata mismatch");
     const digest = sha256(payload(event));
     const chain = chained(previous, digest);
     if (
       digest !== entry.payloadSha256 ||
       previous !== entry.previousSha256 ||
       chain !== entry.chainSha256
-    ) throw new PaperLedgerIntegrityError("Paper event chain verification failed");
+    )
+      throw new PaperLedgerIntegrityError("Paper event chain verification failed");
     events.push(event);
     previous = chain;
   }
@@ -154,7 +166,8 @@ async function recover(
     row.projectionSha256 !== digest ||
     stateJson(normalizedProjection) !== stateJson(reconstructed) ||
     reconstructed.nextSequence !== row.version + 1
-  ) throw new PaperLedgerIntegrityError("Paper stored balance/projection differs from replay");
+  )
+    throw new PaperLedgerIntegrityError("Paper stored balance/projection differs from replay");
   return { row, events, state: reconstructed };
 }
 
@@ -176,22 +189,34 @@ export async function createTradingPaperLedger(
   const base = { ...input, openedAt };
   const state = replayTradingPaperLedger(base);
   const head = genesis({
-    ledgerId: input.ledgerId, spaceId: owner.spaceId, userId: owner.userId,
-    openedAt, quoteCurrency: input.quoteCurrency, initialBalanceQuote: input.initialBalanceQuote,
+    ledgerId: input.ledgerId,
+    spaceId: owner.spaceId,
+    userId: owner.userId,
+    openedAt,
+    quoteCurrency: input.quoteCurrency,
+    initialBalanceQuote: input.initialBalanceQuote,
   });
-  return prisma.$transaction(async (tx) => {
-    await assertMember(tx, owner);
-    await tx.tradingPaperLedger.create({
-      data: {
-        id: input.ledgerId, spaceId: owner.spaceId, ownerUserId: owner.userId,
-        openedAt: new Date(openedAt), quoteCurrency: input.quoteCurrency,
-        initialBalanceQuote: input.initialBalanceQuote,
-        version: 0, projection: asJson(state), projectionSha256: sha256(stateJson(state)),
-        headSha256: head,
-      },
-    });
-    return state;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  return prisma.$transaction(
+    async (tx) => {
+      await assertMember(tx, owner);
+      await tx.tradingPaperLedger.create({
+        data: {
+          id: input.ledgerId,
+          spaceId: owner.spaceId,
+          ownerUserId: owner.userId,
+          openedAt: new Date(openedAt),
+          quoteCurrency: input.quoteCurrency,
+          initialBalanceQuote: input.initialBalanceQuote,
+          version: 0,
+          projection: asJson(state),
+          projectionSha256: sha256(stateJson(state)),
+          headSha256: head,
+        },
+      });
+      return state;
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 }
 
 /** Read-only independently verified projection; no action permissions exposed. */
@@ -201,10 +226,13 @@ export async function readVerifiedTradingPaperLedger(
   ledgerId: string,
 ): Promise<TradingPaperLedgerState> {
   return withTransactionRetry(() =>
-    prisma.$transaction(async (tx) => {
-      const verified = await recover(tx, owner, ledgerId);
-      return verified.state;
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }),
+    prisma.$transaction(
+      async (tx) => {
+        const verified = await recover(tx, owner, ledgerId);
+        return verified.state;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    ),
   );
 }
 
@@ -221,48 +249,60 @@ export async function appendTradingPaperLedgerEvent(
 ): Promise<{ status: "appended" | "duplicate"; state: TradingPaperLedgerState }> {
   const event = normalizedEvent(raw);
   return withTransactionRetry(() =>
-    prisma.$transaction(async (tx) => {
-      const { row, events, state } = await recover(tx, owner, event.ledgerId);
-      const existing = events.find((entry) => entry.eventId === event.eventId);
-      if (existing) {
-        if (payload(existing) !== payload(event)) {
-          throw new PaperLedgerConflictError("Duplicate paper ID has a conflicting payload");
+    prisma.$transaction(
+      async (tx) => {
+        const { row, events, state } = await recover(tx, owner, event.ledgerId);
+        const existing = events.find((entry) => entry.eventId === event.eventId);
+        if (existing) {
+          if (payload(existing) !== payload(event)) {
+            throw new PaperLedgerConflictError("Duplicate paper ID has a conflicting payload");
+          }
+          return { status: "duplicate" as const, state };
         }
-        return { status: "duplicate" as const, state };
-      }
-      if (event.sequence !== row.version + 1) {
-        throw new PaperLedgerConflictError("Paper event sequence gap or concurrent stale writer");
-      }
-      if (events.length >= MAX_REPLAY_EVENTS) {
-        throw new PaperLedgerConflictError("Paper journal exceeds bounded full replay");
-      }
-      const next = replayTradingPaperLedger({ ...header(row), events: [...events, event] });
-      const digest = sha256(payload(event));
-      const chain = chained(row.headSha256, digest);
-      const changed = await tx.tradingPaperLedger.updateMany({
-        where: {
-          id: row.id, spaceId: owner.spaceId, ownerUserId: owner.userId,
-          version: row.version, headSha256: row.headSha256,
-        },
-        data: {
-          version: { increment: 1 },
-          projection: asJson(next), projectionSha256: sha256(stateJson(next)),
-          headSha256: chain,
-        },
-      });
-      if (changed.count !== 1) throw new PaperLedgerConflictError("Paper version CAS failed");
-      await tx.tradingPaperLedgerEvent.create({
-        data: {
-          ledgerId: row.id, sequence: event.sequence, eventId: event.eventId,
-          kind: event.kind, recordedAt: new Date(event.recordedAt),
-          payload: asJson(event), payloadSha256: digest,
-          previousSha256: row.headSha256, chainSha256: chain,
-        },
-      });
-      await tx.tradingPaperLedgerOutbox.create({
-        data: { ledgerId: row.id, sequence: event.sequence, status: "pending" },
-      });
-      return { status: "appended" as const, state: next };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }),
+        if (event.sequence !== row.version + 1) {
+          throw new PaperLedgerConflictError("Paper event sequence gap or concurrent stale writer");
+        }
+        if (events.length >= MAX_REPLAY_EVENTS) {
+          throw new PaperLedgerConflictError("Paper journal exceeds bounded full replay");
+        }
+        const next = replayTradingPaperLedger({ ...header(row), events: [...events, event] });
+        const digest = sha256(payload(event));
+        const chain = chained(row.headSha256, digest);
+        const changed = await tx.tradingPaperLedger.updateMany({
+          where: {
+            id: row.id,
+            spaceId: owner.spaceId,
+            ownerUserId: owner.userId,
+            version: row.version,
+            headSha256: row.headSha256,
+          },
+          data: {
+            version: { increment: 1 },
+            projection: asJson(next),
+            projectionSha256: sha256(stateJson(next)),
+            headSha256: chain,
+          },
+        });
+        if (changed.count !== 1) throw new PaperLedgerConflictError("Paper version CAS failed");
+        await tx.tradingPaperLedgerEvent.create({
+          data: {
+            ledgerId: row.id,
+            sequence: event.sequence,
+            eventId: event.eventId,
+            kind: event.kind,
+            recordedAt: new Date(event.recordedAt),
+            payload: asJson(event),
+            payloadSha256: digest,
+            previousSha256: row.headSha256,
+            chainSha256: chain,
+          },
+        });
+        await tx.tradingPaperLedgerOutbox.create({
+          data: { ledgerId: row.id, sequence: event.sequence, status: "pending" },
+        });
+        return { status: "appended" as const, state: next };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    ),
   );
 }
