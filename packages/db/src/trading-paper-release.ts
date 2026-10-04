@@ -77,14 +77,19 @@ export async function releaseTradingPaperReservationsInTransaction(
   for (const reservation of candidates) {
     const eventId = `paper-release:${randomUUID()}`;
     const eventSequence = state.nextSequence;
-    const appended = await appendTradingPaperLedgerEventInTransaction(tx, owner, {
-      ledgerId,
-      eventId,
-      sequence: eventSequence,
-      kind: "release",
-      recordedAt: releasedAt,
-      reservationId: reservation.reservationId,
-    }, caller);
+    const appended = await appendTradingPaperLedgerEventInTransaction(
+      tx,
+      owner,
+      {
+        ledgerId,
+        eventId,
+        sequence: eventSequence,
+        kind: "release",
+        recordedAt: releasedAt,
+        reservationId: reservation.reservationId,
+      },
+      caller,
+    );
     if (appended.status !== "appended") {
       throw new PaperReleaseIntegrityError("Fresh reconciliation event unexpectedly duplicated");
     }
