@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { assertTradingPaperCallerInTransaction, type PaperBotCaller } from "./trading-paper-bot.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
 import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
@@ -21,7 +22,6 @@ import {
   appendTradingPaperLedgerEventInTransaction,
   recoverTradingPaperLedgerInTransaction,
 } from "./trading-paper-store.js";
-import { assertTradingPaperCallerInTransaction, type PaperBotCaller } from "./trading-paper-bot.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 type Owner = { spaceId: string; userId: string };
@@ -519,17 +519,22 @@ export async function fillApprovedTradingPaperReservation(
         const fillEventSequence = recovered.state.nextSequence;
         const executedPriceQuote = decimal(executed);
         const feeQuote = decimal(fee);
-        const appended = await appendTradingPaperLedgerEventInTransaction(tx, owner, {
-          ledgerId,
-          eventId: fillEventId,
-          sequence: fillEventSequence,
-          kind: "fill_buy",
-          recordedAt: filledAt,
-          reservationId,
-          quantityBase: reservation.quantityBase,
-          executedPriceQuote,
-          feeQuote,
-        }, caller);
+        const appended = await appendTradingPaperLedgerEventInTransaction(
+          tx,
+          owner,
+          {
+            ledgerId,
+            eventId: fillEventId,
+            sequence: fillEventSequence,
+            kind: "fill_buy",
+            recordedAt: filledAt,
+            reservationId,
+            quantityBase: reservation.quantityBase,
+            executedPriceQuote,
+            feeQuote,
+          },
+          caller,
+        );
         if (appended.status !== "appended") {
           throw new PaperFillIntegrityError("Fresh synthetic fill unexpectedly duplicated");
         }
