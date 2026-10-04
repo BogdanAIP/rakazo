@@ -139,7 +139,11 @@ export type PaperTradingControlResult =
       mode: "paper_only";
       action: "enable" | "disable";
       ledgerId: string;
-      error: "stale_policy_revision" | "already_enabled" | "already_disabled" | "reconciliation_required";
+      error:
+        | "stale_policy_revision"
+        | "already_enabled"
+        | "already_disabled"
+        | "reconciliation_required";
       currentPolicyRevision: number;
     };
 

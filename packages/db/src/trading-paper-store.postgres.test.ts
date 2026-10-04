@@ -2412,12 +2412,7 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(1);
     expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(1);
     expect(await first.prisma.tradingPaperReleaseAudit.count({ where: { ledgerId } })).toBe(0);
-    const blockedEnable = await makePaperControlEffect(
-      ledgerId,
-      "c5-corrupt-enable",
-      "enable",
-      2,
-    );
+    const blockedEnable = await makePaperControlEffect(ledgerId, "c5-corrupt-enable", "enable", 2);
     await expect(
       applyApprovedTradingPaperControl(second.prisma, owner, blockedEnable.id),
     ).rejects.toBeInstanceOf(PaperLifecycleAuditError);
@@ -2473,8 +2468,9 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     expect(
       await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_buy" } }),
     ).toBe(0);
-    expect(await first.prisma.tradingPaperReleaseAudit.findMany({ where: { ledgerId } }))
-      .toMatchObject([{ reason: "kill_switch", policyRevision: 2 }]);
+    expect(
+      await first.prisma.tradingPaperReleaseAudit.findMany({ where: { ledgerId } }),
+    ).toMatchObject([{ reason: "kill_switch", policyRevision: 2 }]);
     expect(await auditTradingPaperLifecycle(first.prisma, owner, ledgerId)).toMatchObject({
       status: "verified",
       openReservations: 0,
@@ -2485,7 +2481,12 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       revision: 2,
       policy: { enabled: false, killSwitch: true },
     });
-    const reviewedEnable = await makePaperControlEffect(ledgerId, "c5-reviewed-enable", "enable", 2);
+    const reviewedEnable = await makePaperControlEffect(
+      ledgerId,
+      "c5-reviewed-enable",
+      "enable",
+      2,
+    );
     await expect(
       applyApprovedTradingPaperControl(second.prisma, owner, reviewedEnable.id),
     ).resolves.toMatchObject({
