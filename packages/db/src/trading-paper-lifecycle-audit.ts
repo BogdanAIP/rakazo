@@ -354,9 +354,8 @@ export async function auditTradingPaperLifecycle(
   now: Date = new Date(),
 ) {
   return withTransactionRetry(() =>
-    prisma.$transaction(
-      (tx) => auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, now),
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    ),
+    prisma.$transaction((tx) => auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, now), {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    }),
   );
 }
