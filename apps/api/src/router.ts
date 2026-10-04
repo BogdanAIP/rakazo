@@ -545,6 +545,7 @@ async function capabilityContextForBot(
   botId: string,
   operationId: string,
   signal?: AbortSignal,
+  projectId?: string,
 ): Promise<AdapterContext> {
   const bot = await deps.prisma.bot.findFirst({
     where: { id: botId, spaceId: actor.spaceId, userId: actor.userId },
@@ -564,6 +565,7 @@ async function capabilityContextForBot(
   return {
     ...connectionContext(actor, operationId, signal),
     botId,
+    projectId,
     connectedConnections: rows.map((row) => ({
       id: row.id,
       connectorId: row.connectorId,
@@ -3813,12 +3815,14 @@ export function createRouter(deps: RouterDeps) {
         return invokeCapabilityTool(deps, resolved.call, adapterContext);
       }),
       execute: authed.capabilities.execute.handler(async ({ context, input }) => {
+        if (input.projectId) await ownedProject(deps, context.actor, input.projectId);
         const adapterContext = await capabilityContextForBot(
           deps,
           context.actor,
           input.botId,
           "capabilities.execute",
           context.signal,
+          input.projectId,
         );
         const resolved = await resolveCapabilityTool(deps, adapterContext, input);
         return invokeCapabilityTool(deps, resolved.call, adapterContext);

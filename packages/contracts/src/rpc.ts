@@ -757,6 +757,7 @@ export const appContract = {
       .input(
         z.object({
           botId: Id,
+          projectId: Id.optional(),
           tool: z.string().min(1).max(300),
           route: CapabilityToolRouteSchema,
           args: z.record(z.string(), z.unknown()).default({}),
