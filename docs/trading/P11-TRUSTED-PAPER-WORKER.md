@@ -1,0 +1,51 @@
+# P11 — Trusted Paper Worker and independent Risk Manager: implementation gate
+
+Status: **design/acceptance contract only**, stacked DRAFT after PR #11 / P10. This document does not install, schedule, activate or authorize a worker. Neither the live nor simulated exchange order path exists. The next code slice must not start before the real PostgreSQL P10 races pass on an exact CI head.
+
+## Ownership and trust boundaries
+
+- Reuse **one Rakazo**: its existing authenticated user/space model, PostgreSQL + Prisma, existing Rakazo Worker, job recovery, audit, and configured public market-data adapters. No second trading server, CAP/OpenResearch, extra tunnel, unowned background service, direct LLM -> database mutation, exchange keys, wallet signing or broker/RPC order endpoint.
+- P6 `evaluateTradingPaperRisk()` is a **research preview**: it accepts caller-provided portfolio and uses bounded JavaScript number math. Its `paper_preview` output is never an approval, an order intent or authority to reserve virtual funds. P9 is synthetic full-fill spot accounting; P10 is a trusted-service DB primitive, not a public AI tool.
+- The Paper Worker must be invoked only by an authenticated Rakazo runtime action with owner/space scope, durable idempotency key and a *separately user-authorized, disabled-by-default* paper capability. AI outputs remain untrusted signal proposals, including NO_TRADE.
+- Only deterministic server code assigns event ID, sequence, event timestamp, simulation IDs and the source observation reference. A model cannot supply actor identity, policy, privileged idempotency keys or its own approval.
+
+## P11A — Persist owner-scoped paper policy, default DENY
+
+Store a policy in existing Prisma schema scoped to one ledger, space and owner. Initialize `enabled=false` and `killSwitch=true` with a monotonically increasing revision and audit record; no implicit enable or migration of the user's working database. Enforce membership and policy ownership on every read/change.
+
+Required bounded fields include paper-only mode, allowed active spot venues/instruments and one quote currency, max total exposure, risk/idea, cumulative day-loss, open stop-risk, positions, per-order cash, quote age, spread, trigger deviation, conservative fee/slippage assumptions, and time-limited signal/reservation eligibility. A policy change is an authenticated user action: neither LLM, backtest, market feed nor paper strategy can raise or disable caps. A kill-switch changes revision and blocks every subsequent reservation; existing outstanding reservations need a separately audited release/reconciliation path.
+
+Persist rejection/audit records with candidate/signal ID, ledger and policy revisions, source observation and human-readable reason. Do not persist raw external credentials or private client data.
+
+## P11B — One serializable **evaluate + reserve** transaction
+
+An ordinary sequence of `readVerifiedTradingPaperLedger()` followed by `appendTradingPaperLedgerEvent()` is **not safe**: two workers could both assess stale funds or a policy could be disabled between them. Add a separate internal DB service so the following steps happen in ONE PostgreSQL serializable transaction:
+
+1. Resolve authenticated actor, active membership, disabled/enabled paper capability and the owner-scoped policy from trusted database state. If unavailable, reject without money mutation.
+2. Load the P10 row and replay/verify *all* events/hash/projection **within that transaction**, never trust cached balance or signal claims of available cash.
+3. Validate normalized research-only signal, its expiry, supported active spot market and vetted public bid/ask provenance. Use server clock and bounded freshness; reject missing/stale market data, future times, NO_TRADE, quote/venue/policy mismatch, market halt and any unsupported precision.
+4. Build risk inputs from verified persistent state, not a caller-supplied P6 portfolio. P9 stores book-cost but **not an attested per-position stop or daily risk snapshot**; until stop and loss-reconciliation data are genuinely persisted, fail closed whenever the ledger has existing positions or reservations. Do not assume zero exposure or invent stop-risk fields.
+5. Independently cap risk; use exact-decimal/BigInt for executable virtual amount, quantity increment, fees and worst-case held amount. P6 floating-point previews may inform display but cannot authorize or size the DB reservation. Deny if any required risk input is unrepresentable.
+6. Recheck the policy revision/kill-switch and P10 ledger revision/head with CAS. Insert an inert `reserve` synthetic event, its rebuilt projection, decision audit and paper-notification outbox atomically. Identical durable idempotency keys return the existing result; conflicting reuse fails closed.
+7. On serialization failure, retry the whole verification/decision transaction up to a bounded limit. Never retry just the write using a previously approved result. A failed/rejected attempt may generate an audit-only record but must not modify virtual money.
+
+The outbox is a notification, **not** an exchange order queue. No RPC/MCP/plugin endpoint may expose raw `appendTradingPaperLedgerEvent` or accept AI prose as approval. No silent paper-job enablement.
+
+## P11C — Bounded synthetic lifecycle, separate gate
+
+Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.
+
+## Acceptance before enabled paper scheduling
+
+- P10 exact-head genuine isolated-Postgres races and restart reconstruction pass. Tests distinguish independent DB sessions from two separate OS processes; add a process-level stress gate if required by deployment topology.
+- Two independently connected workers race the same candidate: at most one reserved hold and one outbox; same idempotency key replays without mutation. Distinct candidates racing the last virtual cash cannot both spend it.
+- Revoked owner/space, stale quote, expired signal, unsupported market/precision, changed policy, disabled capability, kill-switch, tampered hash/projection, missing persisted risk and outbox failure cause no partial money mutation.
+- Restart/recovery rebuilds the identical virtual ledger, audits and outstanding reservation set; outbox delivery cannot place any order.
+- All changes have unit, disposable PostgreSQL integration and rollback tests, named ownership and traceable denial reasons. Application code and SQL migration require review, backup and explicit local action. No merge/deploy, exchange secret collection or runtime activation is authorized by this design.
+
+## Follow-on sequence
+
+1. P11A policy schema, migration and authenticated write restrictions (default deny).
+2. P11B transaction-scoped risk decision + synthetic reservation, CAS/idempotency and concurrency tests.
+3. P11C expiry/release, kill-switch reconciliation and restart consistency.
+4. Explicitly reviewed fill simulator and user-opt-in paper scheduling — **only after** the preceding stages pass. A separately approved live execution project must have independent instrument/venue/legal/financial safety gates.
