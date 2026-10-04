@@ -311,9 +311,8 @@ export async function appendTradingPaperLedgerEvent(
   raw: PaperEvent,
 ): Promise<{ status: "appended" | "duplicate"; state: TradingPaperLedgerState }> {
   return withTransactionRetry(() =>
-    prisma.$transaction(
-      (tx) => appendTradingPaperLedgerEventInTransaction(tx, owner, raw),
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    ),
+    prisma.$transaction((tx) => appendTradingPaperLedgerEventInTransaction(tx, owner, raw), {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    }),
   );
 }

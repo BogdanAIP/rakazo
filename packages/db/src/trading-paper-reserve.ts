@@ -45,22 +45,25 @@ type ReserveDenyReason =
   | "capacity_invalid_stop"
   | "capacity_below_minimum";
 
+type TradingPaperReserveSuccess = {
+  mode: "paper_only";
+  signalId: string;
+  reservationId: string;
+  eventId: string;
+  eventSequence: number;
+  policyRevision: number;
+  quantityBase: string;
+  heldQuote: string;
+  worstCaseStopRiskQuote: string;
+  stopPriceQuote: string;
+  expiresAt: string;
+};
+type TradingPaperReserveDuplicate = TradingPaperReserveSuccess & { status: "duplicate" };
+type TradingPaperReserveCreated = TradingPaperReserveSuccess & { status: "reserved" };
 export type TradingPaperReserveResult =
   | (Omit<TradingPaperReservationDeny, "reason"> & { reason: ReserveDenyReason })
-  | {
-      status: "reserved" | "duplicate";
-      mode: "paper_only";
-      signalId: string;
-      reservationId: string;
-      eventId: string;
-      eventSequence: number;
-      policyRevision: number;
-      quantityBase: string;
-      heldQuote: string;
-      worstCaseStopRiskQuote: string;
-      stopPriceQuote: string;
-      expiresAt: string;
-    };
+  | TradingPaperReserveCreated
+  | TradingPaperReserveDuplicate;
 
 function sha256(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value), "utf8").digest("hex");
@@ -152,7 +155,7 @@ async function readExistingDecision(
   ledgerId: string,
   signal: Extract<TradingSignal, { kind: "proposal" }>,
   evidenceId: string,
-): Promise<Extract<TradingPaperReserveResult, { status: "duplicate" }> | null> {
+): Promise<TradingPaperReserveDuplicate | null> {
   const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
   const row = await tx.tradingPaperReservationDecision.findUnique({
     where: { ledgerId_signalId: { ledgerId, signalId: signal.signalId } },
@@ -186,8 +189,7 @@ async function readExistingDecision(
   }
   const event = recovered.events.find((entry) => entry.eventId === row.eventId);
   if (
-    !event ||
-    event.kind !== "reserve" ||
+    event?.kind !== "reserve" ||
     event.sequence !== row.eventSequence ||
     event.reservationId !== row.reservationId ||
     event.signalId !== row.signalId ||
@@ -196,7 +198,9 @@ async function readExistingDecision(
     event.expiresAt !== row.expiresAt.toISOString() ||
     JSON.stringify(event.market) !== JSON.stringify(signal.market)
   ) {
-    throw new PaperReservationDecisionIntegrityError("Stored reserve decision disagrees with ledger");
+    throw new PaperReservationDecisionIntegrityError(
+      "Stored reserve decision disagrees with ledger",
+    );
   }
   return {
     status: "duplicate",
@@ -326,7 +330,9 @@ export async function reserveApprovedTradingPaperSignal(
           };
           const appended = await appendTradingPaperLedgerEventInTransaction(tx, owner, event);
           if (appended.status !== "appended") {
-            throw new PaperReservationDecisionIntegrityError("Fresh B7 event unexpectedly duplicated");
+            throw new PaperReservationDecisionIntegrityError(
+              "Fresh B7 event unexpectedly duplicated",
+            );
           }
           const requestSha256 = requestDigest(owner, ledgerId, signal, evidenceId);
           const normalized: DecisionDigestInput = {

@@ -6,10 +6,7 @@ import {
   TradingSignalSchema,
   type TradingTicker,
 } from "@rakazo/contracts";
-import {
-  deriveTradingPaperRiskState,
-  type TradingPaperDerivedRiskState,
-} from "@rakazo/core";
+import { deriveTradingPaperRiskState, type TradingPaperDerivedRiskState } from "@rakazo/core";
 import type { Prisma } from "./client.js";
 import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import { verifyTradingPaperRiskPolicyInTransaction } from "./trading-paper-risk-policy.js";
@@ -91,11 +88,7 @@ export async function evaluateTradingPaperReservationInTransaction(
   proposedSignal: unknown,
   evidenceId: string | null,
 ): Promise<TradingPaperReservationDeny | TradingPaperReservationReady> {
-  const { row, events, state } = await recoverTradingPaperLedgerInTransaction(
-    tx,
-    owner,
-    ledgerId,
-  );
+  const { row, events, state } = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
   const verified = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
   const { policy } = verified;
   const deny = (reason: TradingPaperReservationDenyReason): TradingPaperReservationDeny => ({

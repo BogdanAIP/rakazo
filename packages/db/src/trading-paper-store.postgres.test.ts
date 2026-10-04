@@ -1094,7 +1094,9 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     expect(firstResult.quantityBase).not.toBe("0");
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(1);
     expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(1);
-    expect(await first.prisma.tradingPaperReservationDecision.count({ where: { ledgerId } })).toBe(1);
+    expect(await first.prisma.tradingPaperReservationDecision.count({ where: { ledgerId } })).toBe(
+      1,
+    );
     const ledger = await readVerifiedTradingPaperLedger(second.prisma, owner, ledgerId);
     expect(ledger.reservations).toHaveLength(1);
     expect(ledger.reservations[0]?.reservationId).toBe(firstResult.reservationId);
@@ -1150,16 +1152,39 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
         const taskId = `paper-b7-race-task-${label}-${suffix}`;
         const runId = `paper-b7-race-run-${label}-${suffix}`;
         await first.prisma.bot.create({
-          data: { id: botId, spaceId: owner.spaceId, userId: owner.userId, name: "B7 Race", color: "#000000" },
+          data: {
+            id: botId,
+            spaceId: owner.spaceId,
+            userId: owner.userId,
+            name: "B7 Race",
+            color: "#000000",
+          },
         });
         await first.prisma.thread.create({
           data: { id: threadId, spaceId: owner.spaceId, botId, userId: owner.userId },
         });
         await first.prisma.task.create({
-          data: { id: taskId, spaceId: owner.spaceId, botId, threadId, userId: owner.userId, prompt: "b7 race", status: "running" },
+          data: {
+            id: taskId,
+            spaceId: owner.spaceId,
+            botId,
+            threadId,
+            userId: owner.userId,
+            prompt: "b7 race",
+            status: "running",
+          },
         });
         await first.prisma.run.create({
-          data: { id: runId, spaceId: owner.spaceId, botId, threadId, taskId, userId: owner.userId, status: "running", trigger: "user" },
+          data: {
+            id: runId,
+            spaceId: owner.spaceId,
+            botId,
+            threadId,
+            taskId,
+            userId: owner.userId,
+            status: "running",
+            trigger: "user",
+          },
         });
         const effect = await first.prisma.externalEffect.create({
           data: {
