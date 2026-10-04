@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { TradingInstrumentSchema } from "@rakazo/contracts";
+import { createHash, randomUUID } from "node:crypto";
+import { TradingInstrumentSchema, TradingPaperPolicySchema } from "@rakazo/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb } from "./client.js";
 import { preflightTradingPaperReservation } from "./trading-paper-reservation-preflight.js";
@@ -11,6 +11,7 @@ import {
 import {
   appendTradingPaperLedgerEvent,
   createTradingPaperLedger,
+  PaperLedgerIntegrityError,
   readVerifiedTradingPaperLedger,
 } from "./trading-paper-store.js";
 
@@ -258,4 +259,78 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     ).rejects.toBeInstanceOf(PaperRiskPolicyIntegrityError);
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(before);
   });
+  it("P11B-0 refuses an externally flipped policy without trusted market data", async () => {
+    const ledgerId = `paper-preflight-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: "2026-10-04T08:00:00.000Z",
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "1000",
+    });
+    const disabled = await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+      allowedVenues: ["okx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "1500",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    });
+    // Simulate a privileged DB edit in the disposable test DB. This does NOT
+    // introduce any policy enable method into the Rakazo application.
+    const switched = TradingPaperPolicySchema.parse({
+      ...disabled,
+      enabled: true,
+      killSwitch: false,
+    });
+    const policySha256 = createHash("sha256")
+      .update(JSON.stringify(switched), "utf8")
+      .digest("hex");
+    await first.prisma.tradingPaperRiskPolicy.update({
+      where: { ledgerId },
+      data: { policy: JSON.parse(JSON.stringify(switched)), policySha256 },
+    });
+    const candidate = {
+      kind: "proposal",
+      executionStatus: "research_only",
+      signalId: "synthetic-untrusted-quote",
+      strategyId: "offline-fixture",
+      strategyVersion: "1",
+      createdAt: "2026-10-04T08:00:30.000Z",
+      expiresAt: "2026-10-04T08:30:00.000Z",
+      evidenceIds: ["fixture-only"],
+      market,
+      action: "spot_buy",
+      entryTrigger: "100",
+      stopLoss: "95",
+      takeProfit: ["110"],
+      invalidation: "offline-test-only",
+      rationale: "Synthetic, not a live recommendation",
+      riskBudgetQuote: null,
+      maxSlippageBps: null,
+    };
+    const result = await preflightTradingPaperReservation(second.prisma, owner, ledgerId, candidate);
+    expect(result).toEqual({
+      status: "deny",
+      reason: "trusted_market_snapshot_unavailable",
+      ledgerRevision: 0,
+      policyRevision: 0,
+    });
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(0);
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(0);
+    await first.prisma.tradingPaperLedger.update({
+      where: { id: ledgerId },
+      data: { projectionSha256: "f".repeat(64) },
+    });
+    await expect(
+      preflightTradingPaperReservation(second.prisma, owner, ledgerId, candidate),
+    ).rejects.toBeInstanceOf(PaperLedgerIntegrityError);
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(0);
+  });
+
 });
