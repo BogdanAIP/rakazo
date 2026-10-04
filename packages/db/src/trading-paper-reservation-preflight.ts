@@ -119,7 +119,9 @@ export async function preflightTradingPaperReservation(
           );
           if (!guards) return deny("stop_risk_unavailable");
           let total = 0n;
-          const positions = new Map(state.positions.map((position) => [position.positionId, position]));
+          const positions = new Map(
+            state.positions.map((position) => [position.positionId, position]),
+          );
           for (const guard of guards) {
             const position = positions.get(guard.positionId);
             if (!position) return deny("stop_risk_unavailable");

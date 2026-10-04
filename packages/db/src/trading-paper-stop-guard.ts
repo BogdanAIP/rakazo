@@ -1,8 +1,5 @@
 import { createHash } from "node:crypto";
-import type {
-  TradingPaperLedgerEvent,
-  TradingPaperLedgerState,
-} from "@rakazo/contracts";
+import type { TradingPaperLedgerEvent, TradingPaperLedgerState } from "@rakazo/contracts";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
 import { recoverTradingPaperLedgerInTransaction } from "./trading-paper-store.js";
@@ -11,6 +8,12 @@ import { withTransactionRetry } from "./transaction-retry.js";
 type Owner = { spaceId: string; userId: string };
 type PaperDb = Pick<PrismaClient, "$transaction">;
 const decimal = /^(?:0|[1-9]\d{0,15})(?:\.\d{1,8})?$/;
+const SCALE = 100_000_000n;
+function units(value: string): bigint {
+  if (!decimal.test(value)) throw new PaperStopGuardIntegrityError("Invalid exact stop decimal");
+  const [whole, fraction = ""] = value.split(".");
+  return BigInt(whole!) * SCALE + BigInt(fraction.padEnd(8, "0"));
+}
 const digest = (value: {
   ledgerId: string;
   positionId: string;
@@ -59,18 +62,14 @@ export async function recordTradingPaperStopGuardForOpenPosition(
   return withTransactionRetry(() =>
     prisma.$transaction(
       async (tx) => {
-        const { events, state } = await recoverTradingPaperLedgerInTransaction(
-          tx,
-          owner,
-          ledgerId,
-        );
+        const { events, state } = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
         const position = state.positions.find((entry) => entry.positionId === positionId);
         const fill = events.find(
           (entry): entry is Extract<TradingPaperLedgerEvent, { kind: "fill_buy" }> =>
             entry.kind === "fill_buy" && entry.reservationId === positionId,
         );
         if (!position || !fill) throw new PaperStopGuardIntegrityError();
-        if (Number(stopPriceQuote) >= Number(fill.executedPriceQuote)) {
+        if (units(stopPriceQuote) >= units(fill.executedPriceQuote)) {
           throw new PaperStopGuardIntegrityError("Long paper stop must be below entry fill");
         }
         const row = {
@@ -141,7 +140,7 @@ export async function verifyTradingPaperStopGuardsInTransaction(
       !decimal.test(row.stopPriceQuote) ||
       !/[1-9]/.test(row.stopPriceQuote) ||
       row.guardSha256 !== digest(normalized) ||
-      Number(row.stopPriceQuote) >= Number(fill.executedPriceQuote)
+      units(row.stopPriceQuote) >= units(fill.executedPriceQuote)
     ) {
       throw new PaperStopGuardIntegrityError();
     }
