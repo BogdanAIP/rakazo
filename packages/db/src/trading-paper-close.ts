@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { assertTradingPaperCallerInTransaction, type PaperBotCaller } from "./trading-paper-bot.js";
 import {
   PaperFillIntegrityError,
   verifyTradingPaperOpenFillInTransaction,
@@ -16,7 +17,6 @@ import {
   appendTradingPaperLedgerEventInTransaction,
   recoverTradingPaperLedgerInTransaction,
 } from "./trading-paper-store.js";
-import { assertTradingPaperCallerInTransaction, type PaperBotCaller } from "./trading-paper-bot.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 type Owner = { spaceId: string; userId: string };
@@ -345,17 +345,22 @@ export async function closeTradingPaperPositionOnStop(
         const closeEventSequence = recovered.state.nextSequence;
         const executedPriceQuote = decimal(executed);
         const feeQuote = decimal(fee);
-        const appended = await appendTradingPaperLedgerEventInTransaction(tx, owner, {
-          ledgerId,
-          eventId: closeEventId,
-          sequence: closeEventSequence,
-          kind: "fill_sell",
-          recordedAt: closedAt,
-          positionId,
-          quantityBase: opened.quantityBase,
-          executedPriceQuote,
-          feeQuote,
-        }, caller);
+        const appended = await appendTradingPaperLedgerEventInTransaction(
+          tx,
+          owner,
+          {
+            ledgerId,
+            eventId: closeEventId,
+            sequence: closeEventSequence,
+            kind: "fill_sell",
+            recordedAt: closedAt,
+            positionId,
+            quantityBase: opened.quantityBase,
+            executedPriceQuote,
+            feeQuote,
+          },
+          caller,
+        );
         if (appended.status !== "appended") {
           throw new PaperCloseIntegrityError("Fresh synthetic close unexpectedly duplicated");
         }
