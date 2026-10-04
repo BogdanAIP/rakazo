@@ -22,6 +22,7 @@ export {
 } from "./trading-paper-quote-evidence.js";
 export * from "./trading-paper-reservation-preflight.js";
 export {
+  applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,
   PaperRiskPolicyIntegrityError,
   readVerifiedTradingPaperRiskPolicy,

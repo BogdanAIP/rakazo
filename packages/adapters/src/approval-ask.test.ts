@@ -51,6 +51,27 @@ describe("buildApprovalAskBlock", () => {
     expect(block.detail).toContain("to: person@example.test");
   });
 
+  it("uses one-time paper controls and never offers always allow", () => {
+    const enable = buildApprovalAskBlock(
+      "effect-paper-enable",
+      "paper_trading_control",
+      { action: "enable", ledger_id: "paper-1", expected_policy_revision: 2 },
+      [],
+    );
+    expect(enable).toMatchObject({
+      kind: "ask",
+      text: "Enable paper-only trading for “paper-1”?",
+      actions: [
+        { id: "allow", label: "Enable paper only", outcome: "enabled" },
+        { id: "deny", label: "Cancel", outcome: "cancelled" },
+      ],
+    });
+    expect(JSON.stringify(enable)).not.toContain("Always allow");
+    if (enable.kind !== "ask") throw new Error("expected ask block");
+    expect(enable.detail).toContain("does not authorize live orders");
+    expect(enable.detail).toContain("expected policy revision: 2");
+  });
+
   it("uses a one-time create or cancel choice for a new security boundary", () => {
     const block = buildApprovalAskBlock(
       "effect-1",

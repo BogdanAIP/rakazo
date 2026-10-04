@@ -19,7 +19,9 @@ export function buildApprovalAskBlock(
     approvalEffectId: effectId,
     text: truncate(
       redactSecrets(
-        toolName === "create_space" ? `${summary}?` : `Review before ${summary}`,
+        toolName === "create_space" || toolName === "paper_trading_control"
+          ? `${summary}?`
+          : `Review before ${summary}`,
         secrets,
       ),
       MAX_APPROVAL_SUMMARY_LENGTH,
@@ -32,11 +34,20 @@ export function buildApprovalAskBlock(
             { id: "allow", label: "Create space", outcome: "created" },
             { id: "deny", label: "Cancel", outcome: "cancelled" },
           ]
-        : [
-            { id: "allow", label: "Allow once" },
-            { id: "always", label: "Always allow this tool" },
-            { id: "deny", label: "Deny" },
-          ],
+        : toolName === "paper_trading_control"
+          ? [
+              {
+                id: "allow",
+                label: args.action === "disable" ? "Disable paper trading" : "Enable paper only",
+                outcome: args.action === "disable" ? "disabled" : "enabled",
+              },
+              { id: "deny", label: "Cancel", outcome: "cancelled" },
+            ]
+          : [
+              { id: "allow", label: "Allow once" },
+              { id: "always", label: "Always allow this tool" },
+              { id: "deny", label: "Deny" },
+            ],
   };
 }
 
@@ -54,6 +65,11 @@ function describeApprovalAction(toolName: string, args: Record<string, unknown>)
     const name = args.name ? String(args.name) : "Untitled";
     return `Create space “${name}”`;
   }
+  if (toolName === "paper_trading_control") {
+    const verb = args.action === "disable" ? "Disable" : "Enable";
+    const ledger = args.ledger_id ? String(args.ledger_id) : "unknown ledger";
+    return `${verb} paper-only trading for “${ledger}”`;
+  }
   const target = pickScopeLabel(args);
   return target ? `${toolName} → ${target}` : toolName;
 }
@@ -70,6 +86,13 @@ function formatApprovalDetail(
   if (toolName === "create_space") {
     lines.push(
       "Bots, groups, chats, files, memory, and integrations in this space stay separate from other spaces.",
+    );
+  }
+  if (toolName === "paper_trading_control") {
+    lines.push(
+      "This changes only the synthetic paper-only capability. It does not authorize live orders or change risk limits.",
+      `ledger: ${String(args.ledger_id ?? "")}`,
+      `expected policy revision: ${String(args.expected_policy_revision ?? "")}`,
     );
   }
   for (const key of ["collection", "title", "to", "subject", "amount", "body"]) {

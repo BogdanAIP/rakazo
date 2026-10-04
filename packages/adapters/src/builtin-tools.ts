@@ -858,6 +858,21 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    name: "paper_trading_control",
+    description:
+      "Propose enabling or disabling Rakazo's synthetic PAPER-ONLY trading capability for one existing ledger at an exact policy revision. Use only when the user explicitly asks for this control change. This always requires a fresh confirmation card; it cannot be auto-reviewed or permanently allowed. It never authorizes live exchange orders, credentials, leverage, futures, wallets, or real funds, and it cannot change risk limits.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["enable", "disable"] },
+        ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+        expected_policy_revision: { type: "integer", minimum: 0 },
+      },
+      required: ["action", "ledger_id", "expected_policy_revision"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "spawn_bot",
     description:
       "Create a full, regular bot — the same kind the user creates from the + button. It gets its own thread, computer, and memory, and appears as a peer in the bot list. Do not also call run_subagent. Creating the bot is the whole action. Only set prompt if the user asked that new bot to start work immediately.",

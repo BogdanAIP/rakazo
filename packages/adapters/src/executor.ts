@@ -92,6 +92,7 @@ import {
 } from "@rakazo/core/node/approval-effect-key";
 import {
   appendEventInTransaction,
+  applyApprovedTradingPaperControl,
   createSpaceForMember,
   createThreadMessageInTransaction,
   effectiveMemoryScope,
@@ -3552,6 +3553,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
               ok: true,
               result: String(args.task ?? "done."),
             };
+          }
+          if (name === "paper_trading_control") {
+            if (!applied || !claimedEffect) {
+              throw new Error("Paper trading control requires a claimed explicit approval.");
+            }
+            return applyApprovedTradingPaperControl(
+              deps.prisma,
+              { spaceId: run.spaceId, userId: run.userId },
+              applied.effect.id,
+            );
           }
           if (name === "create_space") {
             try {

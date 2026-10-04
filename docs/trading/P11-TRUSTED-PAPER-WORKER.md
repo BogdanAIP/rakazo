@@ -39,6 +39,12 @@ A new repository-only `TradingPaperStopGuard` relation binds a stop to the ledge
 
 When all current positions have verified guards, preflight calculates conservative aggregate stop risk with eight-decimal BigInt math: stop price is moved adversely by policy slippage, expected proceeds are rounded down, the assumed sell fee is rounded up, and remaining loss is compared with `maxOpenRiskQuote`. A valid guard can advance the deny-only gate to `reserve_authority_unavailable`; a low stop exceeding the cap returns `open_stop_risk_limit_exceeded`. No guard write changes ledger events, balances or outbox.
 
+## P11B-6 — explicit owner approval for PAPER capability only
+
+Rakazo now has a dedicated builtin `paper_trading_control` proposal with `action=enable|disable`, exact ledger id and expected policy revision. It is **mandatory explicit approval**: approval rules, Auto Review and "Always allow" cannot bypass confirmation. The card exposes only one-time enable/disable and cancel choices and states that live orders remain unauthorized.
+
+After approval, the persisted `ExternalEffect` is claimed first. The DB transition verifies executing status, owner/space/run, tool kind and exact approved args. Policy CAS, immutable `TradingPaperPolicyAudit` insertion and effect completion then happen in ONE serializable transaction. This control cannot edit risk limits: enable changes only `enabled=true, killSwitch=false`; disable changes only `enabled=false, killSwitch=true`. Stale revisions consume the one-time effect without a policy change. Unapproved effects fail closed. The capability remains **paper_only** and grants no live-order, credential, wallet, futures or broker authority.
+
 ## P11B — One serializable **evaluate + reserve** transaction
 
 

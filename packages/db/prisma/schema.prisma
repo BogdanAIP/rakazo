@@ -1393,6 +1393,7 @@ model TradingPaperLedger {
   riskPolicy          TradingPaperRiskPolicy?
   quoteEvidence       TradingPaperQuoteEvidence[]
   stopGuards          TradingPaperStopGuard[]
+  policyAudits        TradingPaperPolicyAudit[]
 
   @@index([spaceId, ownerUserId])
   @@map("trading_paper_ledgers")
@@ -1440,6 +1441,26 @@ model TradingPaperRiskPolicy {
   updatedAt      DateTime           @updatedAt
 
   @@map("trading_paper_risk_policies")
+}
+
+
+/** Immutable owner/effect-bound audit of explicit PAPER capability toggles. */
+model TradingPaperPolicyAudit {
+  effectId      String             @id
+  ledgerId      String
+  ledger        TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId       String
+  userId        String
+  runId         String
+  action        String
+  fromRevision  Int
+  toRevision    Int
+  beforeSha256  String
+  afterSha256   String
+  createdAt     DateTime           @default(now())
+
+  @@index([ledgerId, createdAt])
+  @@map("trading_paper_policy_audits")
 }
 
 /** Evidence only: no broker data, account keys or risk approval.
