@@ -19,7 +19,7 @@ function decimal(value: bigint): string {
   const magnitude = value < 0n ? -value : value;
   const whole = magnitude / SCALE;
   const fractional = (magnitude % SCALE).toString().padStart(8, "0").replace(/0+$/, "");
-  return negative + whole.toString() + (fractional ? "." + fractional : "");
+  return `${negative}${whole.toString()}${fractional ? "." + fractional : ""}`;
 }
 function roundUpProduct(quantity: bigint, price: bigint): bigint {
   return (quantity * price + SCALE - 1n) / SCALE;
@@ -33,7 +33,7 @@ function aligned(amount: bigint, increment: string | null): boolean {
 type Reservation = {
   reservationId: string;
   signalId: string;
-  market: Extract<TradingPaperLedgerInput["events"][number], {kind: "reserve"}>["market"];
+  market: Extract<TradingPaperLedgerInput["events"][number], { kind: "reserve" }>["market"];
   quantity: bigint;
   held: bigint;
   expiresAt: number;
@@ -107,7 +107,8 @@ export function replayTradingPaperLedger(raw: TradingPaperLedgerInput): TradingP
       const maximum = units(event.maxSpendQuote);
       const expires = Date.parse(event.expiresAt);
       if (expires <= occurred) throw new Error("Paper reservation expires before creation");
-      if (!aligned(qty, market.quantityIncrement)) throw new Error("Paper quantity not lot-aligned");
+      if (!aligned(qty, market.quantityIncrement))
+        throw new Error("Paper quantity not lot-aligned");
       if (market.minNotional !== null && maximum < units(market.minNotional)) {
         throw new Error("Paper reservation below market min notional");
       }
