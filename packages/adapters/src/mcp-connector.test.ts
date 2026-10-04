@@ -1173,13 +1173,18 @@ describe("fork creation and contribution through the MCP execution boundary", ()
       },
     ];
     const create = vi.fn().mockResolvedValue({ id: "fork-record" });
+    const project = { findFirst: vi.fn().mockResolvedValue({ id: "project-1" }) };
+    const projectResource = { findMany: vi.fn().mockResolvedValue(resources.slice(0, 2)), create };
     const prisma = {
       botMcpServer: {
         findMany: vi.fn().mockResolvedValue([assignment]),
         findFirst: vi.fn().mockResolvedValue(assignment),
       },
-      project: { findFirst: vi.fn().mockResolvedValue({ id: "project-1" }) },
-      projectResource: { findMany: vi.fn().mockResolvedValue(resources.slice(0, 2)), create },
+      project,
+      projectResource,
+      $transaction: vi.fn(async (run: (tx: unknown) => Promise<unknown>) =>
+        run({ project, projectResource }),
+      ),
     };
     const connector = new McpConnector(prisma as never, {} as never, { network: TEST_NETWORK });
     const context: AdapterContext = {

@@ -59,14 +59,35 @@ const apiResponse = {
 };
 function fixture(rows: unknown[] = [dest]) {
   const findMany = vi.fn().mockResolvedValue(rows);
+  const findFirst = vi.fn().mockResolvedValue({ id: "project-1" });
   const create = vi.fn().mockResolvedValue({ id: "new-resource" });
+  const persisted: unknown[] = [];
+  const transaction = vi.fn(async (run: (tx: unknown) => Promise<unknown>) => {
+    const staged: unknown[] = [];
+    const result = await run({
+      project: { findFirst },
+      projectResource: {
+        findMany,
+        create: async (args: unknown) => {
+          const created = await create(args);
+          staged.push(args);
+          return created;
+        },
+      },
+    });
+    persisted.push(...staged);
+    return result;
+  });
   return {
     db: {
-      project: { findFirst: vi.fn().mockResolvedValue({ id: "project-1" }) },
+      project: { findFirst },
       projectResource: { findMany, create },
+      $transaction: transaction,
     } as never,
     findMany,
     create,
+    persisted,
+    transaction,
   };
 }
 
@@ -157,6 +178,29 @@ describe("safe fork and upstream PR permissions", () => {
         }),
       }),
     });
+  });
+  it("atomically rolls back both grants when the second insert fails", async () => {
+    const f = fixture();
+    f.create
+      .mockResolvedValueOnce({ id: "first" })
+      .mockRejectedValueOnce(new Error("second insert failed"));
+    await expect(
+      registerGithubFork(
+        f.db,
+        context,
+        server,
+        {
+          source: "otherproject/library",
+          destination: "bogdanaip",
+        },
+        apiResponse,
+      ),
+    ).resolves.toBe(false);
+    expect(f.transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: "Serializable",
+    });
+    expect(f.create).toHaveBeenCalledTimes(2);
+    expect(f.persisted).toHaveLength(0);
   });
   it("recognizes the official v1.14.0 CreateFork minimal receipt without exposing credentials", async () => {
     const f = fixture();

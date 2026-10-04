@@ -154,7 +154,7 @@ export function verifiedFork(result: unknown, source: string, destination: strin
   return full;
 }
 export async function registerGithubFork(
-  db: Records,
+  db: PrismaClient,
   ctx: AdapterContext,
   serverId: string,
   fork: { source: string; destination: string },
@@ -162,57 +162,66 @@ export async function registerGithubFork(
 ): Promise<boolean> {
   const name = verifiedFork(result, fork.source, fork.destination);
   if (!name || !ctx.projectId) return false;
-  const rows = await resources(db, ctx);
-  if (
-    !rows.some(
-      (r) =>
-        r.kind === "github.fork.destination" &&
-        r.ref.toLowerCase() === fork.destination &&
-        granted(r, serverId, "allow_fork"),
-    )
-  )
-    return false;
-  // Never overwrite a pre-existing resource/grant; manual review remains possible.
-  if (rows.some((r) => r.kind === "github.repo" && canonical(r.ref) === name)) return false;
   try {
-    await db.projectResource.create({
-      data: {
-        projectId: ctx.projectId,
-        spaceId: ctx.spaceId,
-        userId: ctx.userId,
-        kind: "github.repo",
-        ref: name,
-        label: name,
-        metadata: {
-          githubAccess: "autonomous_write",
-          githubMcpServerId: serverId,
-          forkOf: fork.source,
-          verifiedFork: true,
-        },
+    return await db.$transaction(
+      async (tx) => {
+        // Check and create both grants within ONE transaction. A failed second
+        // insert rolls back the writable fork grant created by the first insert.
+        const rows = await resources(tx, ctx);
+        if (
+          !rows.some(
+            (r) =>
+              r.kind === "github.fork.destination" &&
+              r.ref.toLowerCase() === fork.destination &&
+              granted(r, serverId, "allow_fork"),
+          )
+        )
+          return false;
+        // Existing resources are not overwritten, including concurrent inserts.
+        if (rows.some((r) => r.kind === "github.repo" && canonical(r.ref) === name)) return false;
+        await tx.projectResource.create({
+          data: {
+            projectId: ctx.projectId!,
+            spaceId: ctx.spaceId,
+            userId: ctx.userId,
+            kind: "github.repo",
+            ref: name,
+            label: name,
+            metadata: {
+              githubAccess: "autonomous_write",
+              githubMcpServerId: serverId,
+              forkOf: fork.source,
+              verifiedFork: true,
+            },
+          },
+        });
+        await tx.projectResource.create({
+          data: {
+            projectId: ctx.projectId!,
+            spaceId: ctx.spaceId,
+            userId: ctx.userId,
+            kind: "github.pr.upstream",
+            ref: `${fork.source}#${name}`,
+            label: `PR: ${name} -> ${fork.source}`,
+            metadata: {
+              githubAccess: "contribute_via_pr",
+              githubMcpServerId: serverId,
+              upstream: fork.source,
+              forkRef: name,
+              verifiedFork: true,
+            },
+          },
+        });
+        return true;
       },
-    });
-    await db.projectResource.create({
-      data: {
-        projectId: ctx.projectId,
-        spaceId: ctx.spaceId,
-        userId: ctx.userId,
-        kind: "github.pr.upstream",
-        ref: `${fork.source}#${name}`,
-        label: `PR: ${name} -> ${fork.source}`,
-        metadata: {
-          githubAccess: "contribute_via_pr",
-          githubMcpServerId: serverId,
-          upstream: fork.source,
-          forkRef: name,
-          verifiedFork: true,
-        },
-      },
-    });
+      { isolationLevel: "Serializable" },
+    );
   } catch {
+    // Includes uniqueness races and serialization failures; no partial grant.
     return false;
-  } // A concurrent insert must never broaden a different grant.
-  return true;
+  }
 }
+
 /** Contribute via PR: write ONLY to GitHub PR metadata on upstream, code stays in a verified fork. */
 export async function assertGithubContribution(
   db: Records,

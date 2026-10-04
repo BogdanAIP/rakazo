@@ -72,7 +72,8 @@ ID and exact github.com destination owner/repository URL from THAT response.
 If a future version returns a full fork object instead, fork=true, full_name,
 owner and the exact upstream parent are all verified. Neither path trusts the
 model's desired output as proof. Only after verification does it create two new
-project resources:
+project resources in one Serializable PostgreSQL transaction; a second-insert
+failure rolls back the first grant:
 - github.repo for the verified fork, with autonomous_write, forkOf and verifiedFork
 - github.pr.upstream for this exact fork/upstream pair, with contribute_via_pr
 
