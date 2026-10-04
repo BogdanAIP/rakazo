@@ -2,6 +2,7 @@ import process from "node:process";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { loadChatGptContext, searchChatGptCapabilities } from "./chatgpt-context.js";
 import type { ProcedureMode } from "./chatgpt-rakazo.js";
 import {
   actRakazoComputer,
@@ -145,6 +146,43 @@ server.registerTool(
   async ({ procedure }) => textResult(await describeProcedure(procedure)),
 );
 
+server.registerTool(
+  "rakazo_context_bootstrap",
+  {
+    title: "Load shared Rakazo context",
+    description:
+      "Read-only cross-chat context: bot Memory, open Scratchpad, available Skills, active Runs, Routines, installed capabilities. No second model. At the beginning of a task, call this with the existing botId.",
+    inputSchema: z.object({ botId: z.string().min(1).optional() }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ botId }) => textResult(await loadChatGptContext(callRakazoRpc, botId)),
+);
+
+server.registerTool(
+  "rakazo_capability_search",
+  {
+    title: "Discover installed and public capabilities",
+    description:
+      "Read-only discovery. Search installed capabilities and optionally public integrations without installing, authorizing or executing them.",
+    inputSchema: z.object({
+      query: z.string().max(200).default(""),
+      includePublic: z.boolean().default(false),
+    }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+  },
+  async ({ query, includePublic }) =>
+    textResult(await searchChatGptCapabilities(callRakazoRpc, query, includePublic)),
+);
 server.registerTool(
   "rakazo_read",
   {

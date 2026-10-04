@@ -128,7 +128,10 @@ export async function searchChatGptCapabilities(
     query,
     publicCatalogEnabled: catalog.enabled === true,
     installed: installed.map((item) => ({
-      id: item.id, name: item.name, kind: item.kind, source: item.source,
+      id: item.id,
+      name: item.name,
+      kind: item.kind,
+      source: item.source,
     })),
     discoveryResults: results.slice(0, 20).map((item) => ({
       name: item.name,
