@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { TradingInstrumentSchema, TradingPaperPolicySchema } from "@rakazo/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb } from "./client.js";
+import { auditTradingPaperLifecycle, PaperLifecycleAuditError } from "./trading-paper-lifecycle-audit.js";
 import { closeTradingPaperPositionOnStop, PaperCloseConflictError } from "./trading-paper-close.js";
 import {
   fillApprovedTradingPaperReservation,
@@ -2159,6 +2160,76 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       expect(state.positions).toHaveLength(1);
       expect(await first.prisma.tradingPaperStopGuard.count({ where: { ledgerId } })).toBe(1);
       expect(await first.prisma.tradingPaperCloseDecision.count({ where: { ledgerId } })).toBe(0);
+    }
+  });
+  it("P11C-3 audits closed PnL across a fresh DB client and fails on decision/guard tampering", async () => {
+    const closedId = `paper-c2-stop-${suffix}`;
+    const restarted = createDb(databaseUrl!, {
+      poolMax: 1,
+      applicationName: "paper-lifecycle-audit-restart",
+    });
+    try {
+      const audited = await auditTradingPaperLifecycle(restarted.prisma, owner, closedId);
+      const state = await readVerifiedTradingPaperLedger(restarted.prisma, owner, closedId);
+      expect(audited).toMatchObject({
+        status: "verified",
+        mode: "paper_only",
+        acceptedEvents: 3,
+        reservationDecisions: 1,
+        fillDecisions: 1,
+        releaseAudits: 0,
+        closeDecisions: 1,
+        openPositions: 0,
+        openReservations: 0,
+        realizedPnlQuote: state.realizedPnlQuote,
+      });
+      expect(Number(audited.realizedPnlQuote)).toBeLessThan(0);
+      const close = await first.prisma.tradingPaperCloseDecision.findFirstOrThrow({
+        where: { ledgerId: closedId },
+      });
+      await first.prisma.tradingPaperCloseDecision.update({
+        where: { ledgerId_positionId: { ledgerId: closedId, positionId: close.positionId } },
+        data: { decisionSha256: "0".repeat(64) },
+      });
+      await expect(auditTradingPaperLifecycle(restarted.prisma, owner, closedId))
+        .rejects.toBeInstanceOf(PaperLifecycleAuditError);
+      await first.prisma.tradingPaperCloseDecision.update({
+        where: { ledgerId_positionId: { ledgerId: closedId, positionId: close.positionId } },
+        data: { decisionSha256: close.decisionSha256 },
+      });
+      expect((await auditTradingPaperLifecycle(restarted.prisma, owner, closedId)).status).toBe(
+        "verified",
+      );
+      await first.prisma.tradingPaperCloseDecision.delete({
+        where: { ledgerId_positionId: { ledgerId: closedId, positionId: close.positionId } },
+      });
+      await expect(auditTradingPaperLifecycle(restarted.prisma, owner, closedId))
+        .rejects.toBeInstanceOf(PaperLifecycleAuditError);
+
+      const openId = `paper-c1-fill-${suffix}`;
+      const open = await auditTradingPaperLifecycle(restarted.prisma, owner, openId);
+      expect(open).toMatchObject({
+        status: "verified",
+        reservationDecisions: 1,
+        fillDecisions: 1,
+        closeDecisions: 0,
+        openPositions: 1,
+      });
+      const guard = await first.prisma.tradingPaperStopGuard.findFirstOrThrow({
+        where: { ledgerId: openId },
+      });
+      await first.prisma.tradingPaperStopGuard.update({
+        where: { ledgerId_positionId: { ledgerId: openId, positionId: guard.positionId } },
+        data: { guardSha256: "0".repeat(64) },
+      });
+      await expect(auditTradingPaperLifecycle(restarted.prisma, owner, openId)).rejects.toThrow();
+      await first.prisma.tradingPaperStopGuard.update({
+        where: { ledgerId_positionId: { ledgerId: openId, positionId: guard.positionId } },
+        data: { guardSha256: guard.guardSha256 },
+      });
+    } finally {
+      await restarted.prisma.$disconnect();
+      await restarted.pool.end();
     }
   });
 });
