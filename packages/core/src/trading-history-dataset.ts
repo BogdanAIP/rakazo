@@ -2,7 +2,6 @@ import {
   type TradingHistoryCapture,
   TradingHistoryCaptureSchema,
   type TradingHistoryDataset,
-  type TradingHistoryGapSchema,
 } from "@rakazo/contracts";
 
 const HOUR_MS = 3_600_000;
