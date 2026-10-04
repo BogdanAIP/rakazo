@@ -2,7 +2,10 @@ import { createHash } from "node:crypto";
 import { type TradingPaperPolicy, TradingPaperPolicySchema } from "@rakazo/contracts";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
-import { requireTradingBotPaperBindingInTransaction } from "./trading-paper-bot.js";
+import {
+  requireTradingBotPaperBindingInTransaction,
+  TradingBotPaperBindingError,
+} from "./trading-paper-bot.js";
 import {
   auditTradingPaperLifecycleInTransaction,
   PaperLifecycleAuditError,
@@ -217,8 +220,11 @@ export async function applyApprovedTradingPaperControl(
               request.ledgerId,
               { runId: effect.run.id, allowArchived: request.action === "disable" },
             );
-          } catch {
-            throw new PaperRiskPolicyIntegrityError("Paper control Run is not the bound Bot");
+          } catch (error) {
+            if (error instanceof TradingBotPaperBindingError) {
+              throw new PaperRiskPolicyIntegrityError("Paper control Run is not the bound Bot");
+            }
+            throw error;
           }
         }
         const verified = await verifyTradingPaperRiskPolicyInTransaction(
