@@ -1,9 +1,6 @@
 import * as z from "zod";
 import { IsoDate } from "./ids.js";
-import {
-  TradingCandleSchema,
-  TradingInstrumentSchema,
-} from "./trading.js";
+import { TradingCandleSchema, TradingInstrumentSchema } from "./trading.js";
 
 /**
  * Captured normalized PUBLIC data. This is not exchange-signed proof that the
@@ -28,7 +25,11 @@ export const TradingHistoryDatasetSchema = TradingHistoryCaptureSchema.extend({
   schemaVersion: z.literal("okx_normalized_closed_1h_v1"),
   /** SHA-256 of a documented, stable, normalized UTF-8 JSON representation. */
   datasetSha256: z.string().regex(/^[a-f0-9]{64}$/),
-  canonicalByteLength: z.number().int().positive().max(8 * 1024 * 1024),
+  canonicalByteLength: z
+    .number()
+    .int()
+    .positive()
+    .max(8 * 1024 * 1024),
   firstOpenedAt: IsoDate,
   lastOpenedAt: IsoDate,
   gapRanges: z.array(TradingHistoryGapSchema).max(9_999),
