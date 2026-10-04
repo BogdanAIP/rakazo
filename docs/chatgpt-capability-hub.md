@@ -30,3 +30,14 @@ Installed MCP/API/GraphQL connectors are currently dispatched in Rakazo's intern
 3. Two conversations exchange a checkpoint through shared Rakazo state without duplicating records or overwriting unrelated work.
 4. Capability search clearly distinguishes discovered from installed/authorized and does not execute on search.
 5. Physical Host/tunnel remain unchanged; tests classify pass/fail/not-run, and existing same-tunnel restart is separately coordinated.
+
+## Native Windows update controls (AIHOT-style UX)
+
+Rakazo already has `DesktopUpdates.tsx` (packaged desktop) and `SoftwareUpdateSection.tsx` (updater-sidecar). The current native Windows installation does not configure the updater sidecar, so `updater/apply` MUST NOT be reused blindly. Extend the existing Settings/Updates UI with independent native controls:
+
+1. **Check Rakazo updates (read-only):** show the current local HEAD and fetched remote HEAD, branch/source, changed files, dirty/untracked working tree, impact (app/DB/Host/R), current tunnel status, available backup and a dry-run compatibility report.
+2. **Update native Rakazo (explicit confirmation):** protect dirty files; only fast-forward or explicitly reviewed merge, never reset/force-pull. Require verified backup before DB migration, test targeted changed packages, stage install/start under the original Windows controller, verify API/Web/Host heartbeat and same original tunnel. On failure show precise recovery/rollback instructions; never claim success from a completed shell command alone.
+3. **Refresh Plugin R separately:** only if changed MCP adapter; verify the original alias/tunnel ID, actual process PID/start time and authenticated live health. Use a one-shot external launcher/scheduled job because the active R MCP cannot synchronously restart itself. Stop only the verified owned runtime, wait for fully stopped state, connect the SAME registered alias with existing protected credentials and MCP command, then verify new PID, health and exact tool catalog. Do not create a new tunnel, re-pair the Host or restart DB/API. Never expose keys, tokens or raw runtime JSON.
+4. **UI status and cleanup:** show phases Check -> Ready -> Updating -> Verifying -> Success/Error; lock out duplicates and concurrent GUI ownership changes. Show unchanged/touched components and offer changelog. Remove the one-shot task/script after successful completion, preserving a redacted audit log. Explicitly indicate that already-open ChatGPT conversations may cache older tool schemas, so final acceptance includes a new-session discovery and actual bootstrap/discovery test.
+
+The 2026-10-04 manual R refresh completed with `PASS_SAME_REGISTERED_TUNNEL_NEW_PROCESS`, task exit code 0, with original API and Windows Host healthy. One-shot scheduled task and script removed; the audit log remains. This is one observed manual run, NOT proof that the future UI exists yet.
