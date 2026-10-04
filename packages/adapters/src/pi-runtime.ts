@@ -33,6 +33,7 @@ import type {
 import { usableModelId } from "@rakazo/contracts";
 import { getLogger } from "@rakazo/logging";
 import { isToolPauseResult } from "./approval-effect.js";
+import { connectionIdArgument, credentialArgument } from "./bot-secrets.js";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
 import { DEFAULT_OPENROUTER_MODEL_ID } from "./deployment-model.js";
 import {
@@ -856,7 +857,9 @@ function withoutSteeringMessages(
  * value only when `credential` is present, and it validates the destination
  * shape itself. An earlier version of this function listed only
  * label/purpose/connectionId, so every credential the model supplied was
- * dropped here and the saved value had nowhere to go.
+ * dropped here and the saved value had nowhere to go. Top-level destination
+ * fields and a JSON string credential are folded into `credential` so they
+ * are not dropped the same way.
  */
 export function prepareRequestSecretArguments(raw: Record<string, unknown>) {
   const label = raw.label == null ? "" : String(raw.label);
@@ -868,11 +871,13 @@ export function prepareRequestSecretArguments(raw: Record<string, unknown>) {
       })`,
     );
   }
+  const credential = credentialArgument(raw);
+  const connectionId = connectionIdArgument(raw.connectionId);
   return {
     label,
     purpose,
-    ...(raw.connectionId ? { connectionId: String(raw.connectionId) } : {}),
-    ...(raw.credential ? { credential: raw.credential } : {}),
+    ...(connectionId ? { connectionId } : {}),
+    ...(credential !== undefined ? { credential } : {}),
     ...(raw.replace === true ? { replace: true } : {}),
   };
 }
