@@ -8,9 +8,9 @@ import {
   TradingPaperLedgerStateSchema,
 } from "@rakazo/contracts";
 import { replayTradingPaperLedger } from "@rakazo/core";
-import { assertTradingPaperCallerInTransaction, type PaperBotCaller } from "./trading-paper-bot.js";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { assertTradingPaperCallerInTransaction, type PaperBotCaller } from "./trading-paper-bot.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 type PaperStoreDb = Pick<PrismaClient, "$transaction">;
@@ -275,7 +275,10 @@ export async function appendTradingPaperLedgerEventInTransaction(
 ): Promise<{ status: "appended" | "duplicate"; state: TradingPaperLedgerState }> {
   const event = normalizedEvent(raw);
   await assertTradingPaperCallerInTransaction(
-    tx, owner, event.ledgerId, caller,
+    tx,
+    owner,
+    event.ledgerId,
+    caller,
     event.kind === "reserve" || event.kind === "fill_buy" ? "new_exposure" : "protective",
   );
   const { row, events, state } = await recoverTradingPaperLedgerInTransaction(
@@ -341,8 +344,11 @@ export async function appendTradingPaperLedgerEvent(
   caller?: PaperBotCaller,
 ): Promise<{ status: "appended" | "duplicate"; state: TradingPaperLedgerState }> {
   return withTransactionRetry(() =>
-    prisma.$transaction((tx) => appendTradingPaperLedgerEventInTransaction(tx, owner, raw, caller), {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    }),
+    prisma.$transaction(
+      (tx) => appendTradingPaperLedgerEventInTransaction(tx, owner, raw, caller),
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    ),
   );
 }
