@@ -314,7 +314,12 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       riskBudgetQuote: null,
       maxSlippageBps: null,
     };
-    const result = await preflightTradingPaperReservation(second.prisma, owner, ledgerId, candidate);
+    const result = await preflightTradingPaperReservation(
+      second.prisma,
+      owner,
+      ledgerId,
+      candidate,
+    );
     expect(result).toEqual({
       status: "deny",
       reason: "trusted_market_snapshot_unavailable",
@@ -332,5 +337,4 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     ).rejects.toBeInstanceOf(PaperLedgerIntegrityError);
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(0);
   });
-
 });
