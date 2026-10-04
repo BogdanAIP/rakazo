@@ -3,7 +3,10 @@ import { type TradingSignal, TradingSignalSchema } from "@rakazo/contracts";
 import { estimateExactPaperSpotCapacity } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
-import { auditTradingPaperLifecycleInTransaction, PaperLifecycleAuditError } from "./trading-paper-lifecycle-audit.js";
+import {
+  auditTradingPaperLifecycleInTransaction,
+  PaperLifecycleAuditError,
+} from "./trading-paper-lifecycle-audit.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
 import {
   evaluateTradingPaperReservationInTransaction,
