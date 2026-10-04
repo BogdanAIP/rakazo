@@ -24,7 +24,7 @@ const base = z.object({
   recordedAt: IsoDate,
 });
 const reserve = base
-  .extend({  
+  .extend({
     kind: z.literal("reserve"),
     reservationId: EventId,
     signalId: EventId,
@@ -35,13 +35,13 @@ const reserve = base
   })
   .strict();
 const release = base
-  .extend({  
+  .extend({
     kind: z.literal("release"),
     reservationId: EventId,
   })
   .strict();
 const fillBuy = base
-  .extend({  
+  .extend({
     kind: z.literal("fill_buy"),
     reservationId: EventId,
     quantityBase: TradingPaperLedgerPositiveSchema,
@@ -50,7 +50,7 @@ const fillBuy = base
   })
   .strict();
 const fillSell = base
-  .extend({  
+  .extend({
     kind: z.literal("fill_sell"),
     positionId: EventId,
     quantityBase: TradingPaperLedgerPositiveSchema,
