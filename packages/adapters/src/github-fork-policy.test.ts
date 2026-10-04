@@ -1,0 +1,266 @@
+import type { AdapterContext } from "@rakazo/adapter-kit";
+import { describe, expect, it, vi } from "vitest";
+import {
+  assertGithubContribution,
+  authorizeGithubFork,
+  githubAuthenticatedLogin,
+  registerGithubFork,
+  verifiedFork,
+} from "./github-fork-policy.js";
+
+const server = "github-server";
+const context: AdapterContext = {
+  operationId: "test",
+  traceId: "trace",
+  botId: "bot-1",
+  spaceId: "space-1",
+  userId: "user-1",
+  projectId: "project-1",
+  signal: new AbortController().signal,
+};
+const dest = {
+  kind: "github.fork.destination",
+  ref: "BogdanAIP",
+  metadata: { githubAccess: "allow_fork", githubMcpServerId: server },
+};
+const upstream = {
+  kind: "github.pr.upstream",
+  ref: "otherproject/library#bogdanaip/library",
+  metadata: {
+    githubAccess: "contribute_via_pr",
+    githubMcpServerId: server,
+    upstream: "otherproject/library",
+    forkRef: "bogdanaip/library",
+    verifiedFork: true,
+  },
+};
+const fork = {
+  kind: "github.repo",
+  ref: "bogdanaip/library",
+  metadata: {
+    githubAccess: "autonomous_write",
+    githubMcpServerId: server,
+    forkOf: "otherproject/library",
+    verifiedFork: true,
+  },
+};
+const apiResponse = {
+  content: [
+    {
+      type: "text",
+      text: JSON.stringify({
+        full_name: "BogdanAIP/library",
+        fork: true,
+        owner: { login: "BogdanAIP" },
+        parent: { full_name: "OtherProject/library" },
+      }),
+    },
+  ],
+};
+function fixture(rows: unknown[] = [dest]) {
+  const findMany = vi.fn().mockResolvedValue(rows);
+  const create = vi.fn().mockResolvedValue({ id: "new-resource" });
+  return {
+    db: {
+      project: { findFirst: vi.fn().mockResolvedValue({ id: "project-1" }) },
+      projectResource: { findMany, create },
+    } as never,
+    findMany,
+    create,
+  };
+}
+
+describe("safe fork and upstream PR permissions", () => {
+  it("resolves the OAuth identity from GitHub MCP get_me, not caller args", () => {
+    expect(
+      githubAuthenticatedLogin({ content: [{ type: "text", text: '{"login":"BogdanAIP"}' }] }),
+    ).toBe("bogdanaip");
+    expect(() => githubAuthenticatedLogin({ isError: true })).toThrow();
+    expect(() =>
+      githubAuthenticatedLogin({ content: [{ type: "text", text: '{"login":"unknown/user"}' }] }),
+    ).toThrow();
+  });
+  it("permits forking external source only into an explicitly granted destination", async () => {
+    const f = fixture();
+    await expect(
+      authorizeGithubFork(
+        f.db,
+        context,
+        server,
+        {
+          owner: "OtherProject",
+          repo: "library",
+        },
+        "BogdanAIP",
+      ),
+    ).resolves.toEqual({
+      source: "otherproject/library",
+      destination: "bogdanaip",
+    });
+    await expect(
+      authorizeGithubFork(
+        f.db,
+        context,
+        server,
+        {
+          owner: "OtherProject",
+          repo: "library",
+          organization: "OtherOrg",
+        },
+        "BogdanAIP",
+      ),
+    ).rejects.toThrow("no allow_fork");
+    await expect(
+      authorizeGithubFork(
+        f.db,
+        context,
+        "other-server",
+        {
+          owner: "OtherProject",
+          repo: "library",
+        },
+        "BogdanAIP",
+      ),
+    ).rejects.toThrow("no allow_fork");
+  });
+  it("registers writable fork only after GitHub returns verified fork + parent", async () => {
+    const f = fixture();
+    const planned = { source: "otherproject/library", destination: "bogdanaip" };
+    expect(verifiedFork(apiResponse, planned.source, planned.destination)).toBe(
+      "bogdanaip/library",
+    );
+    await expect(registerGithubFork(f.db, context, server, planned, apiResponse)).resolves.toBe(
+      true,
+    );
+    expect(f.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        kind: "github.repo",
+        ref: "bogdanaip/library",
+        metadata: expect.objectContaining({
+          githubAccess: "autonomous_write",
+          forkOf: "otherproject/library",
+          verifiedFork: true,
+          githubMcpServerId: server,
+        }),
+      }),
+    });
+    expect(f.create).toHaveBeenCalledTimes(2);
+    expect(f.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        kind: "github.pr.upstream",
+        ref: "otherproject/library#bogdanaip/library",
+        metadata: expect.objectContaining({
+          githubAccess: "contribute_via_pr",
+          upstream: "otherproject/library",
+          forkRef: "bogdanaip/library",
+          verifiedFork: true,
+        }),
+      }),
+    });
+  });
+  it.each([
+    [{ isError: true }],
+    [{ content: [{ type: "text", text: '{"full_name":"BogdanAIP/library","fork":true}' }] }],
+    [
+      {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              full_name: "AnotherUser/library",
+              fork: true,
+              owner: { login: "AnotherUser" },
+              parent: { full_name: "OtherProject/library" },
+            }),
+          },
+        ],
+      },
+    ],
+    [
+      {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              full_name: "BogdanAIP/library",
+              fork: true,
+              owner: { login: "BogdanAIP" },
+              parent: { full_name: "OtherProject/other" },
+            }),
+          },
+        ],
+      },
+    ],
+  ])("never auto-grants for missing or inconsistent fork provenance", async (reply) => {
+    const f = fixture(),
+      planned = { source: "otherproject/library", destination: "bogdanaip" };
+    await expect(registerGithubFork(f.db, context, server, planned, reply)).resolves.toBe(false);
+    expect(f.create).not.toHaveBeenCalled();
+  });
+  it("does not auto-grant when the destination permission was revoked", async () => {
+    const f = fixture([]);
+    await expect(
+      registerGithubFork(
+        f.db,
+        context,
+        server,
+        {
+          source: "otherproject/library",
+          destination: "bogdanaip",
+        },
+        apiResponse,
+      ),
+    ).resolves.toBe(false);
+    expect(f.create).not.toHaveBeenCalled();
+  });
+  it("does not overwrite any existing resource/grant", async () => {
+    const f = fixture([dest, fork]);
+    await expect(
+      registerGithubFork(
+        f.db,
+        context,
+        server,
+        {
+          source: "otherproject/library",
+          destination: "bogdanaip",
+        },
+        apiResponse,
+      ),
+    ).resolves.toBe(false);
+    expect(f.create).not.toHaveBeenCalled();
+  });
+  it("allows a fork PR only with upstream grant and linked writable fork", async () => {
+    const f = fixture([upstream, fork]);
+    const args = {
+      owner: "OtherProject",
+      repo: "library",
+      head: "BogdanAIP:feature/change",
+      base: "main",
+    };
+    await expect(assertGithubContribution(f.db, context, server, args)).resolves.toBe(
+      "otherproject/library",
+    );
+    for (const rows of [
+      [upstream],
+      [fork],
+      [upstream, { ...fork, metadata: { ...fork.metadata, forkOf: "OtherProject/another" } }],
+    ]) {
+      const denied = fixture(rows);
+      await expect(assertGithubContribution(denied.db, context, server, args)).rejects.toThrow(
+        "requires upstream PR grant",
+      );
+    }
+    await expect(
+      assertGithubContribution(f.db, context, server, {
+        ...args,
+        head: "SomeoneElse:branch",
+      }),
+    ).rejects.toThrow("requires upstream PR grant");
+    await expect(
+      assertGithubContribution(f.db, context, server, {
+        ...args,
+        head_repo: "SomeoneElse/library",
+      }),
+    ).rejects.toThrow("Invalid or ambiguous");
+  });
+});

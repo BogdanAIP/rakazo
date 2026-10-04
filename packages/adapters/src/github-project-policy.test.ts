@@ -36,6 +36,22 @@ describe("project-scoped autonomous GitHub writes", () => {
       "bogdanaip/rakazo",
     );
     expect(
+      githubWriteTarget("create_pull_request", {
+        owner: "BogdanAIP",
+        repo: "rakazo",
+        head: "feature/isolated",
+        base: "main",
+      }),
+    ).toBe("bogdanaip/rakazo");
+    expect(
+      githubWriteTarget("discussion_comment_write", {
+        owner: "BogdanAIP",
+        repo: "rakazo",
+        method: "add",
+        discussionNumber: 1,
+      }),
+    ).toBe("bogdanaip/rakazo");
+    expect(
       githubWriteTarget("merge_pull_request", {
         repository_full_name: "BogdanAIP/rakazo",
       }),
@@ -62,6 +78,27 @@ describe("project-scoped autonomous GitHub writes", () => {
     [
       "create_repository_ruleset",
       { owner: "BogdanAIP", repo: "rakazo", level: "enterprise", enterprise: "other" },
+    ],
+    ["create_pull_request", { owner: "BogdanAIP", repo: "rakazo", head: "AnotherOwner:branch" }],
+    ["sub_issue_write", { owner: "BogdanAIP", repo: "rakazo", issue_number: 1, sub_issue_id: 50 }],
+    [
+      "discussion_comment_write",
+      { owner: "BogdanAIP", repo: "rakazo", method: "update", commentNodeID: "foreign" },
+    ],
+    [
+      "pull_request_review_write",
+      { owner: "BogdanAIP", repo: "rakazo", method: "resolve_thread", threadId: "foreign" },
+    ],
+    ["add_reply_to_pull_request_comment", { owner: "BogdanAIP", repo: "rakazo", commentId: 100 }],
+    ["update_issue_comment", { owner: "BogdanAIP", repo: "rakazo", comment_id: 100 }],
+    ["add_issue_comment", { owner: "BogdanAIP", repo: "rakazo", issue_number: 1, comment_id: 100 }],
+    [
+      "custom_properties_write",
+      { owner: "BogdanAIP", repo: "rakazo", level: "repository", org: "BogdanAIP" },
+    ],
+    [
+      "create_repository_ruleset",
+      { owner: "BogdanAIP", repo: "rakazo", level: "repository", enterprise: "elsewhere" },
     ],
   ])("fails closed for unsupported or ambiguous targets: %s", (name, args) => {
     expect(() => githubWriteTarget(name, args)).toThrow();

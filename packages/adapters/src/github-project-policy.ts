@@ -24,7 +24,6 @@ const REPOSITORY_WRITE_TOOLS = new Set([
   "push_files",
   "request_copilot_review",
   "star_repository",
-  "sub_issue_write",
   "unstar_repository",
   "update_issue_comment",
   "update_pull_request",
@@ -99,6 +98,50 @@ export function githubWriteTarget(toolName: string, args: Record<string, unknown
     if (parent !== target) {
       throw new GithubProjectScopeDenied("Cross-repository parent issue is not authorized.");
     }
+  }
+  // A qualified PR head can select a fork outside the authorized repository.
+  if (
+    toolName === "create_pull_request" &&
+    (typeof args.head !== "string" || args.head.includes(":"))
+  ) {
+    throw new GithubProjectScopeDenied(
+      "A pull request head must be an unqualified branch in the authorized repository.",
+    );
+  }
+  // Opaque node IDs cannot be attributed to the target repository from arguments alone.
+  if (
+    toolName === "discussion_comment_write" &&
+    (args.method !== "add" || args.commentNodeID !== undefined)
+  ) {
+    throw new GithubProjectScopeDenied(
+      "Only repository-scoped new discussion comments are authorized.",
+    );
+  }
+  if (
+    toolName === "pull_request_review_write" &&
+    (args.threadId !== undefined ||
+      !["create", "submit_pending", "delete_pending"].includes(String(args.method)))
+  ) {
+    throw new GithubProjectScopeDenied(
+      "Review thread node mutations require separate repository verification.",
+    );
+  }
+  if (
+    toolName === "add_reply_to_pull_request_comment" ||
+    toolName === "update_issue_comment" ||
+    (toolName === "add_issue_comment" && args.comment_id !== undefined)
+  ) {
+    throw new GithubProjectScopeDenied(
+      "Opaque cross-repository comment IDs require separate verification.",
+    );
+  }
+  if (
+    (toolName === "custom_properties_write" || toolName === "create_repository_ruleset") &&
+    (args.org !== undefined || args.enterprise !== undefined)
+  ) {
+    throw new GithubProjectScopeDenied(
+      "An organization or enterprise selector is not repository-scoped.",
+    );
   }
   return target;
 }

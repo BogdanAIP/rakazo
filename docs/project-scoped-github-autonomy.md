@@ -48,3 +48,37 @@ workflow running with its own credentials.
 5. Revoke by removing grant metadata or archiving the project.
 
 No DB migration and no new GitHub PAT are required for this policy.
+
+
+## Forks and upstream PRs
+
+Project resources may grant a GitHub destination account or organization:
+- kind: github.fork.destination
+- ref: BogdanAIP
+- metadata.githubAccess: allow_fork
+- metadata.githubMcpServerId: ID of the assigned official GitHub MCP server
+
+The fork_repository tool may read/fork a different accessible upstream repository.
+Rakazo checks the selected Project, destination resource and GitHub MCP server.
+For a personal-account destination, the login comes from get_me on the same
+authenticated GitHub MCP session; an optional explicit organization must match
+a destination grant.
+
+After fork_repository succeeds, Rakazo grants no new write access merely from
+the requested tool arguments. It checks the actual GitHub response for fork=true,
+the expected full_name/owner and the exact upstream parent. Only after verifying
+these fields does it create two new project resources:
+- github.repo for the verified fork, with autonomous_write, forkOf and verifiedFork
+- github.pr.upstream for this exact fork/upstream pair, with contribute_via_pr
+
+The second grant permits creating a pull request in the upstream with a qualified
+fork head (owner:branch) but never grants arbitrary file/Issue/merge rights in the
+upstream. No pre-existing resource/grant is silently overwritten. If GitHub omits
+the required provenance fields or resource registration fails, the fork operation
+may have succeeded but Rakazo does NOT claim that it granted the missing rights.
+Verify and register the resource explicitly instead.
+
+Unrelated repositories remain readable when GitHub authorization allows it.
+A fork or upstream PR cannot evade the backend guard through the lazy tool catalog.
+Newly introduced, account-wide, ambiguous or opaque-node-ID mutations stay
+unavailable without a separately reviewed and implemented scope.
