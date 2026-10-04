@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { assertTradingPaperCallerInTransaction, type PaperBotCaller } from "./trading-paper-bot.js";
 import {
   PaperFillIntegrityError,
   verifyTradingPaperOpenFillInTransaction,
@@ -223,10 +224,12 @@ export async function closeTradingPaperPositionOnStop(
   ledgerId: string,
   positionId: string,
   evidenceId: string,
+  caller?: PaperBotCaller,
 ): Promise<TradingPaperCloseResult> {
   const operation = async (): Promise<TradingPaperCloseResult> =>
     prisma.$transaction(
       async (tx) => {
+        await assertTradingPaperCallerInTransaction(tx, owner, ledgerId, caller, "protective");
         await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         const prior = await readExistingClose(tx, owner, ledgerId, positionId, evidenceId);
@@ -342,17 +345,22 @@ export async function closeTradingPaperPositionOnStop(
         const closeEventSequence = recovered.state.nextSequence;
         const executedPriceQuote = decimal(executed);
         const feeQuote = decimal(fee);
-        const appended = await appendTradingPaperLedgerEventInTransaction(tx, owner, {
-          ledgerId,
-          eventId: closeEventId,
-          sequence: closeEventSequence,
-          kind: "fill_sell",
-          recordedAt: closedAt,
-          positionId,
-          quantityBase: opened.quantityBase,
-          executedPriceQuote,
-          feeQuote,
-        });
+        const appended = await appendTradingPaperLedgerEventInTransaction(
+          tx,
+          owner,
+          {
+            ledgerId,
+            eventId: closeEventId,
+            sequence: closeEventSequence,
+            kind: "fill_sell",
+            recordedAt: closedAt,
+            positionId,
+            quantityBase: opened.quantityBase,
+            executedPriceQuote,
+            feeQuote,
+          },
+          caller,
+        );
         if (appended.status !== "appended") {
           throw new PaperCloseIntegrityError("Fresh synthetic close unexpectedly duplicated");
         }

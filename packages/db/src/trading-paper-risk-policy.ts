@@ -361,6 +361,7 @@ export async function applyApprovedTradingPaperControl(
             "kill_switch",
             nextRevision,
             Date.now(),
+            binding?.botId ? { botId: binding.botId, runId: effect.run.id } : undefined,
           );
         }
         return complete({

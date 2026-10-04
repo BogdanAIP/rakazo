@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb } from "./client.js";
 import {
   createTradingBotPaperLedger,
@@ -7,13 +6,23 @@ import {
   requireTradingBotPaperBindingInTransaction,
   TradingBotPaperBindingError,
 } from "./trading-paper-bot.js";
+import { closeTradingPaperPositionOnStop } from "./trading-paper-close.js";
+import { fillApprovedTradingPaperReservation } from "./trading-paper-fill.js";
+import { reconcileTradingPaperReservations } from "./trading-paper-reconciliation.js";
+import { readTradingPaperRecoveryStatus } from "./trading-paper-recovery-status.js";
+import { reserveApprovedTradingPaperSignal } from "./trading-paper-reserve.js";
 import {
   applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,
   PaperRiskPolicyIntegrityError,
   readVerifiedTradingPaperRiskPolicy,
 } from "./trading-paper-risk-policy.js";
-import { createTradingPaperLedger, readVerifiedTradingPaperLedger } from "./trading-paper-store.js";
+import {
+  appendTradingPaperLedgerEvent,
+  createTradingPaperLedger,
+  readVerifiedTradingPaperLedger,
+} from "./trading-paper-store.js";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
@@ -314,4 +323,131 @@ describePostgres("P12-1A native Bot / paper ledger immutable scope", () => {
     });
     expect(await first.prisma.tradingPaperLedger.count({ where: { botId: botA } })).toBe(1);
   });
+  it("P12-1B denies every unscoped/foreign-Bot write and recovery on a bound ledger", async () => {
+    const wrong = { botId: botB };
+    const correct = { botId: botA };
+    const noTrade = {
+      kind: "no_trade" as const,
+      signalId: `bot-scope-no-trade-${suffix}`,
+      strategyId: "offline-only",
+      strategyVersion: "1",
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      evidenceIds: ["offline"],
+      reason: "Scope checks must precede all execution and replay",
+    };
+    const event = {
+      ledgerId: ledgerA,
+      eventId: `bot-scope-event-${suffix}`,
+      kind: "reserve" as const,
+      sequence: 1,
+      recordedAt: new Date().toISOString(),
+      reservationId: `bot-scope-hold-${suffix}`,
+      signalId: `bot-scope-signal-${suffix}`,
+      market: {
+        venue: "okx",
+        kind: "spot" as const,
+        symbol: "SOL-USDT",
+        base: "SOL",
+        quote: "USDT",
+        status: "active" as const,
+        priceIncrement: "0.01",
+        quantityIncrement: "0.01",
+        minNotional: "5",
+        expiryAt: null,
+      },
+      quantityBase: "1",
+      maxSpendQuote: "20",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    };
+    const countBefore = await first.prisma.tradingPaperLedgerEvent.count({
+      where: { ledgerId: ledgerA },
+    });
+    await expect(
+      reserveApprovedTradingPaperSignal(first.prisma, owner, ledgerA, noTrade, "offline"),
+    ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
+    await expect(
+      reserveApprovedTradingPaperSignal(first.prisma, owner, ledgerA, noTrade, "offline", wrong),
+    ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
+    await expect(
+      fillApprovedTradingPaperReservation(first.prisma, owner, ledgerA, "missing", "offline"),
+    ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
+    await expect(
+      fillApprovedTradingPaperReservation(
+        first.prisma,
+        owner,
+        ledgerA,
+        "missing",
+        "offline",
+        wrong,
+      ),
+    ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
+    await expect(
+      closeTradingPaperPositionOnStop(first.prisma, owner, ledgerA, "missing", "offline"),
+    ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
+    await expect(
+      closeTradingPaperPositionOnStop(first.prisma, owner, ledgerA, "missing", "offline", wrong),
+    ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
+    await expect(
+      reconcileTradingPaperReservations(first.prisma, owner, ledgerA),
+    ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
+    await expect(
+      reconcileTradingPaperReservations(first.prisma, owner, ledgerA, wrong),
+    ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
+    await expect(
+      readTradingPaperRecoveryStatus(first.prisma, owner, ledgerA),
+    ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
+    await expect(
+      readTradingPaperRecoveryStatus(first.prisma, owner, ledgerA, new Date(), wrong),
+    ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
+    await expect(appendTradingPaperLedgerEvent(first.prisma, owner, event)).rejects.toBeInstanceOf(
+      TradingBotPaperBindingError,
+    );
+    await expect(
+      appendTradingPaperLedgerEvent(first.prisma, owner, event, wrong),
+    ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId: ledgerA } })).toBe(
+      countBefore,
+    );
+    expect(
+      await readTradingPaperRecoveryStatus(second.prisma, owner, ledgerA, new Date(), correct),
+    ).toMatchObject({ mode: "paper_only", status: "verified", enabled: false });
+    await expect(
+      reconcileTradingPaperReservations(second.prisma, owner, ledgerA, correct),
+    ).resolves.toMatchObject({ released: 0, reason: "kill_switch" });
+  });
+
+  it("P12-1B permits protective recovery after archive but rejects new exposure", async () => {
+    await first.prisma.bot.update({ where: { id: botA }, data: { archivedAt: new Date() } });
+    try {
+      await expect(
+        readTradingPaperRecoveryStatus(second.prisma, owner, ledgerA, new Date(), { botId: botA }),
+      ).resolves.toMatchObject({ status: "verified" });
+      await expect(
+        reconcileTradingPaperReservations(second.prisma, owner, ledgerA, { botId: botA }),
+      ).resolves.toMatchObject({ released: 0 });
+      await expect(
+        reserveApprovedTradingPaperSignal(
+          second.prisma,
+          owner,
+          ledgerA,
+          {
+            kind: "no_trade",
+            signalId: "archived-no-trade",
+            strategyId: "test",
+            strategyVersion: "1",
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 60_000).toISOString(),
+            evidenceIds: ["offline"],
+            reason: "Archived Bot cannot create exposure",
+          },
+          "offline",
+          { botId: botA },
+        ),
+      ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
+    } finally {
+      await first.prisma.bot.update({ where: { id: botA }, data: { archivedAt: null } });
+    }
+  });
+
 });

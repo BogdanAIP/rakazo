@@ -1,6 +1,6 @@
 # P12 — Native Rakazo Trading Bot (stacked after P11C-7)
 
-Status (2026-10-04): **P12-0 profile implemented; P12-1A Bot/ledger binding code and migration in stacked DRAFT; P12-1B+ pending; nothing deployed**.
+Status (2026-10-04): **P12-0 profile and P12-1A binding implemented in stacked DRAFTs; P12-1B guarded writes in further stacked DRAFT; no Bot/Worker deployed**.
 Source branch: `feature/rakazo-trading-native-bot-2026-10-04`, based on P11C-7 / PR #12.
 This is the implementation-slice sequence P0–P12, distinct from the broad product-phase table in ROADMAP.md.
 
@@ -32,7 +32,15 @@ P10/P11 legacy ledgers originally scope by `spaceId + ownerUserId` but not `botI
 
 **P12-1A does NOT expose a Bot-facing money writer, scheduler, user API or paper tool; it does not install/run a Bot.** New Bot-bound ledgers start with no risk policy and cannot reserve until separate explicit policy/approval and the remaining writer guards are finished. P11 legacy owner-scoped internal primitives remain as before for regression compatibility. This is an isolated schema and trusted-service foundation, not the activation of a new execution mode.
 
-### P12-1B still required before any Bot-driven paper activation
+### P12-1B guarded internal journal paths (this stacked DRAFT)
+
+P12-1B requires a trusted, service-derived `PaperBotCaller` on **bound** ledgers at the same serializable transaction boundary: reserve, fill_buy, stop-triggered fill_sell, expiration/kill-switch release, reconciliation, verified recovery status and the underlying direct synthetic journal append. An absent/foreign Bot is rejected before any idempotent prior-result read or virtual-money mutation; a Bot caller cannot adopt a legacy NULL journal. A caller's optional Run must belong to the same Bot, owner and space. These typed internal parameters are **not** model-facing RPC/MCP tools and do not themselves provide execution approval.
+
+`new_exposure` requires an active native Bot; `protective` close/release and verified `recovery` allow the exact bound Bot after archive to avoid stranding protective operations. Existing explicit B6 owner approval still gates enable/disable, and approved disable passes its originating Run identity through reservation release. The old P11 internal functions retain their legacy NULL-ledger behavior and test coverage. No routine/scheduler or live broker is activated.
+
+Disposable PostgreSQL regression tests exercise unscoped and foreign-Bot denial on reserve/fill/stop-close/reconcile/recovery/direct append, zero added journal events, owner recovery after archive and denial of new exposure. Each new Bot-facing adapter must derive the caller from authenticated context, **not** from AI-generated text or a user-editable prompt. This slice does not add a generic Bot-facing write endpoint. Additional E2E approval/restart and protective-stop lifecycle testing remains a gate before automatic Paper execution.
+
+### P12-1C — required before automatic Paper activation
  Add a migration and a trusted creation/binding service, with all of these invariants:
 
 1. Lookup authenticated current `Bot` inside the same serializable transaction: matching `spaceId`, owner `userId`, active/non-archived status and non-deleting Space membership. An arbitrary botId or AI claim must not stand in for authentication.
@@ -61,4 +69,4 @@ In the ordinary bot view, progressively expose Trading: Discovery, Signals, Stra
 
 P12-0 does NOT create a Bot on the user's machine, persist a Bot↔ledger relation, start a Routine, attach a wallet, submit exchange orders or turn on an outbox dispatcher. P11 virtual ledger remains synthetic/full-fill spot only. Live CEX, derivative leverage, DEX signing and DeFi allocation are later individually authorized projects. No profit promise, fabricated signals, automatic strategy promotion or unrestricted model access to credentials.
 
-Implementation sequence: P12-0 template + offline tests → P12-1A insert-only Bot relation and scoped allocation/approval (draft) → P12-1B guard EVERY Bot-facing reserve/fill/close/release/recovery in its atomic transaction, including owner emergency disable and crash/race regressions → P12-2 native Bot research/reporting integration → P12-3 UI/approvals → separately reviewed paper Worker activation. Keep every PR stacked/draft until acceptance and explicit rollout.
+Implementation sequence: P12-0 template + offline tests → P12-1A insert-only Bot relation and scoped allocation/approval (draft) → P12-1B transaction-local Bot guards (draft) → P12-1C integration and adversarial full protective/restart verification → P12-2 native Bot research/reporting integration → P12-3 UI/approvals → separately reviewed paper Worker activation. Keep every PR stacked/draft until acceptance and explicit rollout.

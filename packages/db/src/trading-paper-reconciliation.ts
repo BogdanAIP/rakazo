@@ -1,5 +1,6 @@
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { assertTradingPaperCallerInTransaction, type PaperBotCaller } from "./trading-paper-bot.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
 import {
   lockTradingPaperRiskPolicyInTransaction,
@@ -16,10 +17,12 @@ export async function reconcileTradingPaperReservations(
   prisma: PaperDb,
   owner: Owner,
   ledgerId: string,
+  caller?: PaperBotCaller,
 ): Promise<{ released: number; reason: "expired" | "kill_switch" }> {
   return withTransactionRetry(() =>
     prisma.$transaction(
       async (tx) => {
+        await assertTradingPaperCallerInTransaction(tx, owner, ledgerId, caller, "protective");
         await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         const verified = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         const reason =
@@ -31,6 +34,7 @@ export async function reconcileTradingPaperReservations(
           reason,
           verified.revision,
           Date.now(),
+          caller,
         );
         return { released: result.released, reason };
       },

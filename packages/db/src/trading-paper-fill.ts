@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { assertTradingPaperCallerInTransaction, type PaperBotCaller } from "./trading-paper-bot.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
 import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
@@ -369,10 +370,12 @@ export async function fillApprovedTradingPaperReservation(
   ledgerId: string,
   reservationId: string,
   evidenceId: string,
+  caller?: PaperBotCaller,
 ): Promise<TradingPaperFillResult> {
   const operation = async (): Promise<TradingPaperFillResult> =>
     prisma.$transaction(
       async (tx) => {
+        await assertTradingPaperCallerInTransaction(tx, owner, ledgerId, caller, "new_exposure");
         await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         const prior = await readExistingFill(tx, owner, ledgerId, reservationId, evidenceId);
@@ -438,6 +441,7 @@ export async function fillApprovedTradingPaperReservation(
             "expired",
             policy.revision,
             now,
+            caller,
           );
           return { status: "deny", mode: "paper_only", reason: "reservation_expired" };
         }
@@ -506,6 +510,7 @@ export async function fillApprovedTradingPaperReservation(
             "expired",
             policy.revision,
             now,
+            caller,
           );
           return { status: "deny", mode: "paper_only", reason: "reservation_expired" };
         }
@@ -514,17 +519,22 @@ export async function fillApprovedTradingPaperReservation(
         const fillEventSequence = recovered.state.nextSequence;
         const executedPriceQuote = decimal(executed);
         const feeQuote = decimal(fee);
-        const appended = await appendTradingPaperLedgerEventInTransaction(tx, owner, {
-          ledgerId,
-          eventId: fillEventId,
-          sequence: fillEventSequence,
-          kind: "fill_buy",
-          recordedAt: filledAt,
-          reservationId,
-          quantityBase: reservation.quantityBase,
-          executedPriceQuote,
-          feeQuote,
-        });
+        const appended = await appendTradingPaperLedgerEventInTransaction(
+          tx,
+          owner,
+          {
+            ledgerId,
+            eventId: fillEventId,
+            sequence: fillEventSequence,
+            kind: "fill_buy",
+            recordedAt: filledAt,
+            reservationId,
+            quantityBase: reservation.quantityBase,
+            executedPriceQuote,
+            feeQuote,
+          },
+          caller,
+        );
         if (appended.status !== "appended") {
           throw new PaperFillIntegrityError("Fresh synthetic fill unexpectedly duplicated");
         }

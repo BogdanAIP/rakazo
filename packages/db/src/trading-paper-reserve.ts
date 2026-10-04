@@ -3,6 +3,7 @@ import { type TradingSignal, TradingSignalSchema } from "@rakazo/contracts";
 import { estimateExactPaperSpotCapacity } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { assertTradingPaperCallerInTransaction, type PaperBotCaller } from "./trading-paper-bot.js";
 import {
   auditTradingPaperLifecycleInTransaction,
   PaperLifecycleAuditError,
@@ -315,6 +316,7 @@ export async function reserveApprovedTradingPaperSignal(
   ledgerId: string,
   proposedSignal: unknown,
   evidenceId: string,
+  caller?: PaperBotCaller,
 ): Promise<TradingPaperReserveResult> {
   const parsed = TradingSignalSchema.safeParse(proposedSignal);
   const proposal = parsed.success && parsed.data.kind === "proposal" ? parsed.data : null;
@@ -324,6 +326,7 @@ export async function reserveApprovedTradingPaperSignal(
   const operation = async (): Promise<TradingPaperReserveResult> =>
     prisma.$transaction(
       async (tx) => {
+        await assertTradingPaperCallerInTransaction(tx, owner, ledgerId, caller, "new_exposure");
         await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         if (proposal) {
@@ -340,6 +343,7 @@ export async function reserveApprovedTradingPaperSignal(
             : "expired",
           currentPolicy.revision,
           Date.now(),
+          caller,
         );
         const evaluated = await evaluateTradingPaperReservationInTransaction(
           tx,
@@ -425,7 +429,12 @@ export async function reserveApprovedTradingPaperSignal(
             maxSpendQuote: capacity.heldQuote,
             expiresAt,
           };
-          const appended = await appendTradingPaperLedgerEventInTransaction(tx, owner, event);
+          const appended = await appendTradingPaperLedgerEventInTransaction(
+            tx,
+            owner,
+            event,
+            caller,
+          );
           if (appended.status !== "appended") {
             throw new PaperReservationDecisionIntegrityError(
               "Fresh B7 event unexpectedly duplicated",
