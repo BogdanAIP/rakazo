@@ -59,10 +59,7 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       await first.prisma.organization.deleteMany({ where: { id: orgId } });
       await first.prisma.user.deleteMany({ where: { id: owner.userId } });
     } finally {
-      await Promise.allSettled([
-        first.prisma.$disconnect(),
-        second.prisma.$disconnect(),
-      ]);
+      await Promise.allSettled([first.prisma.$disconnect(), second.prisma.$disconnect()]);
       await Promise.allSettled([first.pool.end(), second.pool.end()]);
     }
   });
@@ -139,12 +136,18 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       expect(state.acceptedEvents).toBe(sequence);
       expect(state.reservedQuote).toBe(String(sequence * 20));
       expect(state.availableQuote).toBe(String(1000 - sequence * 20));
-      expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(sequence);
-      expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(sequence);
+      expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(
+        sequence,
+      );
+      expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+        sequence,
+      );
       const winner = outcomes[0]?.status === "fulfilled" ? a : b;
       const retry = await appendTradingPaperLedgerEvent(second.prisma, owner, winner);
       expect(retry.status).toBe("duplicate");
-      expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(sequence);
+      expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+        sequence,
+      );
     }
   });
 
@@ -174,7 +177,9 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       expect(state.acceptedEvents).toBe(7);
       expect(state.reservedQuote).toBe("140");
       expect(state.availableQuote).toBe("860");
-      expect(await restarted.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(7);
+      expect(await restarted.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+        7,
+      );
       expect((await appendTradingPaperLedgerEvent(restarted.prisma, owner, event)).status).toBe(
         "duplicate",
       );
