@@ -2,6 +2,11 @@ import { createHash, randomUUID } from "node:crypto";
 import { TradingInstrumentSchema, TradingPaperPolicySchema } from "@rakazo/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb } from "./client.js";
+import {
+  PaperQuoteEvidenceError,
+  readVerifiedPaperQuoteEvidence,
+  recordSyntheticPaperQuoteEvidence,
+} from "./trading-paper-quote-evidence.js";
 import { preflightTradingPaperReservation } from "./trading-paper-reservation-preflight.js";
 import {
   createDisabledTradingPaperRiskPolicy,
@@ -337,4 +342,55 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     ).rejects.toBeInstanceOf(PaperLedgerIntegrityError);
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(0);
   });
+  it("P11B-1 persists only bounded offline evidence with owner and checksum", async () => {
+    const ledgerId = `paper-evidence-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: "2026-10-04T08:00:00.000Z",
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "1000",
+    });
+    const fetchedAt = new Date().toISOString();
+    const ticker = {
+      venue: "okx",
+      kind: "spot",
+      symbol: "SOL-USDT",
+      observedAt: fetchedAt,
+      fetchedAt,
+      bid: "100",
+      ask: "100.1",
+      quoteVolume24h: "100000",
+    };
+    await expect(
+      recordSyntheticPaperQuoteEvidence(first.prisma, owner, ledgerId, { ...ticker, bid: "101" }),
+    ).rejects.toBeInstanceOf(PaperQuoteEvidenceError);
+    await expect(
+      recordSyntheticPaperQuoteEvidence(first.prisma, owner, ledgerId, {
+        ...ticker,
+        observedAt: "2020-01-01T00:00:00.000Z",
+      }),
+    ).rejects.toBeInstanceOf(PaperQuoteEvidenceError);
+    const saved = await recordSyntheticPaperQuoteEvidence(first.prisma, owner, ledgerId, ticker);
+    expect(saved.source).toBe("offline_fixture");
+    const recovered = await readVerifiedPaperQuoteEvidence(second.prisma, owner, ledgerId, saved.id);
+    expect(recovered.ticker).toMatchObject(ticker);
+    await expect(
+      readVerifiedPaperQuoteEvidence(
+        second.prisma,
+        { ...owner, userId: "not-owner" },
+        ledgerId,
+        saved.id,
+      ),
+    ).rejects.toBeInstanceOf(PaperQuoteEvidenceError);
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(0);
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(0);
+    await first.prisma.tradingPaperQuoteEvidence.update({
+      where: { id: saved.id },
+      data: { payloadSha256: "f".repeat(64) },
+    });
+    await expect(
+      readVerifiedPaperQuoteEvidence(second.prisma, owner, ledgerId, saved.id),
+    ).rejects.toBeInstanceOf(PaperQuoteEvidenceError);
+  });
+
 });

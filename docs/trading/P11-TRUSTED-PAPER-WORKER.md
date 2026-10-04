@@ -17,6 +17,10 @@ Required bounded fields include paper-only mode, allowed active spot venues/inst
 
 Persist rejection/audit records with candidate/signal ID, ledger and policy revisions, source observation and human-readable reason. Do not persist raw external credentials or private client data.
 
+## P11B-1 — conservative exact sizing and offline quote evidence
+
+Implemented `estimateExactPaperSpotCapacity` in core: eight-decimal BigInt arithmetic, conservative adverse rounding of both sides' fees/slippage, quantization down to instrument lot size, and independent available-cash/exposure/per-idea/daily/open-risk caps. Its `inert_estimate` is a display/research calculation, **not** an authorization, and cannot reserve anything. Market evidence is stored in the existing PostgreSQL via a separate repository-only migration and internal `trading-paper-quote-evidence.ts`. The initial source is strictly `offline_fixture`, enforced by SQL CHECK: origin is *not attested*, there is no network ingestion, no public tool access and P11B preflight continues to deny `trusted_market_snapshot_unavailable`. Record/read validate owner scope, bounded timestamp freshness at ingestion, eight-decimal bid/ask and SHA-256. Integrity hashes are not security against privileged DB edits. Genuine connector provenance, stale checks **at decision time**, matching exact instrument metadata and explicit user paper approval remain blocking requirements for transaction-bound reserve.
+
 ## P11B — One serializable **evaluate + reserve** transaction
 
 

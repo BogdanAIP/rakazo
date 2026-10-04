@@ -1391,6 +1391,7 @@ model TradingPaperLedger {
   updatedAt           DateTime                  @updatedAt
   events              TradingPaperLedgerEvent[]
   riskPolicy          TradingPaperRiskPolicy?
+  quoteEvidence       TradingPaperQuoteEvidence[]
 
   @@index([spaceId, ownerUserId])
   @@map("trading_paper_ledgers")
@@ -1438,4 +1439,21 @@ model TradingPaperRiskPolicy {
   updatedAt      DateTime           @updatedAt
 
   @@map("trading_paper_risk_policies")
+}
+
+/** Evidence only: no broker data, account keys or risk approval.
+ * Initially accepts only a clearly labeled synthetic offline fixture. */
+model TradingPaperQuoteEvidence {
+  id            String             @id
+  ledgerId      String
+  ledger        TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  source        String
+  payload       Json
+  payloadSha256 String
+  observedAt    DateTime
+  fetchedAt     DateTime
+  receivedAt    DateTime           @default(now())
+
+  @@index([ledgerId, receivedAt])
+  @@map("trading_paper_quote_evidence")
 }
