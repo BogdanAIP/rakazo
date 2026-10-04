@@ -220,7 +220,6 @@ async function readExistingDecision(
   };
 }
 
-
 export type VerifiedTradingPaperReservationDecision = {
   signalId: string;
   reservationId: string;

@@ -12,7 +12,10 @@ import {
   verifyCurrentTradingPaperEnableAuditInTransaction,
   verifyTradingPaperRiskPolicyInTransaction,
 } from "./trading-paper-risk-policy.js";
-import { recordTradingPaperStopGuardForOpenPositionInTransaction } from "./trading-paper-stop-guard.js";
+import {
+  recordTradingPaperStopGuardForOpenPositionInTransaction,
+  verifyTradingPaperStopGuardsInTransaction,
+} from "./trading-paper-stop-guard.js";
 import {
   appendTradingPaperLedgerEventInTransaction,
   recoverTradingPaperLedgerInTransaction,
@@ -37,6 +40,21 @@ export class PaperFillIntegrityError extends Error {
   }
 }
 
+type TradingPaperFillSuccess = {
+  mode: "paper_only";
+  reservationId: string;
+  signalId: string;
+  fillEventId: string;
+  fillEventSequence: number;
+  policyRevision: number;
+  quantityBase: string;
+  executedPriceQuote: string;
+  feeQuote: string;
+  stopPriceQuote: string;
+  filledAt: string;
+};
+type TradingPaperFillCreated = TradingPaperFillSuccess & { status: "filled" };
+type TradingPaperFillDuplicate = TradingPaperFillSuccess & { status: "duplicate" };
 export type TradingPaperFillResult =
   | {
       status: "deny";
@@ -58,20 +76,8 @@ export type TradingPaperFillResult =
         | "held_quote_exceeded"
         | "risk_state_unavailable";
     }
-  | {
-      status: "filled" | "duplicate";
-      mode: "paper_only";
-      reservationId: string;
-      signalId: string;
-      fillEventId: string;
-      fillEventSequence: number;
-      policyRevision: number;
-      quantityBase: string;
-      executedPriceQuote: string;
-      feeQuote: string;
-      stopPriceQuote: string;
-      filledAt: string;
-    };
+  | TradingPaperFillCreated
+  | TradingPaperFillDuplicate;
 
 function sha256(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value), "utf8").digest("hex");
@@ -97,7 +103,14 @@ function bpsScaled(value: number): bigint | null {
   return BigInt(whole!) * 10_000n + BigInt(fraction.padEnd(4, "0"));
 }
 function requestDigest(owner: Owner, ledgerId: string, reservationId: string, evidenceId: string) {
-  return sha256(["paper_fill_buy_v1", owner.spaceId, owner.userId, ledgerId, reservationId, evidenceId]);
+  return sha256([
+    "paper_fill_buy_v1",
+    owner.spaceId,
+    owner.userId,
+    ledgerId,
+    reservationId,
+    evidenceId,
+  ]);
 }
 type FillDigestInput = {
   ledgerId: string;
@@ -140,7 +153,7 @@ async function readExistingFill(
   ledgerId: string,
   reservationId: string,
   evidenceId: string,
-): Promise<Extract<TradingPaperFillResult, { status: "duplicate" }> | null> {
+): Promise<TradingPaperFillDuplicate | null> {
   const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
   const row = await tx.tradingPaperFillDecision.findUnique({
     where: { ledgerId_reservationId: { ledgerId, reservationId } },
@@ -184,11 +197,15 @@ async function readExistingFill(
   ) {
     throw new PaperFillIntegrityError("Stored fill decision disagrees with ledger");
   }
-  const guards = await tx.tradingPaperStopGuard.findMany({
-    where: { ledgerId, positionId: reservationId },
-  });
-  if (guards.length !== 1 || guards[0]?.stopPriceQuote !== row.stopPriceQuote) {
-    throw new PaperFillIntegrityError("Stored fill decision lacks matching stop guard");
+  const guards = await verifyTradingPaperStopGuardsInTransaction(
+    tx,
+    ledgerId,
+    recovered.events,
+    recovered.state,
+  );
+  const guard = guards?.find((entry) => entry.positionId === reservationId);
+  if (!guard || guard.stopPriceQuote !== row.stopPriceQuote) {
+    throw new PaperFillIntegrityError("Stored fill decision lacks matching verified stop guard");
   }
   return {
     status: "duplicate",

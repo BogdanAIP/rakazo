@@ -1790,12 +1790,7 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
         quoteVolume24h: "100000",
       },
     );
-    const disable = await makePaperControlEffect(
-      race.ledgerId,
-      "c1-disable-race",
-      "disable",
-      1,
-    );
+    const disable = await makePaperControlEffect(race.ledgerId, "c1-disable-race", "disable", 1);
     const [fillResult, disableResult] = await Promise.all([
       fillApprovedTradingPaperReservation(
         first.prisma,
@@ -1819,12 +1814,14 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     expect(finalState.reservations).toHaveLength(0);
     if (fillCount === 1) {
       expect(finalState.positions).toHaveLength(1);
-      expect(await first.prisma.tradingPaperStopGuard.count({ where: { ledgerId: race.ledgerId } }))
-        .toBe(1);
+      expect(
+        await first.prisma.tradingPaperStopGuard.count({ where: { ledgerId: race.ledgerId } }),
+      ).toBe(1);
     } else {
       expect(finalState.positions).toHaveLength(0);
-      expect(await first.prisma.tradingPaperFillDecision.count({ where: { ledgerId: race.ledgerId } }))
-        .toBe(0);
+      expect(
+        await first.prisma.tradingPaperFillDecision.count({ where: { ledgerId: race.ledgerId } }),
+      ).toBe(0);
     }
   });
 });
