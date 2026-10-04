@@ -2648,9 +2648,9 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       where,
       data: { status: "delivered" },
     });
-    await expect(
-      auditTradingPaperLifecycle(second.prisma, owner, ledgerId),
-    ).rejects.toBeInstanceOf(PaperLifecycleAuditError);
+    await expect(auditTradingPaperLifecycle(second.prisma, owner, ledgerId)).rejects.toBeInstanceOf(
+      PaperLifecycleAuditError,
+    );
     const blocked = await readTradingPaperRecoveryStatus(second.prisma, owner, ledgerId);
     expect(blocked).toMatchObject({
       status: "integrity_blocked",
