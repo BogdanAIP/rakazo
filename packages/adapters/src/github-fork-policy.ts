@@ -95,7 +95,7 @@ export async function authorizeGithubFork(
     throw new GithubProjectScopeDenied("Project has no allow_fork grant for this destination.");
   return { source, destination: destination.toLowerCase() };
 }
-/** Only an actual GitHub repository response with a matching parent may create a grant. */
+/** Accept a verified full fork object or the official GitHub MCP CreateFork ID/URL receipt. */
 export function verifiedFork(result: unknown, source: string, destination: string): string | null {
   const outer = metadata(result);
   if (outer.isError === true) return null;
@@ -112,6 +112,33 @@ export function verifiedFork(result: unknown, source: string, destination: strin
     }
   }
   if (!repository.full_name && outer.full_name) repository = outer;
+  // v1.14.0 fork_repository calls GitHub CreateFork(source) and deliberately
+  // returns only {id,url}. The ID and URL must be the actual tool result, not
+  // arguments suggested by the model. Its source is bound to that MCP call.
+  if (!repository.full_name && repository.id !== undefined && repository.url !== undefined) {
+    const id = repository.id;
+    const validId =
+      typeof id === "string"
+        ? /^[1-9][0-9]{0,19}$/.test(id)
+        : typeof id === "number" && Number.isSafeInteger(id) && id > 0;
+    if (!validId || typeof repository.url !== "string" || canonical(source) !== source) return null;
+    try {
+      const url = new URL(repository.url);
+      if (
+        url.origin !== "https://github.com" ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash ||
+        !/^\/[^/]+\/[^/]+$/.test(url.pathname)
+      )
+        return null;
+      const actual = canonical(url.pathname.slice(1));
+      return actual?.startsWith(`${destination}/`) ? actual : null;
+    } catch {
+      return null;
+    }
+  }
   const full = canonical(repository.full_name);
   const parent = canonical(metadata(repository.parent).full_name);
   const owner = metadata(repository.owner).login;

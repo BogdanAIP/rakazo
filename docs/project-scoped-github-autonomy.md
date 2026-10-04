@@ -65,16 +65,21 @@ authenticated GitHub MCP session; an optional explicit organization must match
 a destination grant.
 
 After fork_repository succeeds, Rakazo grants no new write access merely from
-the requested tool arguments. It checks the actual GitHub response for fork=true,
-the expected full_name/owner and the exact upstream parent. Only after verifying
-these fields does it create two new project resources:
+the requested tool arguments. The official v1.14.0 MCP implementation calls
+GitHub's CreateFork endpoint for the requested source and returns a minimal
+receipt containing the actual fork ID and GitHub URL. Rakazo requires a positive
+ID and exact github.com destination owner/repository URL from THAT response.
+If a future version returns a full fork object instead, fork=true, full_name,
+owner and the exact upstream parent are all verified. Neither path trusts the
+model's desired output as proof. Only after verification does it create two new
+project resources:
 - github.repo for the verified fork, with autonomous_write, forkOf and verifiedFork
 - github.pr.upstream for this exact fork/upstream pair, with contribute_via_pr
 
 The second grant permits creating a pull request in the upstream with a qualified
 fork head (owner:branch) but never grants arbitrary file/Issue/merge rights in the
 upstream. No pre-existing resource/grant is silently overwritten. If GitHub omits
-the required provenance fields or resource registration fails, the fork operation
+a valid ID/URL receipt (or complete fork provenance) or registration fails, the fork operation
 may have succeeded but Rakazo does NOT claim that it granted the missing rights.
 Verify and register the resource explicitly instead.
 

@@ -158,6 +158,58 @@ describe("safe fork and upstream PR permissions", () => {
       }),
     });
   });
+  it("recognizes the official v1.14.0 CreateFork minimal receipt without exposing credentials", async () => {
+    const f = fixture();
+    const actual = {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            id: "123456",
+            url: "https://github.com/BogdanAIP/library",
+          }),
+        },
+      ],
+    };
+    expect(verifiedFork(actual, "otherproject/library", "bogdanaip")).toBe("bogdanaip/library");
+    await expect(
+      registerGithubFork(
+        f.db,
+        context,
+        server,
+        {
+          source: "otherproject/library",
+          destination: "bogdanaip",
+        },
+        actual,
+      ),
+    ).resolves.toBe(true);
+    expect(f.create).toHaveBeenCalledTimes(2);
+  });
+  it.each([
+    { id: "0", url: "https://github.com/BogdanAIP/library" },
+    { id: "123", url: "https://evil.example/BogdanAIP/library" },
+    { id: "123", url: "https://github.com/OtherOrg/library" },
+    { id: "123", url: "https://github.com/BogdanAIP/library/extra" },
+    { id: "123", url: "https://github.com/BogdanAIP/library?redirect=1" },
+  ])("never auto-grants malformed minimal fork receipts", (receipt) => {
+    expect(
+      verifiedFork(
+        { content: [{ type: "text", text: JSON.stringify(receipt) }] },
+        "otherproject/library",
+        "bogdanaip",
+      ),
+    ).toBeNull();
+  });
+  it("does not infer a fork grant from an asynchronous GitHub progress message", () => {
+    expect(
+      verifiedFork(
+        { content: [{ type: "text", text: "Fork is in progress" }] },
+        "otherproject/library",
+        "bogdanaip",
+      ),
+    ).toBeNull();
+  });
   it.each([
     [{ isError: true }],
     [{ content: [{ type: "text", text: '{"full_name":"BogdanAIP/library","fork":true}' }] }],
