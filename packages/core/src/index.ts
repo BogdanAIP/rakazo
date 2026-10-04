@@ -54,6 +54,7 @@ export * from "./trading-market.js";
 export * from "./trading-paper.js";
 export * from "./trading-paper-capacity.js";
 export * from "./trading-paper-ledger.js";
+export * from "./trading-paper-risk-state.js";
 export * from "./trading-replay.js";
 export * from "./trading-research.js";
 export * from "./trading-walkforward.js";
