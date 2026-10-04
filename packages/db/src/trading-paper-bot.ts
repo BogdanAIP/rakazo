@@ -2,10 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { TradingPaperLedgerState } from "@rakazo/contracts";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
-import {
-  createTradingPaperLedgerInTransaction,
-  PaperLedgerIntegrityError,
-} from "./trading-paper-store.js";
+import { createTradingPaperLedgerInTransaction } from "./trading-paper-store.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 type Db = Pick<PrismaClient, "$transaction">;
@@ -41,7 +38,7 @@ export async function requireTradingBotPaperBindingInTransaction(
       id: botId,
       spaceId: owner.spaceId,
       userId: owner.userId,
-      ...(options.allowArchived ? {} : { archivedAt: null }),
+      ...(options.allowArchived ? {} : { archivedAt: null, space: { deletingAt: null } }),
     },
     select: { id: true },
   });
@@ -126,6 +123,3 @@ export async function readTradingBotPaperBinding(
   );
 }
 
-// Retain the existing P10 failure type for genuine replay errors; binding
-// errors are intentionally distinct so callers cannot mistake them for PnL.
-export { PaperLedgerIntegrityError };
