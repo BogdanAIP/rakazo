@@ -1,7 +1,4 @@
-import {
-  TradingInstrumentSchema,
-  TradingPaperLedgerInputSchema,
-} from "@rakazo/contracts";
+import { TradingInstrumentSchema, TradingPaperLedgerInputSchema } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import { replayTradingPaperLedger } from "./trading-paper-ledger.js";
 
@@ -112,9 +109,9 @@ describe("paper spot ledger: idempotent exact-decimal event replay", () => {
     expect(() => run([{ ...reserve, sequence: 2 }])).toThrow("sequence");
     expect(() => run([reserve, { ...buy, sequence: 4 }])).toThrow("sequence");
     expect(() => run([{ ...reserve, ledgerId: "another-ledger" }])).toThrow("Cross-ledger");
-    expect(() =>
-      run([reserve, { ...buy, recordedAt: "2026-10-04T08:00:00.000Z" }]),
-    ).toThrow("backwards");
+    expect(() => run([reserve, { ...buy, recordedAt: "2026-10-04T08:00:00.000Z" }])).toThrow(
+      "backwards",
+    );
     const release = {
       ...context,
       kind: "release",
@@ -141,18 +138,14 @@ describe("paper spot ledger: idempotent exact-decimal event replay", () => {
     expect(() => run([{ ...reserve, market: { ...market, kind: "perpetual" } }])).toThrow(
       "active spot",
     );
-    expect(() => run([{ ...reserve, market: { ...market, quote: "USDC" } }])).toThrow(
-      "currency",
-    );
+    expect(() => run([{ ...reserve, market: { ...market, quote: "USDC" } }])).toThrow("currency");
     expect(() => run([{ ...reserve, quantityBase: "2.001" }])).toThrow("lot-aligned");
     expect(() => run([reserve, { ...buy, quantityBase: "1" }])).toThrow("full lot");
-    expect(() => run([reserve, { ...buy, executedPriceQuote: "100.121" }])).toThrow(
-      "tick-aligned",
-    );
+    expect(() => run([reserve, { ...buy, executedPriceQuote: "100.121" }])).toThrow("tick-aligned");
     expect(() => run([reserve, { ...buy, feeQuote: "25" }])).toThrow("exceeded");
-    expect(() =>
-      run([reserve, { ...buy, recordedAt: "2026-10-04T09:00:01.000Z" }]),
-    ).toThrow("expiry");
+    expect(() => run([reserve, { ...buy, recordedAt: "2026-10-04T09:00:01.000Z" }])).toThrow(
+      "expiry",
+    );
   });
 
   it("refuses double-spending and invalid or repeated full closes", () => {
@@ -184,13 +177,9 @@ describe("paper spot ledger: idempotent exact-decimal event replay", () => {
     expect(() => run([reserve, release, { ...buy, eventId: "event-3", sequence: 3 }])).toThrow(
       "outstanding reservation",
     );
-    expect(() =>
-      run([
-        reserve,
-        release,
-        { ...release, eventId: "event-3", sequence: 3 },
-      ]),
-    ).toThrow("No open");
+    expect(() => run([reserve, release, { ...release, eventId: "event-3", sequence: 3 }])).toThrow(
+      "No open",
+    );
   });
 
   it("uses conservative quote rounding for sub-cent virtual amounts", () => {
