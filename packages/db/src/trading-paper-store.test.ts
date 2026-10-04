@@ -53,79 +53,81 @@ function harness() {
   let snapshot: Snapshot = { ledger: null, events: [], outbox: [] };
   let allow = true;
   let failOutbox = false;
-  const transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>, _options?: unknown) => {
-    const working = structuredClone(snapshot);
-    const tx = {
-      spaceMember: {
-        findFirst: vi.fn(async ({ where }: { where: Row }) =>
-          allow && where.spaceId === owner.spaceId && where.userId === owner.userId
-            ? { id: "membership-1" }
-            : null,
-        ),
-      },
-      tradingPaperLedger: {
-        findFirst: vi.fn(async ({ where }: { where: Row }) =>
-          working.ledger &&
-          working.ledger.id === where.id &&
-          working.ledger.spaceId === where.spaceId &&
-          working.ledger.ownerUserId === where.ownerUserId
-            ? working.ledger
-            : null,
-        ),
-        create: vi.fn(async ({ data }: { data: Row }) => {
-          if (working.ledger) throw new Error("duplicate ledger");
-          working.ledger = { ...data };
-          return working.ledger;
-        }),
-        updateMany: vi.fn(async ({ where, data }: { where: Row; data: Row }) => {
-          if (
-            !working.ledger ||
-            working.ledger.id !== where.id ||
-            working.ledger.spaceId !== where.spaceId ||
-            working.ledger.ownerUserId !== where.ownerUserId ||
-            working.ledger.version !== where.version ||
-            working.ledger.headSha256 !== where.headSha256
-          )
-            return { count: 0 };
-          working.ledger = {
-            ...working.ledger,
-            ...data,
-            version: (working.ledger.version as number) + 1,
-          };
-          return { count: 1 };
-        }),
-      },
-      tradingPaperLedgerEvent: {
-        findMany: vi.fn(async ({ where }: { where: Row }) =>
-          working.events
-            .filter((r) => r.ledgerId === where.ledgerId)
-            .sort((a, b) => (a.sequence as number) - (b.sequence as number)),
-        ),
-        create: vi.fn(async ({ data }: { data: Row }) => {
-          if (
-            working.events.some(
-              (entry) =>
-                entry.ledgerId === data.ledgerId &&
-                (entry.eventId === data.eventId || entry.sequence === data.sequence),
+  const transaction = vi.fn(
+    async (callback: (tx: unknown) => Promise<unknown>, _options?: unknown) => {
+      const working = structuredClone(snapshot);
+      const tx = {
+        spaceMember: {
+          findFirst: vi.fn(async ({ where }: { where: Row }) =>
+            allow && where.spaceId === owner.spaceId && where.userId === owner.userId
+              ? { id: "membership-1" }
+              : null,
+          ),
+        },
+        tradingPaperLedger: {
+          findFirst: vi.fn(async ({ where }: { where: Row }) =>
+            working.ledger &&
+            working.ledger.id === where.id &&
+            working.ledger.spaceId === where.spaceId &&
+            working.ledger.ownerUserId === where.ownerUserId
+              ? working.ledger
+              : null,
+          ),
+          create: vi.fn(async ({ data }: { data: Row }) => {
+            if (working.ledger) throw new Error("duplicate ledger");
+            working.ledger = { ...data };
+            return working.ledger;
+          }),
+          updateMany: vi.fn(async ({ where, data }: { where: Row; data: Row }) => {
+            if (
+              !working.ledger ||
+              working.ledger.id !== where.id ||
+              working.ledger.spaceId !== where.spaceId ||
+              working.ledger.ownerUserId !== where.ownerUserId ||
+              working.ledger.version !== where.version ||
+              working.ledger.headSha256 !== where.headSha256
             )
-          )
-            throw new Error("duplicate paper event");
-          working.events.push({ ...data });
-          return data;
-        }),
-      },
-      tradingPaperLedgerOutbox: {
-        create: vi.fn(async ({ data }: { data: Row }) => {
-          if (failOutbox) throw new Error("outbox insert unavailable");
-          working.outbox.push({ ...data });
-          return data;
-        }),
-      },
-    };
-    const result = await callback(tx);
-    snapshot = working; // commit only after ALL operations complete
-    return result;
-  });
+              return { count: 0 };
+            working.ledger = {
+              ...working.ledger,
+              ...data,
+              version: (working.ledger.version as number) + 1,
+            };
+            return { count: 1 };
+          }),
+        },
+        tradingPaperLedgerEvent: {
+          findMany: vi.fn(async ({ where }: { where: Row }) =>
+            working.events
+              .filter((r) => r.ledgerId === where.ledgerId)
+              .sort((a, b) => (a.sequence as number) - (b.sequence as number)),
+          ),
+          create: vi.fn(async ({ data }: { data: Row }) => {
+            if (
+              working.events.some(
+                (entry) =>
+                  entry.ledgerId === data.ledgerId &&
+                  (entry.eventId === data.eventId || entry.sequence === data.sequence),
+              )
+            )
+              throw new Error("duplicate paper event");
+            working.events.push({ ...data });
+            return data;
+          }),
+        },
+        tradingPaperLedgerOutbox: {
+          create: vi.fn(async ({ data }: { data: Row }) => {
+            if (failOutbox) throw new Error("outbox insert unavailable");
+            working.outbox.push({ ...data });
+            return data;
+          }),
+        },
+      };
+      const result = await callback(tx);
+      snapshot = working; // commit only after ALL operations complete
+      return result;
+    },
+  );
   return {
     prisma: { $transaction: transaction } as unknown as Pick<PrismaClient, "$transaction">,
     transaction,
