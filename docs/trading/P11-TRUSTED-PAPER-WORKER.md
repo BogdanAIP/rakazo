@@ -19,6 +19,9 @@ Persist rejection/audit records with candidate/signal ID, ledger and policy revi
 
 ## P11B — One serializable **evaluate + reserve** transaction
 
+
+**P11B-0 implemented:** `preflightTradingPaperReservation` is an inert deny-only prerequisite. It full-replays the P10 ledger and digest-verifies the P11A policy within a **single serializable transaction**, enforces the scoped owner, and returns revision-tagged denial without balance, event, outbox or order mutations. It refuses disabled policies, kill-switch, invalid/NO_TRADE or unsupported signals, unreconciled positions and reservations, and missing trusted market provenance. Both internal verified readers are deliberately not exported via the DB package index. P11B-0 is **not** evaluate+reserve: there is no enabling operation or trusted quote store yet. The following acceptance steps still gate any actual reservation.
+
 An ordinary sequence of `readVerifiedTradingPaperLedger()` followed by `appendTradingPaperLedgerEvent()` is **not safe**: two workers could both assess stale funds or a policy could be disabled between them. Add a separate internal DB service so the following steps happen in ONE PostgreSQL serializable transaction:
 
 1. Resolve authenticated actor, active membership, disabled/enabled paper capability and the owner-scoped policy from trusted database state. If unavailable, reject without money mutation.

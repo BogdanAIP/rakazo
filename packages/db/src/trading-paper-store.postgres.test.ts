@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { TradingInstrumentSchema } from "@rakazo/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb } from "./client.js";
+import { preflightTradingPaperReservation } from "./trading-paper-reservation-preflight.js";
 import {
   createDisabledTradingPaperRiskPolicy,
   PaperRiskPolicyIntegrityError,
@@ -214,6 +215,20 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     const verified = await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId);
     expect(verified.revision).toBe(0);
     expect(verified.policy).toEqual(policy);
+    const noMutation = await preflightTradingPaperReservation(
+      second.prisma,
+      owner,
+      ledgerId,
+      { kind: "no_trade", signalId: "synthetic-abstain", strategyId: "test",
+        strategyVersion: "1", createdAt: "2026-10-04T08:01:00.000Z",
+        expiresAt: "2026-10-04T09:01:00.000Z", evidenceIds: ["offline"], reason: "no signal" },
+    );
+    expect(noMutation).toMatchObject({
+      status: "deny",
+      reason: "policy_disabled",
+      ledgerRevision: 7,
+      policyRevision: 0,
+    });
     await expect(
       readVerifiedTradingPaperRiskPolicy(
         second.prisma,
@@ -228,6 +243,9 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     });
     await expect(
       readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId),
+    ).rejects.toBeInstanceOf(PaperRiskPolicyIntegrityError);
+    await expect(
+      preflightTradingPaperReservation(second.prisma, owner, ledgerId, null),
     ).rejects.toBeInstanceOf(PaperRiskPolicyIntegrityError);
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(before);
   });

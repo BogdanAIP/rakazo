@@ -87,16 +87,26 @@ export async function readVerifiedTradingPaperRiskPolicy(
   return withTransactionRetry(() =>
     prisma.$transaction(
       async (tx) => {
-        await requireOwnedLedger(tx, owner, ledgerId);
-        const row = await tx.tradingPaperRiskPolicy.findUnique({ where: { ledgerId } });
-        if (!row || !Number.isSafeInteger(row.revision) || row.revision < 0) {
-          throw new PaperRiskPolicyIntegrityError();
-        }
-        const policy = parsePolicy(row.policy);
-        if (digest(policy) !== row.policySha256) throw new PaperRiskPolicyIntegrityError();
-        return { revision: row.revision, policy };
+        return verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
   );
+}
+
+/** Internal-only: checks owner/membership, validates stored JSON and digest inside
+ * the *caller's* serializable transaction, preventing policy/ledger TOCTOU. */
+export async function verifyTradingPaperRiskPolicyInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  ledgerId: string,
+): Promise<{ revision: number; policy: TradingPaperPolicy }> {
+  await requireOwnedLedger(tx, owner, ledgerId);
+  const row = await tx.tradingPaperRiskPolicy.findUnique({ where: { ledgerId } });
+  if (!row || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+    throw new PaperRiskPolicyIntegrityError();
+  }
+  const policy = parsePolicy(row.policy);
+  if (digest(policy) !== row.policySha256) throw new PaperRiskPolicyIntegrityError();
+  return { revision: row.revision, policy };
 }

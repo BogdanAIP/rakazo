@@ -103,7 +103,8 @@ async function assertMember(tx: Prisma.TransactionClient, owner: Owner): Promise
  * blocks future writes rather than silently accepting cached virtual money.
  * Hashes detect accidental DB edits, NOT an adversary with DB write privilege.
  */
-async function recover(
+/** Internal-only: full verified replay in an existing transaction; callers must not expose it to RPC. */
+export async function recoverTradingPaperLedgerInTransaction(
   tx: Prisma.TransactionClient,
   owner: Owner,
   ledgerId: string,
@@ -228,7 +229,7 @@ export async function readVerifiedTradingPaperLedger(
   return withTransactionRetry(() =>
     prisma.$transaction(
       async (tx) => {
-        const verified = await recover(tx, owner, ledgerId);
+        const verified = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
         return verified.state;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -251,7 +252,7 @@ export async function appendTradingPaperLedgerEvent(
   return withTransactionRetry(() =>
     prisma.$transaction(
       async (tx) => {
-        const { row, events, state } = await recover(tx, owner, event.ledgerId);
+        const { row, events, state } = await recoverTradingPaperLedgerInTransaction(tx, owner, event.ledgerId);
         const existing = events.find((entry) => entry.eventId === event.eventId);
         if (existing) {
           if (payload(existing) !== payload(event)) {
