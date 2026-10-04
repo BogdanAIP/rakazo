@@ -11,7 +11,7 @@ import {
  */
 const SCALE = 100_000_000n;
 function units(value: string): bigint {
-  if (!/^(?:0|[1-9]\\d{0,15})(?:\\.\\d{1,8})?$/.test(value)) {
+  if (!/^(?:0|[1-9]\d{0,15})(?:\.\d{1,8})?$/.test(value)) {
     throw new Error("Unsupported exact paper decimal precision");
   }
   const [whole, fraction = ""] = value.split(".");
