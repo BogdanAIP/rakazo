@@ -92,8 +92,11 @@ const SILENT_TOOL_CONTINUATION_PROMPT =
   "Continue the original task from the latest tool result. Do not stop after a tool call; use any remaining tools needed, then give the user the final answer.";
 const SILENT_ALLOWED_TOOL_CONTINUATION_PROMPT =
   "Continue the original task from the latest tool result. If you were instructed to stay silent when there is nothing to report, follow that instruction for the entire final assistant reply. Otherwise use any remaining tools needed, then give the user the final answer.";
-const TOOL_FINAL_RESPONSE_FALLBACK =
-  "I completed the tool step but could not produce a final response. Please ask me to continue.";
+// Shown as a failed-run error, not an assistant message. Asking the user to
+// continue stores that sentence as the reply, and the next "continue" runs
+// tools and misses a final answer again.
+export const MISSING_TOOL_FINAL_RESPONSE_ERROR =
+  "The tools finished, but the model did not write a final answer. Rephrase the request and try again.";
 const DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP = 2;
 // Reasoning-capable models must not start at "off": for OpenRouter, pi-ai maps
 // that to reasoning.effort "none", which 400s on endpoints that mandate
@@ -335,6 +338,9 @@ export class PiAgentRuntime implements AgentRuntime {
         let toolActivityShowing = false;
         let silentToolContinuations = 0;
         let toolWorkPendingFinal = false;
+        // Text streamed before this point is tool-turn narration. Only text after
+        // it counts as the final reply, including when the completed message omits it.
+        let streamedBeforePendingFinal = 0;
         agent.subscribe(async (event) => {
           if (event.type === "message_end") {
             await piSession?.appendMessage(event.message);
@@ -379,10 +385,18 @@ export class PiAgentRuntime implements AgentRuntime {
             if (hasToolCalls && hasToolResults && !host.pausePending) {
               toolWorkPendingFinal = true;
               silentToolContinuations = 0;
+              streamedBeforePendingFinal = streamed.length;
             } else if (toolWorkPendingFinal && !hasToolCalls && !hasToolResults) {
-              if (messageText.trim()) {
+              const streamedFinal = streamed.slice(streamedBeforePendingFinal).trim();
+              if (messageText.trim() || streamedFinal) {
                 toolWorkPendingFinal = false;
                 silentToolContinuations = 0;
+                // A provider can put the answer only on the completed message after
+                // narration already filled `streamed`, so message_end will not emit it.
+                if (messageText.trim() && !streamedFinal) {
+                  streamed += messageText;
+                  queue.push({ type: "text", text: messageText });
+                }
               } else if (
                 !host.pausePending &&
                 silentToolContinuations < MAX_SILENT_TOOL_CONTINUATIONS
@@ -461,10 +475,7 @@ export class PiAgentRuntime implements AgentRuntime {
             // Scheduled/FYI runs may finish after tools with no user-visible text.
             streamed = "";
           } else {
-            // Discard cumulative pre-tool narration from the terminal payload and make the
-            // missing final response visible to the user instead of silently completing.
-            streamed = TOOL_FINAL_RESPONSE_FALLBACK;
-            queue.push({ type: "text", text: streamed });
+            throw new Error(MISSING_TOOL_FINAL_RESPONSE_ERROR);
           }
         } else if (!streamed.trim() && !host.pausePending) {
           streamed = "";
@@ -474,9 +485,7 @@ export class PiAgentRuntime implements AgentRuntime {
             queue.push({ type: "text", text: fallback });
             streamed = fallback;
           } else if (toolWorkPendingFinal && !request.allowSilentEmpty) {
-            // A tool-bearing run must never finish with only a progress/narration message.
-            streamed = TOOL_FINAL_RESPONSE_FALLBACK;
-            queue.push({ type: "text", text: streamed });
+            throw new Error(MISSING_TOOL_FINAL_RESPONSE_ERROR);
           } else if (toolCalls === 0 && !request.allowSilentEmpty) {
             streamed = request.emptyResponseText?.trim() || "No response. Try again.";
             queue.push({ type: "text", text: streamed });
