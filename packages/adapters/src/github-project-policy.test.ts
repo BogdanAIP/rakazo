@@ -1,0 +1,132 @@
+import type { AdapterContext } from "@rakazo/adapter-kit";
+import { describe, expect, it, vi } from "vitest";
+import { assertGithubProjectWrite, githubWriteTarget } from "./github-project-policy.js";
+
+const GRANT = {
+  ref: "BogdanAIP/rakazo",
+  metadata: { githubAccess: "autonomous_write", githubMcpServerId: "github-server" },
+};
+
+const context = {
+  operationId: "test",
+  traceId: "test",
+  botId: "bot-1",
+  spaceId: "space-1",
+  userId: "user-1",
+  projectId: "project-1",
+  signal: new AbortController().signal,
+} satisfies AdapterContext;
+
+function fixture(grants: unknown[] = [GRANT], project: unknown = { id: "project-1" }) {
+  const projectLookup = vi.fn().mockResolvedValue(project);
+  const resourceLookup = vi.fn().mockResolvedValue(grants);
+  return {
+    prisma: {
+      project: { findFirst: projectLookup },
+      projectResource: { findMany: resourceLookup },
+    } as never,
+    projectLookup,
+    resourceLookup,
+  };
+}
+
+describe("project-scoped autonomous GitHub writes", () => {
+  it("accepts ordinary repository mutations with canonical case-insensitive names", () => {
+    expect(githubWriteTarget("push_files", { owner: "BogdanAIP", repo: "Rakazo" })).toBe(
+      "bogdanaip/rakazo",
+    );
+    expect(
+      githubWriteTarget("merge_pull_request", {
+        repository_full_name: "BogdanAIP/rakazo",
+      }),
+    ).toBe("bogdanaip/rakazo");
+  });
+
+  it.each([
+    ["create_repository", { owner: "BogdanAIP", repo: "rakazo" }],
+    ["create_gist", { owner: "BogdanAIP", repo: "rakazo" }],
+    ["push_files", { owner: "BogdanAIP" }],
+    ["push_files", { owner: "BogdanAIP", repo: "../AIHOT" }],
+    ["push_files", { owner: "BogdanAIP", repo: "rakazo", repository_full_name: "BogdanAIP/AIHOT" }],
+    ["create_pull_request", { owner: "BogdanAIP", repo: "rakazo", head_repo: "BogdanAIP/AIHOT" }],
+    ["issue_write", { owner: "BogdanAIP", repo: "rakazo", repositories: ["BogdanAIP/AIHOT"] }],
+  ])("fails closed for unsupported or ambiguous targets: %s", (name, args) => {
+    expect(() => githubWriteTarget(name, args)).toThrow();
+  });
+
+  it("authorizes only the selected project and matching MCP server", async () => {
+    const { prisma, projectLookup, resourceLookup } = fixture();
+    await expect(
+      assertGithubProjectWrite(prisma, context, "github-server", "push_files", {
+        owner: "BogdanAIP",
+        repo: "rakazo",
+      }),
+    ).resolves.toBe("bogdanaip/rakazo");
+    expect(projectLookup).toHaveBeenCalledWith({
+      where: {
+        id: "project-1",
+        spaceId: "space-1",
+        userId: "user-1",
+        archivedAt: null,
+      },
+      select: { id: true },
+    });
+    expect(resourceLookup).toHaveBeenCalledWith({
+      where: {
+        projectId: "project-1",
+        spaceId: "space-1",
+        userId: "user-1",
+        kind: "github.repo",
+      },
+      select: { ref: true, metadata: true },
+    });
+  });
+
+  it("rejects a different repository, a different server, or an ungranted resource", async () => {
+    const { prisma } = fixture();
+    await expect(
+      assertGithubProjectWrite(prisma, context, "github-server", "push_files", {
+        owner: "BogdanAIP",
+        repo: "AIHOT",
+      }),
+    ).rejects.toThrow("no autonomous_write grant");
+    await expect(
+      assertGithubProjectWrite(prisma, context, "other-server", "push_files", {
+        owner: "BogdanAIP",
+        repo: "rakazo",
+      }),
+    ).rejects.toThrow("no autonomous_write grant");
+    const ungranted = fixture([{ ref: "BogdanAIP/rakazo", metadata: {} }]);
+    await expect(
+      assertGithubProjectWrite(ungranted.prisma, context, "github-server", "push_files", {
+        owner: "BogdanAIP",
+        repo: "rakazo",
+      }),
+    ).rejects.toThrow("no autonomous_write grant");
+  });
+
+  it("denies missing, inaccessible and archived project contexts", async () => {
+    const f = fixture();
+    await expect(
+      assertGithubProjectWrite(
+        f.prisma,
+        { ...context, projectId: undefined },
+        "github-server",
+        "push_files",
+        {
+          owner: "BogdanAIP",
+          repo: "rakazo",
+        },
+      ),
+    ).rejects.toThrow("projectId is required");
+    expect(f.projectLookup).not.toHaveBeenCalled();
+    const absent = fixture([GRANT], null);
+    await expect(
+      assertGithubProjectWrite(absent.prisma, context, "github-server", "delete_file", {
+        owner: "BogdanAIP",
+        repo: "rakazo",
+      }),
+    ).rejects.toThrow("not accessible");
+    expect(absent.resourceLookup).not.toHaveBeenCalled();
+  });
+});

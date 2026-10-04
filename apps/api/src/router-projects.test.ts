@@ -1,5 +1,10 @@
 import { RPCHandler } from "@orpc/server/fetch";
-import type { ConnectorCall, ConnectorEvent, ConnectorTool } from "@rakazo/adapter-kit";
+import type {
+  AdapterContext,
+  ConnectorCall,
+  ConnectorEvent,
+  ConnectorTool,
+} from "@rakazo/adapter-kit";
 import type { Actor } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
@@ -178,8 +183,13 @@ describe("capability execution bridge", () => {
   function capabilityDeps() {
     const discoverTools = vi.fn(async () => [readTool, writeTool]);
     const calls: ConnectorCall[] = [];
-    const execute = async function* (call: ConnectorCall): AsyncIterable<ConnectorEvent> {
+    const contexts: AdapterContext[] = [];
+    const execute = async function* (
+      call: ConnectorCall,
+      context: AdapterContext,
+    ): AsyncIterable<ConnectorEvent> {
       calls.push(call);
+      contexts.push(context);
       yield { type: "result", data: { ok: true, tool: call.route?.toolName } };
     };
     const connectors = {
@@ -192,8 +202,9 @@ describe("capability execution bridge", () => {
     const prisma = {
       bot: { findFirst: vi.fn().mockResolvedValue({ id: "bot-1" }) },
       connection: { findMany: vi.fn().mockResolvedValue([]) },
+      project: { findFirst: vi.fn().mockResolvedValue({ id: "project-1" }) },
     } as unknown as PrismaClient;
-    return { deps: baseDeps(prisma, connectors), calls, discoverTools };
+    return { deps: baseDeps(prisma, connectors), calls, contexts, discoverTools };
   }
 
   it("discovers tools and blocks write tools on the read path", async () => {
@@ -259,5 +270,40 @@ describe("capability execution bridge", () => {
     );
     expect(second.response.status).toBe(400);
     expect(calls).toHaveLength(1);
+  });
+  it("passes an owned projectId into the write execution context", async () => {
+    const { deps, calls, contexts } = capabilityDeps();
+    const handler = new RPCHandler(createRouter(deps));
+    const result = await handler.handle(
+      rpc("capabilities/execute", {
+        botId: "bot-1",
+        projectId: "project-1",
+        tool: writeTool.name,
+        route: writeTool.route,
+        args: { owner: "BogdanAIP", repo: "rakazo", title: "test" },
+      }),
+      { prefix: "/rpc", context: { actor } },
+    );
+    expect(result.response.status).toBe(200);
+    expect(calls).toHaveLength(1);
+    expect(contexts[0]?.projectId).toBe("project-1");
+  });
+
+  it("rejects an inaccessible project before executing a write", async () => {
+    const { deps, calls } = capabilityDeps();
+    vi.mocked(deps.prisma.project.findFirst).mockResolvedValueOnce(null);
+    const handler = new RPCHandler(createRouter(deps));
+    const result = await handler.handle(
+      rpc("capabilities/execute", {
+        botId: "bot-1",
+        projectId: "foreign-project",
+        tool: writeTool.name,
+        route: writeTool.route,
+        args: { owner: "BogdanAIP", repo: "rakazo", title: "test" },
+      }),
+      { prefix: "/rpc", context: { actor } },
+    );
+    expect(result.response.status).not.toBe(200);
+    expect(calls).toHaveLength(0);
   });
 });

@@ -1,3 +1,4 @@
+import type { AdapterContext } from "@rakazo/adapter-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { allowlistDrift, McpConnector } from "./mcp-connector.js";
 import { type McpOAuthBroker, StoredMcpOAuthProvider } from "./mcp-oauth.js";
@@ -44,7 +45,12 @@ function mcpFetch(
     failNext: boolean;
     initializations: number;
     headers?: Record<string, string>[];
-    tools?: Array<{ name: string; description?: string; inputSchema: Record<string, unknown> }>;
+    tools?: Array<{
+      name: string;
+      description?: string;
+      inputSchema: Record<string, unknown>;
+      annotations?: { readOnlyHint?: boolean };
+    }>;
     calls?: string[];
   },
   expectedUrl = "https://mcp.example.test/mcp",
@@ -941,5 +947,112 @@ describe("allowlistDrift", () => {
       offered: 2,
       stringAllowedCount: 1,
     });
+  });
+});
+
+describe("GitHub MCP project write enforcement", () => {
+  it("authorizes a scoped direct write and rejects a foreign repository through the lazy catalog", async () => {
+    const state = {
+      failNext: false,
+      initializations: 0,
+      calls: [] as string[],
+      tools: [
+        {
+          name: "push_files",
+          inputSchema: {
+            type: "object",
+            properties: {
+              owner: { type: "string" },
+              repo: { type: "string" },
+            },
+            required: ["owner", "repo"],
+          },
+          annotations: { readOnlyHint: false },
+        },
+        {
+          name: "get_file_contents",
+          inputSchema: { type: "object" },
+          annotations: { readOnlyHint: true },
+        },
+      ],
+    };
+    vi.stubGlobal("fetch", mcpFetch(state));
+    const server = { ...SERVER, slug: "github" };
+    const assignment = { ...ASSIGNMENT, server };
+    const prisma = {
+      botMcpServer: {
+        findMany: vi.fn().mockResolvedValue([assignment]),
+        findFirst: vi.fn().mockResolvedValue(assignment),
+      },
+      project: { findFirst: vi.fn().mockResolvedValue({ id: "project-1" }) },
+      projectResource: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            ref: "BogdanAIP/rakazo",
+            metadata: { githubAccess: "autonomous_write", githubMcpServerId: "server-1" },
+          },
+        ]),
+      },
+    };
+    const connector = new McpConnector(prisma as never, {} as never, {
+      network: TEST_NETWORK,
+    });
+    const context: AdapterContext = {
+      operationId: "test",
+      traceId: "test",
+      spaceId: "w1",
+      userId: "u1",
+      botId: "bot-1",
+      projectId: "project-1",
+      signal: new AbortController().signal,
+    };
+    const collect = async (
+      call: Parameters<McpConnector["execute"]>[0],
+      ctx: AdapterContext = context,
+    ) => {
+      const events = [];
+      for await (const event of connector.execute(call, ctx)) events.push(event);
+      return events;
+    };
+    const route = {
+      connectorId: "mcp",
+      resourceId: "server-1",
+      resourceRevision: 1,
+      toolName: "push_files",
+      catalogGroup: "github",
+    };
+    const allowed = await collect({
+      tool: "mcp__github__push_files",
+      route,
+      args: { owner: "BogdanAIP", repo: "rakazo" },
+      executionId: "allowed-1",
+    });
+    expect(allowed.some((event) => event.type === "result")).toBe(true);
+    expect(state.calls).toEqual(["push_files"]);
+
+    const denied = await collect({
+      tool: "connectors_execute_tool",
+      route: { connectorId: "mcp", toolName: "__catalog_execute" },
+      args: {
+        id: "server-1:push_files",
+        arguments: { owner: "BogdanAIP", repo: "AIHOT" },
+      },
+      executionId: "denied-1",
+    });
+    expect(denied.some((event) => event.type === "error")).toBe(true);
+    expect(state.calls).toEqual(["push_files"]);
+
+    const read = await collect(
+      {
+        tool: "mcp__github__get_file_contents",
+        route: { ...route, toolName: "get_file_contents" },
+        args: { owner: "BogdanAIP", repo: "AIHOT" },
+        executionId: "read-1",
+      },
+      { ...context, projectId: undefined },
+    );
+    expect(read.some((event) => event.type === "result")).toBe(true);
+    expect(state.calls).toEqual(["push_files", "get_file_contents"]);
+    await connector.close();
   });
 });

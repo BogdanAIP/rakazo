@@ -11,6 +11,7 @@ import { getLogger } from "@rakazo/logging";
 import { catalogToolPrefix } from "./approval-effect.js";
 import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safety.js";
 import { appendToolCompletionAudit } from "./executor.js";
+import { assertGithubProjectWrite } from "./github-project-policy.js";
 import {
   CATALOG_EXECUTE,
   catalogEntries,
@@ -268,6 +269,20 @@ export class McpConnector implements ConnectorProvider {
     try {
       const session = await this.sessionFor(assignment.server, context);
       material = this.sessions.get(sessionKey)?.material;
+      if (assignment.server.slug === "github") {
+        const listed = await session.listTools({ signal: context.signal });
+        const authoritative = listed.tools.find((tool) => tool.name === call.route?.toolName);
+        if (!authoritative) throw new Error("GitHub MCP tool is no longer available.");
+        if (authoritative.annotations?.readOnlyHint !== true) {
+          await assertGithubProjectWrite(
+            this.prisma,
+            context,
+            assignment.serverId,
+            authoritative.name,
+            call.args,
+          );
+        }
+      }
       const result = await session.callTool(call.route.toolName, call.args, {
         signal: context.signal,
       });
