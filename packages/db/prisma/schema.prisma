@@ -1396,6 +1396,7 @@ model TradingPaperLedger {
   policyAudits        TradingPaperPolicyAudit[]
   reservationDecisions TradingPaperReservationDecision[]
   releaseAudits        TradingPaperReleaseAudit[]
+  fillDecisions         TradingPaperFillDecision[]
 
   @@index([spaceId, ownerUserId])
   @@map("trading_paper_ledgers")
@@ -1514,6 +1515,32 @@ model TradingPaperReservationDecision {
   @@unique([ledgerId, reservationId])
   @@index([ledgerId, createdAt])
   @@map("trading_paper_reservation_decisions")
+}
+
+/** Durable idempotency/audit for a synthetic full PAPER buy fill only. */
+model TradingPaperFillDecision {
+  ledgerId               String
+  reservationId          String
+  ledger                 TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  requestSha256          String
+  decisionSha256         String
+  evidenceId             String
+  policyApprovalEffectId String
+  policyRevision         Int
+  reserveEventSequence   Int
+  fillEventSequence      Int
+  fillEventId            String
+  quantityBase           String
+  executedPriceQuote     String
+  feeQuote               String
+  stopPriceQuote         String
+  filledAt               DateTime
+  createdAt              DateTime @default(now())
+
+  @@id([ledgerId, reservationId])
+  @@unique([ledgerId, fillEventId])
+  @@index([ledgerId, createdAt])
+  @@map("trading_paper_fill_decisions")
 }
 
 /** Evidence only: no broker data, account keys or risk approval.

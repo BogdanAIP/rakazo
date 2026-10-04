@@ -49,8 +49,8 @@ export class PaperStopGuardIntegrityError extends Error {
  * It can only attach a stop to an ALREADY verified open P9 position and its
  * exact fill_buy sequence. It is intentionally NOT exported by @rakazo/db root,
  * not an RPC/MCP tool and does not create/reserve/fill any virtual order. */
-export async function recordTradingPaperStopGuardForOpenPosition(
-  prisma: PaperDb,
+export async function recordTradingPaperStopGuardForOpenPositionInTransaction(
+  tx: Prisma.TransactionClient,
   owner: Owner,
   ledgerId: string,
   positionId: string,
@@ -59,32 +59,47 @@ export async function recordTradingPaperStopGuardForOpenPosition(
   if (!decimal.test(stopPriceQuote) || !/[1-9]/.test(stopPriceQuote)) {
     throw new PaperStopGuardIntegrityError("Invalid exact stop price");
   }
+  const { events, state } = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
+  const position = state.positions.find((entry) => entry.positionId === positionId);
+  const fill = events.find(
+    (entry): entry is Extract<TradingPaperLedgerEvent, { kind: "fill_buy" }> =>
+      entry.kind === "fill_buy" && entry.reservationId === positionId,
+  );
+  if (!position || !fill) throw new PaperStopGuardIntegrityError();
+  if (units(stopPriceQuote) >= units(fill.executedPriceQuote)) {
+    throw new PaperStopGuardIntegrityError("Long paper stop must be below entry fill");
+  }
+  const row = {
+    ledgerId,
+    positionId,
+    signalId: position.signalId,
+    symbol: position.symbol,
+    quantityBase: position.quantityBase,
+    stopPriceQuote,
+    openedSequence: fill.sequence,
+  };
+  await tx.tradingPaperStopGuard.create({
+    data: { ...row, guardSha256: digest(row) },
+  });
+}
+
+export async function recordTradingPaperStopGuardForOpenPosition(
+  prisma: PaperDb,
+  owner: Owner,
+  ledgerId: string,
+  positionId: string,
+  stopPriceQuote: string,
+): Promise<void> {
   return withTransactionRetry(() =>
     prisma.$transaction(
-      async (tx) => {
-        const { events, state } = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
-        const position = state.positions.find((entry) => entry.positionId === positionId);
-        const fill = events.find(
-          (entry): entry is Extract<TradingPaperLedgerEvent, { kind: "fill_buy" }> =>
-            entry.kind === "fill_buy" && entry.reservationId === positionId,
-        );
-        if (!position || !fill) throw new PaperStopGuardIntegrityError();
-        if (units(stopPriceQuote) >= units(fill.executedPriceQuote)) {
-          throw new PaperStopGuardIntegrityError("Long paper stop must be below entry fill");
-        }
-        const row = {
+      (tx) =>
+        recordTradingPaperStopGuardForOpenPositionInTransaction(
+          tx,
+          owner,
           ledgerId,
           positionId,
-          signalId: position.signalId,
-          symbol: position.symbol,
-          quantityBase: position.quantityBase,
           stopPriceQuote,
-          openedSequence: fill.sequence,
-        };
-        await tx.tradingPaperStopGuard.create({
-          data: { ...row, guardSha256: digest(row) },
-        });
-      },
+        ),
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
   );

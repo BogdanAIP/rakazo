@@ -220,6 +220,89 @@ async function readExistingDecision(
   };
 }
 
+
+export type VerifiedTradingPaperReservationDecision = {
+  signalId: string;
+  reservationId: string;
+  evidenceId: string;
+  policyApprovalEffectId: string;
+  policyRevision: number;
+  quantityBase: string;
+  heldQuote: string;
+  worstCaseStopRiskQuote: string;
+  stopPriceQuote: string;
+  conservativeEntryQuote: string;
+  conservativeStopQuote: string;
+  expiresAt: string;
+  reserveEventSequence: number;
+  market: Extract<TradingSignal, { kind: "proposal" }>["market"];
+};
+
+export async function verifyTradingPaperReservationDecisionInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  ledgerId: string,
+  reservationId: string,
+): Promise<VerifiedTradingPaperReservationDecision | null> {
+  const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
+  const row = await tx.tradingPaperReservationDecision.findUnique({
+    where: { ledgerId_reservationId: { ledgerId, reservationId } },
+  });
+  if (!row) return null;
+  const normalized: DecisionDigestInput = {
+    ledgerId: row.ledgerId,
+    signalId: row.signalId,
+    requestSha256: row.requestSha256,
+    evidenceId: row.evidenceId,
+    policyApprovalEffectId: row.policyApprovalEffectId,
+    policyRevision: row.policyRevision,
+    ledgerRevisionBefore: row.ledgerRevisionBefore,
+    eventSequence: row.eventSequence,
+    eventId: row.eventId,
+    reservationId: row.reservationId,
+    quantityBase: row.quantityBase,
+    heldQuote: row.heldQuote,
+    worstCaseStopRiskQuote: row.worstCaseStopRiskQuote,
+    stopPriceQuote: row.stopPriceQuote,
+    conservativeEntryQuote: row.conservativeEntryQuote,
+    conservativeStopQuote: row.conservativeStopQuote,
+    expiresAt: row.expiresAt.toISOString(),
+  };
+  if (row.decisionSha256 !== decisionDigest(normalized)) {
+    throw new PaperReservationDecisionIntegrityError();
+  }
+  const event = recovered.events.find((entry) => entry.eventId === row.eventId);
+  if (
+    event?.kind !== "reserve" ||
+    event.sequence !== row.eventSequence ||
+    event.reservationId !== row.reservationId ||
+    event.signalId !== row.signalId ||
+    event.quantityBase !== row.quantityBase ||
+    event.maxSpendQuote !== row.heldQuote ||
+    event.expiresAt !== row.expiresAt.toISOString()
+  ) {
+    throw new PaperReservationDecisionIntegrityError(
+      "Stored reserve decision disagrees with ledger",
+    );
+  }
+  return {
+    signalId: row.signalId,
+    reservationId: row.reservationId,
+    evidenceId: row.evidenceId,
+    policyApprovalEffectId: row.policyApprovalEffectId,
+    policyRevision: row.policyRevision,
+    quantityBase: row.quantityBase,
+    heldQuote: row.heldQuote,
+    worstCaseStopRiskQuote: row.worstCaseStopRiskQuote,
+    stopPriceQuote: row.stopPriceQuote,
+    conservativeEntryQuote: row.conservativeEntryQuote,
+    conservativeStopQuote: row.conservativeStopQuote,
+    expiresAt: row.expiresAt.toISOString(),
+    reserveEventSequence: row.eventSequence,
+    market: event.market,
+  };
+}
+
 /** INTERNAL ONLY. This creates a synthetic virtual hold, never an exchange
  * order. No URL, account, key, venue signing function or live-order payload is
  * accepted. The model cannot choose IDs, timestamps, size or max-spend. */
