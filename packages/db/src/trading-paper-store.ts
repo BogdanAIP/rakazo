@@ -238,10 +238,9 @@ export async function createTradingPaperLedger(
   owner: Owner,
   raw: Omit<TradingPaperLedgerInput, "events" | "version">,
 ): Promise<TradingPaperLedgerState> {
-  return prisma.$transaction(
-    (tx) => createTradingPaperLedgerInTransaction(tx, owner, raw),
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-  );
+  return prisma.$transaction((tx) => createTradingPaperLedgerInTransaction(tx, owner, raw), {
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+  });
 }
 
 /** Read-only independently verified projection; no action permissions exposed. */
