@@ -1,6 +1,6 @@
 # P12 — Native Rakazo Trading Bot (stacked after P11C-7)
 
-Status (2026-10-04): **P12-0 profile contract implemented; P12-1+ not implemented, not deployed**.
+Status (2026-10-04): **P12-0 profile implemented; P12-1A Bot/ledger binding code and migration in stacked DRAFT; P12-1B+ pending; nothing deployed**.
 Source branch: `feature/rakazo-trading-native-bot-2026-10-04`, based on P11C-7 / PR #12.
 This is the implementation-slice sequence P0–P12, distinct from the broad product-phase table in ROADMAP.md.
 
@@ -17,9 +17,23 @@ The existing contract already provides `bots.create/get/update/archive/restore/d
 
 A user-facing product should display **Trading Bot** in the ordinary Bot creation experience and, when implemented, choose the template there. Do not add a special bot-control service. A ChatGPT/Plugin R interaction can supervise that same bot; it must not become a second durable portfolio authority.
 
-## P12-1 — durable, immutable Bot ↔ paper-ledger binding (NEXT)
+## P12-1 — durable, immutable Bot ↔ paper-ledger binding (incremental)
 
-P10/P11 currently scope `TradingPaperLedger` by `spaceId + ownerUserId` **but not botId**. This is the missing integration; do not describe existing P11 as a finished user-created trading Bot. Add a migration and a trusted creation/binding service, with all of these invariants:
+P10/P11 legacy ledgers originally scope by `spaceId + ownerUserId` but not `botId`. New P12-1A ledgers carry a creation-time nullable `botId`, **NULL for all pre-existing P10/P11 ledgers**, unique and FK-bound to the native Rakazo Bot. The Bot identity check and immutable financial entry boundary are being integrated incrementally; do not describe P11 or P12-1A as a finished user-facing trading Bot.
+
+### P12-1A implemented in this stacked branch
+
+- A nullable unique `TradingPaperLedger.botId` with a native Bot relation; SQL `ON DELETE RESTRICT` and a trigger prohibit changing this field after insertion (including legacy NULL). No retroactive migration or automatic Bot assignment.
+- `createTradingBotPaperLedger` creates the inert P10 journal and binds one authenticated **active** same-owner/same-space Bot inside one serializable transaction, using a server-minted journal ID and timestamp. A row lock plus uniqueness prevent two independently pooled creators from binding the same Bot. The ordinary legacy `createTradingPaperLedger` remains unbound.
+- `requireTradingBotPaperBindingInTransaction` checks membership, Bot/owner/space/ledger and optionally the Run ID in the caller's transaction; archive bypass is for trusted recovery, not new trading. `readTradingBotPaperBinding` returns only identity (no unaudited balances).
+- For **bound** ledgers, existing explicit B6 approval now validates that the effect's `run.botId` is the linked Bot; a wrong Bot's valid owner-scoped Run fails without consuming the approval. Enabling on an archived Bot is denied; an already approved disable can latch on an archived Bot.
+- The existing `bots.remove` handler refuses deletion of a bound Bot and directs the owner to archive it; SQL FK protects against direct deletion. Duplicating a Bot via existing UI creates a new Bot identity and cannot duplicate the unique ledger relationship.
+- Dedicated isolated PostgreSQL tests cover concurrent allocation, cross-Bot/owner/space access, foreign-run approval, archival recovery/disable, legacy unbound records, trigger immutability, FK preservation and zero virtual journal events at allocation. Tests run only when the disposable testkit supplies `VERIFY_DATABASE`.
+
+**P12-1A does NOT expose a Bot-facing money writer, scheduler, user API or paper tool; it does not install/run a Bot.** New Bot-bound ledgers start with no risk policy and cannot reserve until separate explicit policy/approval and the remaining writer guards are finished. P11 legacy owner-scoped internal primitives remain as before for regression compatibility. This is an isolated schema and trusted-service foundation, not the activation of a new execution mode.
+
+### P12-1B still required before any Bot-driven paper activation
+ Add a migration and a trusted creation/binding service, with all of these invariants:
 
 1. Lookup authenticated current `Bot` inside the same serializable transaction: matching `spaceId`, owner `userId`, active/non-archived status and non-deleting Space membership. An arbitrary botId or AI claim must not stand in for authentication.
 2. Initial supported shape: **one bound paper ledger per native Bot** and one native Bot per ledger. Distinct bots must never share synthetic funds, signal IDs, approvals or paper stop guards merely because the owner matches. Prefer an explicit durable relation with uniqueness/FK and deletion-safe preservation; do not use bot name, prompt, model, `spawnKey` or mutable instructions as the financial identifier.
@@ -47,4 +61,4 @@ In the ordinary bot view, progressively expose Trading: Discovery, Signals, Stra
 
 P12-0 does NOT create a Bot on the user's machine, persist a Bot↔ledger relation, start a Routine, attach a wallet, submit exchange orders or turn on an outbox dispatcher. P11 virtual ledger remains synthetic/full-fill spot only. Live CEX, derivative leverage, DEX signing and DeFi allocation are later individually authorized projects. No profit promise, fabricated signals, automatic strategy promotion or unrestricted model access to credentials.
 
-Implementation sequence: P12-0 template + offline tests → P12-1 durable scope/migration and adversarial PostgreSQL verification → P12-2 native Bot research/reporting integration → P12-3 UI/approvals → separately reviewed paper Worker activation. Keep every PR stacked/draft until acceptance and explicit rollout.
+Implementation sequence: P12-0 template + offline tests → P12-1A insert-only Bot relation and scoped allocation/approval (draft) → P12-1B guard EVERY Bot-facing reserve/fill/close/release/recovery in its atomic transaction, including owner emergency disable and crash/race regressions → P12-2 native Bot research/reporting integration → P12-3 UI/approvals → separately reviewed paper Worker activation. Keep every PR stacked/draft until acceptance and explicit rollout.
