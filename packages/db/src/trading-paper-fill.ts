@@ -182,22 +182,28 @@ async function readExistingFill(
   };
   if (row.decisionSha256 !== decisionDigest(normalized)) throw new PaperFillIntegrityError();
   const fillEvent = recovered.events.find((event) => event.eventId === row.fillEventId);
+  const reserveEvent = recovered.events.find(
+    (event) => event.kind === "reserve" && event.reservationId === reservationId,
+  );
   const position = recovered.state.positions.find(
     (entry) => entry.positionId === row.reservationId,
   );
   if (
+    reserveEvent?.kind !== "reserve" ||
+    reserveEvent.sequence !== row.reserveEventSequence ||
     fillEvent?.kind !== "fill_buy" ||
     fillEvent.sequence !== row.fillEventSequence ||
     fillEvent.reservationId !== row.reservationId ||
     fillEvent.quantityBase !== row.quantityBase ||
     fillEvent.executedPriceQuote !== row.executedPriceQuote ||
     fillEvent.feeQuote !== row.feeQuote ||
-    fillEvent.recordedAt !== row.filledAt.toISOString() ||
-    !position ||
-    position.quantityBase !== row.quantityBase
+    fillEvent.recordedAt !== row.filledAt.toISOString()
   ) {
-    throw new PaperFillIntegrityError("Stored fill decision disagrees with ledger");
+    throw new PaperFillIntegrityError("Stored fill decision disagrees with historical ledger");
   }
+  // This internal reader is called only after the strict C3 lifecycle audit
+  // has independently verified all decision digests, outbox and full-lot
+  // terminal conservation in the SAME serializable, policy-locked transaction.
   const guards = await verifyTradingPaperStopGuardsInTransaction(
     tx,
     ledgerId,
@@ -205,14 +211,43 @@ async function readExistingFill(
     recovered.state,
   );
   const guard = guards?.find((entry) => entry.positionId === reservationId);
-  if (!guard || guard.stopPriceQuote !== row.stopPriceQuote) {
-    throw new PaperFillIntegrityError("Stored fill decision lacks matching verified stop guard");
+  if (position) {
+    if (
+      position.signalId !== reserveEvent.signalId ||
+      position.quantityBase !== row.quantityBase ||
+      !guard ||
+      guard.stopPriceQuote !== row.stopPriceQuote
+    ) {
+      throw new PaperFillIntegrityError("Open fill lacks its matching verified stop guard");
+    }
+  } else {
+    // A legitimate full-lot stop close removes the position and its guard.
+    // Its immutable hashed close decision + matching sell event were verified
+    // by the C3 pre-audit. Do not mistake that terminal state for corruption.
+    const closed = await tx.tradingPaperCloseDecision.findUnique({
+      where: { ledgerId_positionId: { ledgerId, positionId: reservationId } },
+    });
+    const sellEvent = recovered.events.find(
+      (event) => event.kind === "fill_sell" && event.positionId === reservationId,
+    );
+    if (
+      guard ||
+      !closed ||
+      sellEvent?.kind !== "fill_sell" ||
+      closed.buyFillEventSequence !== row.fillEventSequence ||
+      closed.closeEventSequence !== sellEvent.sequence ||
+      closed.closeEventId !== sellEvent.eventId ||
+      closed.quantityBase !== row.quantityBase ||
+      closed.stopPriceQuote !== row.stopPriceQuote
+    ) {
+      throw new PaperFillIntegrityError("Historical fill lacks a verified terminal stop close");
+    }
   }
   return {
     status: "duplicate",
     mode: "paper_only",
     reservationId: row.reservationId,
-    signalId: position.signalId,
+    signalId: reserveEvent.signalId,
     fillEventId: row.fillEventId,
     fillEventSequence: row.fillEventSequence,
     policyRevision: row.policyRevision,

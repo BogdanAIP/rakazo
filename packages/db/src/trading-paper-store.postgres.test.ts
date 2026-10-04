@@ -1989,6 +1989,59 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_sell" } }),
     ).toBe(1);
 
+    // A retry of the ORIGINAL buy after a successful full-lot stop close is
+    // historical idempotency, not a request to reopen the virtual position.
+    const afterCloseVersion = finalState.version;
+    const restarted = createDb(databaseUrl!, {
+      poolMax: 1,
+      applicationName: "paper-c7-historical-fill-retry",
+    });
+    try {
+      await expect(
+        fillApprovedTradingPaperReservation(
+          restarted.prisma,
+          owner,
+          ledgerId,
+          reserved.reservationId,
+          fillEvidence.id,
+        ),
+      ).resolves.toMatchObject({
+        status: "duplicate",
+        fillEventId: filled.fillEventId,
+        fillEventSequence: filled.fillEventSequence,
+        signalId: signal.signalId,
+      });
+      await expect(
+        fillApprovedTradingPaperReservation(
+          first.prisma,
+          owner,
+          ledgerId,
+          reserved.reservationId,
+          fillEvidence.id,
+        ),
+      ).resolves.toMatchObject({ status: "duplicate", fillEventId: filled.fillEventId });
+      await expect(
+        fillApprovedTradingPaperReservation(
+          restarted.prisma,
+          owner,
+          ledgerId,
+          reserved.reservationId,
+          stopEvidence.id,
+        ),
+      ).rejects.toBeInstanceOf(PaperFillConflictError);
+      expect((await readVerifiedTradingPaperLedger(restarted.prisma, owner, ledgerId)).version).toBe(
+        afterCloseVersion,
+      );
+      expect(await restarted.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(3);
+      expect(await restarted.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(3);
+      expect(await restarted.prisma.tradingPaperStopGuard.count({ where: { ledgerId } })).toBe(0);
+      expect(await restarted.prisma.tradingPaperFillDecision.count({ where: { ledgerId } })).toBe(1);
+      expect(await restarted.prisma.tradingPaperCloseDecision.count({ where: { ledgerId } })).toBe(1);
+    } finally {
+      await restarted.prisma.$disconnect();
+      await restarted.pool.end();
+    }
+
     await expect(
       closeTradingPaperPositionOnStop(
         first.prisma,
