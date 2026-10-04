@@ -63,9 +63,7 @@ export async function releaseTradingPaperReservationsInTransaction(
     throw new PaperReleaseIntegrityError("Paper journal is future-dated relative to release clock");
   }
   const candidates = recovered.state.reservations
-    .filter(
-      (reservation) => reason === "kill_switch" || Date.parse(reservation.expiresAt) <= nowMs,
-    )
+    .filter((reservation) => reason === "kill_switch" || Date.parse(reservation.expiresAt) <= nowMs)
     .sort((a, b) => a.reservationId.localeCompare(b.reservationId));
   let state = recovered.state;
   let released = 0;

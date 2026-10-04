@@ -9,12 +9,12 @@ import {
   recordPublicAdapterPaperQuoteEvidence,
   recordSyntheticPaperQuoteEvidence,
 } from "./trading-paper-quote-evidence.js";
+import { reconcileTradingPaperReservations } from "./trading-paper-reconciliation.js";
 import { preflightTradingPaperReservation } from "./trading-paper-reservation-preflight.js";
 import {
   PaperReservationConflictError,
   reserveApprovedTradingPaperSignal,
 } from "./trading-paper-reserve.js";
-import { reconcileTradingPaperReservations } from "./trading-paper-reconciliation.js";
 import {
   applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,
@@ -1392,23 +1392,23 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       maxSpendQuote: "110",
       expiresAt: new Date(now - 60_000).toISOString(),
     });
-    expect((await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId)).reservedQuote).toBe(
-      "110",
-    );
-    await expect(reconcileTradingPaperReservations(second.prisma, owner, ledgerId)).resolves.toEqual(
-      { released: 1, reason: "expired" },
-    );
+    expect(
+      (await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId)).reservedQuote,
+    ).toBe("110");
+    await expect(
+      reconcileTradingPaperReservations(second.prisma, owner, ledgerId),
+    ).resolves.toEqual({ released: 1, reason: "expired" });
     const recovered = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);
     expect(recovered.reservations).toHaveLength(0);
     expect(recovered.availableQuote).toBe("500");
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(2);
     expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(2);
-    expect(await first.prisma.tradingPaperReleaseAudit.findMany({ where: { ledgerId } })).toMatchObject(
-      [{ reason: "expired", releasedQuote: "110", policyRevision: 1 }],
-    );
-    await expect(reconcileTradingPaperReservations(second.prisma, owner, ledgerId)).resolves.toEqual(
-      { released: 0, reason: "expired" },
-    );
+    expect(
+      await first.prisma.tradingPaperReleaseAudit.findMany({ where: { ledgerId } }),
+    ).toMatchObject([{ reason: "expired", releasedQuote: "110", policyRevision: 1 }]);
+    await expect(
+      reconcileTradingPaperReservations(second.prisma, owner, ledgerId),
+    ).resolves.toEqual({ released: 0, reason: "expired" });
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(2);
   });
 
@@ -1480,7 +1480,9 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       evidence.id,
     );
     expect(reserved.status).toBe("reserved");
-    expect((await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId)).reservations).toHaveLength(1);
+    expect(
+      (await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId)).reservations,
+    ).toHaveLength(1);
 
     const disable = await makePaperControlEffect(ledgerId, "b8-kill-disable", "disable", 1);
     await applyApprovedTradingPaperControl(second.prisma, owner, disable.id);
@@ -1494,10 +1496,14 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     expect(state.reservations).toHaveLength(0);
     expect(state.positions).toHaveLength(0);
     expect(state.availableQuote).toBe("500");
-    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "release" } })).toBe(1);
-    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_buy" } })).toBe(0);
-    expect(await first.prisma.tradingPaperReleaseAudit.findMany({ where: { ledgerId } })).toMatchObject(
-      [{ reason: "kill_switch", policyRevision: 2 }],
-    );
+    expect(
+      await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "release" } }),
+    ).toBe(1);
+    expect(
+      await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_buy" } }),
+    ).toBe(0);
+    expect(
+      await first.prisma.tradingPaperReleaseAudit.findMany({ where: { ledgerId } }),
+    ).toMatchObject([{ reason: "kill_switch", policyRevision: 2 }]);
   });
 });

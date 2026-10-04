@@ -251,7 +251,9 @@ export async function reserveApprovedTradingPaperSignal(
           tx,
           owner,
           ledgerId,
-          !currentPolicy.policy.enabled || currentPolicy.policy.killSwitch ? "kill_switch" : "expired",
+          !currentPolicy.policy.enabled || currentPolicy.policy.killSwitch
+            ? "kill_switch"
+            : "expired",
           currentPolicy.revision,
           Date.now(),
         );
