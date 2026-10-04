@@ -30,6 +30,7 @@ function limited(value: unknown, max: number): { text: string; truncated: boolea
 export async function loadChatGptContext(
   read: ContextReader,
   requestedBotId?: string,
+  requestedProject?: { projectId?: string; projectSlug?: string },
 ): Promise<Record<string, unknown>> {
   const bots = objects(await read("bots/list"), "bots/list");
   const matches = requestedBotId ? bots.filter((bot) => bot.id === requestedBotId) : bots;
@@ -62,6 +63,24 @@ export async function loadChatGptContext(
   const memory = objects(memoryValue, "memory/list");
   const scratchpad = objects(scratchpadValue, "scratchpad/list");
   const projects = objects(projectsValue, "projects/list");
+  let selectedProjectContext: Record<string, unknown> | null = null;
+  if (requestedProject?.projectId || requestedProject?.projectSlug) {
+    if (requestedProject.projectId && requestedProject.projectSlug) {
+      throw new Error("Specify only one of projectId or projectSlug");
+    }
+    const selected = projects.filter((project) =>
+      requestedProject.projectId
+        ? project.id === requestedProject.projectId
+        : project.slug === requestedProject.projectSlug,
+    );
+    if (selected.length !== 1) {
+      throw new Error("Specified Rakazo project is not accessible");
+    }
+    selectedProjectContext = object(
+      await read("projects/context", { projectId: str(selected[0]!.id) }),
+      "projects/context",
+    );
+  }
   const skills = objects(skillsValue, "agentSkills/list");
   const runs = objects(object(runsValue, "runs/list").runs, "runs/list").filter(
     (run) => run.botId === botId,
@@ -93,6 +112,39 @@ export async function loadChatGptContext(
       memoryRevision: item.memoryRevision,
       updatedAt: item.updatedAt,
     })),
+    selectedProject: selectedProjectContext
+      ? {
+          project: (() => {
+            const project = object(selectedProjectContext.project, "projects/context project");
+            return {
+              id: project.id,
+              slug: project.slug,
+              name: project.name,
+              description: project.description,
+              memoryRevision: project.memoryRevision,
+              ...limited(project.memory, 18_000),
+            };
+          })(),
+          resources: objects(selectedProjectContext.resources, "projects/context resources")
+            .slice(0, 100)
+            .map((resource) => ({
+              id: resource.id,
+              kind: resource.kind,
+              ref: resource.ref,
+              label: resource.label,
+              metadata: resource.metadata,
+            })),
+          openTasks: objects(selectedProjectContext.openTasks, "projects/context openTasks")
+            .slice(0, MAX_ITEMS)
+            .map((item) => ({
+              id: item.id,
+              title: item.title,
+              status: item.status,
+              updatedAt: item.updatedAt,
+              ...limited(item.notes, 4_000),
+            })),
+        }
+      : null,
     availableSkills: skills.slice(0, 100).map((item) => ({
       id: item.id,
       name: item.name,

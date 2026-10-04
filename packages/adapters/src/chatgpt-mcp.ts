@@ -166,8 +166,22 @@ server.registerTool(
   {
     title: "Load shared Rakazo context",
     description:
-      "Read-only cross-chat context: bot Memory, open Scratchpad, available Skills, active Runs, Routines, installed capabilities. No second model. At the beginning of a task, call this with the existing botId.",
-    inputSchema: z.object({ botId: z.string().min(1).optional() }),
+      "Read-only cross-chat context: global Memory plus project index, open Scratchpad, Skills, Runs, Routines and installed capabilities. Optionally select projectId or projectSlug to load that project memory, resources and open tasks in the same call. No second model.",
+    inputSchema: z
+      .object({
+        botId: z.string().min(1).optional(),
+        projectId: z.string().min(1).optional(),
+        projectSlug: z.string().min(1).max(80).optional(),
+      })
+      .superRefine((input, ctx) => {
+        if (input.projectId && input.projectSlug) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Specify only one of projectId or projectSlug",
+            path: ["projectId"],
+          });
+        }
+      }),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -175,7 +189,13 @@ server.registerTool(
       openWorldHint: false,
     },
   },
-  async ({ botId }) => textResult(await loadChatGptContext(callRakazoRpc, botId)),
+  async ({ botId, projectId, projectSlug }) =>
+    textResult(
+      await loadChatGptContext(callRakazoRpc, botId, {
+        projectId,
+        projectSlug,
+      }),
+    ),
 );
 
 server.registerTool(

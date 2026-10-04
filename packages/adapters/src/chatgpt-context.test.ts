@@ -47,6 +47,58 @@ describe("ChatGPT shared context", () => {
     await expect(loadChatGptContext(read, "missing")).rejects.toThrow("not accessible");
   });
 
+  it("loads selected project context by slug", async () => {
+    const answers: Record<string, unknown> = {
+      "bots/list": [{ id: "bot-1", name: "Test", status: "idle" }],
+      "memory/list": [],
+      "scratchpad/list": [],
+      "projects/list": [
+        { id: "project-1", slug: "rakazo", name: "Rakazo", description: "", memoryRevision: 1 },
+      ],
+      "projects/context": {
+        project: {
+          id: "project-1",
+          slug: "rakazo",
+          name: "Rakazo",
+          description: "",
+          memoryRevision: 1,
+          memory: "Project memory",
+        },
+        resources: [
+          {
+            id: "resource-1",
+            projectId: "project-1",
+            kind: "github.repo",
+            ref: "BogdanAIP/rakazo",
+            label: "Repo",
+            metadata: {},
+          },
+        ],
+        openTasks: [{ id: "task-1", title: "Continue", status: "open", notes: "Next step" }],
+      },
+      "agentSkills/list": [],
+      "runs/list": { runs: [] },
+      "routines/list": [],
+      "capabilities/list": [],
+    };
+    const calls: string[] = [];
+    const read = async (name: string): Promise<unknown> => {
+      calls.push(name);
+      if (!(name in answers)) throw new Error(`Unexpected procedure: ${name}`);
+      return answers[name];
+    };
+    const output = await loadChatGptContext(read, "bot-1", { projectSlug: "rakazo" });
+    expect(output.selectedProject).toMatchObject({
+      project: { id: "project-1", slug: "rakazo", text: "Project memory", truncated: false },
+      resources: [{ kind: "github.repo", ref: "BogdanAIP/rakazo" }],
+      openTasks: [{ id: "task-1", title: "Continue", text: "Next step", truncated: false }],
+    });
+    expect(calls).toContain("projects/context");
+    await expect(loadChatGptContext(read, "bot-1", { projectSlug: "missing" })).rejects.toThrow(
+      "not accessible",
+    );
+  });
+
   it("capability search discovers without installing or executing", async () => {
     const calls: string[] = [];
     const output = await searchChatGptCapabilities(
