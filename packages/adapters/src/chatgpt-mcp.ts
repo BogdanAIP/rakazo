@@ -199,6 +199,44 @@ server.registerTool(
 );
 
 server.registerTool(
+  "rakazo_project_bootstrap",
+  {
+    title: "Load selected Rakazo project context",
+    description:
+      "Read-only project bootstrap for ordinary ChatGPT. Select exactly one projectId or projectSlug and receive global context plus that project memory, resources and open tasks. No second model.",
+    inputSchema: z
+      .object({
+        botId: z.string().min(1).optional(),
+        projectId: z.string().min(1).optional(),
+        projectSlug: z.string().min(1).max(80).optional(),
+      })
+      .superRefine((input, ctx) => {
+        const selectors = Number(Boolean(input.projectId)) + Number(Boolean(input.projectSlug));
+        if (selectors !== 1) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Specify exactly one of projectId or projectSlug",
+            path: ["projectId"],
+          });
+        }
+      }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ botId, projectId, projectSlug }) =>
+    textResult(
+      await loadChatGptContext(callRakazoRpc, botId, {
+        projectId,
+        projectSlug,
+      }),
+    ),
+);
+
+server.registerTool(
   "rakazo_capability_search",
   {
     title: "Discover installed and public capabilities",
