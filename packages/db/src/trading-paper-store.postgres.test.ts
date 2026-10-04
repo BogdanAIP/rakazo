@@ -2688,7 +2688,9 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     expect(policyBefore.policy).toMatchObject({ enabled: true, killSwitch: false });
     const eventsBefore = await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } });
     const outboxBefore = await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } });
-    const releasesBefore = await first.prisma.tradingPaperReleaseAudit.count({ where: { ledgerId } });
+    const releasesBefore = await first.prisma.tradingPaperReleaseAudit.count({
+      where: { ledgerId },
+    });
     const entry = await first.prisma.tradingPaperLedgerOutbox.findFirstOrThrow({
       where: { ledgerId },
       orderBy: { sequence: "asc" },
@@ -2720,9 +2722,15 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     const disabled = await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId);
     expect(disabled.revision).toBe(policyBefore.revision + 1);
     expect(disabled.policy).toEqual({ ...policyBefore.policy, enabled: false, killSwitch: true });
-    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(eventsBefore);
-    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(outboxBefore);
-    expect(await first.prisma.tradingPaperReleaseAudit.count({ where: { ledgerId } })).toBe(releasesBefore);
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(
+      eventsBefore,
+    );
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+      outboxBefore,
+    );
+    expect(await first.prisma.tradingPaperReleaseAudit.count({ where: { ledgerId } })).toBe(
+      releasesBefore,
+    );
     expect(await readVerifiedTradingPaperLedger(second.prisma, owner, ledgerId)).toEqual(before);
     const blocked = await readTradingPaperRecoveryStatus(second.prisma, owner, ledgerId);
     expect(blocked).toMatchObject({
@@ -2741,7 +2749,9 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     await expect(
       applyApprovedTradingPaperControl(first.prisma, owner, prematureEnable.id),
     ).rejects.toBeInstanceOf(PaperLifecycleAuditError);
-    expect(await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId)).toEqual(disabled);
+    expect(await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId)).toEqual(
+      disabled,
+    );
     // Test fixture restoration only, never an application repair path.
     await first.prisma.tradingPaperLedgerOutbox.update({ where, data: { status: "pending" } });
     expect(await auditTradingPaperLifecycle(second.prisma, owner, ledgerId)).toMatchObject({
