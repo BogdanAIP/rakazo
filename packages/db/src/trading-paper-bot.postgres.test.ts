@@ -211,68 +211,107 @@ describePostgres("P12-1A native Bot / paper ledger immutable scope", () => {
     const policy = await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerA, {
       allowedVenues: ["okx"],
       quoteCurrency: "USDT",
-      maxAgeMs: 60_000, maxSpreadBps: 40, maxTriggerDeviationBps: 50,
-      maxPositions: 2, maxPerIdeaRiskQuote: "20", maxDailyLossQuote: "100",
-      maxOpenRiskQuote: "40", maxTotalExposureQuote: "900",
-      assumedFeeBpsPerSide: 10, assumedSlippageBpsPerSide: 10,
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "900",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
     });
     expect(policy).toMatchObject({ enabled: false, killSwitch: true });
     const wrong = await makeEffect("cross-bot", botB, "enable", 0);
-    await expect(applyApprovedTradingPaperControl(first.prisma, owner, wrong.id))
-      .rejects.toBeInstanceOf(PaperRiskPolicyIntegrityError);
-    expect((await first.prisma.externalEffect.findUniqueOrThrow({ where: { id: wrong.id } })).status)
-      .toBe("executing");
-    expect((await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerA)).revision).toBe(0);
+    await expect(
+      applyApprovedTradingPaperControl(first.prisma, owner, wrong.id),
+    ).rejects.toBeInstanceOf(PaperRiskPolicyIntegrityError);
+    expect(
+      (await first.prisma.externalEffect.findUniqueOrThrow({ where: { id: wrong.id } })).status,
+    ).toBe("executing");
+    expect((await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerA)).revision).toBe(
+      0,
+    );
     await first.prisma.$transaction(async (tx) => {
-      await expect(requireTradingBotPaperBindingInTransaction(
-        tx, owner, botA, ledgerA, { runId: `bot-ledger-run-cross-bot-${suffix}` },
-      )).rejects.toBeInstanceOf(TradingBotPaperBindingError);
+      await expect(
+        requireTradingBotPaperBindingInTransaction(tx, owner, botA, ledgerA, {
+          runId: `bot-ledger-run-cross-bot-${suffix}`,
+        }),
+      ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
     });
     const right = await makeEffect("own-bot", botA, "enable", 0);
-    await expect(applyApprovedTradingPaperControl(second.prisma, owner, right.id))
-      .resolves.toMatchObject({
-        ok: true, ledgerId: ledgerA, policyRevision: 1, enabled: true, killSwitch: false,
-      });
+    await expect(
+      applyApprovedTradingPaperControl(second.prisma, owner, right.id),
+    ).resolves.toMatchObject({
+      ok: true,
+      ledgerId: ledgerA,
+      policyRevision: 1,
+      enabled: true,
+      killSwitch: false,
+    });
   });
 
   it("archive denies new Bot-scoped actions but retains owner recovery and approved disable", async () => {
     await first.prisma.bot.update({ where: { id: botA }, data: { archivedAt: new Date() } });
-    await expect(readTradingBotPaperBinding(second.prisma, owner, botA, ledgerA))
-      .rejects.toBeInstanceOf(TradingBotPaperBindingError);
-    expect(await readTradingBotPaperBinding(second.prisma, owner, botA, ledgerA, true))
-      .toMatchObject({ botId: botA, ledgerId: ledgerA });
+    await expect(
+      readTradingBotPaperBinding(second.prisma, owner, botA, ledgerA),
+    ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
+    expect(
+      await readTradingBotPaperBinding(second.prisma, owner, botA, ledgerA, true),
+    ).toMatchObject({ botId: botA, ledgerId: ledgerA });
     const deniedEnable = await makeEffect("archived-enable", botA, "enable", 1);
-    await expect(applyApprovedTradingPaperControl(first.prisma, owner, deniedEnable.id))
-      .rejects.toBeInstanceOf(PaperRiskPolicyIntegrityError);
+    await expect(
+      applyApprovedTradingPaperControl(first.prisma, owner, deniedEnable.id),
+    ).rejects.toBeInstanceOf(PaperRiskPolicyIntegrityError);
     const disable = await makeEffect("archived-disable", botA, "disable", 1);
-    await expect(applyApprovedTradingPaperControl(second.prisma, owner, disable.id))
-      .resolves.toMatchObject({ ok: true, policyRevision: 2, enabled: false, killSwitch: true });
-    expect((await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerA)).policy.enabled)
-      .toBe(false);
+    await expect(
+      applyApprovedTradingPaperControl(second.prisma, owner, disable.id),
+    ).resolves.toMatchObject({ ok: true, policyRevision: 2, enabled: false, killSwitch: true });
+    expect(
+      (await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerA)).policy.enabled,
+    ).toBe(false);
     await first.prisma.bot.update({ where: { id: botA }, data: { archivedAt: null } });
   });
 
   it("preserves legacy P11 journals unbound, and blocks Bot deletion and SQL rebinding", async () => {
     await createTradingPaperLedger(first.prisma, owner, {
-      ledgerId: legacyId, openedAt: "2026-10-04T08:00:00.000Z",
-      quoteCurrency: "USDT", initialBalanceQuote: "50",
+      ledgerId: legacyId,
+      openedAt: "2026-10-04T08:00:00.000Z",
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "50",
     });
-    expect((await first.prisma.tradingPaperLedger.findUniqueOrThrow({
-      where: { id: legacyId }, select: { botId: true },
-    })).botId).toBeNull();
-    await expect(readTradingBotPaperBinding(second.prisma, owner, botA, legacyId))
-      .rejects.toBeInstanceOf(TradingBotPaperBindingError);
-    await expect(first.prisma.tradingPaperLedger.update({
-      where: { id: legacyId }, data: { botId: botA },
-    })).rejects.toThrow();
-    await expect(first.prisma.tradingPaperLedger.update({
-      where: { id: ledgerA }, data: { botId: botB },
-    })).rejects.toThrow();
+    expect(
+      (
+        await first.prisma.tradingPaperLedger.findUniqueOrThrow({
+          where: { id: legacyId },
+          select: { botId: true },
+        })
+      ).botId,
+    ).toBeNull();
+    await expect(
+      readTradingBotPaperBinding(second.prisma, owner, botA, legacyId),
+    ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
+    await expect(
+      first.prisma.tradingPaperLedger.update({
+        where: { id: legacyId },
+        data: { botId: botA },
+      }),
+    ).rejects.toThrow();
+    await expect(
+      first.prisma.tradingPaperLedger.update({
+        where: { id: ledgerA },
+        data: { botId: botB },
+      }),
+    ).rejects.toThrow();
     await expect(first.prisma.bot.delete({ where: { id: botA } })).rejects.toThrow();
-    expect((await readVerifiedTradingPaperLedger(second.prisma, owner, legacyId)).availableQuote)
-      .toBe("50");
-    expect(await readTradingBotPaperBinding(first.prisma, owner, botA, ledgerA))
-      .toMatchObject({ botId: botA, ledgerId: ledgerA });
+    expect(
+      (await readVerifiedTradingPaperLedger(second.prisma, owner, legacyId)).availableQuote,
+    ).toBe("50");
+    expect(await readTradingBotPaperBinding(first.prisma, owner, botA, ledgerA)).toMatchObject({
+      botId: botA,
+      ledgerId: ledgerA,
+    });
     expect(await first.prisma.tradingPaperLedger.count({ where: { botId: botA } })).toBe(1);
   });
 });
