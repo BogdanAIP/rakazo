@@ -2,10 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { TradingInstrumentSchema, TradingPaperPolicySchema } from "@rakazo/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb } from "./client.js";
-import {
-  closeTradingPaperPositionOnStop,
-  PaperCloseConflictError,
-} from "./trading-paper-close.js";
+import { closeTradingPaperPositionOnStop, PaperCloseConflictError } from "./trading-paper-close.js";
 import {
   fillApprovedTradingPaperReservation,
   PaperFillConflictError,

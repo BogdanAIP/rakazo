@@ -223,7 +223,6 @@ async function readExistingFill(
   };
 }
 
-
 export type VerifiedTradingPaperOpenFill = {
   positionId: string;
   signalId: string;
@@ -233,7 +232,9 @@ export type VerifiedTradingPaperOpenFill = {
   feeQuote: string;
   stopPriceQuote: string;
   fillEventSequence: number;
-  market: Awaited<ReturnType<typeof verifyTradingPaperReservationDecisionInTransaction>> extends infer T
+  market: Awaited<
+    ReturnType<typeof verifyTradingPaperReservationDecisionInTransaction>
+  > extends infer T
     ? T extends { market: infer M }
       ? M
       : never

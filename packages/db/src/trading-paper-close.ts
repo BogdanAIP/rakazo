@@ -183,9 +183,7 @@ async function readExistingClose(
   ) {
     throw new PaperCloseIntegrityError("Stored close decision disagrees with ledger");
   }
-  if (
-    (await tx.tradingPaperStopGuard.count({ where: { ledgerId, positionId } })) !== 0
-  ) {
+  if ((await tx.tradingPaperStopGuard.count({ where: { ledgerId, positionId } })) !== 0) {
     throw new PaperCloseIntegrityError("Closed position retained a stop guard");
   }
   const fill = await tx.tradingPaperFillDecision.findUnique({
@@ -197,7 +195,7 @@ async function readExistingClose(
   const positionSignal = recovered.events.find(
     (entry) => entry.kind === "reserve" && entry.reservationId === positionId,
   );
-  if (!positionSignal || positionSignal.kind !== "reserve") {
+  if (positionSignal?.kind !== "reserve") {
     throw new PaperCloseIntegrityError("Close decision lacks matching reserve");
   }
   return {
@@ -259,13 +257,20 @@ export async function closeTradingPaperPositionOnStop(
           return { status: "deny", mode: "paper_only", reason: "paper_capability_unapproved" };
         }
 
-        const opened = await verifyTradingPaperOpenFillInTransaction(tx, owner, ledgerId, positionId);
+        const opened = await verifyTradingPaperOpenFillInTransaction(
+          tx,
+          owner,
+          ledgerId,
+          positionId,
+        );
         if (!opened) {
           const closed = await tx.tradingPaperCloseDecision.findUnique({
             where: { ledgerId_positionId: { ledgerId, positionId } },
           });
           if (closed) {
-            throw new PaperCloseIntegrityError("Close decision became visible without idempotent read");
+            throw new PaperCloseIntegrityError(
+              "Close decision became visible without idempotent read",
+            );
           }
           return { status: "deny", mode: "paper_only", reason: "position_unverified" };
         }
@@ -335,7 +340,9 @@ export async function closeTradingPaperPositionOnStop(
           ? Date.parse(recovered.events.at(-1)!.recordedAt)
           : recovered.row.openedAt.getTime();
         if (lastAt > now + 2_000) {
-          throw new PaperCloseIntegrityError("Paper journal is future-dated relative to close clock");
+          throw new PaperCloseIntegrityError(
+            "Paper journal is future-dated relative to close clock",
+          );
         }
         const closedAt = new Date(Math.max(now, lastAt)).toISOString();
         const closeEventId = `paper-close:${randomUUID()}`;
@@ -360,7 +367,9 @@ export async function closeTradingPaperPositionOnStop(
           where: { ledgerId, positionId },
         });
         if (removed.count !== 1) {
-          throw new PaperCloseIntegrityError("Synthetic close did not remove exactly one stop guard");
+          throw new PaperCloseIntegrityError(
+            "Synthetic close did not remove exactly one stop guard",
+          );
         }
         const requestSha256 = requestDigest(owner, ledgerId, positionId, evidenceId);
         const normalized: CloseDigestInput = {
