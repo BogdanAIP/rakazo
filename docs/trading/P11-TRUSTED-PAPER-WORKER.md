@@ -33,6 +33,12 @@ The preflight takes an **explicit lookup-only** market-evidence ID (never inferr
 
 Risk accounting no longer accepts a caller-supplied portfolio snapshot. `deriveTradingPaperRiskState` reconstructs exact UTC-day realized PnL, conservative cumulative losing-close loss, reserved quote, open cost basis and total open exposure directly from the validated P9/P10 journal using eight-decimal BigInt arithmetic. Wins do **not** erase earlier losses for the daily-loss gate. No duplicate mutable risk snapshot is trusted: the persisted append-only event journal is the source of truth and is re-derived in the same serializable preflight transaction. Existing open positions deliberately produce `openStopRiskQuote=null` / incomplete until a separately persisted and verified stop-guard relation exists; the gate returns `stop_risk_unavailable` rather than assuming zero. Current daily loss, total exposure, position count and known stop risk are compared with policy caps before signal/market checks. After all B4 checks pass, preflight still returns `reserve_authority_unavailable`: there is no authenticated user enable operation or atomic reserve path yet.
 
+## P11B-5 — position-bound stop guards and exact open stop risk
+
+A new repository-only `TradingPaperStopGuard` relation binds a stop to the ledger ID, currently open synthetic position ID, signal ID, symbol, quantity, and the exact `fill_buy` sequence that created that position. The integrity digest is checked against the verified P10 journal; missing guards return `stop_risk_unavailable`, while mismatched/tampered guards are integrity errors. The internal guard writer can only attach to an already verified open position and is **not exported from the @rakazo/db package root or exposed as RPC/MCP**. This helper is a prerequisite for a future atomic fill+guard operation, not permission to create a position.
+
+When all current positions have verified guards, preflight calculates conservative aggregate stop risk with eight-decimal BigInt math: stop price is moved adversely by policy slippage, expected proceeds are rounded down, the assumed sell fee is rounded up, and remaining loss is compared with `maxOpenRiskQuote`. A valid guard can advance the deny-only gate to `reserve_authority_unavailable`; a low stop exceeding the cap returns `open_stop_risk_limit_exceeded`. No guard write changes ledger events, balances or outbox.
+
 ## P11B — One serializable **evaluate + reserve** transaction
 
 

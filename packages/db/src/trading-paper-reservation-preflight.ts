@@ -4,6 +4,7 @@ import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
 import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import { verifyTradingPaperRiskPolicyInTransaction } from "./trading-paper-risk-policy.js";
+import { verifyTradingPaperStopGuardsInTransaction } from "./trading-paper-stop-guard.js";
 import { recoverTradingPaperLedgerInTransaction } from "./trading-paper-store.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
@@ -105,10 +106,35 @@ export async function preflightTradingPaperReservation(
         }
         if (risk.openPositions >= policy.maxPositions) return deny("position_limit_exceeded");
         if (risk.openReservations > 0) return deny("existing_risk_unreconciled");
-        if (!risk.stopRiskComplete || risk.openStopRiskQuote === null) {
-          return deny("stop_risk_unavailable");
+        const feeBps = bpsScaled(policy.assumedFeeBpsPerSide);
+        const slippageBps = bpsScaled(policy.assumedSlippageBpsPerSide);
+        if (feeBps === null || slippageBps === null) return deny("risk_state_unavailable");
+        let openStopRisk = risk.openStopRiskQuote === null ? null : units(risk.openStopRiskQuote);
+        if (!risk.stopRiskComplete || openStopRisk === null) {
+          const guards = await verifyTradingPaperStopGuardsInTransaction(
+            tx,
+            ledgerId,
+            events,
+            state,
+          );
+          if (!guards) return deny("stop_risk_unavailable");
+          let total = 0n;
+          const positions = new Map(state.positions.map((position) => [position.positionId, position]));
+          for (const guard of guards) {
+            const position = positions.get(guard.positionId);
+            if (!position) return deny("stop_risk_unavailable");
+            const quantity = units(position.quantityBase);
+            const stop = units(guard.stopPriceQuote);
+            const slippedStop = (stop * (BPS_SCALE - slippageBps)) / BPS_SCALE;
+            const grossProceeds = (quantity * slippedStop) / SCALE;
+            const sellFee = (grossProceeds * feeBps + BPS_SCALE - 1n) / BPS_SCALE;
+            const netProceeds = grossProceeds > sellFee ? grossProceeds - sellFee : 0n;
+            const cost = units(position.entryCostBasisQuote);
+            if (cost > netProceeds) total += cost - netProceeds;
+          }
+          openStopRisk = total;
         }
-        if (units(risk.openStopRiskQuote) >= units(policy.maxOpenRiskQuote)) {
+        if (openStopRisk >= units(policy.maxOpenRiskQuote)) {
           return deny("open_stop_risk_limit_exceeded");
         }
         const parsed = TradingSignalSchema.safeParse(proposedSignal);

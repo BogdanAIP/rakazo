@@ -1392,6 +1392,7 @@ model TradingPaperLedger {
   events              TradingPaperLedgerEvent[]
   riskPolicy          TradingPaperRiskPolicy?
   quoteEvidence       TradingPaperQuoteEvidence[]
+  stopGuards          TradingPaperStopGuard[]
 
   @@index([spaceId, ownerUserId])
   @@map("trading_paper_ledgers")
@@ -1458,4 +1459,21 @@ model TradingPaperQuoteEvidence {
 
   @@index([ledgerId, receivedAt])
   @@map("trading_paper_quote_evidence")
+}
+
+/** Durable stop metadata for a synthetic open paper position. No broker order authority. */
+model TradingPaperStopGuard {
+  ledgerId       String
+  positionId     String
+  ledger         TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  signalId       String
+  symbol         String
+  quantityBase   String
+  stopPriceQuote String
+  openedSequence Int
+  guardSha256    String
+  createdAt      DateTime @default(now())
+
+  @@id([ledgerId, positionId])
+  @@map("trading_paper_stop_guards")
 }

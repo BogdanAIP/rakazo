@@ -11,6 +11,10 @@ import {
 } from "./trading-paper-quote-evidence.js";
 import { preflightTradingPaperReservation } from "./trading-paper-reservation-preflight.js";
 import {
+  PaperStopGuardIntegrityError,
+  recordTradingPaperStopGuardForOpenPosition,
+} from "./trading-paper-stop-guard.js";
+import {
   createDisabledTradingPaperRiskPolicy,
   PaperRiskPolicyIntegrityError,
   readVerifiedTradingPaperRiskPolicy,
@@ -756,6 +760,60 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       (await preflightTradingPaperReservation(second.prisma, owner, ledgerId, signal, evidence.id))
         .reason,
     ).toBe("stop_risk_unavailable");
+
+    await recordTradingPaperStopGuardForOpenPosition(
+      first.prisma,
+      owner,
+      ledgerId,
+      "risk-open",
+      "95",
+    );
+    expect(
+      (await preflightTradingPaperReservation(second.prisma, owner, ledgerId, signal, evidence.id))
+        .reason,
+    ).toBe("reserve_authority_unavailable");
+
+    const risky = {
+      ledgerId,
+      positionId: "risk-open",
+      signalId: "risk-open-signal",
+      symbol: "SOL-USDT",
+      quantityBase: "1",
+      stopPriceQuote: "50",
+      openedSequence: 5,
+    };
+    await first.prisma.tradingPaperStopGuard.update({
+      where: { ledgerId_positionId: { ledgerId, positionId: "risk-open" } },
+      data: {
+        stopPriceQuote: risky.stopPriceQuote,
+        guardSha256: createHash("sha256")
+          .update(
+            JSON.stringify([
+              risky.ledgerId,
+              risky.positionId,
+              risky.signalId,
+              risky.symbol,
+              risky.quantityBase,
+              risky.stopPriceQuote,
+              risky.openedSequence,
+            ]),
+            "utf8",
+          )
+          .digest("hex"),
+      },
+    });
+    expect(
+      (await preflightTradingPaperReservation(second.prisma, owner, ledgerId, signal, evidence.id))
+        .reason,
+    ).toBe("open_stop_risk_limit_exceeded");
+
+    await first.prisma.tradingPaperStopGuard.update({
+      where: { ledgerId_positionId: { ledgerId, positionId: "risk-open" } },
+      data: { guardSha256: "f".repeat(64) },
+    });
+    await expect(
+      preflightTradingPaperReservation(second.prisma, owner, ledgerId, signal, evidence.id),
+    ).rejects.toBeInstanceOf(PaperStopGuardIntegrityError);
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(
       beforeEvents,
     );
