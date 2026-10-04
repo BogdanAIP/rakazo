@@ -602,4 +602,181 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       (await readVerifiedTradingPaperLedger(second.prisma, owner, ledgerId)).availableQuote,
     ).toBe("1000");
   });
+  it("P11B-4 derives daily loss/exposure from persisted fills and fails closed on missing stops", async () => {
+    const ledgerId = `paper-derived-risk-${suffix}`;
+    const now = Date.now();
+    const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: at(-20_000),
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "1000",
+    });
+    const disabled = await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+      allowedVenues: ["okx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 3,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "5",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "1500",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    });
+    const enabled = TradingPaperPolicySchema.parse({
+      ...disabled,
+      enabled: true,
+      killSwitch: false,
+    });
+    const writePolicy = async (policy: typeof enabled) =>
+      first.prisma.tradingPaperRiskPolicy.update({
+        where: { ledgerId },
+        data: {
+          policy: JSON.parse(JSON.stringify(policy)),
+          policySha256: createHash("sha256")
+            .update(JSON.stringify(policy), "utf8")
+            .digest("hex"),
+        },
+      });
+    await writePolicy(enabled);
+    const events = [
+      {
+        ledgerId,
+        eventId: "risk-reserve-loss",
+        sequence: 1,
+        kind: "reserve",
+        recordedAt: at(-18_000),
+        reservationId: "risk-loss",
+        signalId: "risk-loss-signal",
+        market,
+        quantityBase: "1",
+        maxSpendQuote: "110",
+        expiresAt: at(60_000),
+      },
+      {
+        ledgerId,
+        eventId: "risk-buy-loss",
+        sequence: 2,
+        kind: "fill_buy",
+        recordedAt: at(-17_000),
+        reservationId: "risk-loss",
+        quantityBase: "1",
+        executedPriceQuote: "100",
+        feeQuote: "0",
+      },
+      {
+        ledgerId,
+        eventId: "risk-sell-loss",
+        sequence: 3,
+        kind: "fill_sell",
+        recordedAt: at(-16_000),
+        positionId: "risk-loss",
+        quantityBase: "1",
+        executedPriceQuote: "90",
+        feeQuote: "0",
+      },
+      {
+        ledgerId,
+        eventId: "risk-reserve-open",
+        sequence: 4,
+        kind: "reserve",
+        recordedAt: at(-15_000),
+        reservationId: "risk-open",
+        signalId: "risk-open-signal",
+        market,
+        quantityBase: "1",
+        maxSpendQuote: "110",
+        expiresAt: at(60_000),
+      },
+      {
+        ledgerId,
+        eventId: "risk-buy-open",
+        sequence: 5,
+        kind: "fill_buy",
+        recordedAt: at(-14_000),
+        reservationId: "risk-open",
+        quantityBase: "1",
+        executedPriceQuote: "100",
+        feeQuote: "0",
+      },
+    ] as const;
+    for (const event of events) {
+      await appendTradingPaperLedgerEvent(first.prisma, owner, event);
+    }
+    const quoteAt = new Date().toISOString();
+    const evidence = await recordPublicAdapterPaperQuoteEvidence(
+      first.prisma,
+      owner,
+      ledgerId,
+      market,
+      {
+        venue: "okx",
+        kind: "spot",
+        symbol: "SOL-USDT",
+        observedAt: quoteAt,
+        fetchedAt: quoteAt,
+        bid: "100",
+        ask: "100.1",
+        quoteVolume24h: "100000",
+      },
+    );
+    const signal = {
+      kind: "proposal",
+      executionStatus: "research_only",
+      signalId: "risk-new-signal",
+      strategyId: "risk-test",
+      strategyVersion: "1",
+      createdAt: at(-1000),
+      expiresAt: at(60_000),
+      evidenceIds: ["not-authority"],
+      market,
+      action: "spot_buy",
+      entryTrigger: "100.1",
+      stopLoss: "95",
+      takeProfit: ["110"],
+      invalidation: "fixture",
+      rationale: "Synthetic risk-state verification",
+      riskBudgetQuote: null,
+      maxSlippageBps: null,
+    };
+    const beforeEvents = await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } });
+    const beforeOutbox = await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } });
+    expect(
+      (
+        await preflightTradingPaperReservation(
+          second.prisma,
+          owner,
+          ledgerId,
+          signal,
+          evidence.id,
+        )
+      ).reason,
+    ).toBe("daily_loss_limit_exceeded");
+
+    const relaxed = TradingPaperPolicySchema.parse({
+      ...enabled,
+      maxDailyLossQuote: "100",
+    });
+    await writePolicy(relaxed);
+    expect(
+      (
+        await preflightTradingPaperReservation(
+          second.prisma,
+          owner,
+          ledgerId,
+          signal,
+          evidence.id,
+        )
+      ).reason,
+    ).toBe("stop_risk_unavailable");
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(
+      beforeEvents,
+    );
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+      beforeOutbox,
+    );
+  });
 });

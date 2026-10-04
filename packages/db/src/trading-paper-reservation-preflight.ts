@@ -1,4 +1,5 @@
 import { type TradingSignal, TradingSignalSchema } from "@rakazo/contracts";
+import { deriveTradingPaperRiskState } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
 import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
@@ -37,6 +38,12 @@ type Reason =
   | "market_spread_exceeded"
   | "market_trigger_deviation_exceeded"
   | "signal_expired"
+  | "daily_loss_limit_exceeded"
+  | "total_exposure_limit_exceeded"
+  | "stop_risk_unavailable"
+  | "open_stop_risk_limit_exceeded"
+  | "position_limit_exceeded"
+  | "reserve_authority_unavailable"
   | "risk_state_unavailable";
 
 /** Inert, transaction-bound first stage of P11B. Never returns ALLOW, a
@@ -62,7 +69,11 @@ export async function preflightTradingPaperReservation(
       async (tx) => {
         // Verify BOTH sources inside one serializable snapshot. An invalid
         // policy or tampered ledger is an integrity error, never an AI approval.
-        const { row, state } = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
+        const { row, events, state } = await recoverTradingPaperLedgerInTransaction(
+          tx,
+          owner,
+          ledgerId,
+        );
         const verified = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         const { policy } = verified;
         const deny = (reason: Reason) => ({
@@ -74,6 +85,32 @@ export async function preflightTradingPaperReservation(
         if (!policy.enabled) return deny("policy_disabled");
         if (policy.killSwitch) return deny("kill_switch_active");
         if (state.quoteCurrency !== policy.quoteCurrency) return deny("quote_currency_mismatch");
+        const decisionNow = Date.now();
+        const risk = deriveTradingPaperRiskState(
+          {
+            version: "paper_spot_full_fill_v1",
+            ledgerId: row.id,
+            openedAt: row.openedAt.toISOString(),
+            quoteCurrency: row.quoteCurrency,
+            initialBalanceQuote: row.initialBalanceQuote,
+            events,
+          },
+          new Date(decisionNow),
+        );
+        if (units(risk.realizedLossTodayQuote) >= units(policy.maxDailyLossQuote)) {
+          return deny("daily_loss_limit_exceeded");
+        }
+        if (units(risk.openExposureQuote) >= units(policy.maxTotalExposureQuote)) {
+          return deny("total_exposure_limit_exceeded");
+        }
+        if (risk.openPositions >= policy.maxPositions) return deny("position_limit_exceeded");
+        if (risk.openReservations > 0) return deny("existing_risk_unreconciled");
+        if (!risk.stopRiskComplete || risk.openStopRiskQuote === null) {
+          return deny("stop_risk_unavailable");
+        }
+        if (units(risk.openStopRiskQuote) >= units(policy.maxOpenRiskQuote)) {
+          return deny("open_stop_risk_limit_exceeded");
+        }
         const parsed = TradingSignalSchema.safeParse(proposedSignal);
         if (!parsed.success) return deny("invalid_signal");
         const signal: TradingSignal = parsed.data;
@@ -87,11 +124,8 @@ export async function preflightTradingPaperReservation(
           !policy.allowedVenues.includes(signal.market.venue)
         )
           return deny("unsupported_instrument");
-        // P9 book-cost is not an attested mark/stop risk source. No optimistic
-        // zero exposure assumptions may be fabricated from an AI proposal.
-        if (state.positions.length > 0 || state.reservations.length > 0) {
-          return deny("existing_risk_unreconciled");
-        }
+        // Risk facts above are derived from the persisted journal, never caller
+        // portfolio prose. Stop risk remains incomplete for any existing position.
         // Explicit evidence ID is a locator, NOT evidence of source provenance
         // or a capability. Never take a model's evidenceIds as market authority.
         if (!evidenceId || evidenceId.length > 128) {
@@ -107,7 +141,7 @@ export async function preflightTradingPaperReservation(
         if (JSON.stringify(evidence.market) !== JSON.stringify(signal.market)) {
           return deny("market_snapshot_mismatch");
         }
-        const now = Date.now();
+        const now = decisionNow;
         const observed = Date.parse(evidence.ticker.observedAt);
         const fetched = Date.parse(evidence.ticker.fetchedAt);
         if (
@@ -135,11 +169,10 @@ export async function preflightTradingPaperReservation(
         if (deviation * BPS_SCALE > deviationCap * ask) {
           return deny("market_trigger_deviation_exceeded");
         }
-        // A source-labeled public GET response is not a signed exchange feed.
-        // There is still no durable mark/stop exposure + daily PnL risk state,
-        // authenticated policy-enable path, or independently authorized reserve.
-        // Even a valid fresh observation MUST fail closed and write NOTHING.
-        return deny("risk_state_unavailable");
+        // Market + persisted journal risk facts are now revalidated in the same
+        // transaction. Still no authenticated user enable path or deterministic
+        // reserve/audit/event append authority exists, so this remains DENY ONLY.
+        return deny("reserve_authority_unavailable");
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
