@@ -149,6 +149,7 @@ describe("paper spot ledger: idempotent exact-decimal event replay", () => {
     expect(() => run([reserve, { ...buy, quantityBase: "1" }])).toThrow("full lot");
     expect(() => run([reserve, { ...buy, executedPriceQuote: "100.121" }])).toThrow("tick-aligned");
     expect(() => run([reserve, { ...buy, feeQuote: "25" }])).toThrow("exceeded");
+    expect(() => run([reserve, { ...buy, recordedAt: reserve.expiresAt }])).toThrow("expiry");
     expect(() => run([reserve, { ...buy, recordedAt: "2026-10-04T09:00:01.000Z" }])).toThrow(
       "expiry",
     );
