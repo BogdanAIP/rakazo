@@ -473,4 +473,129 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       readVerifiedPublicPaperQuoteEvidence(second.prisma, owner, ledgerId, saved.id),
     ).rejects.toBeInstanceOf(PaperQuoteEvidenceError);
   });
+  it("P11B-3 checks a persisted public quote inside preflight and ALWAYS denies", async () => {
+    const ledgerId = `paper-decision-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: "2026-10-04T08:00:00.000Z",
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "1000",
+    });
+    const disabled = await createDisabledTradingPaperRiskPolicy(
+      first.prisma,
+      owner,
+      ledgerId,
+      {
+      allowedVenues: ["okx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "1500",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    },
+    );
+    // Privileged TEST DATABASE edit only. There is NO runtime policy-enable API.
+    const changed = TradingPaperPolicySchema.parse({
+      ...disabled,
+      enabled: true,
+      killSwitch: false,
+    });
+    await first.prisma.tradingPaperRiskPolicy.update({
+      where: { ledgerId },
+      data: {
+        policy: JSON.parse(JSON.stringify(changed)),
+        policySha256: createHash("sha256")
+          .update(JSON.stringify(changed), "utf8")
+          .digest("hex"),
+      },
+    });
+    const createdAt = new Date(Date.now() - 1000).toISOString();
+    const signal = {
+      kind: "proposal",
+      executionStatus: "research_only",
+      signalId: "synthetic-p11b3",
+      strategyId: "offline-only",
+      strategyVersion: "1",
+      createdAt,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      evidenceIds: ["model-note-is-not-a-quote"],
+      market,
+      action: "spot_buy",
+      entryTrigger: "100.1",
+      stopLoss: "95",
+      takeProfit: ["110"],
+      invalidation: "fixture-only",
+      rationale: "Synthetic database verification only",
+      riskBudgetQuote: null,
+      maxSlippageBps: null,
+    };
+    const run = (candidate: unknown, evidenceId: string | null = null) =>
+      preflightTradingPaperReservation(second.prisma, owner, ledgerId, candidate, evidenceId);
+    expect((await run(signal)).reason).toBe("trusted_market_snapshot_unavailable");
+    const at = new Date().toISOString();
+    const ticker = {
+      venue: "okx",
+      kind: "spot",
+      symbol: "SOL-USDT",
+      observedAt: at,
+      fetchedAt: at,
+      bid: "100",
+      ask: "100.1",
+      quoteVolume24h: "100000",
+    };
+    const offline = await recordSyntheticPaperQuoteEvidence(first.prisma, owner, ledgerId, ticker);
+    expect((await run(signal, offline.id)).reason).toBe("trusted_market_snapshot_unavailable");
+    const publicEvidence = await recordPublicAdapterPaperQuoteEvidence(
+      first.prisma, owner, ledgerId, market, ticker,
+    );
+    expect((await run(signal, publicEvidence.id)).reason).toBe("risk_state_unavailable");
+    expect((await run({ ...signal, market: { ...market, priceIncrement: "0.1" } }, publicEvidence.id)).reason)
+      .toBe("market_snapshot_mismatch");
+    expect((await run({ ...signal, entryTrigger: "120" }, publicEvidence.id)).reason)
+      .toBe("market_trigger_deviation_exceeded");
+    expect((await run({ ...signal, expiresAt: createdAt }, publicEvidence.id)).reason)
+      .toBe("invalid_signal");
+    const wide = await recordPublicAdapterPaperQuoteEvidence(
+      first.prisma, owner, ledgerId, market, { ...ticker, bid: "90" },
+    );
+    expect((await run(signal, wide.id)).reason).toBe("market_spread_exceeded");
+    // Simulates aged but internally consistent evidence in disposable CI only.
+    const oldAt = new Date(Date.now() - 120_000).toISOString();
+    const stale = { ...ticker, observedAt: oldAt, fetchedAt: oldAt };
+    await first.prisma.tradingPaperQuoteEvidence.update({
+      where: { id: publicEvidence.id },
+      data: {
+        payload: JSON.parse(JSON.stringify(stale)),
+        payloadSha256: createHash("sha256")
+          .update(JSON.stringify(["public_adapter_observation", market, stale]), "utf8")
+          .digest("hex"),
+        observedAt: new Date(oldAt),
+        fetchedAt: new Date(oldAt),
+      },
+    });
+    expect((await run(signal, publicEvidence.id)).reason).toBe("market_snapshot_stale");
+    await first.prisma.tradingPaperQuoteEvidence.update({
+      where: { id: wide.id },
+      data: { payloadSha256: "f".repeat(64) },
+    });
+    await expect(run(signal, wide.id)).rejects.toBeInstanceOf(PaperQuoteEvidenceError);
+    const forgedPolicy = { ...changed, maxSpreadBps: 30 };
+    await first.prisma.tradingPaperRiskPolicy.update({
+      where: { ledgerId },
+      data: { policy: JSON.parse(JSON.stringify(forgedPolicy)) },
+    });
+    await expect(run(signal, offline.id)).rejects.toBeInstanceOf(
+      PaperRiskPolicyIntegrityError,
+    );
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(0);
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(0);
+    expect((await readVerifiedTradingPaperLedger(second.prisma, owner, ledgerId)).availableQuote)
+      .toBe("1000");
+  });
 });
