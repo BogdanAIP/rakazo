@@ -156,7 +156,7 @@ describe("paper spot ledger: idempotent exact-decimal event replay", () => {
   });
 
   it("refuses double-spending and invalid or repeated full closes", () => {
-    expect(() => run([sell])).toThrow("open matching position");
+    expect(() => run([{ ...sell, sequence: 1 }])).toThrow("open matching position");
     expect(() => run([reserve, buy, { ...sell, quantityBase: "1" }])).toThrow("full lot");
     expect(() => run([reserve, buy, { ...sell, executedPriceQuote: "110.001" }])).toThrow(
       "tick-aligned",
