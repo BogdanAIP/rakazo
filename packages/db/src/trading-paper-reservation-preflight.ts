@@ -116,11 +116,10 @@ export async function preflightTradingPaperReservation(
           observed > now + 2_000 ||
           now - observed > policy.maxAgeMs ||
           now - fetched > policy.maxAgeMs
-        ) return deny("market_snapshot_stale");
-        if (
-          Date.parse(signal.expiresAt) <= now ||
-          Date.parse(signal.createdAt) > now + 2_000
-        ) return deny("signal_expired");
+        )
+          return deny("market_snapshot_stale");
+        if (Date.parse(signal.expiresAt) <= now || Date.parse(signal.createdAt) > now + 2_000)
+          return deny("signal_expired");
         const bid = units(evidence.ticker.bid);
         const ask = units(evidence.ticker.ask);
         const trigger = units(signal.entryTrigger);

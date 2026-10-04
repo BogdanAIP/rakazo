@@ -481,11 +481,7 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       quoteCurrency: "USDT",
       initialBalanceQuote: "1000",
     });
-    const disabled = await createDisabledTradingPaperRiskPolicy(
-      first.prisma,
-      owner,
-      ledgerId,
-      {
+    const disabled = await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
       allowedVenues: ["okx"],
       quoteCurrency: "USDT",
       maxAgeMs: 60_000,
@@ -498,8 +494,7 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       maxTotalExposureQuote: "1500",
       assumedFeeBpsPerSide: 10,
       assumedSlippageBpsPerSide: 10,
-    },
-    );
+    });
     // Privileged TEST DATABASE edit only. There is NO runtime policy-enable API.
     const changed = TradingPaperPolicySchema.parse({
       ...disabled,
@@ -510,9 +505,7 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       where: { ledgerId },
       data: {
         policy: JSON.parse(JSON.stringify(changed)),
-        policySha256: createHash("sha256")
-          .update(JSON.stringify(changed), "utf8")
-          .digest("hex"),
+        policySha256: createHash("sha256").update(JSON.stringify(changed), "utf8").digest("hex"),
       },
     });
     const createdAt = new Date(Date.now() - 1000).toISOString();
@@ -552,17 +545,29 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     const offline = await recordSyntheticPaperQuoteEvidence(first.prisma, owner, ledgerId, ticker);
     expect((await run(signal, offline.id)).reason).toBe("trusted_market_snapshot_unavailable");
     const publicEvidence = await recordPublicAdapterPaperQuoteEvidence(
-      first.prisma, owner, ledgerId, market, ticker,
+      first.prisma,
+      owner,
+      ledgerId,
+      market,
+      ticker,
     );
     expect((await run(signal, publicEvidence.id)).reason).toBe("risk_state_unavailable");
-    expect((await run({ ...signal, market: { ...market, priceIncrement: "0.1" } }, publicEvidence.id)).reason)
-      .toBe("market_snapshot_mismatch");
-    expect((await run({ ...signal, entryTrigger: "120" }, publicEvidence.id)).reason)
-      .toBe("market_trigger_deviation_exceeded");
-    expect((await run({ ...signal, expiresAt: createdAt }, publicEvidence.id)).reason)
-      .toBe("invalid_signal");
+    expect(
+      (await run({ ...signal, market: { ...market, priceIncrement: "0.1" } }, publicEvidence.id))
+        .reason,
+    ).toBe("market_snapshot_mismatch");
+    expect((await run({ ...signal, entryTrigger: "120" }, publicEvidence.id)).reason).toBe(
+      "market_trigger_deviation_exceeded",
+    );
+    expect((await run({ ...signal, expiresAt: createdAt }, publicEvidence.id)).reason).toBe(
+      "invalid_signal",
+    );
     const wide = await recordPublicAdapterPaperQuoteEvidence(
-      first.prisma, owner, ledgerId, market, { ...ticker, bid: "90" },
+      first.prisma,
+      owner,
+      ledgerId,
+      market,
+      { ...ticker, bid: "90" },
     );
     expect((await run(signal, wide.id)).reason).toBe("market_spread_exceeded");
     // Simulates aged but internally consistent evidence in disposable CI only.
@@ -590,12 +595,11 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       where: { ledgerId },
       data: { policy: JSON.parse(JSON.stringify(forgedPolicy)) },
     });
-    await expect(run(signal, offline.id)).rejects.toBeInstanceOf(
-      PaperRiskPolicyIntegrityError,
-    );
+    await expect(run(signal, offline.id)).rejects.toBeInstanceOf(PaperRiskPolicyIntegrityError);
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(0);
     expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(0);
-    expect((await readVerifiedTradingPaperLedger(second.prisma, owner, ledgerId)).availableQuote)
-      .toBe("1000");
+    expect(
+      (await readVerifiedTradingPaperLedger(second.prisma, owner, ledgerId)).availableQuote,
+    ).toBe("1000");
   });
 });
