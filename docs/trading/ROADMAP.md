@@ -1,15 +1,19 @@
 # Rakazo Trading — roadmap
 
-Status: **planning / no live trading enabled**  
-Created: 2026-10-03  
+Status: **draft implementation through P11C-7; P12-0 native Bot template; no running paper scheduler or live trading**  
+Created: 2026-10-03; bot-product decision: 2026-10-04  
 Owner: Rakazo product; source of truth for this extension.  
-Related: [ChatGPT + Rakazo roadmap](../chatgpt-rakazo-roadmap.md) and [research register](./RESEARCH.md).
+Related: [ChatGPT + Rakazo roadmap](../chatgpt-rakazo-roadmap.md), [research register](./RESEARCH.md), [P11 internal paper lifecycle](./P11-TRUSTED-PAPER-WORKER.md) and [P12 native Trading Bot](./P12-NATIVE-BOT.md).
+
+**Product identity:** the deliverable is an ordinary **user-created Rakazo Bot** with a strategy, conversation, memory, Tasks/Runs and optional Routines—not a parallel trading app or separate agent runtime. The verified paper ledger and independent Risk Manager belong to Rakazo backend and must be explicitly bound to that Bot. P11 has owner/space-scoped virtual journals, **not yet Bot-bound**; the next integration gate is P12-1. Existing Routine prompts, LLM instructions and generic tool access do not authorize virtual-money changes or live orders.
+
+**Numbering:** the broad P0–P9 product-phase table below is a high-level plan; code implementation slices P0–P12 are tracked in individual `docs/trading/P*.md` documents. Their numbers are not interchangeable.
 
 ## 1. Product goal
 
 Build an optional, self-hosted research and trading capability **inside Rakazo**, not a standalone agent/control plane. Analyze dynamically discovered eligible instruments (BTC/ETH **and altcoins**), spot, dated and perpetual futures, CEX, DEX and DeFi opportunities; generate **concrete, falsifiable, timestamped trading signals**; test strategies out of sample; paper-trade; and, only after a distinct approval gate, connect the user's own trading account. A valid result can be **NO TRADE**. No promise of profit or guaranteed alpha.
 
-The product has two complementary roles:
+The product has two complementary roles, represented through one native Rakazo Trading Bot:
 - **AI Researcher:** market discovery, hypotheses, signals, explanations, simulation and strategy improvement.
 - **Own-account trader:** controlled execution of an approved versioned strategy on the user's account, initially paper-only.
 
@@ -26,13 +30,13 @@ No prop-firm workflow in the initial scope; preserve room for a future adapter w
 
 ## 3. Product surfaces
 
-- Rakazo web/Electron Trading surface with progressive disclosure: Discovery, Signals, Research, Strategies, Paper, Portfolio, Journal, Risk, Connections. Native mobile surfaces can safely degrade to read-only/approvals until equivalence is implemented.
+- **Native Rakazo Bots interface** is the entry point: create one or more Trading Bots through the existing `bots.create` contract; each bot retains its own thread, model, instructions, memory, Runs and optional disabled-by-default Routines. Progressively expose Trading: Discovery, Signals, Research, Strategies, Paper, Portfolio, Journal, Risk, Connections inside the bot. Native mobile surfaces can safely degrade to read-only/approvals until equivalence is implemented.
 - Plugin R tools, once authorized: list markets and data freshness; scan; inspect a signal and its evidence; launch/review backtests; list paper/live positions; pause/disable a strategy; request a time-limited execution approval; see incidents/journal. Never expose raw keys or wallet secrets in tool responses.
 - Signal notifications via optional event integrations; event and alert delivery must be durable and deduplicated.
 
 ## 4. Architecture (conceptual)
 
-ChatGPT / Plugin R -> Rakazo appContract -> Trading application (jobs, auth, decisions, journal) -> market-data adapters + research/backtest provider + independent risk gateway + order/execution adapters -> CEX / DEX / DeFi providers.
+User / ChatGPT via Plugin R -> existing Rakazo Bot (thread, model, Tasks/Runs, optional Routines) -> Rakazo appContract -> trading research and trusted Worker -> Bot-bound paper ledger + independent risk gateway + market-data adapters -> separately authorized execution adapters (future) -> CEX / DEX / DeFi providers.
 
 AI outputs are **proposals**, never privileged order commands. Validate them with a typed schema and deterministic risk checks. Every action includes provenance, mode, identity, strategy version, signal ID, timestamp, TTL and idempotency reference.
 
@@ -84,7 +88,7 @@ Signal display is a research output, not a guarantee that the market will meet t
 - Always distinguish technical reachability (including VPN), exchange contractual/KYC permission, and applicable legal/tax obligations. No automatic registration or deposit; document user checks without embedding personal details.
 - If Rakazo is manually stopped, local trading jobs do not continue. An always-on VPS executor is a **separate opt-in deployment decision**, subordinate to Rakazo's authority and with independently enforced risk limits; no covert autostart.
 
-## 9. Implementation phases and acceptance gates
+## 9. Product phases and acceptance gates (broad plan; see P12 for current code slices)
 
 | Phase | Deliverable | Completion evidence / gate |
 | --- | --- | --- |
@@ -112,6 +116,8 @@ Parallel tracks are allowed for **read-only research**. P6/P7 live permissions r
 7. Define staged, separate futures and DEX testing with the same position/journal/risk semantics, plus domain-specific safeguards.
 
 ## 11. Decision log / non-goals
+
+- **2026-10-04:** This extension delivers a **native user-created Rakazo Trading Bot** (not just reusable trading APIs). P12-0 implements the schema-validated research profile for existing `bots.create`; P12-1 must bind a distinct ledger/policy to an immutable Bot identity with safe archive/duplicate/restart behavior. No automatic Bot creation, paper routine, worker or live order is activated.
 
 - **2026-10-03:** Trading is an **optional module inside existing Rakazo**; one local control plane and existing Plugin R; no CAP/OpenResearch dependency.
 - **2026-10-03:** Support both own-account trading and AI researcher, CEX spot + altcoins, dated/perpetual futures, DEX and DeFi Research; broad discovery and concrete signals, including NO_TRADE.
