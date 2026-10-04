@@ -139,7 +139,7 @@ export type PaperTradingControlResult =
       mode: "paper_only";
       action: "enable" | "disable";
       ledgerId: string;
-      error: "stale_policy_revision" | "already_enabled" | "already_disabled";
+      error: "stale_policy_revision" | "already_enabled" | "already_disabled" | "reconciliation_required";
       currentPolicyRevision: number;
     };
 
@@ -244,6 +244,27 @@ export async function applyApprovedTradingPaperControl(
             error: "already_disabled",
             currentPolicyRevision: verified.revision,
           });
+        }
+        // Re-enabling is a separate approved act, never a side effect of repair.
+        // Verify the whole B7+ lifecycle, then refuse an unreconciled hold
+        // even when a previous kill-switch was successfully latched.
+        if (request.action === "enable") {
+          const lifecycle = await auditTradingPaperLifecycleInTransaction(
+            tx,
+            owner,
+            request.ledgerId,
+            new Date(),
+          );
+          if (lifecycle.openReservations > 0) {
+            return complete({
+              ok: false,
+              mode: "paper_only",
+              action: request.action,
+              ledgerId: request.ledgerId,
+              error: "reconciliation_required",
+              currentPolicyRevision: verified.revision,
+            });
+          }
         }
         // A damaged lifecycle blocks virtual-money mutations, but must NOT
         // prevent the one-time owner-approved kill-switch from latching.

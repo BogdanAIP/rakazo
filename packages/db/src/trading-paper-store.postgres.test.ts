@@ -2318,4 +2318,181 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       "verified",
     );
   });
+  it("P11C-5 restores audited paper-only hold recovery without implicit re-enable", async () => {
+    const ledgerId = `paper-c5-recovery-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: new Date(Date.now() - 30_000).toISOString(),
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "500",
+    });
+    await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+      allowedVenues: ["okx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "300",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    });
+    const initialEnable = await makePaperControlEffect(ledgerId, "c5-enable", "enable", 0);
+    await expect(
+      applyApprovedTradingPaperControl(first.prisma, owner, initialEnable.id),
+    ).resolves.toMatchObject({ ok: true, enabled: true, policyRevision: 1 });
+    const at = new Date().toISOString();
+    const evidence = await recordPublicAdapterPaperQuoteEvidence(
+      first.prisma,
+      owner,
+      ledgerId,
+      market,
+      {
+        venue: "okx",
+        kind: "spot",
+        symbol: "SOL-USDT",
+        observedAt: at,
+        fetchedAt: at,
+        bid: "100",
+        ask: "100.1",
+        quoteVolume24h: "100000",
+      },
+    );
+    const signal = {
+      kind: "proposal",
+      executionStatus: "research_only",
+      signalId: `c5-signal-${suffix}`,
+      strategyId: "c5-recovery",
+      strategyVersion: "1",
+      createdAt: new Date(Date.now() - 1000).toISOString(),
+      expiresAt: new Date(Date.now() + 120_000).toISOString(),
+      evidenceIds: ["research-only"],
+      market,
+      action: "spot_buy",
+      entryTrigger: "100.1",
+      stopLoss: "95",
+      takeProfit: ["110"],
+      invalidation: "synthetic",
+      rationale: "Safe hold restoration fixture",
+      riskBudgetQuote: "10",
+      maxSlippageBps: null,
+    } as const;
+    const reserved = await reserveApprovedTradingPaperSignal(
+      first.prisma,
+      owner,
+      ledgerId,
+      signal,
+      evidence.id,
+    );
+    expect(reserved.status).toBe("reserved");
+    if (reserved.status !== "reserved") throw new Error("expected B7 reserve fixture");
+    const decision = await first.prisma.tradingPaperReservationDecision.findUniqueOrThrow({
+      where: { ledgerId_signalId: { ledgerId, signalId: signal.signalId } },
+    });
+    const decisionWhere = { ledgerId_signalId: { ledgerId, signalId: signal.signalId } };
+    await first.prisma.tradingPaperReservationDecision.update({
+      where: decisionWhere,
+      data: { decisionSha256: "0".repeat(64) },
+    });
+    const disable = await makePaperControlEffect(ledgerId, "c5-disable", "disable", 1);
+    await expect(
+      applyApprovedTradingPaperControl(second.prisma, owner, disable.id),
+    ).resolves.toMatchObject({
+      ok: true,
+      mode: "paper_only",
+      action: "disable",
+      policyRevision: 2,
+      enabled: false,
+      killSwitch: true,
+      reconciliationRequired: true,
+    });
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(1);
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(1);
+    expect(await first.prisma.tradingPaperReleaseAudit.count({ where: { ledgerId } })).toBe(0);
+    const blockedEnable = await makePaperControlEffect(
+      ledgerId,
+      "c5-corrupt-enable",
+      "enable",
+      2,
+    );
+    await expect(
+      applyApprovedTradingPaperControl(second.prisma, owner, blockedEnable.id),
+    ).rejects.toBeInstanceOf(PaperLifecycleAuditError);
+    expect(await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId)).toMatchObject({
+      revision: 2,
+      policy: { enabled: false, killSwitch: true },
+    });
+    await expect(
+      reconcileTradingPaperReservations(second.prisma, owner, ledgerId),
+    ).rejects.toBeInstanceOf(PaperLifecycleAuditError);
+    // This test repairs only its own deliberately altered disposable fixture.
+    // It never calls an automated recovery or edits a user's original journal.
+    await first.prisma.tradingPaperReservationDecision.update({
+      where: decisionWhere,
+      data: { decisionSha256: decision.decisionSha256 },
+    });
+    expect((await auditTradingPaperLifecycle(second.prisma, owner, ledgerId)).status).toBe(
+      "verified",
+    );
+    const prematureEnable = await makePaperControlEffect(
+      ledgerId,
+      "c5-premature-enable",
+      "enable",
+      2,
+    );
+    await expect(
+      applyApprovedTradingPaperControl(first.prisma, owner, prematureEnable.id),
+    ).resolves.toMatchObject({
+      ok: false,
+      action: "enable",
+      error: "reconciliation_required",
+      currentPolicyRevision: 2,
+    });
+    expect(await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId)).toMatchObject({
+      revision: 2,
+      policy: { enabled: false, killSwitch: true },
+    });
+    const [a, b] = await Promise.all([
+      reconcileTradingPaperReservations(first.prisma, owner, ledgerId),
+      reconcileTradingPaperReservations(second.prisma, owner, ledgerId),
+    ]);
+    expect([a.released, b.released].sort()).toEqual([0, 1]);
+    expect([a.reason, b.reason]).toEqual(["kill_switch", "kill_switch"]);
+    await expect(
+      reconcileTradingPaperReservations(second.prisma, owner, ledgerId),
+    ).resolves.toEqual({ released: 0, reason: "kill_switch" });
+    const ledger = await readVerifiedTradingPaperLedger(second.prisma, owner, ledgerId);
+    expect(ledger.reservations).toHaveLength(0);
+    expect(ledger.positions).toHaveLength(0);
+    expect(ledger.availableQuote).toBe("500");
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(2);
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(2);
+    expect(
+      await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_buy" } }),
+    ).toBe(0);
+    expect(await first.prisma.tradingPaperReleaseAudit.findMany({ where: { ledgerId } }))
+      .toMatchObject([{ reason: "kill_switch", policyRevision: 2 }]);
+    expect(await auditTradingPaperLifecycle(first.prisma, owner, ledgerId)).toMatchObject({
+      status: "verified",
+      openReservations: 0,
+      releaseAudits: 1,
+    });
+    // Reconciliation cannot implicitly change the disabled capability.
+    expect(await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId)).toMatchObject({
+      revision: 2,
+      policy: { enabled: false, killSwitch: true },
+    });
+    const reviewedEnable = await makePaperControlEffect(ledgerId, "c5-reviewed-enable", "enable", 2);
+    await expect(
+      applyApprovedTradingPaperControl(second.prisma, owner, reviewedEnable.id),
+    ).resolves.toMatchObject({
+      ok: true,
+      policyRevision: 3,
+      enabled: true,
+      killSwitch: false,
+    });
+  });
 });
