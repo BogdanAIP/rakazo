@@ -31,7 +31,8 @@ describe("physical Windows browser session route", () => {
 
   it("passes opaque session opens and close requests through the owner-scoped dispatcher", async () => {
     const token = "501fa589-44e8-4c66-9c5d-e852933063d8";
-    const dispatch = vi.fn()
+    const dispatch = vi
+      .fn()
       .mockResolvedValueOnce({
         id: "95d9ae2e-ff46-4d23-a8fb-f01e291296ca",
         ok: true,
@@ -44,19 +45,31 @@ describe("physical Windows browser session route", () => {
       });
     const sandbox = new WindowsHostSandboxProvider({} as PrismaClient, { dispatch });
     expect(await sandbox.desktopBrowserSession(computer, { command: "open" }, context)).toEqual({
-      ok: true, sessionToken: token,
+      ok: true,
+      sessionToken: token,
     });
-    expect(await sandbox.desktopBrowserSession(
-      computer, { command: "close", sessionToken: token }, context,
-    )).toEqual({ ok: true });
+    expect(
+      await sandbox.desktopBrowserSession(
+        computer,
+        { command: "close", sessionToken: token },
+        context,
+      ),
+    ).toEqual({ ok: true });
     expect(dispatch).toHaveBeenNthCalledWith(
-      1, "host-one", { kind: "browser.call", botId: "bot-a", request: { command: "open" } },
-      context.signal, 30_000, "user-a",
+      1,
+      "host-one",
+      { kind: "browser.call", botId: "bot-a", request: { command: "open" } },
+      context.signal,
+      30_000,
+      "user-a",
     );
     expect(dispatch).toHaveBeenNthCalledWith(
-      2, "host-one",
+      2,
+      "host-one",
       { kind: "browser.call", botId: "bot-a", request: { command: "close", sessionToken: token } },
-      context.signal, 30_000, "user-a",
+      context.signal,
+      30_000,
+      "user-a",
     );
   });
 });
