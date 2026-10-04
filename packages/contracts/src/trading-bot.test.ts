@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CreateBotInput } from "./domain.js";
-import {
-  buildTradingResearchBotInput,
-  TRADING_RESEARCH_BOT_INSTRUCTIONS,
-} from "./trading-bot.js";
+import { buildTradingResearchBotInput, TRADING_RESEARCH_BOT_INSTRUCTIONS } from "./trading-bot.js";
 
 describe("native trading research bot profile (P12-0)", () => {
   it("uses the existing Rakazo bots.create contract without granting trading authority", () => {
