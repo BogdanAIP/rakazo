@@ -137,18 +137,22 @@ describePostgres("P12-1A native Bot / paper ledger immutable scope", () => {
     const threadId = `bot-ledger-thread-${label}-${suffix}`;
     const taskId = `bot-ledger-task-${label}-${suffix}`;
     const runId = `bot-ledger-run-${label}-${suffix}`;
-    await first.prisma.thread.create({
-      data: { id: threadId, spaceId: owner.spaceId, botId, userId: owner.userId },
-    });
+    const existingThread = await first.prisma.thread.findUnique({ where: { botId } });
+    const resolvedThreadId = existingThread?.id ?? threadId;
+    if (!existingThread) {
+      await first.prisma.thread.create({
+        data: { id: resolvedThreadId, spaceId: owner.spaceId, botId, userId: owner.userId },
+      });
+    }
     await first.prisma.task.create({
       data: {
-        id: taskId, spaceId: owner.spaceId, botId, threadId, userId: owner.userId,
+        id: taskId, spaceId: owner.spaceId, botId, threadId: resolvedThreadId, userId: owner.userId,
         prompt: "fixture only", status: "running",
       },
     });
     await first.prisma.run.create({
       data: {
-        id: runId, spaceId: owner.spaceId, botId, threadId, taskId,
+        id: runId, spaceId: owner.spaceId, botId, threadId: resolvedThreadId, taskId,
         userId: owner.userId, status: "running", trigger: "user",
       },
     });
