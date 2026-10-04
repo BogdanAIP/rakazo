@@ -53,7 +53,7 @@ function harness() {
   let snapshot: Snapshot = { ledger: null, events: [], outbox: [] };
   let allow = true;
   let failOutbox = false;
-  const transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => {
+  const transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>, _options?: unknown) => {
     const working = structuredClone(snapshot);
     const tx = {
       spaceMember: {
