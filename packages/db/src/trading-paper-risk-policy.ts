@@ -287,3 +287,54 @@ export async function applyApprovedTradingPaperControl(
     ),
   );
 }
+
+/** Internal B7 writer barrier. Locks the owner-scoped policy row until the
+ * surrounding transaction commits, so a concurrent approved disable cannot
+ * interleave between risk evaluation and a synthetic reserve. */
+export async function lockTradingPaperRiskPolicyInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  ledgerId: string,
+): Promise<void> {
+  await requireOwnedLedger(tx, owner, ledgerId);
+  const rows = await tx.$queryRaw<Array<{ ledgerId: string }>>(
+    Prisma.sql`SELECT "ledgerId" FROM "trading_paper_risk_policies"
+               WHERE "ledgerId" = ${ledgerId}
+               FOR UPDATE`,
+  );
+  if (rows.length !== 1 || rows[0]?.ledgerId !== ledgerId) {
+    throw new PaperRiskPolicyIntegrityError("Paper risk policy lock unavailable");
+  }
+}
+
+/** B7 requires proof that the CURRENT enabled revision came from B6 explicit
+ * owner approval, not a direct/admin JSON edit. Database superusers remain
+ * outside the application trust boundary; this is not a cryptographic signature. */
+export async function verifyCurrentTradingPaperEnableAuditInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  ledgerId: string,
+  revision: number,
+  policy: TradingPaperPolicy,
+): Promise<{ effectId: string } | null> {
+  const rows = await tx.tradingPaperPolicyAudit.findMany({
+    where: { ledgerId, toRevision: revision },
+    take: 2,
+  });
+  if (rows.length === 0) return null;
+  if (rows.length !== 1) {
+    throw new PaperRiskPolicyIntegrityError("Duplicate paper capability revision audit");
+  }
+  const row = rows[0]!;
+  if (
+    row.spaceId !== owner.spaceId ||
+    row.userId !== owner.userId ||
+    row.action !== "enable" ||
+    row.afterSha256 !== digest(policy) ||
+    !policy.enabled ||
+    policy.killSwitch
+  ) {
+    throw new PaperRiskPolicyIntegrityError("Current paper enable audit does not match policy");
+  }
+  return { effectId: row.effectId };
+}

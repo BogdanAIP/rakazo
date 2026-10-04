@@ -11,6 +11,10 @@ import {
 } from "./trading-paper-quote-evidence.js";
 import { preflightTradingPaperReservation } from "./trading-paper-reservation-preflight.js";
 import {
+  PaperReservationConflictError,
+  reserveApprovedTradingPaperSignal,
+} from "./trading-paper-reserve.js";
+import {
   applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,
   PaperRiskPolicyIntegrityError,
@@ -965,5 +969,306 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
       beforeOutbox,
     );
+  });
+  it("P11B-7 atomically reserves once, replays idempotently and rejects changed same-signal input", async () => {
+    const ledgerId = `paper-b7-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: new Date(Date.now() - 20_000).toISOString(),
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "1000",
+    });
+    await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+      allowedVenues: ["okx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "500",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    });
+    const botId = `paper-b7-bot-${suffix}`;
+    const threadId = `paper-b7-thread-${suffix}`;
+    const taskId = `paper-b7-task-${suffix}`;
+    const runId = `paper-b7-run-${suffix}`;
+    await first.prisma.bot.create({
+      data: {
+        id: botId,
+        spaceId: owner.spaceId,
+        userId: owner.userId,
+        name: "Paper B7 Fixture",
+        color: "#000000",
+      },
+    });
+    await first.prisma.thread.create({
+      data: { id: threadId, spaceId: owner.spaceId, botId, userId: owner.userId },
+    });
+    await first.prisma.task.create({
+      data: {
+        id: taskId,
+        spaceId: owner.spaceId,
+        botId,
+        threadId,
+        userId: owner.userId,
+        prompt: "paper b7 fixture",
+        status: "running",
+      },
+    });
+    await first.prisma.run.create({
+      data: {
+        id: runId,
+        spaceId: owner.spaceId,
+        botId,
+        threadId,
+        taskId,
+        userId: owner.userId,
+        status: "running",
+        trigger: "user",
+      },
+    });
+    const effect = await first.prisma.externalEffect.create({
+      data: {
+        id: `paper-b7-enable-${suffix}`,
+        spaceId: owner.spaceId,
+        runId,
+        kind: "paper_trading_control",
+        idempotencyKey: `paper-b7-enable-key-${suffix}`,
+        status: "executing",
+        request: { action: "enable", ledger_id: ledgerId, expected_policy_revision: 0 },
+      },
+    });
+    await applyApprovedTradingPaperControl(first.prisma, owner, effect.id);
+
+    const at = new Date().toISOString();
+    const evidence = await recordPublicAdapterPaperQuoteEvidence(
+      first.prisma,
+      owner,
+      ledgerId,
+      market,
+      {
+        venue: "okx",
+        kind: "spot",
+        symbol: "SOL-USDT",
+        observedAt: at,
+        fetchedAt: at,
+        bid: "100",
+        ask: "100.1",
+        quoteVolume24h: "100000",
+      },
+    );
+    const signal = {
+      kind: "proposal",
+      executionStatus: "research_only",
+      signalId: `b7-signal-${suffix}`,
+      strategyId: "b7-fixture",
+      strategyVersion: "1",
+      createdAt: new Date(Date.now() - 1000).toISOString(),
+      expiresAt: new Date(Date.now() + 120_000).toISOString(),
+      evidenceIds: ["research-only"],
+      market,
+      action: "spot_buy",
+      entryTrigger: "100.1",
+      stopLoss: "95",
+      takeProfit: ["110"],
+      invalidation: "fixture",
+      rationale: "Synthetic B7 verification",
+      riskBudgetQuote: "10",
+      maxSlippageBps: null,
+    } as const;
+
+    const firstResult = await reserveApprovedTradingPaperSignal(
+      first.prisma,
+      owner,
+      ledgerId,
+      signal,
+      evidence.id,
+    );
+    expect(firstResult.status).toBe("reserved");
+    if (firstResult.status !== "reserved") throw new Error("expected synthetic reservation");
+    expect(firstResult.mode).toBe("paper_only");
+    expect(firstResult.quantityBase).not.toBe("0");
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(1);
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(1);
+    expect(await first.prisma.tradingPaperReservationDecision.count({ where: { ledgerId } })).toBe(1);
+    const ledger = await readVerifiedTradingPaperLedger(second.prisma, owner, ledgerId);
+    expect(ledger.reservations).toHaveLength(1);
+    expect(ledger.reservations[0]?.reservationId).toBe(firstResult.reservationId);
+    expect(ledger.reservedQuote).toBe(firstResult.heldQuote);
+
+    await expect(
+      reserveApprovedTradingPaperSignal(second.prisma, owner, ledgerId, signal, evidence.id),
+    ).resolves.toMatchObject({
+      status: "duplicate",
+      reservationId: firstResult.reservationId,
+      eventId: firstResult.eventId,
+    });
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(1);
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(1);
+
+    await expect(
+      reserveApprovedTradingPaperSignal(
+        second.prisma,
+        owner,
+        ledgerId,
+        { ...signal, entryTrigger: "100.2" },
+        evidence.id,
+      ),
+    ).rejects.toBeInstanceOf(PaperReservationConflictError);
+  });
+
+  it("P11B-7 requires a B6 enable audit and serializes competing candidates to one hold", async () => {
+    const makeLedger = async (label: string, audited: boolean) => {
+      const ledgerId = `paper-b7-race-${label}-${suffix}`;
+      await createTradingPaperLedger(first.prisma, owner, {
+        ledgerId,
+        openedAt: new Date(Date.now() - 20_000).toISOString(),
+        quoteCurrency: "USDT",
+        initialBalanceQuote: "500",
+      });
+      const disabled = await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+        allowedVenues: ["okx"],
+        quoteCurrency: "USDT",
+        maxAgeMs: 60_000,
+        maxSpreadBps: 40,
+        maxTriggerDeviationBps: 50,
+        maxPositions: 2,
+        maxPerIdeaRiskQuote: "20",
+        maxDailyLossQuote: "100",
+        maxOpenRiskQuote: "40",
+        maxTotalExposureQuote: "300",
+        assumedFeeBpsPerSide: 10,
+        assumedSlippageBpsPerSide: 10,
+      });
+      if (audited) {
+        const botId = `paper-b7-race-bot-${label}-${suffix}`;
+        const threadId = `paper-b7-race-thread-${label}-${suffix}`;
+        const taskId = `paper-b7-race-task-${label}-${suffix}`;
+        const runId = `paper-b7-race-run-${label}-${suffix}`;
+        await first.prisma.bot.create({
+          data: { id: botId, spaceId: owner.spaceId, userId: owner.userId, name: "B7 Race", color: "#000000" },
+        });
+        await first.prisma.thread.create({
+          data: { id: threadId, spaceId: owner.spaceId, botId, userId: owner.userId },
+        });
+        await first.prisma.task.create({
+          data: { id: taskId, spaceId: owner.spaceId, botId, threadId, userId: owner.userId, prompt: "b7 race", status: "running" },
+        });
+        await first.prisma.run.create({
+          data: { id: runId, spaceId: owner.spaceId, botId, threadId, taskId, userId: owner.userId, status: "running", trigger: "user" },
+        });
+        const effect = await first.prisma.externalEffect.create({
+          data: {
+            id: `paper-b7-race-effect-${label}-${suffix}`,
+            spaceId: owner.spaceId,
+            runId,
+            kind: "paper_trading_control",
+            idempotencyKey: `paper-b7-race-key-${label}-${suffix}`,
+            status: "executing",
+            request: { action: "enable", ledger_id: ledgerId, expected_policy_revision: 0 },
+          },
+        });
+        await applyApprovedTradingPaperControl(first.prisma, owner, effect.id);
+      } else {
+        const forged = TradingPaperPolicySchema.parse({
+          ...disabled,
+          enabled: true,
+          killSwitch: false,
+        });
+        await first.prisma.tradingPaperRiskPolicy.update({
+          where: { ledgerId },
+          data: {
+            revision: 1,
+            policy: JSON.parse(JSON.stringify(forged)),
+            policySha256: createHash("sha256").update(JSON.stringify(forged), "utf8").digest("hex"),
+          },
+        });
+      }
+      const at = new Date().toISOString();
+      const evidence = await recordPublicAdapterPaperQuoteEvidence(
+        first.prisma,
+        owner,
+        ledgerId,
+        market,
+        {
+          venue: "okx",
+          kind: "spot",
+          symbol: "SOL-USDT",
+          observedAt: at,
+          fetchedAt: at,
+          bid: "100",
+          ask: "100.1",
+          quoteVolume24h: "100000",
+        },
+      );
+      return { ledgerId, evidence };
+    };
+
+    const unaudited = await makeLedger("unaudited", false);
+    const baseSignal = {
+      kind: "proposal",
+      executionStatus: "research_only",
+      strategyId: "b7-race",
+      strategyVersion: "1",
+      createdAt: new Date(Date.now() - 1000).toISOString(),
+      expiresAt: new Date(Date.now() + 120_000).toISOString(),
+      evidenceIds: ["research-only"],
+      market,
+      action: "spot_buy",
+      entryTrigger: "100.1",
+      stopLoss: "95",
+      takeProfit: ["110"],
+      invalidation: "fixture",
+      rationale: "Synthetic competing B7 verification",
+      riskBudgetQuote: "10",
+      maxSlippageBps: null,
+    } as const;
+    await expect(
+      reserveApprovedTradingPaperSignal(
+        first.prisma,
+        owner,
+        unaudited.ledgerId,
+        { ...baseSignal, signalId: `b7-unaudited-${suffix}` },
+        unaudited.evidence.id,
+      ),
+    ).resolves.toMatchObject({ status: "deny", reason: "paper_capability_unapproved" });
+    expect(
+      await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId: unaudited.ledgerId } }),
+    ).toBe(0);
+
+    const race = await makeLedger("audited", true);
+    const [a, b] = await Promise.all([
+      reserveApprovedTradingPaperSignal(
+        first.prisma,
+        owner,
+        race.ledgerId,
+        { ...baseSignal, signalId: `b7-race-a-${suffix}` },
+        race.evidence.id,
+      ),
+      reserveApprovedTradingPaperSignal(
+        second.prisma,
+        owner,
+        race.ledgerId,
+        { ...baseSignal, signalId: `b7-race-b-${suffix}` },
+        race.evidence.id,
+      ),
+    ]);
+    expect([a.status, b.status].filter((status) => status === "reserved")).toHaveLength(1);
+    expect([a, b].filter((result) => result.status === "deny")).toHaveLength(1);
+    expect(
+      await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId: race.ledgerId } }),
+    ).toBe(1);
+    expect(
+      await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId: race.ledgerId } }),
+    ).toBe(1);
+    expect(
+      await first.prisma.tradingPaperReservationDecision.count({
+        where: { ledgerId: race.ledgerId },
+      }),
+    ).toBe(1);
   });
 });

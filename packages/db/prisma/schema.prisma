@@ -1394,6 +1394,7 @@ model TradingPaperLedger {
   quoteEvidence       TradingPaperQuoteEvidence[]
   stopGuards          TradingPaperStopGuard[]
   policyAudits        TradingPaperPolicyAudit[]
+  reservationDecisions TradingPaperReservationDecision[]
 
   @@index([spaceId, ownerUserId])
   @@map("trading_paper_ledgers")
@@ -1460,7 +1461,38 @@ model TradingPaperPolicyAudit {
   createdAt     DateTime           @default(now())
 
   @@index([ledgerId, createdAt])
+  @@unique([ledgerId, toRevision])
   @@map("trading_paper_policy_audits")
+}
+
+/** Durable idempotency/audit for an internal synthetic PAPER reserve only. */
+model TradingPaperReservationDecision {
+  ledgerId               String
+  signalId               String
+  ledger                 TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  requestSha256          String
+  decisionSha256         String
+  evidenceId             String
+  policyApprovalEffectId String
+  policyRevision         Int
+  ledgerRevisionBefore   Int
+  eventSequence          Int
+  eventId                String
+  reservationId          String
+  quantityBase           String
+  heldQuote              String
+  worstCaseStopRiskQuote String
+  stopPriceQuote         String
+  conservativeEntryQuote String
+  conservativeStopQuote  String
+  expiresAt              DateTime
+  createdAt              DateTime @default(now())
+
+  @@id([ledgerId, signalId])
+  @@unique([ledgerId, eventId])
+  @@unique([ledgerId, reservationId])
+  @@index([ledgerId, createdAt])
+  @@map("trading_paper_reservation_decisions")
 }
 
 /** Evidence only: no broker data, account keys or risk approval.
