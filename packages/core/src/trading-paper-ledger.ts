@@ -138,7 +138,8 @@ export function replayTradingPaperLedger(raw: TradingPaperLedgerInput): TradingP
     } else if (event.kind === "fill_buy") {
       const reservation = reservations.get(event.reservationId);
       if (!reservation) throw new Error("Paper buy requires an outstanding reservation");
-      if (occurred >= reservation.expiresAt) throw new Error("Paper fill at or after reservation expiry");
+      if (occurred >= reservation.expiresAt)
+        throw new Error("Paper fill at or after reservation expiry");
       const qty = units(event.quantityBase);
       const price = units(event.executedPriceQuote);
       const fee = units(event.feeQuote);
