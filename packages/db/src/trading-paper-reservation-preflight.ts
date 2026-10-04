@@ -61,7 +61,8 @@ export async function preflightTradingPaperReservation(
           signal.market.status !== "active" ||
           signal.market.quote !== state.quoteCurrency ||
           !policy.allowedVenues.includes(signal.market.venue)
-        ) return deny("unsupported_instrument");
+        )
+          return deny("unsupported_instrument");
         // P9 book-cost is not an attested mark/stop risk source. No optimistic
         // zero exposure assumptions may be fabricated from an AI proposal.
         if (state.positions.length > 0 || state.reservations.length > 0) {

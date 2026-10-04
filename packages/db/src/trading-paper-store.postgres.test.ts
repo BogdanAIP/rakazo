@@ -215,20 +215,29 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     const verified = await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId);
     expect(verified.revision).toBe(0);
     expect(verified.policy).toEqual(policy);
-    const noMutation = await preflightTradingPaperReservation(
-      second.prisma,
-      owner,
-      ledgerId,
-      { kind: "no_trade", signalId: "synthetic-abstain", strategyId: "test",
-        strategyVersion: "1", createdAt: "2026-10-04T08:01:00.000Z",
-        expiresAt: "2026-10-04T09:01:00.000Z", evidenceIds: ["offline"], reason: "no signal" },
-    );
+    const noMutation = await preflightTradingPaperReservation(second.prisma, owner, ledgerId, {
+      kind: "no_trade",
+      signalId: "synthetic-abstain",
+      strategyId: "test",
+      strategyVersion: "1",
+      createdAt: "2026-10-04T08:01:00.000Z",
+      expiresAt: "2026-10-04T09:01:00.000Z",
+      evidenceIds: ["offline"],
+      reason: "no signal",
+    });
     expect(noMutation).toMatchObject({
       status: "deny",
       reason: "policy_disabled",
       ledgerRevision: 7,
       policyRevision: 0,
     });
+    const [one, two] = await Promise.all([
+      preflightTradingPaperReservation(first.prisma, owner, ledgerId, null),
+      preflightTradingPaperReservation(second.prisma, owner, ledgerId, null),
+    ]);
+    expect(one.reason).toBe("policy_disabled");
+    expect(two.reason).toBe("policy_disabled");
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(7);
     await expect(
       readVerifiedTradingPaperRiskPolicy(
         second.prisma,

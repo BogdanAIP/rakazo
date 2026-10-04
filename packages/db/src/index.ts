@@ -14,6 +14,7 @@ export * from "./model-credentials.js";
 export * from "./repos.js";
 export * from "./scope.js";
 export * from "./spaces.js";
+export * from "./trading-paper-reservation-preflight.js";
 export {
   createDisabledTradingPaperRiskPolicy,
   PaperRiskPolicyIntegrityError,
@@ -26,7 +27,6 @@ export {
   PaperLedgerIntegrityError,
   readVerifiedTradingPaperLedger,
 } from "./trading-paper-store.js";
-export * from "./trading-paper-reservation-preflight.js";
 export * from "./transaction-retry.js";
 export * from "./voice-credentials.js";
 export * from "./windows-hosts.js";

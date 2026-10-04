@@ -252,7 +252,11 @@ export async function appendTradingPaperLedgerEvent(
   return withTransactionRetry(() =>
     prisma.$transaction(
       async (tx) => {
-        const { row, events, state } = await recoverTradingPaperLedgerInTransaction(tx, owner, event.ledgerId);
+        const { row, events, state } = await recoverTradingPaperLedgerInTransaction(
+          tx,
+          owner,
+          event.ledgerId,
+        );
         const existing = events.find((entry) => entry.eventId === event.eventId);
         if (existing) {
           if (payload(existing) !== payload(event)) {
