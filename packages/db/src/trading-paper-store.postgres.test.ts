@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { TradingInstrumentSchema } from "@rakazo/contracts";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb } from "./client.js";
 import {
   appendTradingPaperLedgerEvent,
@@ -21,8 +21,12 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     spaceId: `paper-race-space-${suffix}`,
   };
   const orgId = `paper-race-org-${suffix}`;
-  const first = createDb(databaseUrl!, { poolMax: 2, applicationName: "paper-race-first" });
-  const second = createDb(databaseUrl!, { poolMax: 2, applicationName: "paper-race-second" });
+  let first: ReturnType<typeof createDb>;
+  let second: ReturnType<typeof createDb>;
+  beforeAll(() => {
+    first = createDb(databaseUrl!, { poolMax: 2, applicationName: "paper-race-first" });
+    second = createDb(databaseUrl!, { poolMax: 2, applicationName: "paper-race-second" });
+  });
   const market = TradingInstrumentSchema.parse({
     venue: "okx",
     kind: "spot",
@@ -50,6 +54,7 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
   });
 
   afterAll(async () => {
+    if (!first || !second) return;
     try {
       await first.prisma.organization.deleteMany({ where: { id: orgId } });
       await first.prisma.user.deleteMany({ where: { id: owner.userId } });
