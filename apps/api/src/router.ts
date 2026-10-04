@@ -1634,6 +1634,21 @@ export function createRouter(deps: RouterDeps) {
       }),
       remove: authed.bots.remove.handler(async ({ context, input }) => {
         const bot = await repos.getBot(context.actor, input.botId, { includeArchived: true });
+        // P12: the journal must survive Bot archival and cannot be cascade-deleted
+        // or left with missing history. Use archive, not deletion, for bound Bots.
+        const paperLedger = await deps.prisma.tradingPaperLedger.findFirst({
+          where: {
+            botId: bot.id,
+            spaceId: context.actor.spaceId,
+            ownerUserId: context.actor.userId,
+          },
+          select: { id: true },
+        });
+        if (paperLedger) {
+          throw new ORPCError("CONFLICT", {
+            message: "This Bot has a permanent paper journal; archive it instead of deleting it",
+          });
+        }
         await destroyBot(
           {
             prisma: deps.prisma,

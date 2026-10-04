@@ -173,22 +173,39 @@ export async function recoverTradingPaperLedgerInTransaction(
 }
 
 /**
- * Creates a disabled/inert synthetic ledger, not a deposit or an executable
- * paper account. Membership is checked within the same transaction.
+ * INTERNAL factory for a disabled/inert synthetic ledger in the caller's
+ * serializable transaction. Only a trusted authenticated service may supply
+ * botId; it is checked against a locked active Rakazo Bot and current space.
+ * Ordinary P10/P11 creation remains legacy/unbound by default.
  */
-export async function createTradingPaperLedger(
-  prisma: PaperStoreDb,
+export async function createTradingPaperLedgerInTransaction(
+  tx: Prisma.TransactionClient,
   owner: Owner,
   raw: Omit<TradingPaperLedgerInput, "events" | "version">,
+  botId?: string,
 ): Promise<TradingPaperLedgerState> {
   const input = TradingPaperLedgerInputSchema.parse({
     ...raw,
     version: VERSION,
     events: [],
   });
+  await assertMember(tx, owner);
+  if (botId !== undefined) {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>(
+      Prisma.sql`SELECT b."id" FROM "bots" b
+        INNER JOIN "spaces" s ON s."id" = b."spaceId"
+        WHERE b."id" = ${botId}
+          AND b."spaceId" = ${owner.spaceId}
+          AND b."userId" = ${owner.userId}
+          AND b."archivedAt" IS NULL
+          AND s."deletingAt" IS NULL
+        FOR UPDATE OF b`,
+    );
+    if (rows.length !== 1 || rows[0]?.id !== botId)
+      throw new PaperLedgerIntegrityError("Active owned trading Bot unavailable");
+  }
   const openedAt = new Date(input.openedAt).toISOString();
-  const base = { ...input, openedAt };
-  const state = replayTradingPaperLedger(base);
+  const state = replayTradingPaperLedger({ ...input, openedAt });
   const head = genesis({
     ledgerId: input.ledgerId,
     spaceId: owner.spaceId,
@@ -197,27 +214,33 @@ export async function createTradingPaperLedger(
     quoteCurrency: input.quoteCurrency,
     initialBalanceQuote: input.initialBalanceQuote,
   });
-  return prisma.$transaction(
-    async (tx) => {
-      await assertMember(tx, owner);
-      await tx.tradingPaperLedger.create({
-        data: {
-          id: input.ledgerId,
-          spaceId: owner.spaceId,
-          ownerUserId: owner.userId,
-          openedAt: new Date(openedAt),
-          quoteCurrency: input.quoteCurrency,
-          initialBalanceQuote: input.initialBalanceQuote,
-          version: 0,
-          projection: asJson(state),
-          projectionSha256: sha256(stateJson(state)),
-          headSha256: head,
-        },
-      });
-      return state;
+  await tx.tradingPaperLedger.create({
+    data: {
+      id: input.ledgerId,
+      spaceId: owner.spaceId,
+      ownerUserId: owner.userId,
+      ...(botId === undefined ? {} : { botId }),
+      openedAt: new Date(openedAt),
+      quoteCurrency: input.quoteCurrency,
+      initialBalanceQuote: input.initialBalanceQuote,
+      version: 0,
+      projection: asJson(state),
+      projectionSha256: sha256(stateJson(state)),
+      headSha256: head,
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-  );
+  });
+  return state;
+}
+
+/** Legacy DB-only P10 entrypoint remains unchanged and does not bind a Bot. */
+export async function createTradingPaperLedger(
+  prisma: PaperStoreDb,
+  owner: Owner,
+  raw: Omit<TradingPaperLedgerInput, "events" | "version">,
+): Promise<TradingPaperLedgerState> {
+  return prisma.$transaction((tx) => createTradingPaperLedgerInTransaction(tx, owner, raw), {
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+  });
 }
 
 /** Read-only independently verified projection; no action permissions exposed. */
