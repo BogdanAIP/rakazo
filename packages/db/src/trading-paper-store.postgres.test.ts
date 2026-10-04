@@ -1363,7 +1363,7 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       }),
     ).toBe(1);
   });
-  it("P11C-0 releases expired synthetic holds idempotently under trusted-clock reconciliation", async () => {
+  it("P11C-0 rejects legacy P9 expiry reconciliation without a B7 decision", async () => {
     const ledgerId = `paper-b8-expired-${suffix}`;
     const now = Date.now();
     await createTradingPaperLedger(first.prisma, owner, {
@@ -1388,6 +1388,8 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     });
     const enable = await makePaperControlEffect(ledgerId, "b8-expired-enable", "enable", 0);
     await applyApprovedTradingPaperControl(first.prisma, owner, enable.id);
+    // A direct P9 append deliberately has NO B7 reservation decision. It is
+    // not a managed C0 hold and may not be silently upgraded by reconciliation.
     await appendTradingPaperLedgerEvent(first.prisma, owner, {
       ledgerId,
       eventId: `b8-expired-reserve-event-${suffix}`,
@@ -1406,19 +1408,16 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     ).toBe("110");
     await expect(
       reconcileTradingPaperReservations(second.prisma, owner, ledgerId),
-    ).resolves.toEqual({ released: 1, reason: "expired" });
+    ).rejects.toBeInstanceOf(PaperLifecycleAuditError);
     const recovered = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);
-    expect(recovered.reservations).toHaveLength(0);
-    expect(recovered.availableQuote).toBe("500");
-    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(2);
-    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(2);
-    expect(
-      await first.prisma.tradingPaperReleaseAudit.findMany({ where: { ledgerId } }),
-    ).toMatchObject([{ reason: "expired", releasedQuote: "110", policyRevision: 1 }]);
+    expect(recovered.reservations).toHaveLength(1);
+    expect(recovered.availableQuote).toBe("390");
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(1);
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(1);
+    expect(await first.prisma.tradingPaperReleaseAudit.count({ where: { ledgerId } })).toBe(0);
     await expect(
       reconcileTradingPaperReservations(second.prisma, owner, ledgerId),
-    ).resolves.toEqual({ released: 0, reason: "expired" });
-    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(2);
+    ).rejects.toBeInstanceOf(PaperLifecycleAuditError);
   });
 
   it("P11C-0 approved disable atomically releases an outstanding B7 hold but never creates a fill", async () => {
