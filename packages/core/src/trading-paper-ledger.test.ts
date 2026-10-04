@@ -140,6 +140,12 @@ describe("paper spot ledger: idempotent exact-decimal event replay", () => {
     );
     expect(() => run([{ ...reserve, market: { ...market, quote: "USDC" } }])).toThrow("currency");
     expect(() => run([{ ...reserve, quantityBase: "2.001" }])).toThrow("lot-aligned");
+    expect(() =>
+      run([{ ...reserve, market: { ...market, priceIncrement: "0.000000001" } }, buy]),
+    ).toThrow("precision");
+    expect(() =>
+      run([{ ...reserve, market: { ...market, quantityIncrement: "0.000000001" } }]),
+    ).toThrow("precision");
     expect(() => run([reserve, { ...buy, quantityBase: "1" }])).toThrow("full lot");
     expect(() => run([reserve, { ...buy, executedPriceQuote: "100.121" }])).toThrow("tick-aligned");
     expect(() => run([reserve, { ...buy, feeQuote: "25" }])).toThrow("exceeded");
