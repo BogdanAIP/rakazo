@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { TradingPaperLedgerState } from "@rakazo/contracts";
 import type { Prisma } from "./client.js";
+import { assertTradingPaperCallerInTransaction, type PaperBotCaller } from "./trading-paper-bot.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
 import {
   appendTradingPaperLedgerEventInTransaction,
@@ -53,7 +54,9 @@ export async function releaseTradingPaperReservationsInTransaction(
   reason: PaperReleaseReason,
   policyRevision: number,
   nowMs: number,
+  caller?: PaperBotCaller,
 ): Promise<{ released: number; state: TradingPaperLedgerState }> {
+  await assertTradingPaperCallerInTransaction(tx, owner, ledgerId, caller, "protective");
   if (!Number.isFinite(nowMs) || !Number.isSafeInteger(policyRevision) || policyRevision < 0) {
     throw new PaperReleaseIntegrityError("Invalid trusted release clock or policy revision");
   }
@@ -81,7 +84,7 @@ export async function releaseTradingPaperReservationsInTransaction(
       kind: "release",
       recordedAt: releasedAt,
       reservationId: reservation.reservationId,
-    });
+    }, caller);
     if (appended.status !== "appended") {
       throw new PaperReleaseIntegrityError("Fresh reconciliation event unexpectedly duplicated");
     }
