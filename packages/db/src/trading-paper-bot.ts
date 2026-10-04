@@ -8,6 +8,43 @@ import { withTransactionRetry } from "./transaction-retry.js";
 type Db = Pick<PrismaClient, "$transaction">;
 type Owner = { spaceId: string; userId: string };
 
+/** Internal trusted-service identity; always derive from an authenticated Rakazo Bot/Run. */
+export type PaperBotCaller = { botId: string; runId?: string };
+
+/**
+ * A mandatory transaction-local authorization gate for all P12-bound journals.
+ * Legacy NULL journals remain confined to P10/P11's existing internal owner APIs,
+ * and cannot be accessed through a new Bot-scoped caller.
+ * Protective exits, reconciliation and recovery are allowed after archival;
+ * new reservations and virtual buy fills are not.
+ */
+export async function assertTradingPaperCallerInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  ledgerId: string,
+  caller: PaperBotCaller | undefined,
+  action: "new_exposure" | "protective" | "recovery",
+): Promise<void> {
+  const ledger = await tx.tradingPaperLedger.findFirst({
+    where: { id: ledgerId, spaceId: owner.spaceId, ownerUserId: owner.userId },
+    select: { botId: true },
+  });
+  if (!ledger) throw new TradingBotPaperBindingError();
+  if (ledger.botId === null) {
+    if (caller) throw new TradingBotPaperBindingError("Legacy journal cannot be used by a Bot");
+    // Preserve P11 owner-membership authorization, checked by its existing
+    // risk/ledger/audit functions inside this same transaction.
+    return;
+  }
+  if (!caller || caller.botId !== ledger.botId) {
+    throw new TradingBotPaperBindingError("Bound paper journal requires its exact Bot");
+  }
+  await requireTradingBotPaperBindingInTransaction(tx, owner, caller.botId, ledgerId, {
+    ...(caller.runId ? { runId: caller.runId } : {}),
+    allowArchived: action !== "new_exposure",
+  });
+}
+
 export class TradingBotPaperBindingError extends Error {
   constructor(message = "Native trading Bot / paper ledger binding unavailable") {
     super(message);
