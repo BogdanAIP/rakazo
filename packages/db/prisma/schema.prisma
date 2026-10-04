@@ -423,6 +423,7 @@ model Bot {
   mcpServers        BotMcpServer[]
   groupMembers      ChatGroupMember[]
   botSecrets BotSecret[]
+  tradingPaperLedger TradingPaperLedger?
 
   externalConversations ExternalConversation[]
 
@@ -1380,6 +1381,9 @@ model TradingPaperLedger {
   space               Space                     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
   ownerUserId         String
   owner               User                      @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  // Legacy P10/P11 journals remain NULL. Binding is insert-only, protected by SQL trigger.
+  botId               String?                   @unique
+  bot                 Bot?                      @relation(fields: [botId], references: [id], onDelete: Restrict)
   openedAt            DateTime
   quoteCurrency       String
   initialBalanceQuote String
