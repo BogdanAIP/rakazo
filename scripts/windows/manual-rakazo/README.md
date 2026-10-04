@@ -101,3 +101,12 @@ The previous manual controller forced `RAKAZO_WINDOWS_PROCESS_ENABLED=false`, `R
 The dedicated computer remains persistent between ordinary bot runs; ChatGPT can explicitly obtain a user-control lease for direct R computer calls after a run finishes. This does not create indefinite autonomous background action, bypass required control leases, or cause ChatGPT to wake itself up without a new conversation/automation trigger. The user's local GUI still runs only on manual click and no Windows autostart is added.
 
 Historical pilot status: the three Windows Host opt-ins were initially false. The current launcher now explicitly enables them following the owner's request; browser availability still requires a valid private OpenCLI profile/entry.
+
+## Native Windows update controls
+
+The running native tray has three separate commands:
+- Check GitHub updates fetches the current tracking branch and reports local/remote commits and blockers without installing or restarting anything; it accepts only the pinned Rakazo origin and current upstream.
+- Update from GitHub requires an explicit confirmation. It refuses dirty working trees, divergent history and automatic migration/tunnel-control changes. A separate PowerShell process waits for the owning controller to exit and ports 3100/5173 to be free, locks the original controller mutex, rechecks the pinned commit, performs a fast-forward, installs frozen dependencies, checks adapters and launches the existing GUI shortcut. It does not stop PostgreSQL or re-pair R. On failure consult the local native-update-stage.log and recover deliberately.
+- Refresh Plugin R requires confirmation and briefly interrupts R calls in other chats. It verifies the original tunnel ID and PID/start-time, protected credentials and health; stops only the exact verified process and reconnects the same alias. Its local plugin-r-refresh.log records stages.
+
+These controls belong to the native manual-launcher tray, not the packaged Electron/Compose updaters. They become visible after the normal native controller restart. The updater intentionally refuses to overwrite existing local changes such as apps/desktop/src/docker-cli.ts.

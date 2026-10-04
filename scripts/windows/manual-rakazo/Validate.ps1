@@ -2,7 +2,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $script = Join-Path $PSScriptRoot 'Rakazo.ps1'
-foreach ($name in @('Rakazo.ps1', 'Tunnel.Diagnostics.ps1', 'Tunnel.Control.ps1', 'Check-ExistingR.ps1', 'Install-Shortcut.ps1')) {
+foreach ($name in @('Rakazo.ps1', 'Tunnel.Diagnostics.ps1', 'Tunnel.Control.ps1', 'Check-ExistingR.ps1', 'Install-Shortcut.ps1', 'Native.Update.ps1', 'Native.TrayUpdates.ps1', 'Refresh-PluginR.ps1')) {
     $file = Join-Path $PSScriptRoot $name
     $tokens = $null
     $parseErrors = $null
@@ -45,6 +45,20 @@ foreach ($needed in @(
 )) {
     if (-not $installerText.Contains($needed)) {
         throw "Canonical shortcut migration guard absent: $needed"
+    }
+}
+$nativeUpdateText = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Native.Update.ps1'))
+foreach ($required in @('--ff-only', 'Working tree contains local changes', 'Unexpected upstream',
+    'ExpectedTarget', 'RakazoNativeManualController')) {
+    if (-not $nativeUpdateText.Contains($required)) { throw "Native updater guard missing: $required" }
+}
+$refreshText = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Refresh-PluginR.ps1'))
+foreach ($required in @('ExpectedStopPid', 'ExpectedStopStart', 'PASS_SAME_REGISTERED_TUNNEL_NEW_PROCESS')) {
+    if (-not $refreshText.Contains($required)) { throw "Plugin R refresh guard missing: $required" }
+}
+foreach ($fileText in @($nativeUpdateText, $refreshText)) {
+    foreach ($forbidden in @('git reset --hard', 'runtimes create', 'windowsHosts/createPairing')) {
+        if ($fileText.Contains($forbidden)) { throw "Forbidden update operation present: $forbidden" }
     }
 }
 $text = [IO.File]::ReadAllText($script)

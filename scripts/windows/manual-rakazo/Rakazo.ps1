@@ -33,6 +33,7 @@ function Write-RakazoLaunchStage([string]$stage) {
 }
 . (Join-Path $PSScriptRoot 'Tunnel.Diagnostics.ps1')
 . (Join-Path $PSScriptRoot 'Tunnel.Control.ps1')
+. (Join-Path $PSScriptRoot 'Native.TrayUpdates.ps1')
 
 function Test-Http([string]$url) {
     try {
@@ -620,6 +621,7 @@ try {
         [System.Windows.Forms.MessageBox]::Show($message, 'Rakazo status') | Out-Null
     })
     $ctx = [System.Windows.Forms.ApplicationContext]::new()
+    Add-RakazoNativeUpdateMenu -Menu $menu -Context $ctx -Repo $repo -Updater (Join-Path $PSScriptRoot 'Native.Update.ps1')
     $quit.add_Click({ Write-RakazoLaunchStage 'tray quit requested'; $ctx.ExitThread() })
     $tray.ContextMenuStrip = $menu
     $tray.Visible = $true
