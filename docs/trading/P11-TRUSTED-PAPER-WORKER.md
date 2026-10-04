@@ -1,6 +1,6 @@
 # P11 — Trusted Paper Worker and independent Risk Manager: implementation gate
 
-Status: **design/acceptance contract only**, stacked DRAFT after PR #11 / P10. This document does not install, schedule, activate or authorize a worker. Neither the live nor simulated exchange order path exists. The next code slice must not start before the real PostgreSQL P10 races pass on an exact CI head.
+Status: **P11A default-deny policy persistence implemented in a stacked DRAFT**, while P11B/P11C remain acceptance contracts. PR #11 / P10 genuine isolated-PostgreSQL race suite passed on exact head `ae49879289dc823e6f2ebf86c381e8adcfcd9ff6`. This document does not install, schedule, activate or authorize any worker. Neither live nor simulated exchange-order execution exists.
 
 ## Ownership and trust boundaries
 
@@ -9,9 +9,9 @@ Status: **design/acceptance contract only**, stacked DRAFT after PR #11 / P10. T
 - The Paper Worker must be invoked only by an authenticated Rakazo runtime action with owner/space scope, durable idempotency key and a *separately user-authorized, disabled-by-default* paper capability. AI outputs remain untrusted signal proposals, including NO_TRADE.
 - Only deterministic server code assigns event ID, sequence, event timestamp, simulation IDs and the source observation reference. A model cannot supply actor identity, policy, privileged idempotency keys or its own approval.
 
-## P11A — Persist owner-scoped paper policy, default DENY
+## P11A — Persist owner-scoped paper policy, default DENY (first code slice)
 
-Store a policy in existing Prisma schema scoped to one ledger, space and owner. Initialize `enabled=false` and `killSwitch=true` with a monotonically increasing revision and audit record; no implicit enable or migration of the user's working database. Enforce membership and policy ownership on every read/change.
+Implemented schema, migration artifact and DB-only create/read service in `packages/db/src/trading-paper-risk-policy.ts`. There is deliberately no policy enable/update endpoint. Store a policy in existing Prisma schema scoped to one ledger, space and owner. Initialize `enabled=false` and `killSwitch=true` with a monotonically increasing revision and audit record; no implicit enable or migration of the user's working database. Enforce membership and policy ownership on every read/change.
 
 Required bounded fields include paper-only mode, allowed active spot venues/instruments and one quote currency, max total exposure, risk/idea, cumulative day-loss, open stop-risk, positions, per-order cash, quote age, spread, trigger deviation, conservative fee/slippage assumptions, and time-limited signal/reservation eligibility. A policy change is an authenticated user action: neither LLM, backtest, market feed nor paper strategy can raise or disable caps. A kill-switch changes revision and blocks every subsequent reservation; existing outstanding reservations need a separately audited release/reconciliation path.
 

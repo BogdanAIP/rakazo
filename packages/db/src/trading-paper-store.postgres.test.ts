@@ -231,5 +231,4 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     ).rejects.toBeInstanceOf(PaperRiskPolicyIntegrityError);
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(before);
   });
-
 });

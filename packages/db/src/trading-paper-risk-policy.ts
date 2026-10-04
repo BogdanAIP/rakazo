@@ -1,8 +1,5 @@
 import { createHash } from "node:crypto";
-import {
-  type TradingPaperPolicy,
-  TradingPaperPolicySchema,
-} from "@rakazo/contracts";
+import { type TradingPaperPolicy, TradingPaperPolicySchema } from "@rakazo/contracts";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
 import { withTransactionRetry } from "./transaction-retry.js";
@@ -25,7 +22,9 @@ function parsePolicy(value: unknown): TradingPaperPolicy {
   }
 }
 function digest(value: TradingPaperPolicy): string {
-  return createHash("sha256").update(JSON.stringify(parsePolicy(value)), "utf8").digest("hex");
+  return createHash("sha256")
+    .update(JSON.stringify(parsePolicy(value)), "utf8")
+    .digest("hex");
 }
 async function requireOwnedLedger(
   tx: Prisma.TransactionClient,
