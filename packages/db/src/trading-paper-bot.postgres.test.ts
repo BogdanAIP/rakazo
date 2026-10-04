@@ -38,8 +38,10 @@ describePostgres("P12-1A native Bot / paper ledger immutable scope", () => {
     const createdAt = new Date();
     await first.prisma.user.create({
       data: {
-        id: owner.userId, name: "Native Bot Paper Fixture",
-        email: `${owner.userId}@rakazo.test`, emailVerified: false,
+        id: owner.userId,
+        name: "Native Bot Paper Fixture",
+        email: `${owner.userId}@rakazo.test`,
+        emailVerified: false,
       },
     });
     await first.prisma.organization.create({
@@ -47,27 +49,40 @@ describePostgres("P12-1A native Bot / paper ledger immutable scope", () => {
     });
     await first.prisma.member.create({
       data: {
-        id: `bot-ledger-member-${suffix}`, organizationId: orgId,
-        userId: owner.userId, role: "member", createdAt,
+        id: `bot-ledger-member-${suffix}`,
+        organizationId: orgId,
+        userId: owner.userId,
+        role: "member",
+        createdAt,
       },
     });
     await first.prisma.space.create({
       data: {
-        id: owner.spaceId, organizationId: orgId, name: "Native Bot Paper Fixture",
-        isDefault: false, createdByUserId: owner.userId,
+        id: owner.spaceId,
+        organizationId: orgId,
+        name: "Native Bot Paper Fixture",
+        isDefault: false,
+        createdByUserId: owner.userId,
       },
     });
     await first.prisma.spaceMember.create({
       data: {
-        id: `bot-ledger-space-member-${suffix}`, spaceId: owner.spaceId,
-        organizationId: orgId, userId: owner.userId, role: "owner", createdAt,
+        id: `bot-ledger-space-member-${suffix}`,
+        spaceId: owner.spaceId,
+        organizationId: orgId,
+        userId: owner.userId,
+        role: "owner",
+        createdAt,
       },
     });
     for (const botId of [botA, botB]) {
       await first.prisma.bot.create({
         data: {
-          id: botId, spaceId: owner.spaceId, userId: owner.userId,
-          name: "Paper Research Bot", color: "#000000",
+          id: botId,
+          spaceId: owner.spaceId,
+          userId: owner.userId,
+          name: "Paper Research Bot",
+          color: "#000000",
         },
       });
     }
@@ -91,10 +106,12 @@ describePostgres("P12-1A native Bot / paper ledger immutable scope", () => {
   it("locks a native Bot and permits at most one newly bound ledger across two clients", async () => {
     const attempted = await Promise.allSettled([
       createTradingBotPaperLedger(first.prisma, owner, botA, {
-        quoteCurrency: "USDT", initialBalanceQuote: "1000",
+        quoteCurrency: "USDT",
+        initialBalanceQuote: "1000",
       }),
       createTradingBotPaperLedger(second.prisma, owner, botA, {
-        quoteCurrency: "USDT", initialBalanceQuote: "2000",
+        quoteCurrency: "USDT",
+        initialBalanceQuote: "2000",
       }),
     ]);
     const wins = attempted.filter((x) => x.status === "fulfilled");
@@ -106,34 +123,47 @@ describePostgres("P12-1A native Bot / paper ledger immutable scope", () => {
     expect(wins[0].value.botId).toBe(botA);
     expect(await first.prisma.tradingPaperLedger.count({ where: { botId: botA } })).toBe(1);
     expect(await readTradingBotPaperBinding(second.prisma, owner, botA, ledgerA)).toEqual({
-      botId: botA, ledgerId: ledgerA, mode: "paper_only",
+      botId: botA,
+      ledgerId: ledgerA,
+      mode: "paper_only",
     });
-    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId: ledgerA } })).toBe(0);
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId: ledgerA } })).toBe(
+      0,
+    );
   });
 
   it("isolates two Bots and rejects wrong owners, spaces, cross-Bot reads and allocations", async () => {
     const b = await createTradingBotPaperLedger(second.prisma, owner, botB, {
-      quoteCurrency: "USDT", initialBalanceQuote: "600",
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "600",
     });
     ledgerB = b.ledgerId;
     expect(ledgerB).not.toBe(ledgerA);
-    await expect(readTradingBotPaperBinding(first.prisma, owner, botA, ledgerB))
-      .rejects.toBeInstanceOf(TradingBotPaperBindingError);
-    await expect(readTradingBotPaperBinding(second.prisma, owner, botB, ledgerA))
-      .rejects.toBeInstanceOf(TradingBotPaperBindingError);
+    await expect(
+      readTradingBotPaperBinding(first.prisma, owner, botA, ledgerB),
+    ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
+    await expect(
+      readTradingBotPaperBinding(second.prisma, owner, botB, ledgerA),
+    ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
     await expect(
       readTradingBotPaperBinding(first.prisma, { ...owner, userId: "foreign" }, botA, ledgerA),
     ).rejects.toBeInstanceOf(TradingBotPaperBindingError);
     await expect(
       createTradingBotPaperLedger(second.prisma, { ...owner, spaceId: "foreign-space" }, botA, {
-        quoteCurrency: "USDT", initialBalanceQuote: "5",
+        quoteCurrency: "USDT",
+        initialBalanceQuote: "5",
       }),
     ).rejects.toThrow();
     expect(await first.prisma.tradingPaperLedger.count({ where: { botId: botA } })).toBe(1);
     expect(await second.prisma.tradingPaperLedger.count({ where: { botId: botB } })).toBe(1);
   });
 
-  const makeEffect = async (label: string, botId: string, action: "enable" | "disable", revision: number) => {
+  const makeEffect = async (
+    label: string,
+    botId: string,
+    action: "enable" | "disable",
+    revision: number,
+  ) => {
     const threadId = `bot-ledger-thread-${label}-${suffix}`;
     const taskId = `bot-ledger-task-${label}-${suffix}`;
     const runId = `bot-ledger-run-${label}-${suffix}`;
@@ -146,20 +176,30 @@ describePostgres("P12-1A native Bot / paper ledger immutable scope", () => {
     }
     await first.prisma.task.create({
       data: {
-        id: taskId, spaceId: owner.spaceId, botId, threadId: resolvedThreadId, userId: owner.userId,
-        prompt: "fixture only", status: "running",
+        id: taskId,
+        spaceId: owner.spaceId,
+        botId,
+        threadId: resolvedThreadId,
+        userId: owner.userId,
+        prompt: "fixture only",
+        status: "running",
       },
     });
     await first.prisma.run.create({
       data: {
-        id: runId, spaceId: owner.spaceId, botId, threadId: resolvedThreadId, taskId,
-        userId: owner.userId, status: "running", trigger: "user",
+        id: runId,
+        spaceId: owner.spaceId,
+        botId,
+        threadId: resolvedThreadId,
+        taskId,
+        userId: owner.userId,
+        status: "running",
+        trigger: "user",
       },
     });
     return first.prisma.externalEffect.create({
       data: {
-        id: `bot-ledger-effect-${label}-${suffix}`, spaceId: owner.spaceId,
-        runId, kind: "paper_trading_control",
+        id: `bot-ledger-effect-${label}-${suffix}`,
         idempotencyKey: `bot-ledger-effect-key-${label}-${suffix}`,
         status: "executing",
         request: { action, ledger_id: ledgerA, expected_policy_revision: revision },
