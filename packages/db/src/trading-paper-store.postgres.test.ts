@@ -2,12 +2,15 @@ import { createHash, randomUUID } from "node:crypto";
 import { TradingInstrumentSchema, TradingPaperPolicySchema } from "@rakazo/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb } from "./client.js";
-import { auditTradingPaperLifecycle, PaperLifecycleAuditError } from "./trading-paper-lifecycle-audit.js";
 import { closeTradingPaperPositionOnStop, PaperCloseConflictError } from "./trading-paper-close.js";
 import {
   fillApprovedTradingPaperReservation,
   PaperFillConflictError,
 } from "./trading-paper-fill.js";
+import {
+  auditTradingPaperLifecycle,
+  PaperLifecycleAuditError,
+} from "./trading-paper-lifecycle-audit.js";
 import {
   PaperQuoteEvidenceError,
   readVerifiedPaperQuoteEvidence,
@@ -2191,8 +2194,9 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
         where: { ledgerId_positionId: { ledgerId: closedId, positionId: close.positionId } },
         data: { decisionSha256: "0".repeat(64) },
       });
-      await expect(auditTradingPaperLifecycle(restarted.prisma, owner, closedId))
-        .rejects.toBeInstanceOf(PaperLifecycleAuditError);
+      await expect(
+        auditTradingPaperLifecycle(restarted.prisma, owner, closedId),
+      ).rejects.toBeInstanceOf(PaperLifecycleAuditError);
       await first.prisma.tradingPaperCloseDecision.update({
         where: { ledgerId_positionId: { ledgerId: closedId, positionId: close.positionId } },
         data: { decisionSha256: close.decisionSha256 },
@@ -2203,8 +2207,9 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       await first.prisma.tradingPaperCloseDecision.delete({
         where: { ledgerId_positionId: { ledgerId: closedId, positionId: close.positionId } },
       });
-      await expect(auditTradingPaperLifecycle(restarted.prisma, owner, closedId))
-        .rejects.toBeInstanceOf(PaperLifecycleAuditError);
+      await expect(
+        auditTradingPaperLifecycle(restarted.prisma, owner, closedId),
+      ).rejects.toBeInstanceOf(PaperLifecycleAuditError);
 
       const openId = `paper-c1-fill-${suffix}`;
       const open = await auditTradingPaperLifecycle(restarted.prisma, owner, openId);

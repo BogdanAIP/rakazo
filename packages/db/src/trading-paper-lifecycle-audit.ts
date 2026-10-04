@@ -83,7 +83,6 @@ export async function auditTradingPaperLifecycleInTransaction(
   const byClose = new Map(closes.map((entry) => [entry.positionId, entry] as const));
   const reserveEvents = new Map(reserves.map((event) => [event.reservationId, event] as const));
   const buyEvents = new Map(buys.map((event) => [event.reservationId, event] as const));
-  const sellEvents = new Map(sells.map((event) => [event.positionId, event] as const));
   const outboxSequences = new Set(outbox.map((entry) => entry.sequence));
   assert(
     outboxSequences.size === outbox.length &&
@@ -92,11 +91,13 @@ export async function auditTradingPaperLifecycleInTransaction(
   );
 
   // Check original one-time owner approval for every synthetic reserve/fill/close.
-  const approvalIds = [...new Set([
-    ...reservations.map((entry) => entry.policyApprovalEffectId),
-    ...fills.map((entry) => entry.policyApprovalEffectId),
-    ...closes.map((entry) => entry.policyApprovalEffectId),
-  ])];
+  const approvalIds = [
+    ...new Set([
+      ...reservations.map((entry) => entry.policyApprovalEffectId),
+      ...fills.map((entry) => entry.policyApprovalEffectId),
+      ...closes.map((entry) => entry.policyApprovalEffectId),
+    ]),
+  ];
   const approvals = await tx.tradingPaperPolicyAudit.findMany({
     where: { ledgerId, effectId: { in: approvalIds } },
   });
@@ -129,14 +130,26 @@ export async function auditTradingPaperLifecycleInTransaction(
       "Reserve event missing its matching decision",
     );
     assert(
-      decision.decisionSha256 === hash([
-        decision.ledgerId, decision.signalId, decision.requestSha256, decision.evidenceId,
-        decision.policyApprovalEffectId, decision.policyRevision, decision.ledgerRevisionBefore,
-        decision.eventSequence, decision.eventId, decision.reservationId, decision.quantityBase,
-        decision.heldQuote, decision.worstCaseStopRiskQuote, decision.stopPriceQuote,
-        decision.conservativeEntryQuote, decision.conservativeStopQuote,
-        decision.expiresAt.toISOString(),
-      ]),
+      decision.decisionSha256 ===
+        hash([
+          decision.ledgerId,
+          decision.signalId,
+          decision.requestSha256,
+          decision.evidenceId,
+          decision.policyApprovalEffectId,
+          decision.policyRevision,
+          decision.ledgerRevisionBefore,
+          decision.eventSequence,
+          decision.eventId,
+          decision.reservationId,
+          decision.quantityBase,
+          decision.heldQuote,
+          decision.worstCaseStopRiskQuote,
+          decision.stopPriceQuote,
+          decision.conservativeEntryQuote,
+          decision.conservativeStopQuote,
+          decision.expiresAt.toISOString(),
+        ]),
       "Reserve decision digest mismatch",
     );
     approved(decision.policyApprovalEffectId, decision.policyRevision);
@@ -164,19 +177,31 @@ export async function auditTradingPaperLifecycleInTransaction(
       "Buy event missing its matching fill decision",
     );
     assert(
-      record.decisionSha256 === hash([
-        record.ledgerId, record.reservationId, record.requestSha256, record.evidenceId,
-        record.policyApprovalEffectId, record.policyRevision, record.reserveEventSequence,
-        record.fillEventSequence, record.fillEventId, record.quantityBase,
-        record.executedPriceQuote, record.feeQuote, record.stopPriceQuote,
-        record.filledAt.toISOString(),
-      ]),
+      record.decisionSha256 ===
+        hash([
+          record.ledgerId,
+          record.reservationId,
+          record.requestSha256,
+          record.evidenceId,
+          record.policyApprovalEffectId,
+          record.policyRevision,
+          record.reserveEventSequence,
+          record.fillEventSequence,
+          record.fillEventId,
+          record.quantityBase,
+          record.executedPriceQuote,
+          record.feeQuote,
+          record.stopPriceQuote,
+          record.filledAt.toISOString(),
+        ]),
       "Fill decision digest mismatch",
     );
     approved(record.policyApprovalEffectId, record.policyRevision);
-    costs.set(event.reservationId,
+    costs.set(
+      event.reservationId,
       (units(event.quantityBase) * units(event.executedPriceQuote) + SCALE - 1n) / SCALE +
-        units(event.feeQuote));
+        units(event.feeQuote),
+    );
   }
 
   for (const event of releaseEvents) {
@@ -196,19 +221,27 @@ export async function auditTradingPaperLifecycleInTransaction(
       "Release audit disagrees with terminal reservation state",
     );
     assert(
-      record.releaseSha256 === hash([
-        record.ledgerId, record.reservationId, record.eventSequence, record.eventId,
-        record.reason, record.policyRevision, record.releasedQuote,
-        record.releasedAt.toISOString(),
-      ]),
+      record.releaseSha256 ===
+        hash([
+          record.ledgerId,
+          record.reservationId,
+          record.eventSequence,
+          record.eventId,
+          record.reason,
+          record.policyRevision,
+          record.releasedQuote,
+          record.releasedAt.toISOString(),
+        ]),
       "Release audit digest mismatch",
     );
   }
   for (const event of reserves) {
     const id = event.reservationId;
     assert(
-      Number(byFill.has(id)) + Number(byRelease.has(id)) +
-        Number(state.reservations.some((r) => r.reservationId === id)) === 1,
+      Number(byFill.has(id)) +
+        Number(byRelease.has(id)) +
+        Number(state.reservations.some((r) => r.reservationId === id)) ===
+        1,
       "Reserve has zero or multiple terminal/current states",
     );
   }
@@ -234,25 +267,39 @@ export async function auditTradingPaperLifecycleInTransaction(
       "Sell event missing its matching close decision",
     );
     assert(
-      record.decisionSha256 === hash([
-        record.ledgerId, record.positionId, record.requestSha256, record.evidenceId,
-        record.policyApprovalEffectId, record.policyRevision, record.buyFillEventSequence,
-        record.closeEventSequence, record.closeEventId, record.quantityBase,
-        record.executedPriceQuote, record.feeQuote, record.stopPriceQuote,
-        record.closedAt.toISOString(),
-      ]),
+      record.decisionSha256 ===
+        hash([
+          record.ledgerId,
+          record.positionId,
+          record.requestSha256,
+          record.evidenceId,
+          record.policyApprovalEffectId,
+          record.policyRevision,
+          record.buyFillEventSequence,
+          record.closeEventSequence,
+          record.closeEventId,
+          record.quantityBase,
+          record.executedPriceQuote,
+          record.feeQuote,
+          record.stopPriceQuote,
+          record.closedAt.toISOString(),
+        ]),
       "Close decision digest mismatch",
     );
     approved(record.policyApprovalEffectId, record.policyRevision);
-    const received = (units(event.quantityBase) * units(event.executedPriceQuote)) / SCALE -
-      units(event.feeQuote);
+    const received =
+      (units(event.quantityBase) * units(event.executedPriceQuote)) / SCALE - units(event.feeQuote);
     realized += received - cost;
   }
-  assert(decimal(realized) === state.realizedPnlQuote, "Independent realized PnL reconciliation failed");
+  assert(
+    decimal(realized) === state.realizedPnlQuote,
+    "Independent realized PnL reconciliation failed",
+  );
   for (const event of buys) {
     assert(
       Number(byClose.has(event.reservationId)) +
-        Number(state.positions.some((position) => position.positionId === event.reservationId)) === 1,
+        Number(state.positions.some((position) => position.positionId === event.reservationId)) ===
+        1,
       "Buy has zero or multiple close/current states",
     );
   }
@@ -262,7 +309,10 @@ export async function auditTradingPaperLifecycleInTransaction(
   assert(guards && guards.length === state.positions.length, "Missing verified open stop guard");
   for (const guard of guards) {
     const fill = byFill.get(guard.positionId);
-    assert(fill && guard.stopPriceQuote === fill.stopPriceQuote, "Open guard differs from fill decision");
+    assert(
+      fill && guard.stopPriceQuote === fill.stopPriceQuote,
+      "Open guard differs from fill decision",
+    );
   }
   const risk = deriveTradingPaperRiskState(
     {
