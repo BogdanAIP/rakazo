@@ -7,6 +7,15 @@ describe("ChatGPT shared context", () => {
       "bots/list": [{ id: "bot-1", name: "Test", status: "idle" }],
       "memory/list": [{ id: "m", content: "Shared", revision: 1 }],
       "scratchpad/list": [],
+      "projects/list": [
+        {
+          id: "project-1",
+          slug: "rakazo",
+          name: "Rakazo",
+          description: "Control plane",
+          memoryRevision: 1,
+        },
+      ],
       "agentSkills/list": [],
       "runs/list": { runs: [] },
       "routines/list": [],
@@ -19,6 +28,16 @@ describe("ChatGPT shared context", () => {
     });
     expect(output.bot).toEqual({ id: "bot-1", name: "Test", status: "idle" });
     expect(calls).toContain("memory/list");
+    expect(output.projects).toEqual([
+      {
+        id: "project-1",
+        slug: "rakazo",
+        name: "Rakazo",
+        description: "Control plane",
+        memoryRevision: 1,
+        updatedAt: undefined,
+      },
+    ]);
     expect(calls).not.toContain("memory/update");
   });
   it("requires an explicit bot when more than one exists", async () => {

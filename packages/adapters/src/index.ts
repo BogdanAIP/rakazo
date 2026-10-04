@@ -65,6 +65,7 @@ export * from "./integration-provider-settings.js";
 export * from "./jev-auto-review.js";
 export * from "./job-reconciler.js";
 export * from "./keyless-http-web.js";
+export { assertConnectorToolArgs } from "./lazy-tool-catalog.js";
 export * from "./mcp-connector.js";
 export * from "./mcp-emulator.js";
 export * from "./mcp-oauth.js";

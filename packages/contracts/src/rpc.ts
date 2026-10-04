@@ -23,6 +23,9 @@ import {
   BotSchema,
   BotSectionSchema,
   CapabilityInstallSchema,
+  CapabilityInvocationResultSchema,
+  CapabilityToolRouteSchema,
+  CapabilityToolSchema,
   ComputerModeSchema,
   ComputerReleaseReasonSchema,
   ComputerStatusSchema,
@@ -53,6 +56,10 @@ import {
   ModelConnectInputSchema,
   ModelCredentialSchema,
   ModelOAuthBeginSchema,
+  ProjectResourceSchema,
+  ProjectSchema,
+  ProjectSlugSchema,
+  ProjectSummarySchema,
   REPLY_QUOTE_MAX_LENGTH,
   ReorderBotsInput,
   RoutineSchema,
@@ -579,6 +586,7 @@ export const appContract = {
       .input(
         z.object({
           botId: Id,
+          projectId: Id.optional(),
           status: ScratchpadItemStatusSchema.optional(),
           includeDone: z.boolean().optional(),
         }),
@@ -589,6 +597,7 @@ export const appContract = {
       .input(
         z.object({
           itemId: Id,
+          projectId: Id.nullable().optional(),
           title: z.string().min(1).max(200).optional(),
           status: ScratchpadItemStatusSchema.optional(),
           notes: z.string().max(4_000).optional(),
@@ -597,6 +606,81 @@ export const appContract = {
       .output(ScratchpadItemSchema),
     remove: oc.input(z.object({ itemId: Id })).output(z.object({ ok: z.literal(true) })),
   },
+  projects: {
+    list: oc
+      .input(z.object({ includeArchived: z.boolean().default(false) }))
+      .output(z.array(ProjectSummarySchema)),
+    get: oc
+      .input(
+        z
+          .object({ projectId: Id.optional(), slug: ProjectSlugSchema.optional() })
+          .superRefine((input, ctx) => {
+            if (!input.projectId && !input.slug) {
+              ctx.addIssue({
+                code: "custom",
+                message: "Provide projectId or slug",
+                path: ["projectId"],
+              });
+            }
+          }),
+      )
+      .output(ProjectSchema),
+    create: oc
+      .input(
+        z.object({
+          slug: ProjectSlugSchema,
+          name: z.string().trim().min(1).max(160),
+          description: z.string().max(4_000).default(""),
+          memory: z.string().max(100_000).default(""),
+        }),
+      )
+      .output(ProjectSchema),
+    update: oc
+      .input(
+        z
+          .object({
+            projectId: Id,
+            name: z.string().trim().min(1).max(160).optional(),
+            description: z.string().max(4_000).optional(),
+            memory: z.string().max(100_000).optional(),
+            expectedMemoryRevision: z.number().int().positive().optional(),
+            archived: z.boolean().optional(),
+          })
+          .superRefine((input, ctx) => {
+            if (input.memory !== undefined && input.expectedMemoryRevision === undefined) {
+              ctx.addIssue({
+                code: "custom",
+                message: "expectedMemoryRevision is required when updating project memory",
+                path: ["expectedMemoryRevision"],
+              });
+            }
+          }),
+      )
+      .output(ProjectSchema),
+    context: oc.input(z.object({ projectId: Id })).output(
+      z.object({
+        project: ProjectSchema,
+        resources: z.array(ProjectResourceSchema),
+        openTasks: z.array(ScratchpadItemSchema),
+      }),
+    ),
+    resources: {
+      list: oc.input(z.object({ projectId: Id })).output(z.array(ProjectResourceSchema)),
+      upsert: oc
+        .input(
+          z.object({
+            projectId: Id,
+            kind: z.string().regex(/^[a-z][a-z0-9._-]{0,79}$/),
+            ref: z.string().trim().min(1).max(2_048),
+            label: z.string().trim().max(240).default(""),
+            metadata: z.record(z.string(), z.unknown()).default({}),
+          }),
+        )
+        .output(ProjectResourceSchema),
+      remove: oc.input(z.object({ resourceId: Id })).output(z.object({ ok: z.literal(true) })),
+    },
+  },
+
   skills: {
     list: oc.input(botId).output(z.array(TaughtSkillSchema)),
     get: oc.input(z.object({ skillId: Id })).output(TaughtSkillSchema),
@@ -649,6 +733,38 @@ export const appContract = {
   },
   capabilities: {
     list: oc.output(z.array(CapabilityInstallSchema)),
+    tools: oc
+      .input(
+        z.object({
+          botId: Id,
+          query: z.string().trim().max(200).default(""),
+          limit: z.number().int().min(1).max(100).default(50),
+        }),
+      )
+      .output(z.array(CapabilityToolSchema)),
+    read: oc
+      .input(
+        z.object({
+          botId: Id,
+          tool: z.string().min(1).max(300),
+          route: CapabilityToolRouteSchema,
+          args: z.record(z.string(), z.unknown()).default({}),
+          executionId: z.string().min(1).max(160).optional(),
+        }),
+      )
+      .output(CapabilityInvocationResultSchema),
+    execute: oc
+      .input(
+        z.object({
+          botId: Id,
+          tool: z.string().min(1).max(300),
+          route: CapabilityToolRouteSchema,
+          args: z.record(z.string(), z.unknown()).default({}),
+          executionId: z.string().min(1).max(160).optional(),
+        }),
+      )
+      .output(CapabilityInvocationResultSchema),
+
     catalogSearch: oc
       .input(
         z.object({

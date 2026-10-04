@@ -421,6 +421,7 @@ export type ScratchpadItemStatus = z.infer<typeof ScratchpadItemStatusSchema>;
 export const ScratchpadItemSchema = z.object({
   id: Id,
   botId: Id,
+  projectId: Id.nullable(),
   title: z.string(),
   status: ScratchpadItemStatusSchema,
   notes: z.string(),
@@ -431,6 +432,7 @@ export type ScratchpadItem = z.infer<typeof ScratchpadItemSchema>;
 
 export const CreateScratchpadItemInput = z.object({
   botId: Id,
+  projectId: Id.optional(),
   title: z.string().min(1).max(200),
   status: ScratchpadItemStatusSchema.default("open"),
   notes: z.string().max(4_000).default(""),
@@ -606,6 +608,67 @@ export const ActionAutoReviewSettingsSchema = z.object({
 });
 export type ActionAutoReviewSettings = z.infer<typeof ActionAutoReviewSettingsSchema>;
 
+export const ProjectSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(/^[a-z0-9][a-z0-9._-]*$/);
+export type ProjectSlug = z.infer<typeof ProjectSlugSchema>;
+
+export const ProjectSummarySchema = z.object({
+  id: Id,
+  slug: ProjectSlugSchema,
+  name: z.string(),
+  description: z.string(),
+  memoryRevision: z.number().int().positive(),
+  archivedAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type ProjectSummary = z.infer<typeof ProjectSummarySchema>;
+
+export const ProjectSchema = ProjectSummarySchema.extend({
+  memory: z.string(),
+});
+export type Project = z.infer<typeof ProjectSchema>;
+
+export const ProjectResourceSchema = z.object({
+  id: Id,
+  projectId: Id,
+  kind: z.string().regex(/^[a-z][a-z0-9._-]{0,79}$/),
+  ref: z.string(),
+  label: z.string(),
+  metadata: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type ProjectResource = z.infer<typeof ProjectResourceSchema>;
+
+export const CapabilityToolRouteSchema = z.object({
+  connectorId: z.string().min(1).max(120),
+  toolName: z.string().min(1).max(200),
+  resourceId: z.string().min(1).max(500).optional(),
+  resourceRevision: z.union([z.string(), z.number()]).optional(),
+  catalogGroup: z.string().max(200).optional(),
+});
+export type CapabilityToolRoute = z.infer<typeof CapabilityToolRouteSchema>;
+
+export const CapabilityToolSchema = z.object({
+  name: z.string().min(1).max(300),
+  description: z.string().max(4_000),
+  inputSchema: z.record(z.string(), z.unknown()),
+  readOnly: z.boolean(),
+  route: CapabilityToolRouteSchema,
+});
+export type CapabilityTool = z.infer<typeof CapabilityToolSchema>;
+
+export const CapabilityInvocationResultSchema = z.object({
+  logs: z.array(z.string().max(2_000)).max(100),
+  result: z.unknown().optional(),
+  error: z.string().max(4_000).nullable(),
+});
+export type CapabilityInvocationResult = z.infer<typeof CapabilityInvocationResultSchema>;
 export const CapabilityInstallSchema = z.object({
   id: Id,
   kind: z.enum(["skill", "plugin", "mcp", "api", "graphql", "connection"]),

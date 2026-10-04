@@ -19,6 +19,8 @@ type ProcedureContract = {
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
 const READ_ACTIONS = new Set([
+  "read",
+  "context",
   "all",
   "bootstrap",
   "catalog",
@@ -108,6 +110,7 @@ const WRITE_ACTIONS = new Set([
   "updateDraft",
   "updatePolicy",
   "uploadFile",
+  "upsert",
 ]);
 
 const DESTRUCTIVE_ACTIONS = new Set([

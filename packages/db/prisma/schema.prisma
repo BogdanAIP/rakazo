@@ -182,6 +182,8 @@ model Space {
   runs                        Run[]
   routines                    Routine[]
   scratchpadItems             ScratchpadItem[]
+  projects                    Project[]
+  projectResources            ProjectResource[]
   taughtSkills                TaughtSkill[]
   agentSkills                 AgentSkill[]
   connections                 Connection[]
@@ -734,6 +736,46 @@ model ExternalEffect {
   @@map("external_effects")
 }
 
+model Project {
+  id             String            @id @default(cuid())
+  spaceId        String
+  space          Space             @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  userId         String
+  slug           String
+  name           String
+  description    String            @default("")
+  memory         String            @default("")
+  memoryRevision Int               @default(1)
+  archivedAt     DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  resources      ProjectResource[]
+  scratchpadItems ScratchpadItem[]
+
+  @@unique([spaceId, userId, slug])
+  @@index([spaceId, userId, archivedAt, updatedAt])
+  @@map("projects")
+}
+
+model ProjectResource {
+  id        String   @id @default(cuid())
+  spaceId   String
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  kind      String
+  ref       String
+  label     String   @default("")
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, kind, ref])
+  @@index([spaceId, userId, projectId])
+  @@map("project_resources")
+}
+
 model Routine {
   id             String    @id @default(cuid())
   spaceId        String
@@ -769,6 +811,8 @@ model ScratchpadItem {
   space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
   botId     String
   bot       Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   userId    String
   title     String
   status    String   @default("open")
@@ -777,6 +821,7 @@ model ScratchpadItem {
   updatedAt DateTime @updatedAt
 
   @@index([spaceId, botId, status])
+  @@index([spaceId, projectId, status])
   @@index([spaceId, botId, updatedAt])
   @@map("scratchpad_items")
 }
@@ -817,7 +862,7 @@ model AgentSkill {
   name        String
   description String
   content     String
-  /// user | builtin | plugin — only user skills are writable via API/tools.
+  /// user | builtin | plugin вЂ” only user skills are writable via API/tools.
   source      String   @default("user")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -1032,7 +1077,7 @@ model UsageRecord {
   /// Which bot spent this. Deliberately NOT a relation: a usage row is spend that really
   /// happened, and no lifecycle event on the bot may delete it or blank its attribution.
   /// `Cascade` erased the row; `SetNull` would erase the attribution instead, and because
-  /// deleting a bot also deletes its runs, `runId` goes null in the same breath — the row
+  /// deleting a bot also deletes its runs, `runId` goes null in the same breath вЂ” the row
   /// would keep only space, user, model and token counts.
   ///
   /// So the id outlives the bot and may dangle. Read it with a LEFT JOIN; `BotDeletion.id`
@@ -1166,7 +1211,7 @@ model BotMcpServer {
 model MessagingIdentity {
   id                   String    @id @default(cuid())
   provider             String
-  /// Sender address within the provider: E.164 number, Slack user id, ….
+  /// Sender address within the provider: E.164 number, Slack user id, вЂ¦.
   address              String
   /// Opaque provider thread id for the 1:1 conversation; learned on inbound.
   dmThreadId           String?

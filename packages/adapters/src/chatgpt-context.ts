@@ -42,17 +42,26 @@ export async function loadChatGptContext(
   }
   const bot = matches[0]!;
   const botId = str(bot.id);
-  const [memoryValue, scratchpadValue, skillsValue, runsValue, routinesValue, installsValue] =
-    await Promise.all([
-      read("memory/list", { botId }),
-      read("scratchpad/list", { botId, includeDone: false }),
-      read("agentSkills/list"),
-      read("runs/list", { filter: "active" }),
-      read("routines/list", { botId }),
-      read("capabilities/list"),
-    ]);
+  const [
+    memoryValue,
+    scratchpadValue,
+    projectsValue,
+    skillsValue,
+    runsValue,
+    routinesValue,
+    installsValue,
+  ] = await Promise.all([
+    read("memory/list", { botId }),
+    read("scratchpad/list", { botId, includeDone: false }),
+    read("projects/list", { includeArchived: false }),
+    read("agentSkills/list"),
+    read("runs/list", { filter: "active" }),
+    read("routines/list", { botId }),
+    read("capabilities/list"),
+  ]);
   const memory = objects(memoryValue, "memory/list");
   const scratchpad = objects(scratchpadValue, "scratchpad/list");
+  const projects = objects(projectsValue, "projects/list");
   const skills = objects(skillsValue, "agentSkills/list");
   const runs = objects(object(runsValue, "runs/list").runs, "runs/list").filter(
     (run) => run.botId === botId,
@@ -75,6 +84,14 @@ export async function loadChatGptContext(
       status: item.status,
       updatedAt: item.updatedAt,
       ...limited(item.notes, 4_000),
+    })),
+    projects: projects.slice(0, 100).map((item) => ({
+      id: item.id,
+      slug: item.slug,
+      name: item.name,
+      description: item.description,
+      memoryRevision: item.memoryRevision,
+      updatedAt: item.updatedAt,
     })),
     availableSkills: skills.slice(0, 100).map((item) => ({
       id: item.id,
@@ -103,6 +120,7 @@ export async function loadChatGptContext(
     })),
     counts: {
       openTasks: scratchpad.length,
+      projects: projects.length,
       skills: skills.length,
       activeRuns: runs.length,
       routines: routines.length,
@@ -141,6 +159,6 @@ export async function searchChatGptCapabilities(
       surfaces: item.surfaces,
     })),
     resultCount: results.length,
-    note: "Discovery does not install, authenticate, assign or execute a capability. Review provenance, dependencies, permissions, licensing and transport before installation. Existing installed connector dispatch is not yet exposed as a direct Plugin R tool.",
+    note: "Discovery does not install, authenticate, assign or execute a capability. Review provenance, dependencies, permissions, licensing and transport before installation. Use capabilities/tools plus capabilities/read or capabilities/execute to discover and invoke authorized tools through Rakazo.",
   };
 }

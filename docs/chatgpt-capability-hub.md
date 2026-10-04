@@ -41,3 +41,20 @@ Rakazo already has `DesktopUpdates.tsx` (packaged desktop) and `SoftwareUpdateSe
 4. **UI status and cleanup:** show phases Check -> Ready -> Updating -> Verifying -> Success/Error; lock out duplicates and concurrent GUI ownership changes. Show unchanged/touched components and offer changelog. Remove the one-shot task/script after successful completion, preserving a redacted audit log. Explicitly indicate that already-open ChatGPT conversations may cache older tool schemas, so final acceptance includes a new-session discovery and actual bootstrap/discovery test.
 
 The 2026-10-04 manual R refresh completed with `PASS_SAME_REGISTERED_TUNNEL_NEW_PROCESS`, task exit code 0, with original API and Windows Host healthy. One-shot scheduled task and script removed; the audit log remains. This is one observed manual run, NOT proof that the future UI exists yet.
+
+## Project-aware control plane
+
+Rakazo uses the existing Space as the top-level user boundary. Projects live below a Space and provide a stable cross-chat context independent of any physical computer or one ChatGPT thread.
+
+A Project stores a slug/name, description and revision-guarded memory. Project resources attach durable references such as `github.repo`, `mcp.server`, API/file/URL/artifact identifiers and metadata. Scratchpad items may optionally belong to a Project, so project context can aggregate open tasks across bots.
+
+The ChatGPT gateway stays intentionally small:
+- `rakazo_context_bootstrap` lists available Projects in addition to global/bot state.
+- `rakazo_project_context` loads one Project's memory, resources and open tasks.
+- `rakazo_tool_search` discovers currently authorized connector tools.
+- `rakazo_tool_read` executes only tools whose current authoritative metadata declares them read-only.
+- `rakazo_tool_execute` is the explicit high-consequence path for write-capable tools.
+
+Tool execution goes through the existing ConnectorRegistry, not a GitHub-specific shortcut. That keeps one path for installed MCP/API/GraphQL capabilities, assigned OAuth MCP servers and managed connectors. Every invocation re-discovers the tool and matches its routing metadata before execution, so stale assignments/routes are rejected.
+
+Project memory updates require an expected memory revision. This avoids the full-replacement race present in legacy bot MEMORY.md updates and provides a CAS-style checkpoint for concurrent chats.

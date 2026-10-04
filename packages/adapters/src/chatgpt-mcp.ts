@@ -24,6 +24,21 @@ const callSchema = z.object({
   input: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
+const capabilityRouteSchema = z.object({
+  connectorId: z.string().min(1).max(120),
+  toolName: z.string().min(1).max(200),
+  resourceId: z.string().min(1).max(500).optional(),
+  resourceRevision: z.union([z.string(), z.number()]).optional(),
+  catalogGroup: z.string().max(200).optional(),
+});
+
+const capabilityCallSchema = z.object({
+  botId: z.string().min(1),
+  tool: z.string().min(1).max(300),
+  route: capabilityRouteSchema,
+  args: z.record(z.string(), z.unknown()).default({}),
+  executionId: z.string().min(1).max(160).optional(),
+});
 const computerActionSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.enum(["click", "move", "down", "up"]),
@@ -183,6 +198,79 @@ server.registerTool(
   async ({ query, includePublic }) =>
     textResult(await searchChatGptCapabilities(callRakazoRpc, query, includePublic)),
 );
+server.registerTool(
+  "rakazo_project_context",
+  {
+    title: "Load Rakazo project context",
+    description:
+      "Read one persistent Rakazo project with its project memory, resources and open tasks. Use the project list from rakazo_context_bootstrap, or discover projects/list through rakazo_read.",
+    inputSchema: z.object({ projectId: z.string().min(1) }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ projectId }) => textResult(await callRakazoRpc("projects/context", { projectId })),
+);
+
+server.registerTool(
+  "rakazo_tool_search",
+  {
+    title: "Search authorized Rakazo tools",
+    description:
+      "Search the tools currently authorized through Rakazo across installed MCP/API/GraphQL and assigned connector providers. Returns bounded tool schemas and authoritative routing metadata without executing anything.",
+    inputSchema: z.object({
+      botId: z.string().min(1),
+      query: z.string().max(200).default(""),
+      limit: z.number().int().min(1).max(100).default(50),
+    }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+  },
+  async ({ botId, query, limit }) =>
+    textResult(await callRakazoRpc("capabilities/tools", { botId, query, limit })),
+);
+
+server.registerTool(
+  "rakazo_tool_read",
+  {
+    title: "Run a read-only Rakazo tool",
+    description:
+      "Invoke one previously discovered Rakazo capability only when its authoritative tool metadata declares it read-only. Rediscovery and route validation happen server-side before execution.",
+    inputSchema: capabilityCallSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  },
+  async (input) => textResult(await callRakazoRpc("capabilities/read", input)),
+);
+
+server.registerTool(
+  "rakazo_tool_execute",
+  {
+    title: "Run a Rakazo capability",
+    description:
+      "Invoke one previously discovered authorized Rakazo capability, including write-capable external tools. The authoritative route is rediscovered and validated by Rakazo before execution.",
+    inputSchema: capabilityCallSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  },
+  async (input) => textResult(await callRakazoRpc("capabilities/execute", input)),
+);
+
 server.registerTool(
   "rakazo_read",
   {
