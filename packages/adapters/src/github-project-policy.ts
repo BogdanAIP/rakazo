@@ -82,6 +82,24 @@ export function githubWriteTarget(toolName: string, args: Record<string, unknown
       "Bulk or cross-repository GitHub operation is not authorized.",
     );
   }
+  if (
+    (toolName === "custom_properties_write" || toolName === "create_repository_ruleset") &&
+    args.level !== "repository"
+  ) {
+    throw new GithubProjectScopeDenied("Only repository-level GitHub changes are authorized.");
+  }
+  if (
+    toolName === "issue_write" &&
+    (args.parent_owner !== undefined || args.parent_repo !== undefined)
+  ) {
+    const parent =
+      typeof args.parent_owner === "string" && typeof args.parent_repo === "string"
+        ? canonicalRepo(`${args.parent_owner}/${args.parent_repo}`)
+        : null;
+    if (parent !== target) {
+      throw new GithubProjectScopeDenied("Cross-repository parent issue is not authorized.");
+    }
+  }
   return target;
 }
 

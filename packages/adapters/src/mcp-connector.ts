@@ -31,6 +31,18 @@ import type { EncryptedSecretStore } from "./secrets.js";
 type SessionEntry = { session: McpSession; revision: number; material: OAuthMaterial };
 type PendingSession = { revision: number; promise: Promise<McpSession> };
 
+export function isOfficialGithubMcpServer(
+  server: Pick<McpServer, "slug" | "command" | "endpoint">,
+): boolean {
+  if (server.slug === "github") return true;
+  if (/(?:^|[\\/])github-mcp-server(?:\.exe)?$/i.test(server.command ?? "")) return true;
+  try {
+    return new URL(server.endpoint ?? "").hostname.toLowerCase() === "api.githubcopilot.com";
+  } catch {
+    return false;
+  }
+}
+
 /** Runtime MCP connector. Authorization is re-checked against the bot assignment on every call. */
 /**
  * Stale allowlist entries are filtered out below with no error. Discovery already has the
@@ -269,7 +281,7 @@ export class McpConnector implements ConnectorProvider {
     try {
       const session = await this.sessionFor(assignment.server, context);
       material = this.sessions.get(sessionKey)?.material;
-      if (assignment.server.slug === "github") {
+      if (isOfficialGithubMcpServer(assignment.server)) {
         const listed = await session.listTools({ signal: context.signal });
         const authoritative = listed.tools.find((tool) => tool.name === call.route?.toolName);
         if (!authoritative) throw new Error("GitHub MCP tool is no longer available.");

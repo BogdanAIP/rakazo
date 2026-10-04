@@ -50,6 +50,19 @@ describe("project-scoped autonomous GitHub writes", () => {
     ["push_files", { owner: "BogdanAIP", repo: "rakazo", repository_full_name: "BogdanAIP/AIHOT" }],
     ["create_pull_request", { owner: "BogdanAIP", repo: "rakazo", head_repo: "BogdanAIP/AIHOT" }],
     ["issue_write", { owner: "BogdanAIP", repo: "rakazo", repositories: ["BogdanAIP/AIHOT"] }],
+    [
+      "issue_write",
+      { owner: "BogdanAIP", repo: "rakazo", parent_owner: "BogdanAIP", parent_repo: "AIHOT" },
+    ],
+    ["issue_write", { owner: "BogdanAIP", repo: "rakazo", parent_owner: "BogdanAIP" }],
+    [
+      "custom_properties_write",
+      { owner: "BogdanAIP", repo: "rakazo", level: "organization", org: "BogdanAIP" },
+    ],
+    [
+      "create_repository_ruleset",
+      { owner: "BogdanAIP", repo: "rakazo", level: "enterprise", enterprise: "other" },
+    ],
   ])("fails closed for unsupported or ambiguous targets: %s", (name, args) => {
     expect(() => githubWriteTarget(name, args)).toThrow();
   });

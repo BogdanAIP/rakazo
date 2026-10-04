@@ -1,6 +1,6 @@
 import type { AdapterContext } from "@rakazo/adapter-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { allowlistDrift, McpConnector } from "./mcp-connector.js";
+import { allowlistDrift, isOfficialGithubMcpServer, McpConnector } from "./mcp-connector.js";
 import { type McpOAuthBroker, StoredMcpOAuthProvider } from "./mcp-oauth.js";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -1054,5 +1054,32 @@ describe("GitHub MCP project write enforcement", () => {
     expect(read.some((event) => event.type === "result")).toBe(true);
     expect(state.calls).toEqual(["push_files", "get_file_contents"]);
     await connector.close();
+  });
+});
+
+describe("official GitHub MCP identity", () => {
+  it("keeps the repository fence after a server rename", () => {
+    expect(isOfficialGithubMcpServer({ slug: "github", command: null, endpoint: null })).toBe(true);
+    expect(
+      isOfficialGithubMcpServer({
+        slug: "renamed",
+        command: "C:\\tools\\github-mcp-server.exe",
+        endpoint: null,
+      }),
+    ).toBe(true);
+    expect(
+      isOfficialGithubMcpServer({
+        slug: "renamed",
+        command: null,
+        endpoint: "https://api.githubcopilot.com/mcp/",
+      }),
+    ).toBe(true);
+    expect(
+      isOfficialGithubMcpServer({
+        slug: "other",
+        command: null,
+        endpoint: "https://other.example/mcp",
+      }),
+    ).toBe(false);
   });
 });
