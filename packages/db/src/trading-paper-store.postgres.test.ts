@@ -551,7 +551,7 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       market,
       ticker,
     );
-    expect((await run(signal, publicEvidence.id)).reason).toBe("risk_state_unavailable");
+    expect((await run(signal, publicEvidence.id)).reason).toBe("reserve_authority_unavailable");
     expect(
       (await run({ ...signal, market: { ...market, priceIncrement: "0.1" } }, publicEvidence.id))
         .reason,
@@ -636,9 +636,7 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
         where: { ledgerId },
         data: {
           policy: JSON.parse(JSON.stringify(policy)),
-          policySha256: createHash("sha256")
-            .update(JSON.stringify(policy), "utf8")
-            .digest("hex"),
+          policySha256: createHash("sha256").update(JSON.stringify(policy), "utf8").digest("hex"),
         },
       });
     await writePolicy(enabled);
@@ -745,15 +743,8 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     const beforeEvents = await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } });
     const beforeOutbox = await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } });
     expect(
-      (
-        await preflightTradingPaperReservation(
-          second.prisma,
-          owner,
-          ledgerId,
-          signal,
-          evidence.id,
-        )
-      ).reason,
+      (await preflightTradingPaperReservation(second.prisma, owner, ledgerId, signal, evidence.id))
+        .reason,
     ).toBe("daily_loss_limit_exceeded");
 
     const relaxed = TradingPaperPolicySchema.parse({
@@ -762,15 +753,8 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     });
     await writePolicy(relaxed);
     expect(
-      (
-        await preflightTradingPaperReservation(
-          second.prisma,
-          owner,
-          ledgerId,
-          signal,
-          evidence.id,
-        )
-      ).reason,
+      (await preflightTradingPaperReservation(second.prisma, owner, ledgerId, signal, evidence.id))
+        .reason,
     ).toBe("stop_risk_unavailable");
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(
       beforeEvents,

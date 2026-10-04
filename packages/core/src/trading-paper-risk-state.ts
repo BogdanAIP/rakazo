@@ -1,7 +1,4 @@
-import {
-  type TradingPaperLedgerInput,
-  TradingPaperLedgerInputSchema,
-} from "@rakazo/contracts";
+import { type TradingPaperLedgerInput, TradingPaperLedgerInputSchema } from "@rakazo/contracts";
 import { replayTradingPaperLedger } from "./trading-paper-ledger.js";
 
 const SCALE = 100_000_000n;
@@ -19,10 +16,9 @@ function decimal(value: bigint): string {
   const negative = value < 0n;
   const n = negative ? -value : value;
   const fraction = (n % SCALE).toString().padStart(8, "0").replace(/0+$/, "");
-  return `${negative ? "-" : ""}${n / SCALE}${fraction ? "." + fraction : ""}`;
+  return `${negative ? "-" : ""}${n / SCALE}${fraction ? `.${fraction}` : ""}`;
 }
-const ceilProduct = (quantity: bigint, price: bigint) =>
-  (quantity * price + SCALE - 1n) / SCALE;
+const ceilProduct = (quantity: bigint, price: bigint) => (quantity * price + SCALE - 1n) / SCALE;
 const floorProduct = (quantity: bigint, price: bigint) => (quantity * price) / SCALE;
 
 export type TradingPaperDerivedRiskState = {
@@ -52,11 +48,7 @@ export function deriveTradingPaperRiskState(
   if (!Number.isFinite(now.getTime())) throw new Error("Invalid paper risk clock");
   const input = TradingPaperLedgerInputSchema.parse(raw);
   const state = replayTradingPaperLedger(input);
-  const dayStartMs = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate(),
-  );
+  const dayStartMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const nextDayMs = dayStartMs + 86_400_000;
   const processed = new Set<string>();
   const reservations = new Map<string, { quantity: bigint }>();

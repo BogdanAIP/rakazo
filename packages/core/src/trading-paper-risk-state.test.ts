@@ -56,8 +56,7 @@ const sell = (id: string, sequence: number, at: string, price: string) => ({
   executedPriceQuote: price,
   feeQuote: "0",
 });
-const input = (events: unknown[]) =>
-  TradingPaperLedgerInputSchema.parse({ ...base, events });
+const input = (events: unknown[]) => TradingPaperLedgerInputSchema.parse({ ...base, events });
 
 describe("derived paper risk state", () => {
   it("derives UTC daily pnl/loss exactly and does not let wins erase gross daily loss", () => {
