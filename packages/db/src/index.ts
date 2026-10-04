@@ -14,6 +14,12 @@ export * from "./model-credentials.js";
 export * from "./repos.js";
 export * from "./scope.js";
 export * from "./spaces.js";
+export {
+  PaperQuoteEvidenceError,
+  readVerifiedPaperQuoteEvidence,
+  readVerifiedPublicPaperQuoteEvidence,
+  recordPublicAdapterPaperQuoteEvidence,
+} from "./trading-paper-quote-evidence.js";
 export * from "./trading-paper-reservation-preflight.js";
 export {
   createDisabledTradingPaperRiskPolicy,

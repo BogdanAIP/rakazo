@@ -5,6 +5,8 @@ import { createDb } from "./client.js";
 import {
   PaperQuoteEvidenceError,
   readVerifiedPaperQuoteEvidence,
+  readVerifiedPublicPaperQuoteEvidence,
+  recordPublicAdapterPaperQuoteEvidence,
   recordSyntheticPaperQuoteEvidence,
 } from "./trading-paper-quote-evidence.js";
 import { preflightTradingPaperReservation } from "./trading-paper-reservation-preflight.js";
@@ -395,6 +397,68 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     });
     await expect(
       readVerifiedPaperQuoteEvidence(second.prisma, owner, ledgerId, saved.id),
+    ).rejects.toBeInstanceOf(PaperQuoteEvidenceError);
+  });
+  it("P11B-2 labels public adapter evidence and verifies metadata and owner", async () => {
+    const ledgerId = `paper-public-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: "2026-10-04T08:00:00.000Z",
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "1000",
+    });
+    const at = new Date().toISOString();
+    const ticker = {
+      venue: "okx",
+      kind: "spot",
+      symbol: "SOL-USDT",
+      observedAt: at,
+      fetchedAt: at,
+      bid: "100",
+      ask: "100.1",
+      quoteVolume24h: "100000",
+    };
+    await expect(
+      recordPublicAdapterPaperQuoteEvidence(first.prisma, owner, ledgerId, market, {
+        ...ticker,
+        symbol: "WRONG-USDT",
+      }),
+    ).rejects.toBeInstanceOf(PaperQuoteEvidenceError);
+    const saved = await recordPublicAdapterPaperQuoteEvidence(
+      first.prisma,
+      owner,
+      ledgerId,
+      market,
+      ticker,
+    );
+    expect(saved.source).toBe("public_adapter_observation");
+    const recovered = await readVerifiedPublicPaperQuoteEvidence(
+      second.prisma,
+      owner,
+      ledgerId,
+      saved.id,
+    );
+    expect(recovered.market).toEqual(market);
+    expect(recovered.ticker).toMatchObject(ticker);
+    await expect(
+      readVerifiedPaperQuoteEvidence(second.prisma, owner, ledgerId, saved.id),
+    ).rejects.toBeInstanceOf(PaperQuoteEvidenceError);
+    await expect(
+      readVerifiedPublicPaperQuoteEvidence(
+        second.prisma,
+        { ...owner, userId: "not-owner" },
+        ledgerId,
+        saved.id,
+      ),
+    ).rejects.toBeInstanceOf(PaperQuoteEvidenceError);
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(0);
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(0);
+    await first.prisma.tradingPaperQuoteEvidence.update({
+      where: { id: saved.id },
+      data: { market: { ...market, quantityIncrement: "0.1" } },
+    });
+    await expect(
+      readVerifiedPublicPaperQuoteEvidence(second.prisma, owner, ledgerId, saved.id),
     ).rejects.toBeInstanceOf(PaperQuoteEvidenceError);
   });
 });

@@ -1,5 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
-import { type TradingTicker, TradingTickerSchema } from "@rakazo/contracts";
+import {
+  type TradingInstrument,
+  TradingInstrumentSchema,
+  type TradingTicker,
+  TradingTickerSchema,
+} from "@rakazo/contracts";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
 import { withTransactionRetry } from "./transaction-retry.js";
@@ -7,6 +12,7 @@ import { withTransactionRetry } from "./transaction-retry.js";
 type Owner = { spaceId: string; userId: string };
 type PaperDb = Pick<PrismaClient, "$transaction">;
 const SOURCE = "offline_fixture" as const;
+const PUBLIC_SOURCE = "public_adapter_observation" as const;
 const MAX_AGE_MS = 300_000;
 const SCALE = 100_000_000n;
 function exact(value: string): bigint {
@@ -20,6 +26,48 @@ const sha = (value: TradingTicker) =>
   createHash("sha256")
     .update(JSON.stringify([SOURCE, value]), "utf8")
     .digest("hex");
+
+const publicSha = (market: TradingInstrument, ticker: TradingTicker) =>
+  createHash("sha256")
+    .update(JSON.stringify([PUBLIC_SOURCE, market, ticker]), "utf8")
+    .digest("hex");
+
+function validateTicker(ticker: TradingTicker, now: number): void {
+  const observed = Date.parse(ticker.observedAt);
+  const fetched = Date.parse(ticker.fetchedAt);
+  if (
+    !Number.isFinite(observed) ||
+    !Number.isFinite(fetched) ||
+    observed > fetched + 2_000 ||
+    fetched > now + 2_000 ||
+    observed > now + 2_000 ||
+    now - observed > MAX_AGE_MS ||
+    now - fetched > MAX_AGE_MS
+  )
+    throw new PaperQuoteEvidenceError("Quote is stale or future-dated");
+  const bid = exact(ticker.bid);
+  const ask = exact(ticker.ask);
+  if (bid === 0n || ask === 0n || bid > ask) {
+    throw new PaperQuoteEvidenceError("Bid/ask is crossed or zero");
+  }
+}
+function validatePair(market: TradingInstrument, ticker: TradingTicker): void {
+  if (
+    market.kind !== "spot" ||
+    market.status !== "active" ||
+    market.expiryAt !== null ||
+    market.priceIncrement === null ||
+    market.quantityIncrement === null ||
+    !["okx", "bingx"].includes(market.venue) ||
+    ticker.kind !== "spot" ||
+    ticker.venue !== market.venue ||
+    ticker.symbol !== market.symbol ||
+    exact(market.priceIncrement) === 0n ||
+    exact(market.quantityIncrement) === 0n ||
+    (market.minNotional !== null && exact(market.minNotional) === 0n)
+  )
+    throw new PaperQuoteEvidenceError("Public spot market/ticker mismatch or incomplete precision");
+}
 
 export class PaperQuoteEvidenceError extends Error {
   constructor(message = "Paper quote evidence is unavailable or invalid") {
@@ -122,6 +170,90 @@ export async function readVerifiedPaperQuoteEvidence(
           throw new PaperQuoteEvidenceError();
         }
         return { id, source: SOURCE, ticker };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    ),
+  );
+}
+
+/** Persist source-labeled public adapter observation in the EXISTING scoped DB.
+ * This function is DB-only; its inputs must originate from the fixed-endpoint
+ * adapter function, never a model, RPC route or caller-reported source label.
+ * Hash is an integrity checksum, NOT an exchange signature or risk approval. */
+export async function recordPublicAdapterPaperQuoteEvidence(
+  prisma: PaperDb,
+  owner: Owner,
+  ledgerId: string,
+  rawMarket: unknown,
+  rawTicker: unknown,
+): Promise<{ id: string; source: typeof PUBLIC_SOURCE }> {
+  const market = TradingInstrumentSchema.parse(rawMarket);
+  const ticker = TradingTickerSchema.parse(rawTicker);
+  validatePair(market, ticker);
+  validateTicker(ticker, Date.now());
+  const id = randomUUID();
+  return withTransactionRetry(() =>
+    prisma.$transaction(
+      async (tx) => {
+        await requireOwner(tx, owner, ledgerId);
+        const ledger = await tx.tradingPaperLedger.findUniqueOrThrow({
+          where: { id: ledgerId },
+          select: { quoteCurrency: true },
+        });
+        if (market.quote !== ledger.quoteCurrency) {
+          throw new PaperQuoteEvidenceError("Observed quote currency differs from ledger");
+        }
+        await tx.tradingPaperQuoteEvidence.create({
+          data: {
+            id,
+            ledgerId,
+            source: PUBLIC_SOURCE,
+            market: JSON.parse(JSON.stringify(market)) as Prisma.InputJsonValue,
+            payload: JSON.parse(JSON.stringify(ticker)) as Prisma.InputJsonValue,
+            payloadSha256: publicSha(market, ticker),
+            observedAt: new Date(ticker.observedAt),
+            fetchedAt: new Date(ticker.fetchedAt),
+          },
+        });
+        return { id, source: PUBLIC_SOURCE };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    ),
+  );
+}
+
+/** For evidence/audit UI only. Does not grant the quote freshness at decision
+ * time, signal approval, capacity to reserve, or authenticated venue signing. */
+export async function readVerifiedPublicPaperQuoteEvidence(
+  prisma: PaperDb,
+  owner: Owner,
+  ledgerId: string,
+  id: string,
+): Promise<{
+  id: string;
+  source: typeof PUBLIC_SOURCE;
+  market: TradingInstrument;
+  ticker: TradingTicker;
+}> {
+  return withTransactionRetry(() =>
+    prisma.$transaction(
+      async (tx) => {
+        await requireOwner(tx, owner, ledgerId);
+        const row = await tx.tradingPaperQuoteEvidence.findFirst({ where: { id, ledgerId } });
+        if (!row || row.source !== PUBLIC_SOURCE) throw new PaperQuoteEvidenceError();
+        const parsedMarket = TradingInstrumentSchema.safeParse(row.market);
+        const parsedTicker = TradingTickerSchema.safeParse(row.payload);
+        if (!parsedMarket.success || !parsedTicker.success) throw new PaperQuoteEvidenceError();
+        const market = parsedMarket.data;
+        const ticker = parsedTicker.data;
+        validatePair(market, ticker);
+        if (
+          row.payloadSha256 !== publicSha(market, ticker) ||
+          row.observedAt.getTime() !== Date.parse(ticker.observedAt) ||
+          row.fetchedAt.getTime() !== Date.parse(ticker.fetchedAt)
+        )
+          throw new PaperQuoteEvidenceError("Public quote digest/timestamps mismatch");
+        return { id, source: PUBLIC_SOURCE, market, ticker };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),

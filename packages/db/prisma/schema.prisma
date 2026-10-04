@@ -1442,13 +1442,15 @@ model TradingPaperRiskPolicy {
 }
 
 /** Evidence only: no broker data, account keys or risk approval.
- * Initially accepts only a clearly labeled synthetic offline fixture. */
+ * Stores separately labeled offline fixtures and public-adapter observations;
+ * neither is an approval or authenticated exchange attestation. */
 model TradingPaperQuoteEvidence {
   id            String             @id
   ledgerId      String
   ledger        TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
   source        String
   payload       Json
+  market        Json?
   payloadSha256 String
   observedAt    DateTime
   fetchedAt     DateTime
