@@ -441,6 +441,7 @@ export async function fillApprovedTradingPaperReservation(
             "expired",
             policy.revision,
             now,
+            caller,
           );
           return { status: "deny", mode: "paper_only", reason: "reservation_expired" };
         }
@@ -509,6 +510,7 @@ export async function fillApprovedTradingPaperReservation(
             "expired",
             policy.revision,
             now,
+            caller,
           );
           return { status: "deny", mode: "paper_only", reason: "reservation_expired" };
         }
