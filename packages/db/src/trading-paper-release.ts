@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { TradingPaperLedgerState } from "@rakazo/contracts";
 import type { Prisma } from "./client.js";
+import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
 import {
   appendTradingPaperLedgerEventInTransaction,
   recoverTradingPaperLedgerInTransaction,
@@ -56,6 +57,7 @@ export async function releaseTradingPaperReservationsInTransaction(
   if (!Number.isFinite(nowMs) || !Number.isSafeInteger(policyRevision) || policyRevision < 0) {
     throw new PaperReleaseIntegrityError("Invalid trusted release clock or policy revision");
   }
+  await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date(nowMs));
   const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
   const lastEvent = recovered.events.at(-1);
   const lastAt = lastEvent ? Date.parse(lastEvent.recordedAt) : recovered.row.openedAt.getTime();
@@ -103,5 +105,6 @@ export async function releaseTradingPaperReservationsInTransaction(
     state = appended.state;
     released += 1;
   }
+  await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date(nowMs));
   return { released, state };
 }

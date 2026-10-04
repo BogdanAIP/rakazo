@@ -3,6 +3,7 @@ import { type TradingSignal, TradingSignalSchema } from "@rakazo/contracts";
 import { estimateExactPaperSpotCapacity } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { auditTradingPaperLifecycleInTransaction, PaperLifecycleAuditError } from "./trading-paper-lifecycle-audit.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
 import {
   evaluateTradingPaperReservationInTransaction,
@@ -320,14 +321,12 @@ export async function reserveApprovedTradingPaperSignal(
   const operation = async (): Promise<TradingPaperReserveResult> =>
     prisma.$transaction(
       async (tx) => {
+        await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
+        await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         if (proposal) {
           const existing = await readExistingDecision(tx, owner, ledgerId, proposal, evidenceId);
           if (existing) return existing;
-        } else {
-          await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
         }
-
-        await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         const currentPolicy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         await releaseTradingPaperReservationsInTransaction(
           tx,
@@ -456,6 +455,7 @@ export async function reserveApprovedTradingPaperSignal(
               decisionSha256: decisionDigest(normalized),
             },
           });
+          await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
           return {
             status: "reserved",
             mode: "paper_only",
@@ -471,7 +471,11 @@ export async function reserveApprovedTradingPaperSignal(
             expiresAt,
           };
         } catch (error) {
-          if (error instanceof PaperReservationDecisionIntegrityError) throw error;
+          if (
+            error instanceof PaperReservationDecisionIntegrityError ||
+            error instanceof PaperLifecycleAuditError
+          )
+            throw error;
           return deny(evaluated, "capacity_unrepresentable");
         }
       },
@@ -485,6 +489,7 @@ export async function reserveApprovedTradingPaperSignal(
     return withTransactionRetry(() =>
       prisma.$transaction(
         async (tx) => {
+          await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
           const existing = await readExistingDecision(tx, owner, ledgerId, proposal, evidenceId);
           if (!existing) throw error;
           return existing;

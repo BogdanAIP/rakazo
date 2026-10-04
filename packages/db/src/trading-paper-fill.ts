@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
 import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
 import {
@@ -337,18 +338,10 @@ export async function fillApprovedTradingPaperReservation(
   const operation = async (): Promise<TradingPaperFillResult> =>
     prisma.$transaction(
       async (tx) => {
+        await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
+        await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         const prior = await readExistingFill(tx, owner, ledgerId, reservationId, evidenceId);
         if (prior) return prior;
-
-        await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
-        const duplicateAfterLock = await readExistingFill(
-          tx,
-          owner,
-          ledgerId,
-          reservationId,
-          evidenceId,
-        );
-        if (duplicateAfterLock) return duplicateAfterLock;
 
         const policy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         if (!policy.policy.enabled) {
@@ -531,6 +524,7 @@ export async function fillApprovedTradingPaperReservation(
             decisionSha256: decisionDigest(normalized),
           },
         });
+        await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         return {
           status: "filled",
           mode: "paper_only",

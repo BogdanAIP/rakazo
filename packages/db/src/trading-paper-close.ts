@@ -5,6 +5,7 @@ import {
   PaperFillIntegrityError,
   verifyTradingPaperOpenFillInTransaction,
 } from "./trading-paper-fill.js";
+import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
 import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import {
   lockTradingPaperRiskPolicyInTransaction,
@@ -226,18 +227,10 @@ export async function closeTradingPaperPositionOnStop(
   const operation = async (): Promise<TradingPaperCloseResult> =>
     prisma.$transaction(
       async (tx) => {
+        await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
+        await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         const prior = await readExistingClose(tx, owner, ledgerId, positionId, evidenceId);
         if (prior) return prior;
-
-        await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
-        const duplicateAfterLock = await readExistingClose(
-          tx,
-          owner,
-          ledgerId,
-          positionId,
-          evidenceId,
-        );
-        if (duplicateAfterLock) return duplicateAfterLock;
 
         const policy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         if (!policy.policy.enabled) {
@@ -395,6 +388,7 @@ export async function closeTradingPaperPositionOnStop(
             decisionSha256: decisionDigest(normalized),
           },
         });
+        await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         return {
           status: "closed",
           mode: "paper_only",

@@ -2237,4 +2237,59 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       await restarted.pool.end();
     }
   });
+  it("P11C-4 rejects corrupt managed lifecycle before any reserve/fill/close/release or disable", async () => {
+    const ledgerId = `paper-c1-fill-${suffix}`;
+    const row = await first.prisma.tradingPaperFillDecision.findFirstOrThrow({
+      where: { ledgerId },
+    });
+    const before = {
+      version: (await first.prisma.tradingPaperLedger.findUniqueOrThrow({ where: { id: ledgerId } }))
+        .version,
+      events: await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } }),
+      outbox: await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } }),
+      decisions: await first.prisma.tradingPaperFillDecision.count({ where: { ledgerId } }),
+    };
+    const where = { ledgerId_reservationId: { ledgerId, reservationId: row.reservationId } };
+    await first.prisma.tradingPaperFillDecision.update({
+      where,
+      data: { decisionSha256: "0".repeat(64) },
+    });
+    const disable = await makePaperControlEffect(ledgerId, "c4-block-disable", "disable", 1);
+    await expect(reconcileTradingPaperReservations(first.prisma, owner, ledgerId))
+      .rejects.toBeInstanceOf(PaperLifecycleAuditError);
+    await expect(
+      reserveApprovedTradingPaperSignal(second.prisma, owner, ledgerId, null, ""),
+    ).rejects.toBeInstanceOf(PaperLifecycleAuditError);
+    await expect(
+      fillApprovedTradingPaperReservation(
+        second.prisma, owner, ledgerId, row.reservationId, row.evidenceId,
+      ),
+    ).rejects.toBeInstanceOf(PaperLifecycleAuditError);
+    await expect(
+      closeTradingPaperPositionOnStop(
+        second.prisma, owner, ledgerId, row.reservationId, row.evidenceId,
+      ),
+    ).rejects.toBeInstanceOf(PaperLifecycleAuditError);
+    await expect(applyApprovedTradingPaperControl(second.prisma, owner, disable.id))
+      .rejects.toBeInstanceOf(PaperLifecycleAuditError);
+    expect(
+      (await first.prisma.externalEffect.findUniqueOrThrow({ where: { id: disable.id } })).status,
+    ).toBe("executing");
+    expect((await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId)).revision).toBe(
+      1,
+    );
+    expect((await first.prisma.tradingPaperLedger.findUniqueOrThrow({ where: { id: ledgerId } })).version)
+      .toBe(before.version);
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } }))
+      .toBe(before.events);
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } }))
+      .toBe(before.outbox);
+    expect(await first.prisma.tradingPaperFillDecision.count({ where: { ledgerId } }))
+      .toBe(before.decisions);
+    await first.prisma.tradingPaperFillDecision.update({
+      where,
+      data: { decisionSha256: row.decisionSha256 },
+    });
+    expect((await auditTradingPaperLifecycle(first.prisma, owner, ledgerId)).status).toBe("verified");
+  });
 });
