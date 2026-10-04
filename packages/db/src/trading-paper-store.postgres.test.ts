@@ -2237,7 +2237,7 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       await restarted.pool.end();
     }
   });
-  it("P11C-4 rejects corrupt managed lifecycle before any reserve/fill/close/release or disable", async () => {
+  it("P11C-4 blocks corrupt-money writes but still latches approved kill-switch", async () => {
     const ledgerId = `paper-c1-fill-${suffix}`;
     const row = await first.prisma.tradingPaperFillDecision.findFirstOrThrow({
       where: { ledgerId },
@@ -2282,13 +2282,22 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     ).rejects.toBeInstanceOf(PaperLifecycleAuditError);
     await expect(
       applyApprovedTradingPaperControl(second.prisma, owner, disable.id),
-    ).rejects.toBeInstanceOf(PaperLifecycleAuditError);
+    ).resolves.toMatchObject({
+      ok: true,
+      mode: "paper_only",
+      action: "disable",
+      policyRevision: 2,
+      enabled: false,
+      killSwitch: true,
+      reconciliationRequired: true,
+    });
     expect(
       (await first.prisma.externalEffect.findUniqueOrThrow({ where: { id: disable.id } })).status,
-    ).toBe("executing");
-    expect((await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId)).revision).toBe(
-      1,
-    );
+    ).toBe("completed");
+    expect(await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId)).toMatchObject({
+      revision: 2,
+      policy: { enabled: false, killSwitch: true },
+    });
     expect(
       (await first.prisma.tradingPaperLedger.findUniqueOrThrow({ where: { id: ledgerId } }))
         .version,

@@ -2,7 +2,13 @@ import { createHash } from "node:crypto";
 import { type TradingPaperPolicy, TradingPaperPolicySchema } from "@rakazo/contracts";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import {
+  auditTradingPaperLifecycleInTransaction,
+  PaperLifecycleAuditError,
+} from "./trading-paper-lifecycle-audit.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
+import { PaperStopGuardIntegrityError } from "./trading-paper-stop-guard.js";
+import { PaperLedgerIntegrityError } from "./trading-paper-store.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 type PolicyDb = Pick<PrismaClient, "$transaction">;
@@ -126,6 +132,7 @@ export type PaperTradingControlResult =
       policyRevision: number;
       enabled: boolean;
       killSwitch: boolean;
+      reconciliationRequired?: boolean;
     }
   | {
       ok: false;
@@ -238,6 +245,31 @@ export async function applyApprovedTradingPaperControl(
             currentPolicyRevision: verified.revision,
           });
         }
+        // A damaged lifecycle blocks virtual-money mutations, but must NOT
+        // prevent the one-time owner-approved kill-switch from latching.
+        // Detect known audit integrity errors before any policy write. A
+        // pending hold is left untouched and must be reconciled after repair.
+        let releaseAuditAvailable = true;
+        if (request.action === "disable") {
+          try {
+            await auditTradingPaperLifecycleInTransaction(
+              tx,
+              owner,
+              request.ledgerId,
+              new Date(),
+            );
+          } catch (error) {
+            if (
+              error instanceof PaperLifecycleAuditError ||
+              error instanceof PaperLedgerIntegrityError ||
+              error instanceof PaperStopGuardIntegrityError
+            ) {
+              releaseAuditAvailable = false;
+            } else {
+              throw error;
+            }
+          }
+        }
         const next = parsePolicy({
           ...current,
           enabled: request.action === "enable",
@@ -274,7 +306,7 @@ export async function applyApprovedTradingPaperControl(
             afterSha256,
           },
         });
-        if (request.action === "disable") {
+        if (request.action === "disable" && releaseAuditAvailable) {
           await releaseTradingPaperReservationsInTransaction(
             tx,
             owner,
@@ -292,6 +324,7 @@ export async function applyApprovedTradingPaperControl(
           policyRevision: nextRevision,
           enabled: next.enabled,
           killSwitch: next.killSwitch,
+          ...(releaseAuditAvailable ? {} : { reconciliationRequired: true }),
         });
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
