@@ -25,17 +25,28 @@ describe("inert exact paper spot capacity", () => {
     expect("orderId" in x || "approval" in x || "submit" in x).toBe(false);
   });
   it("fails closed on unsupported precision, zero cash, stop above ask and excessive fees", () => {
-    expect(estimateExactPaperSpotCapacity({ ...sample, quantityIncrement: "0.000000001" })).toEqual({
-      status: "deny", reason: "unrepresentable",
-    });
+    expect(estimateExactPaperSpotCapacity({ ...sample, quantityIncrement: "0.000000001" })).toEqual(
+      {
+        status: "deny",
+        reason: "unrepresentable",
+      },
+    );
     expect(estimateExactPaperSpotCapacity({ ...sample, availableQuote: "0" }).status).toBe("deny");
     expect(estimateExactPaperSpotCapacity({ ...sample, stopQuote: "101" }).status).toBe("deny");
-    expect(estimateExactPaperSpotCapacity({ ...sample, assumedFeeBpsPerSide: 1001 }).status).toBe("deny");
+    expect(estimateExactPaperSpotCapacity({ ...sample, assumedFeeBpsPerSide: 1001 }).status).toBe(
+      "deny",
+    );
   });
   it("checks minimum notional and adverse fee/slippage rounding", () => {
-    expect(estimateExactPaperSpotCapacity({ ...sample, minNotionalQuote: "900" }).status).toBe("deny");
+    expect(estimateExactPaperSpotCapacity({ ...sample, minNotionalQuote: "900" }).status).toBe(
+      "deny",
+    );
     const a = estimateExactPaperSpotCapacity(sample);
-    const b = estimateExactPaperSpotCapacity({ ...sample, assumedFeeBpsPerSide: 30, assumedSlippageBpsPerSide: 30 });
+    const b = estimateExactPaperSpotCapacity({
+      ...sample,
+      assumedFeeBpsPerSide: 30,
+      assumedSlippageBpsPerSide: 30,
+    });
     expect(a.status).toBe("inert_estimate");
     expect(b.status).toBe("inert_estimate");
     if (a.status === "inert_estimate" && b.status === "inert_estimate") {
