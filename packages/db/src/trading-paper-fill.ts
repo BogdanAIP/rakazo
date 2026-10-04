@@ -21,6 +21,7 @@ import {
   appendTradingPaperLedgerEventInTransaction,
   recoverTradingPaperLedgerInTransaction,
 } from "./trading-paper-store.js";
+import { assertTradingPaperCallerInTransaction, type PaperBotCaller } from "./trading-paper-bot.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 type Owner = { spaceId: string; userId: string };
@@ -369,10 +370,12 @@ export async function fillApprovedTradingPaperReservation(
   ledgerId: string,
   reservationId: string,
   evidenceId: string,
+  caller?: PaperBotCaller,
 ): Promise<TradingPaperFillResult> {
   const operation = async (): Promise<TradingPaperFillResult> =>
     prisma.$transaction(
       async (tx) => {
+        await assertTradingPaperCallerInTransaction(tx, owner, ledgerId, caller, "new_exposure");
         await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         const prior = await readExistingFill(tx, owner, ledgerId, reservationId, evidenceId);
@@ -524,7 +527,7 @@ export async function fillApprovedTradingPaperReservation(
           quantityBase: reservation.quantityBase,
           executedPriceQuote,
           feeQuote,
-        });
+        }, caller);
         if (appended.status !== "appended") {
           throw new PaperFillIntegrityError("Fresh synthetic fill unexpectedly duplicated");
         }
