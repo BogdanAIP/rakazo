@@ -2,11 +2,11 @@ import { createHash } from "node:crypto";
 import { type TradingPaperPolicy, TradingPaperPolicySchema } from "@rakazo/contracts";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { requireTradingBotPaperBindingInTransaction } from "./trading-paper-bot.js";
 import {
   auditTradingPaperLifecycleInTransaction,
   PaperLifecycleAuditError,
 } from "./trading-paper-lifecycle-audit.js";
-import { requireTradingBotPaperBindingInTransaction } from "./trading-paper-bot.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
 import { PaperStopGuardIntegrityError } from "./trading-paper-stop-guard.js";
 import { PaperLedgerIntegrityError } from "./trading-paper-store.js";
