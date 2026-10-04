@@ -3,6 +3,7 @@ import { type TradingSignal, TradingSignalSchema } from "@rakazo/contracts";
 import { estimateExactPaperSpotCapacity } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { assertTradingPaperCallerInTransaction, type PaperBotCaller } from "./trading-paper-bot.js";
 import {
   auditTradingPaperLifecycleInTransaction,
   PaperLifecycleAuditError,
@@ -22,7 +23,6 @@ import {
   appendTradingPaperLedgerEventInTransaction,
   recoverTradingPaperLedgerInTransaction,
 } from "./trading-paper-store.js";
-import { assertTradingPaperCallerInTransaction, type PaperBotCaller } from "./trading-paper-bot.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 type Owner = { spaceId: string; userId: string };
@@ -429,7 +429,12 @@ export async function reserveApprovedTradingPaperSignal(
             maxSpendQuote: capacity.heldQuote,
             expiresAt,
           };
-          const appended = await appendTradingPaperLedgerEventInTransaction(tx, owner, event, caller);
+          const appended = await appendTradingPaperLedgerEventInTransaction(
+            tx,
+            owner,
+            event,
+            caller,
+          );
           if (appended.status !== "appended") {
             throw new PaperReservationDecisionIntegrityError(
               "Fresh B7 event unexpectedly duplicated",
