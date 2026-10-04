@@ -6,6 +6,7 @@ import {
   auditTradingPaperLifecycleInTransaction,
   PaperLifecycleAuditError,
 } from "./trading-paper-lifecycle-audit.js";
+import { requireTradingBotPaperBindingInTransaction } from "./trading-paper-bot.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
 import { PaperStopGuardIntegrityError } from "./trading-paper-stop-guard.js";
 import { PaperLedgerIntegrityError } from "./trading-paper-store.js";
@@ -188,7 +189,7 @@ export async function applyApprovedTradingPaperControl(
       async (tx) => {
         const effect = await tx.externalEffect.findUnique({
           where: { id: effectId },
-          include: { run: { select: { id: true, spaceId: true, userId: true } } },
+          include: { run: { select: { id: true, botId: true, spaceId: true, userId: true } } },
         });
         if (
           effect?.status !== "executing" ||
@@ -200,6 +201,26 @@ export async function applyApprovedTradingPaperControl(
           throw new PaperRiskPolicyIntegrityError("Paper control lacks explicit approved effect");
         const request = parseControlRequest(effect.request);
         await requireOwnedLedger(tx, owner, request.ledgerId);
+        // P12: legacy P11 ledgers remain unbound. A NEW bound ledger may
+        // only receive an approval from a Run of its exact native Rakazo Bot.
+        // Archive bypass is exclusively for a previously approved disable.
+        const binding = await tx.tradingPaperLedger.findUnique({
+          where: { id: request.ledgerId },
+          select: { botId: true },
+        });
+        if (binding?.botId) {
+          try {
+            await requireTradingBotPaperBindingInTransaction(
+              tx,
+              owner,
+              binding.botId,
+              request.ledgerId,
+              { runId: effect.run.id, allowArchived: request.action === "disable" },
+            );
+          } catch {
+            throw new PaperRiskPolicyIntegrityError("Paper control Run is not the bound Bot");
+          }
+        }
         const verified = await verifyTradingPaperRiskPolicyInTransaction(
           tx,
           owner,
