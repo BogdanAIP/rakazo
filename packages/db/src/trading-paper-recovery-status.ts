@@ -10,6 +10,7 @@ import {
   PaperLedgerIntegrityError,
   recoverTradingPaperLedgerInTransaction,
 } from "./trading-paper-store.js";
+import { assertTradingPaperCallerInTransaction, type PaperBotCaller } from "./trading-paper-bot.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 type Owner = { spaceId: string; userId: string };
@@ -50,10 +51,12 @@ export async function readTradingPaperRecoveryStatus(
   owner: Owner,
   ledgerId: string,
   now: Date = new Date(),
+  caller?: PaperBotCaller,
 ): Promise<PaperRecoveryStatus> {
   return withTransactionRetry(() =>
     prisma.$transaction(
       async (tx): Promise<PaperRecoveryStatus> => {
+        await assertTradingPaperCallerInTransaction(tx, owner, ledgerId, caller, "recovery");
         // This owner/membership gate MUST complete before classifying
         // integrity failures, so unauthorized callers never gain an oracle.
         const verified = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
