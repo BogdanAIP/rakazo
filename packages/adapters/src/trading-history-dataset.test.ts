@@ -61,10 +61,12 @@ const settings = {
 describe("normalized historical snapshot integrity", () => {
   it("computes stable SHA from canonical parsed values regardless of object field order", () => {
     const a = buildVerifiedTradingHistoryDataset(capture());
-    const b = buildVerifiedTradingHistoryDataset(capture({
-      market: Object.fromEntries(Object.entries(market).reverse()),
-      candles: candles().map((bar) => Object.fromEntries(Object.entries(bar).reverse())),
-    }));
+    const b = buildVerifiedTradingHistoryDataset(
+      capture({
+        market: Object.fromEntries(Object.entries(market).reverse()),
+        candles: candles().map((bar) => Object.fromEntries(Object.entries(bar).reverse())),
+      }),
+    );
     expect(a.datasetSha256).toMatch(/^[a-f0-9]{64}$/);
     expect(a.datasetSha256).toBe(b.datasetSha256);
     expect(a.canonicalByteLength).toBe(b.canonicalByteLength);
@@ -83,23 +85,23 @@ describe("normalized historical snapshot integrity", () => {
     expect(() =>
       verifyTradingHistoryDataset({ ...a, retrievedAt: "2026-10-04T08:01:00.000Z" }),
     ).toThrow("integrity");
-    expect(() =>
-      verifyTradingHistoryDataset({ ...a, totalMissingBars: 3 }),
-    ).toThrow("integrity");
-    expect(() =>
-      verifyTradingHistoryDataset({ ...a, eligibleForSpotWalkforward: false }),
-    ).toThrow("integrity");
+    expect(() => verifyTradingHistoryDataset({ ...a, totalMissingBars: 3 })).toThrow("integrity");
+    expect(() => verifyTradingHistoryDataset({ ...a, eligibleForSpotWalkforward: false })).toThrow(
+      "integrity",
+    );
   });
 
   it("preserves holes rather than filling candles or emitting backtest results", () => {
     const missing = candles().filter((_, i) => i !== 9);
     const dataset = buildVerifiedTradingHistoryDataset(capture({ candles: missing }));
     expect(dataset.candles).toHaveLength(21);
-    expect(dataset.gapRanges).toEqual([{
-      afterOpenedAt: new Date(opened0 + 8 * 3_600_000).toISOString(),
-      beforeOpenedAt: new Date(opened0 + 10 * 3_600_000).toISOString(),
-      missingBars: 1,
-    }]);
+    expect(dataset.gapRanges).toEqual([
+      {
+        afterOpenedAt: new Date(opened0 + 8 * 3_600_000).toISOString(),
+        beforeOpenedAt: new Date(opened0 + 10 * 3_600_000).toISOString(),
+        missingBars: 1,
+      },
+    ]);
     expect(dataset.totalMissingBars).toBe(1);
     expect(dataset.eligibleForSpotWalkforward).toBe(false);
     expect(() => replayVerifiedSpotDataset(dataset, settings)).toThrow("not eligible");
@@ -119,9 +121,7 @@ describe("normalized historical snapshot integrity", () => {
     expect(() =>
       buildVerifiedTradingHistoryDataset(capture({ retrievedAt: new Date(opened0).toISOString() })),
     ).toThrow("Unclosed");
-    expect(() =>
-      capture({ candles: [{ ...candles()[0], confirmed: false }] }),
-    ).toThrow();
+    expect(() => capture({ candles: [{ ...candles()[0], confirmed: false }] })).toThrow();
   });
 
   it("retains an inactive/delisted-at-capture archive but never silently treats it as tradable", () => {
@@ -145,19 +145,22 @@ describe("normalized historical snapshot integrity", () => {
   });
 
   it("constructs a dataset via exactly one keyless public OKX history GET", async () => {
-    const data = candles().reverse().map((c) => [
-      String(Date.parse(c.openedAt)),
-      c.open,
-      c.high,
-      c.low,
-      c.close,
-      "1",
-      "1",
-      c.quoteVolume,
-      "1",
-    ]);
-    const mock = vi.fn(async (_url: unknown, _options: unknown) =>
-      new Response(JSON.stringify({ code: "0", data }), { status: 200 }),
+    const data = candles()
+      .reverse()
+      .map((c) => [
+        String(Date.parse(c.openedAt)),
+        c.open,
+        c.high,
+        c.low,
+        c.close,
+        "1",
+        "1",
+        c.quoteVolume,
+        "1",
+      ]);
+    const mock = vi.fn(
+      async (_url: unknown, _options: unknown) =>
+        new Response(JSON.stringify({ code: "0", data }), { status: 200 }),
     );
     const result = await captureOkxClosedHistoryDataset(market, {
       fetchImpl: mock as unknown as typeof fetch,
