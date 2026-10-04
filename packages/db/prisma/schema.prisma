@@ -45,6 +45,7 @@ model User {
   createdSpaces               Space[]                      @relation("SpaceCreator")
   botSecrets BotSecret[]
   agentSecrets               AgentSecret[]
+  tradingPaperLedgers         TradingPaperLedger[]
 
   @@unique([email])
   @@map("user")
@@ -206,6 +207,7 @@ model Space {
   botSecrets BotSecret[]
   externalConversations       ExternalConversation[]
   agentSecrets                AgentSecret[]
+  tradingPaperLedgers         TradingPaperLedger[]
 
   @@unique([id, organizationId])
   @@index([organizationId, createdAt])
@@ -1366,4 +1368,60 @@ model IntegrationProviderConfig {
   updatedAt  DateTime @updatedAt
 
   @@map("integration_provider_configs")
+}
+
+/**
+ * Inert PAPER-only ledger. There is no order/credential relation, RPC route or
+ * execution authority. All event append operations must be owner-space scoped.
+ */
+model TradingPaperLedger {
+  id                  String                    @id
+  spaceId             String
+  space               Space                     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  ownerUserId         String
+  owner               User                      @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  openedAt            DateTime
+  quoteCurrency       String
+  initialBalanceQuote String
+  version             Int                       @default(0)
+  projection          Json
+  projectionSha256    String
+  headSha256          String
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  events              TradingPaperLedgerEvent[]
+
+  @@index([spaceId, ownerUserId])
+  @@map("trading_paper_ledgers")
+}
+
+model TradingPaperLedgerEvent {
+  ledgerId      String
+  sequence      Int
+  eventId       String
+  kind          String
+  recordedAt    DateTime
+  payload       Json
+  payloadSha256 String
+  previousSha256 String
+  chainSha256   String
+  createdAt     DateTime @default(now())
+  ledger        TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  outbox        TradingPaperLedgerOutbox?
+
+  @@id([ledgerId, sequence])
+  @@unique([ledgerId, eventId])
+  @@map("trading_paper_ledger_events")
+}
+
+/** Durable inert notification only, NOT a broker order or an active dispatcher. */
+model TradingPaperLedgerOutbox {
+  ledgerId    String
+  sequence    Int
+  status      String @default("pending")
+  createdAt   DateTime @default(now())
+  event       TradingPaperLedgerEvent @relation(fields: [ledgerId, sequence], references: [ledgerId, sequence], onDelete: Cascade)
+
+  @@id([ledgerId, sequence])
+  @@map("trading_paper_ledger_outbox")
 }
