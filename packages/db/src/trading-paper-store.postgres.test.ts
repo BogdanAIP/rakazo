@@ -921,16 +921,16 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     expect(await second.prisma.tradingPaperPolicyAudit.count({ where: { ledgerId } })).toBe(1);
 
     const stale = await makeEffect("stale", "disable", 0);
-    await expect(
-      applyApprovedTradingPaperControl(second.prisma, owner, stale.id),
-    ).resolves.toEqual({
-      ok: false,
-      mode: "paper_only",
-      action: "disable",
-      ledgerId,
-      error: "stale_policy_revision",
-      currentPolicyRevision: 1,
-    });
+    await expect(applyApprovedTradingPaperControl(second.prisma, owner, stale.id)).resolves.toEqual(
+      {
+        ok: false,
+        mode: "paper_only",
+        action: "disable",
+        ledgerId,
+        error: "stale_policy_revision",
+        currentPolicyRevision: 1,
+      },
+    );
     expect(await second.prisma.tradingPaperPolicyAudit.count({ where: { ledgerId } })).toBe(1);
 
     const disable = await makeEffect("disable", "disable", 1);
@@ -946,9 +946,7 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       killSwitch: true,
     });
     expect(await second.prisma.tradingPaperPolicyAudit.count({ where: { ledgerId } })).toBe(2);
-    expect(
-      await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId),
-    ).toMatchObject({
+    expect(await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId)).toMatchObject({
       revision: 2,
       policy: { mode: "paper_only", enabled: false, killSwitch: true },
     });
