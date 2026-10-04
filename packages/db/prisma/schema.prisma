@@ -1395,6 +1395,7 @@ model TradingPaperLedger {
   stopGuards          TradingPaperStopGuard[]
   policyAudits        TradingPaperPolicyAudit[]
   reservationDecisions TradingPaperReservationDecision[]
+  releaseAudits        TradingPaperReleaseAudit[]
 
   @@index([spaceId, ownerUserId])
   @@map("trading_paper_ledgers")
@@ -1463,6 +1464,26 @@ model TradingPaperPolicyAudit {
   @@index([ledgerId, createdAt])
   @@unique([ledgerId, toRevision])
   @@map("trading_paper_policy_audits")
+}
+
+/** Immutable audit of synthetic hold release; never an exchange close/order. */
+model TradingPaperReleaseAudit {
+  ledgerId       String
+  reservationId  String
+  ledger         TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  eventSequence  Int
+  eventId        String
+  reason         String
+  policyRevision Int
+  releasedQuote  String
+  releasedAt     DateTime
+  releaseSha256  String
+  createdAt      DateTime @default(now())
+
+  @@id([ledgerId, reservationId])
+  @@unique([ledgerId, eventId])
+  @@index([ledgerId, createdAt])
+  @@map("trading_paper_release_audits")
 }
 
 /** Durable idempotency/audit for an internal synthetic PAPER reserve only. */

@@ -14,6 +14,7 @@ import {
   PaperReservationConflictError,
   reserveApprovedTradingPaperSignal,
 } from "./trading-paper-reserve.js";
+import { reconcileTradingPaperReservations } from "./trading-paper-reconciliation.js";
 import {
   applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,
@@ -75,6 +76,63 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     maxSpendQuote: "20",
     expiresAt: "2026-10-04T10:00:00.000Z",
   });
+  const makePaperControlEffect = async (
+    ledgerId: string,
+    label: string,
+    action: "enable" | "disable",
+    revision: number,
+  ) => {
+    const botId = `paper-control-helper-bot-${label}-${suffix}`;
+    const threadId = `paper-control-helper-thread-${label}-${suffix}`;
+    const taskId = `paper-control-helper-task-${label}-${suffix}`;
+    const runId = `paper-control-helper-run-${label}-${suffix}`;
+    await first.prisma.bot.create({
+      data: {
+        id: botId,
+        spaceId: owner.spaceId,
+        userId: owner.userId,
+        name: "Paper Control Helper",
+        color: "#000000",
+      },
+    });
+    await first.prisma.thread.create({
+      data: { id: threadId, spaceId: owner.spaceId, botId, userId: owner.userId },
+    });
+    await first.prisma.task.create({
+      data: {
+        id: taskId,
+        spaceId: owner.spaceId,
+        botId,
+        threadId,
+        userId: owner.userId,
+        prompt: "paper control helper",
+        status: "running",
+      },
+    });
+    await first.prisma.run.create({
+      data: {
+        id: runId,
+        spaceId: owner.spaceId,
+        botId,
+        threadId,
+        taskId,
+        userId: owner.userId,
+        status: "running",
+        trigger: "user",
+      },
+    });
+    return first.prisma.externalEffect.create({
+      data: {
+        id: `paper-control-helper-effect-${label}-${suffix}`,
+        spaceId: owner.spaceId,
+        runId,
+        kind: "paper_trading_control",
+        idempotencyKey: `paper-control-helper-key-${label}-${suffix}`,
+        status: "executing",
+        request: { action, ledger_id: ledgerId, expected_policy_revision: revision },
+      },
+    });
+  };
 
   afterAll(async () => {
     if (!first || !second) return;
@@ -1295,5 +1353,151 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
         where: { ledgerId: race.ledgerId },
       }),
     ).toBe(1);
+  });
+  it("P11C-0 releases expired synthetic holds idempotently under trusted-clock reconciliation", async () => {
+    const ledgerId = `paper-b8-expired-${suffix}`;
+    const now = Date.now();
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: new Date(now - 180_000).toISOString(),
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "500",
+    });
+    await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+      allowedVenues: ["okx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "300",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    });
+    const enable = await makePaperControlEffect(ledgerId, "b8-expired-enable", "enable", 0);
+    await applyApprovedTradingPaperControl(first.prisma, owner, enable.id);
+    await appendTradingPaperLedgerEvent(first.prisma, owner, {
+      ledgerId,
+      eventId: `b8-expired-reserve-event-${suffix}`,
+      sequence: 1,
+      kind: "reserve",
+      recordedAt: new Date(now - 120_000).toISOString(),
+      reservationId: `b8-expired-reservation-${suffix}`,
+      signalId: `b8-expired-signal-${suffix}`,
+      market,
+      quantityBase: "1",
+      maxSpendQuote: "110",
+      expiresAt: new Date(now - 60_000).toISOString(),
+    });
+    expect((await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId)).reservedQuote).toBe(
+      "110",
+    );
+    await expect(reconcileTradingPaperReservations(second.prisma, owner, ledgerId)).resolves.toEqual(
+      { released: 1, reason: "expired" },
+    );
+    const recovered = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);
+    expect(recovered.reservations).toHaveLength(0);
+    expect(recovered.availableQuote).toBe("500");
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(2);
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(2);
+    expect(await first.prisma.tradingPaperReleaseAudit.findMany({ where: { ledgerId } })).toMatchObject(
+      [{ reason: "expired", releasedQuote: "110", policyRevision: 1 }],
+    );
+    await expect(reconcileTradingPaperReservations(second.prisma, owner, ledgerId)).resolves.toEqual(
+      { released: 0, reason: "expired" },
+    );
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(2);
+  });
+
+  it("P11C-0 approved disable atomically releases an outstanding B7 hold but never creates a fill", async () => {
+    const ledgerId = `paper-b8-kill-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: new Date(Date.now() - 20_000).toISOString(),
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "500",
+    });
+    await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+      allowedVenues: ["okx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "300",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    });
+    const enable = await makePaperControlEffect(ledgerId, "b8-kill-enable", "enable", 0);
+    await applyApprovedTradingPaperControl(first.prisma, owner, enable.id);
+    const at = new Date().toISOString();
+    const evidence = await recordPublicAdapterPaperQuoteEvidence(
+      first.prisma,
+      owner,
+      ledgerId,
+      market,
+      {
+        venue: "okx",
+        kind: "spot",
+        symbol: "SOL-USDT",
+        observedAt: at,
+        fetchedAt: at,
+        bid: "100",
+        ask: "100.1",
+        quoteVolume24h: "100000",
+      },
+    );
+    const signal = {
+      kind: "proposal",
+      executionStatus: "research_only",
+      signalId: `b8-kill-signal-${suffix}`,
+      strategyId: "b8-kill",
+      strategyVersion: "1",
+      createdAt: new Date(Date.now() - 1000).toISOString(),
+      expiresAt: new Date(Date.now() + 120_000).toISOString(),
+      evidenceIds: ["research-only"],
+      market,
+      action: "spot_buy",
+      entryTrigger: "100.1",
+      stopLoss: "95",
+      takeProfit: ["110"],
+      invalidation: "fixture",
+      rationale: "B8 synthetic disable reconciliation",
+      riskBudgetQuote: "10",
+      maxSlippageBps: null,
+    } as const;
+    const reserved = await reserveApprovedTradingPaperSignal(
+      first.prisma,
+      owner,
+      ledgerId,
+      signal,
+      evidence.id,
+    );
+    expect(reserved.status).toBe("reserved");
+    expect((await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId)).reservations).toHaveLength(1);
+
+    const disable = await makePaperControlEffect(ledgerId, "b8-kill-disable", "disable", 1);
+    await applyApprovedTradingPaperControl(second.prisma, owner, disable.id);
+
+    const policyAfter = await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId);
+    expect(policyAfter).toMatchObject({
+      revision: 2,
+      policy: { mode: "paper_only", enabled: false, killSwitch: true },
+    });
+    const state = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);
+    expect(state.reservations).toHaveLength(0);
+    expect(state.positions).toHaveLength(0);
+    expect(state.availableQuote).toBe("500");
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "release" } })).toBe(1);
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_buy" } })).toBe(0);
+    expect(await first.prisma.tradingPaperReleaseAudit.findMany({ where: { ledgerId } })).toMatchObject(
+      [{ reason: "kill_switch", policyRevision: 2 }],
+    );
   });
 });

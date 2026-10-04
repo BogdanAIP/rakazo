@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { type TradingPaperPolicy, TradingPaperPolicySchema } from "@rakazo/contracts";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 type PolicyDb = Pick<PrismaClient, "$transaction">;
@@ -273,6 +274,16 @@ export async function applyApprovedTradingPaperControl(
             afterSha256,
           },
         });
+        if (request.action === "disable") {
+          await releaseTradingPaperReservationsInTransaction(
+            tx,
+            owner,
+            request.ledgerId,
+            "kill_switch",
+            nextRevision,
+            Date.now(),
+          );
+        }
         return complete({
           ok: true,
           mode: "paper_only",

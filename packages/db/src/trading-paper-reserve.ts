@@ -3,6 +3,7 @@ import { type TradingSignal, TradingSignalSchema } from "@rakazo/contracts";
 import { estimateExactPaperSpotCapacity } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
 import {
   evaluateTradingPaperReservationInTransaction,
   type TradingPaperReservationDeny,
@@ -11,6 +12,7 @@ import {
 import {
   lockTradingPaperRiskPolicyInTransaction,
   verifyCurrentTradingPaperEnableAuditInTransaction,
+  verifyTradingPaperRiskPolicyInTransaction,
 } from "./trading-paper-risk-policy.js";
 import {
   appendTradingPaperLedgerEventInTransaction,
@@ -244,6 +246,15 @@ export async function reserveApprovedTradingPaperSignal(
         }
 
         await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
+        const currentPolicy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
+        await releaseTradingPaperReservationsInTransaction(
+          tx,
+          owner,
+          ledgerId,
+          !currentPolicy.policy.enabled || currentPolicy.policy.killSwitch ? "kill_switch" : "expired",
+          currentPolicy.revision,
+          Date.now(),
+        );
         const evaluated = await evaluateTradingPaperReservationInTransaction(
           tx,
           owner,
