@@ -86,8 +86,9 @@ export async function auditTradingPaperLifecycleInTransaction(
   const outboxSequences = new Set(outbox.map((entry) => entry.sequence));
   assert(
     outboxSequences.size === outbox.length &&
-      events.every((event) => outboxSequences.has(event.sequence)),
-    "Lifecycle event missing its inert outbox entry",
+      events.every((event) => outboxSequences.has(event.sequence)) &&
+      outbox.every((entry) => entry.status === "pending"),
+    "Lifecycle inert outbox missing, duplicated or unexpectedly dispatched",
   );
 
   // Check original one-time owner approval for every synthetic reserve/fill/close.

@@ -2632,4 +2632,52 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       ),
     ).rejects.toBeInstanceOf(PaperRiskPolicyIntegrityError);
   });
+  it("P11C-8 rejects a forged inert-outbox delivery marker without money mutation", async () => {
+    const ledgerId = `paper-c5-recovery-${suffix}`;
+    const before = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);
+    const policyBefore = await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId);
+    const eventsBefore = await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } });
+    const outboxBefore = await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } });
+    const entry = await first.prisma.tradingPaperLedgerOutbox.findFirstOrThrow({
+      where: { ledgerId },
+      orderBy: { sequence: "asc" },
+    });
+    expect(entry.status).toBe("pending");
+    const where = { ledgerId_sequence: { ledgerId, sequence: entry.sequence } };
+    await first.prisma.tradingPaperLedgerOutbox.update({
+      where,
+      data: { status: "delivered" },
+    });
+    await expect(
+      auditTradingPaperLifecycle(second.prisma, owner, ledgerId),
+    ).rejects.toBeInstanceOf(PaperLifecycleAuditError);
+    const blocked = await readTradingPaperRecoveryStatus(second.prisma, owner, ledgerId);
+    expect(blocked).toMatchObject({
+      status: "integrity_blocked",
+      nextAction: "inspect_and_restore_independently",
+    });
+    expect("availableQuote" in blocked).toBe(false);
+    await expect(
+      reserveApprovedTradingPaperSignal(second.prisma, owner, ledgerId, null, ""),
+    ).rejects.toBeInstanceOf(PaperLifecycleAuditError);
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(
+      eventsBefore,
+    );
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+      outboxBefore,
+    );
+    expect(await readVerifiedTradingPaperLedger(second.prisma, owner, ledgerId)).toEqual(before);
+    expect(await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId)).toEqual(
+      policyBefore,
+    );
+    // Restore only the disposable test fixture; there is no automatic repair API.
+    await first.prisma.tradingPaperLedgerOutbox.update({
+      where,
+      data: { status: "pending" },
+    });
+    expect(await auditTradingPaperLifecycle(second.prisma, owner, ledgerId)).toMatchObject({
+      status: "verified",
+      acceptedEvents: eventsBefore,
+    });
+  });
 });
