@@ -17,7 +17,9 @@ function exact(value: string): bigint {
   return BigInt(whole!) * SCALE + BigInt(fraction.padEnd(8, "0"));
 }
 const sha = (value: TradingTicker) =>
-  createHash("sha256").update(JSON.stringify([SOURCE, value]), "utf8").digest("hex");
+  createHash("sha256")
+    .update(JSON.stringify([SOURCE, value]), "utf8")
+    .digest("hex");
 
 export class PaperQuoteEvidenceError extends Error {
   constructor(message = "Paper quote evidence is unavailable or invalid") {
@@ -61,8 +63,13 @@ export async function recordSyntheticPaperQuoteEvidence(
     observed > now + 2_000 ||
     now - observed > MAX_AGE_MS ||
     now - fetched > MAX_AGE_MS
-  ) throw new PaperQuoteEvidenceError("Offline quote is stale or future-dated");
-  if (exact(ticker.bid) === 0n || exact(ticker.ask) === 0n || exact(ticker.bid) > exact(ticker.ask)) {
+  )
+    throw new PaperQuoteEvidenceError("Offline quote is stale or future-dated");
+  if (
+    exact(ticker.bid) === 0n ||
+    exact(ticker.ask) === 0n ||
+    exact(ticker.bid) > exact(ticker.ask)
+  ) {
     throw new PaperQuoteEvidenceError("Offline bid/ask is crossed or zero");
   }
   const id = randomUUID();
@@ -109,7 +116,8 @@ export async function readVerifiedPaperQuoteEvidence(
           row.payloadSha256 !== sha(ticker) ||
           row.observedAt.getTime() !== Date.parse(ticker.observedAt) ||
           row.fetchedAt.getTime() !== Date.parse(ticker.fetchedAt)
-        ) throw new PaperQuoteEvidenceError("Quote evidence digest/timestamps mismatch");
+        )
+          throw new PaperQuoteEvidenceError("Quote evidence digest/timestamps mismatch");
         if (ticker.kind !== "spot" || !["okx", "bingx"].includes(ticker.venue)) {
           throw new PaperQuoteEvidenceError();
         }

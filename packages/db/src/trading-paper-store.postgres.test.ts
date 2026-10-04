@@ -372,7 +372,12 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     ).rejects.toBeInstanceOf(PaperQuoteEvidenceError);
     const saved = await recordSyntheticPaperQuoteEvidence(first.prisma, owner, ledgerId, ticker);
     expect(saved.source).toBe("offline_fixture");
-    const recovered = await readVerifiedPaperQuoteEvidence(second.prisma, owner, ledgerId, saved.id);
+    const recovered = await readVerifiedPaperQuoteEvidence(
+      second.prisma,
+      owner,
+      ledgerId,
+      saved.id,
+    );
     expect(recovered.ticker).toMatchObject(ticker);
     await expect(
       readVerifiedPaperQuoteEvidence(
@@ -392,5 +397,4 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       readVerifiedPaperQuoteEvidence(second.prisma, owner, ledgerId, saved.id),
     ).rejects.toBeInstanceOf(PaperQuoteEvidenceError);
   });
-
 });
