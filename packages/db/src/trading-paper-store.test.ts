@@ -85,7 +85,8 @@ function harness() {
             working.ledger.ownerUserId !== where.ownerUserId ||
             working.ledger.version !== where.version ||
             working.ledger.headSha256 !== where.headSha256
-          ) return { count: 0 };
+          )
+            return { count: 0 };
           working.ledger = {
             ...working.ledger,
             ...data,
@@ -96,14 +97,19 @@ function harness() {
       },
       tradingPaperLedgerEvent: {
         findMany: vi.fn(async ({ where }: { where: Row }) =>
-          working.events.filter((r) => r.ledgerId === where.ledgerId)
+          working.events
+            .filter((r) => r.ledgerId === where.ledgerId)
             .sort((a, b) => (a.sequence as number) - (b.sequence as number)),
         ),
         create: vi.fn(async ({ data }: { data: Row }) => {
-          if (working.events.some((entry) =>
-            entry.ledgerId === data.ledgerId &&
-            (entry.eventId === data.eventId || entry.sequence === data.sequence)
-          )) throw new Error("duplicate paper event");
+          if (
+            working.events.some(
+              (entry) =>
+                entry.ledgerId === data.ledgerId &&
+                (entry.eventId === data.eventId || entry.sequence === data.sequence),
+            )
+          )
+            throw new Error("duplicate paper event");
           working.events.push({ ...data });
           return data;
         }),
@@ -125,8 +131,12 @@ function harness() {
     transaction,
     snapshot: () => structuredClone(snapshot),
     tamper: (mutate: (data: Snapshot) => void) => mutate(snapshot),
-    denyMembership: () => { allow = false; },
-    breakOutbox: () => { failOutbox = true; },
+    denyMembership: () => {
+      allow = false;
+    },
+    breakOutbox: () => {
+      failOutbox = true;
+    },
   };
 }
 const create = (h: ReturnType<typeof harness>) =>
@@ -160,8 +170,9 @@ describe("trusted-service-only transactional paper journal", () => {
     const b = await appendTradingPaperLedgerEvent(h.prisma, owner, buy);
     expect(b.state.availableQuote).toBe("799.56");
     expect(b.state.openCostBasisQuote).toBe("200.44");
-    expect((await readVerifiedTradingPaperLedger(h.prisma, owner, "paper-1")).bookEquityQuote)
-      .toBe("1000");
+    expect((await readVerifiedTradingPaperLedger(h.prisma, owner, "paper-1")).bookEquityQuote).toBe(
+      "1000",
+    );
   });
 
   it("an identical event retry is inert; conflicting ID, sequence or actor fails closed", async () => {
@@ -172,15 +183,28 @@ describe("trusted-service-only transactional paper journal", () => {
     const duplicate = await appendTradingPaperLedgerEvent(h.prisma, owner, reserve);
     expect(duplicate.status).toBe("duplicate");
     expect(h.snapshot()).toEqual(before);
-    await expect(appendTradingPaperLedgerEvent(h.prisma, owner, {
-      ...reserve, maxSpendQuote: "210",
-    })).rejects.toBeInstanceOf(PaperLedgerConflictError);
-    await expect(appendTradingPaperLedgerEvent(h.prisma, owner, {
-      ...buy, sequence: 3,
-    })).rejects.toBeInstanceOf(PaperLedgerConflictError);
-    await expect(readVerifiedTradingPaperLedger(h.prisma, {
-      spaceId: owner.spaceId, userId: "another-user",
-    }, "paper-1")).rejects.toBeInstanceOf(PaperLedgerIntegrityError);
+    await expect(
+      appendTradingPaperLedgerEvent(h.prisma, owner, {
+        ...reserve,
+        maxSpendQuote: "210",
+      }),
+    ).rejects.toBeInstanceOf(PaperLedgerConflictError);
+    await expect(
+      appendTradingPaperLedgerEvent(h.prisma, owner, {
+        ...buy,
+        sequence: 3,
+      }),
+    ).rejects.toBeInstanceOf(PaperLedgerConflictError);
+    await expect(
+      readVerifiedTradingPaperLedger(
+        h.prisma,
+        {
+          spaceId: owner.spaceId,
+          userId: "another-user",
+        },
+        "paper-1",
+      ),
+    ).rejects.toBeInstanceOf(PaperLedgerIntegrityError);
     expect(h.snapshot()).toEqual(before);
   });
 
@@ -188,17 +212,24 @@ describe("trusted-service-only transactional paper journal", () => {
     const h = harness();
     await create(h);
     await appendTradingPaperLedgerEvent(h.prisma, owner, reserve);
-    h.tamper((d) => { d.events[0]!.payloadSha256 = "0".repeat(64); });
-    await expect(readVerifiedTradingPaperLedger(h.prisma, owner, "paper-1")).rejects
-      .toBeInstanceOf(PaperLedgerIntegrityError);
-    await expect(appendTradingPaperLedgerEvent(h.prisma, owner, buy)).rejects
-      .toBeInstanceOf(PaperLedgerIntegrityError);
+    h.tamper((d) => {
+      d.events[0]!.payloadSha256 = "0".repeat(64);
+    });
+    await expect(readVerifiedTradingPaperLedger(h.prisma, owner, "paper-1")).rejects.toBeInstanceOf(
+      PaperLedgerIntegrityError,
+    );
+    await expect(appendTradingPaperLedgerEvent(h.prisma, owner, buy)).rejects.toBeInstanceOf(
+      PaperLedgerIntegrityError,
+    );
     const h2 = harness();
     await create(h2);
     await appendTradingPaperLedgerEvent(h2.prisma, owner, reserve);
-    h2.tamper((d) => { d.ledger!.projectionSha256 = "1".repeat(64); });
-    await expect(readVerifiedTradingPaperLedger(h2.prisma, owner, "paper-1")).rejects
-      .toBeInstanceOf(PaperLedgerIntegrityError);
+    h2.tamper((d) => {
+      d.ledger!.projectionSha256 = "1".repeat(64);
+    });
+    await expect(
+      readVerifiedTradingPaperLedger(h2.prisma, owner, "paper-1"),
+    ).rejects.toBeInstanceOf(PaperLedgerIntegrityError);
   });
 
   it("rolls back revision and cash reservation when outbox insert fails", async () => {
@@ -219,8 +250,9 @@ describe("trusted-service-only transactional paper journal", () => {
     const another = harness();
     await create(another);
     another.denyMembership();
-    await expect(appendTradingPaperLedgerEvent(another.prisma, owner, reserve)).rejects
-      .toBeInstanceOf(PaperLedgerIntegrityError);
+    await expect(
+      appendTradingPaperLedgerEvent(another.prisma, owner, reserve),
+    ).rejects.toBeInstanceOf(PaperLedgerIntegrityError);
     expect(another.snapshot().events).toHaveLength(0);
   });
 });
