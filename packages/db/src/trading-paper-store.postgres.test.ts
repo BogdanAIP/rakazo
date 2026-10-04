@@ -2528,15 +2528,32 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
   });
 
   it("P11C-6 reports only verified finances and respects owner scope", async () => {
-    const closed = await readTradingPaperRecoveryStatus(
+    // C3 deliberately removes a close decision and leaves this disposable
+    // fixture corrupt: the status reader must not report its PnL as verified.
+    const damagedClose = await readTradingPaperRecoveryStatus(
       first.prisma,
       owner,
       `paper-c2-stop-${suffix}`,
     );
-    expect(closed).toMatchObject({
+    expect(damagedClose).toMatchObject({
+      status: "integrity_blocked",
+      nextAction: "inspect_and_restore_independently",
+    });
+    expect("realizedPnlQuote" in damagedClose).toBe(false);
+    // C4 restores its tampered fill SHA, but keeps the policy disabled and
+    // the synthetic open position protected by its persisted stop guard.
+    const verifiedOpen = await readTradingPaperRecoveryStatus(
+      second.prisma,
+      owner,
+      `paper-c1-fill-${suffix}`,
+    );
+    expect(verifiedOpen).toMatchObject({
       status: "verified",
+      enabled: false,
+      killSwitch: true,
       openReservations: 0,
-      openPositions: 0,
+      openPositions: 1,
+      nextAction: "separate_owner_approval_to_enable",
     });
     const damagedLegacy = await readTradingPaperRecoveryStatus(
       second.prisma,
