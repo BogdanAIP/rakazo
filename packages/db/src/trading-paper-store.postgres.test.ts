@@ -2029,14 +2029,20 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
           stopEvidence.id,
         ),
       ).rejects.toBeInstanceOf(PaperFillConflictError);
-      expect((await readVerifiedTradingPaperLedger(restarted.prisma, owner, ledgerId)).version).toBe(
-        afterCloseVersion,
-      );
+      expect(
+        (await readVerifiedTradingPaperLedger(restarted.prisma, owner, ledgerId)).version,
+      ).toBe(afterCloseVersion);
       expect(await restarted.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(3);
-      expect(await restarted.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(3);
+      expect(await restarted.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+        3,
+      );
       expect(await restarted.prisma.tradingPaperStopGuard.count({ where: { ledgerId } })).toBe(0);
-      expect(await restarted.prisma.tradingPaperFillDecision.count({ where: { ledgerId } })).toBe(1);
-      expect(await restarted.prisma.tradingPaperCloseDecision.count({ where: { ledgerId } })).toBe(1);
+      expect(await restarted.prisma.tradingPaperFillDecision.count({ where: { ledgerId } })).toBe(
+        1,
+      );
+      expect(await restarted.prisma.tradingPaperCloseDecision.count({ where: { ledgerId } })).toBe(
+        1,
+      );
     } finally {
       await restarted.prisma.$disconnect();
       await restarted.pool.end();
