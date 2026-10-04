@@ -39,9 +39,8 @@ export function buildApprovalAskBlock(
               {
                 id: "allow",
                 label: args.action === "disable" ? "Disable paper trading" : "Enable paper only",
-                outcome: args.action === "disable" ? "disabled" : "enabled",
               },
-              { id: "deny", label: "Cancel", outcome: "cancelled" },
+              { id: "deny", label: "Cancel" },
             ]
           : [
               { id: "allow", label: "Allow once" },

@@ -117,8 +117,23 @@ type PaperTradingControlRequest = {
   expectedPolicyRevision: number;
 };
 export type PaperTradingControlResult =
-  | { ok: true; mode: "paper_only"; action: "enable" | "disable"; ledgerId: string; policyRevision: number; enabled: boolean; killSwitch: boolean }
-  | { ok: false; mode: "paper_only"; action: "enable" | "disable"; ledgerId: string; error: "stale_policy_revision" | "already_enabled" | "already_disabled"; currentPolicyRevision: number };
+  | {
+      ok: true;
+      mode: "paper_only";
+      action: "enable" | "disable";
+      ledgerId: string;
+      policyRevision: number;
+      enabled: boolean;
+      killSwitch: boolean;
+    }
+  | {
+      ok: false;
+      mode: "paper_only";
+      action: "enable" | "disable";
+      ledgerId: string;
+      error: "stale_policy_revision" | "already_enabled" | "already_disabled";
+      currentPolicyRevision: number;
+    };
 
 function parseControlRequest(value: unknown): PaperTradingControlRequest {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -126,7 +141,9 @@ function parseControlRequest(value: unknown): PaperTradingControlRequest {
   }
   const row = value as Record<string, unknown>;
   const keys = Object.keys(row).sort();
-  if (JSON.stringify(keys) !== JSON.stringify(["action", "expected_policy_revision", "ledger_id"])) {
+  if (
+    JSON.stringify(keys) !== JSON.stringify(["action", "expected_policy_revision", "ledger_id"])
+  ) {
     throw new PaperRiskPolicyIntegrityError("Unexpected paper control approval fields");
   }
   const action = row.action;
@@ -139,7 +156,8 @@ function parseControlRequest(value: unknown): PaperTradingControlRequest {
     ledgerId.length > 128 ||
     !Number.isSafeInteger(revision) ||
     (revision as number) < 0
-  ) throw new PaperRiskPolicyIntegrityError("Invalid paper control approval payload");
+  )
+    throw new PaperRiskPolicyIntegrityError("Invalid paper control approval payload");
   return { action, ledgerId, expectedPolicyRevision: revision as number };
 }
 function asInputJson(value: unknown): Prisma.InputJsonValue {
@@ -161,16 +179,20 @@ export async function applyApprovedTradingPaperControl(
           include: { run: { select: { id: true, spaceId: true, userId: true } } },
         });
         if (
-          !effect ||
-          effect.status !== "executing" ||
+          effect?.status !== "executing" ||
           effect.kind !== "paper_trading_control" ||
           effect.spaceId !== owner.spaceId ||
           effect.run.spaceId !== owner.spaceId ||
           effect.run.userId !== owner.userId
-        ) throw new PaperRiskPolicyIntegrityError("Paper control lacks explicit approved effect");
+        )
+          throw new PaperRiskPolicyIntegrityError("Paper control lacks explicit approved effect");
         const request = parseControlRequest(effect.request);
         await requireOwnedLedger(tx, owner, request.ledgerId);
-        const verified = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, request.ledgerId);
+        const verified = await verifyTradingPaperRiskPolicyInTransaction(
+          tx,
+          owner,
+          request.ledgerId,
+        );
         const complete = async (result: PaperTradingControlResult) => {
           const settled = await tx.externalEffect.updateMany({
             where: { id: effectId, status: "executing" },
@@ -183,8 +205,12 @@ export async function applyApprovedTradingPaperControl(
         };
         if (verified.revision !== request.expectedPolicyRevision) {
           return complete({
-            ok: false, mode: "paper_only", action: request.action, ledgerId: request.ledgerId,
-            error: "stale_policy_revision", currentPolicyRevision: verified.revision,
+            ok: false,
+            mode: "paper_only",
+            action: request.action,
+            ledgerId: request.ledgerId,
+            error: "stale_policy_revision",
+            currentPolicyRevision: verified.revision,
           });
         }
         const current = verified.policy;
@@ -193,14 +219,22 @@ export async function applyApprovedTradingPaperControl(
         }
         if (request.action === "enable" && current.enabled) {
           return complete({
-            ok: false, mode: "paper_only", action: request.action, ledgerId: request.ledgerId,
-            error: "already_enabled", currentPolicyRevision: verified.revision,
+            ok: false,
+            mode: "paper_only",
+            action: request.action,
+            ledgerId: request.ledgerId,
+            error: "already_enabled",
+            currentPolicyRevision: verified.revision,
           });
         }
         if (request.action === "disable" && !current.enabled) {
           return complete({
-            ok: false, mode: "paper_only", action: request.action, ledgerId: request.ledgerId,
-            error: "already_disabled", currentPolicyRevision: verified.revision,
+            ok: false,
+            mode: "paper_only",
+            action: request.action,
+            ledgerId: request.ledgerId,
+            error: "already_disabled",
+            currentPolicyRevision: verified.revision,
           });
         }
         const next = parsePolicy({
@@ -211,21 +245,42 @@ export async function applyApprovedTradingPaperControl(
         const beforeSha256 = digest(current);
         const afterSha256 = digest(next);
         const changed = await tx.tradingPaperRiskPolicy.updateMany({
-          where: { ledgerId: request.ledgerId, revision: verified.revision, policySha256: beforeSha256 },
-          data: { revision: { increment: 1 }, policy: asInputJson(next), policySha256: afterSha256 },
+          where: {
+            ledgerId: request.ledgerId,
+            revision: verified.revision,
+            policySha256: beforeSha256,
+          },
+          data: {
+            revision: { increment: 1 },
+            policy: asInputJson(next),
+            policySha256: afterSha256,
+          },
         });
-        if (changed.count !== 1) throw new PaperRiskPolicyIntegrityError("Paper policy revision CAS failed");
+        if (changed.count !== 1)
+          throw new PaperRiskPolicyIntegrityError("Paper policy revision CAS failed");
         const nextRevision = verified.revision + 1;
         await tx.tradingPaperPolicyAudit.create({
           data: {
-            effectId, ledgerId: request.ledgerId, spaceId: owner.spaceId, userId: owner.userId,
-            runId: effect.run.id, action: request.action, fromRevision: verified.revision,
-            toRevision: nextRevision, beforeSha256, afterSha256,
+            effectId,
+            ledgerId: request.ledgerId,
+            spaceId: owner.spaceId,
+            userId: owner.userId,
+            runId: effect.run.id,
+            action: request.action,
+            fromRevision: verified.revision,
+            toRevision: nextRevision,
+            beforeSha256,
+            afterSha256,
           },
         });
         return complete({
-          ok: true, mode: "paper_only", action: request.action, ledgerId: request.ledgerId,
-          policyRevision: nextRevision, enabled: next.enabled, killSwitch: next.killSwitch,
+          ok: true,
+          mode: "paper_only",
+          action: request.action,
+          ledgerId: request.ledgerId,
+          policyRevision: nextRevision,
+          enabled: next.enabled,
+          killSwitch: next.killSwitch,
         });
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },

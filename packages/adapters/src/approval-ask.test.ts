@@ -62,8 +62,8 @@ describe("buildApprovalAskBlock", () => {
       kind: "ask",
       text: "Enable paper-only trading for “paper-1”?",
       actions: [
-        { id: "allow", label: "Enable paper only", outcome: "enabled" },
-        { id: "deny", label: "Cancel", outcome: "cancelled" },
+        { id: "allow", label: "Enable paper only" },
+        { id: "deny", label: "Cancel" },
       ],
     });
     expect(JSON.stringify(enable)).not.toContain("Always allow");
