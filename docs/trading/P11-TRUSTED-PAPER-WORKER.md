@@ -84,6 +84,14 @@ A successful fill atomically appends one full-lot `fill_buy` event, updates the 
 
 This is a deterministic simulator transition only. There is still no broker/exchange submission, private API, paper-exchange account, active outbox consumer, scheduler, partial fill or live order path.
 
+## P11C-2 — server-triggered synthetic stop close
+
+The first synthetic position close is intentionally **not** a model-selected sell. It can run only when a fresh verified public bid reaches or falls below the already persisted C1 stop guard. The close service accepts only owner/ledger, the open synthetic position id and a public evidence id. Quantity, stop, price, fee, timestamp and event id are recovered or minted by trusted server code. The policy row is locked; the current capability must still be enabled by an explicit B6 approval. A disabled/kill-switched ledger does not auto-liquidate open positions and cannot run this close path until explicitly re-enabled.
+
+At a triggered stop, bid is moved adversely by the persisted slippage assumption and rounded **down** to the instrument tick; the sell fee is rounded up. A single serializable transaction appends the full-lot `fill_sell`, rebuilds ledger balances/PnL, deletes exactly one verified stop guard, writes the inert outbox notification and stores an integrity-hashed `TradingPaperCloseDecision`. Position id is the durable close idempotency key. Same-evidence retries return the existing close; a changed evidence id conflicts. A stop close racing an approved disable is serialized on the same policy lock: either the close commits before disable, or disable wins and the position remains open with its stop guard; there is no double terminal mutation.
+
+Take-profit/manual exits, partial fills, exchange-native paper accounts and live broker orders remain outside this slice.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.

@@ -1397,6 +1397,7 @@ model TradingPaperLedger {
   reservationDecisions TradingPaperReservationDecision[]
   releaseAudits        TradingPaperReleaseAudit[]
   fillDecisions         TradingPaperFillDecision[]
+  closeDecisions        TradingPaperCloseDecision[]
 
   @@index([spaceId, ownerUserId])
   @@map("trading_paper_ledgers")
@@ -1541,6 +1542,32 @@ model TradingPaperFillDecision {
   @@unique([ledgerId, fillEventId])
   @@index([ledgerId, createdAt])
   @@map("trading_paper_fill_decisions")
+}
+
+/** Durable idempotency/audit for a synthetic stop-triggered PAPER close only. */
+model TradingPaperCloseDecision {
+  ledgerId               String
+  positionId             String
+  ledger                 TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  requestSha256          String
+  decisionSha256         String
+  evidenceId             String
+  policyApprovalEffectId String
+  policyRevision         Int
+  buyFillEventSequence   Int
+  closeEventSequence     Int
+  closeEventId           String
+  quantityBase           String
+  executedPriceQuote     String
+  feeQuote               String
+  stopPriceQuote         String
+  closedAt               DateTime
+  createdAt              DateTime @default(now())
+
+  @@id([ledgerId, positionId])
+  @@unique([ledgerId, closeEventId])
+  @@index([ledgerId, createdAt])
+  @@map("trading_paper_close_decisions")
 }
 
 /** Evidence only: no broker data, account keys or risk approval.

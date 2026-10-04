@@ -223,6 +223,107 @@ async function readExistingFill(
   };
 }
 
+
+export type VerifiedTradingPaperOpenFill = {
+  positionId: string;
+  signalId: string;
+  policyRevision: number;
+  quantityBase: string;
+  executedPriceQuote: string;
+  feeQuote: string;
+  stopPriceQuote: string;
+  fillEventSequence: number;
+  market: Awaited<ReturnType<typeof verifyTradingPaperReservationDecisionInTransaction>> extends infer T
+    ? T extends { market: infer M }
+      ? M
+      : never
+    : never;
+};
+
+export async function verifyTradingPaperOpenFillInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  ledgerId: string,
+  positionId: string,
+): Promise<VerifiedTradingPaperOpenFill | null> {
+  const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
+  const row = await tx.tradingPaperFillDecision.findUnique({
+    where: { ledgerId_reservationId: { ledgerId, reservationId: positionId } },
+  });
+  if (!row) return null;
+  const normalized: FillDigestInput = {
+    ledgerId: row.ledgerId,
+    reservationId: row.reservationId,
+    requestSha256: row.requestSha256,
+    evidenceId: row.evidenceId,
+    policyApprovalEffectId: row.policyApprovalEffectId,
+    policyRevision: row.policyRevision,
+    reserveEventSequence: row.reserveEventSequence,
+    fillEventSequence: row.fillEventSequence,
+    fillEventId: row.fillEventId,
+    quantityBase: row.quantityBase,
+    executedPriceQuote: row.executedPriceQuote,
+    feeQuote: row.feeQuote,
+    stopPriceQuote: row.stopPriceQuote,
+    filledAt: row.filledAt.toISOString(),
+  };
+  if (row.decisionSha256 !== decisionDigest(normalized)) throw new PaperFillIntegrityError();
+  const fillEvent = recovered.events.find((event) => event.eventId === row.fillEventId);
+  const position = recovered.state.positions.find((entry) => entry.positionId === positionId);
+  if (
+    fillEvent?.kind !== "fill_buy" ||
+    fillEvent.sequence !== row.fillEventSequence ||
+    fillEvent.reservationId !== positionId ||
+    fillEvent.quantityBase !== row.quantityBase ||
+    fillEvent.executedPriceQuote !== row.executedPriceQuote ||
+    fillEvent.feeQuote !== row.feeQuote ||
+    fillEvent.recordedAt !== row.filledAt.toISOString() ||
+    !position ||
+    position.quantityBase !== row.quantityBase
+  ) {
+    throw new PaperFillIntegrityError("Open fill decision disagrees with current ledger position");
+  }
+  const reservation = await verifyTradingPaperReservationDecisionInTransaction(
+    tx,
+    owner,
+    ledgerId,
+    positionId,
+  );
+  if (
+    !reservation ||
+    reservation.signalId !== position.signalId ||
+    reservation.quantityBase !== position.quantityBase
+  ) {
+    throw new PaperFillIntegrityError("Open fill lacks matching verified reserve decision");
+  }
+  const guards = await verifyTradingPaperStopGuardsInTransaction(
+    tx,
+    ledgerId,
+    recovered.events,
+    recovered.state,
+  );
+  const guard = guards?.find((entry) => entry.positionId === positionId);
+  if (
+    !guard ||
+    guard.signalId !== position.signalId ||
+    guard.quantityBase !== position.quantityBase ||
+    guard.stopPriceQuote !== row.stopPriceQuote
+  ) {
+    throw new PaperFillIntegrityError("Open fill lacks matching verified stop guard");
+  }
+  return {
+    positionId,
+    signalId: position.signalId,
+    policyRevision: row.policyRevision,
+    quantityBase: row.quantityBase,
+    executedPriceQuote: row.executedPriceQuote,
+    feeQuote: row.feeQuote,
+    stopPriceQuote: row.stopPriceQuote,
+    fillEventSequence: row.fillEventSequence,
+    market: reservation.market,
+  };
+}
+
 /** INTERNAL ONLY synthetic full-fill simulator. No exchange account, private
  * endpoint, signing function or order payload exists in this path. */
 export async function fillApprovedTradingPaperReservation(
