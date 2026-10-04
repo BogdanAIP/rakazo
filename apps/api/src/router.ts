@@ -1637,7 +1637,11 @@ export function createRouter(deps: RouterDeps) {
         // P12: the journal must survive Bot archival and cannot be cascade-deleted
         // or left with missing history. Use archive, not deletion, for bound Bots.
         const paperLedger = await deps.prisma.tradingPaperLedger.findFirst({
-          where: { botId: bot.id, spaceId: context.actor.spaceId, ownerUserId: context.actor.userId },
+          where: {
+            botId: bot.id,
+            spaceId: context.actor.spaceId,
+            ownerUserId: context.actor.userId,
+          },
           select: { id: true },
         });
         if (paperLedger) {
