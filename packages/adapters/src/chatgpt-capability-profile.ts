@@ -70,8 +70,12 @@ async function bindingIsLive(
     }),
     "capabilities/tools",
   );
+  const expectedAccess = SEMANTIC_CAPABILITY_REQUIREMENTS[binding.requirement].access;
   return tools.some(
-    (tool) => tool.name === binding.tool && routeMatches(tool.route, binding.route),
+    (tool) =>
+      tool.name === binding.tool &&
+      routeMatches(tool.route, binding.route) &&
+      (expectedAccess !== "read" || tool.readOnly === true),
   );
 }
 
