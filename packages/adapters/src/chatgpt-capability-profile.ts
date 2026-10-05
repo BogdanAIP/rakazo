@@ -1,4 +1,5 @@
 import {
+  CAPABILITY_BINDING_SCHEMA_VERSION,
   type CapabilityBindingSnapshot,
   type CapabilityProfileSnapshot,
   parseCapabilityBindingResource,
@@ -359,5 +360,86 @@ export async function resolveProjectCapabilityProfile(
       denied: resolutions.filter((item) => item.level === "denied").length,
     },
     note: "Resolution is read-only. ready/available does not bypass existing Project grants, capability assignments, Computer control leases, approvals or tool policy. Missing capabilities are not installed automatically.",
+  };
+}
+
+
+export async function assignProjectCapabilityBinding(
+  call: ContextReader,
+  input: {
+    projectId: string;
+    requirement: SemanticCapabilityRequirement;
+    botId: string;
+    tool: string;
+    route: CapabilityBindingSnapshot["route"];
+  },
+): Promise<Record<string, unknown>> {
+  const context = record(
+    await call("projects/context", { projectId: input.projectId }),
+    "projects/context",
+  );
+  const resources = records(context.resources, "projects/context resources");
+  const openTasks = records(context.openTasks, "projects/context openTasks");
+  const active = profileResource(resources);
+  if (!active) throw new Error("Project has no active capability.profile.");
+  if ("error" in active) throw new Error(active.error);
+
+  const declared =
+    active.snapshot.required.includes(input.requirement) ||
+    active.snapshot.optional.includes(input.requirement);
+  if (!declared) {
+    if (active.snapshot.denied.includes(input.requirement)) {
+      throw new Error("Active capability profile explicitly denies " + input.requirement + ".");
+    }
+    throw new Error("Active capability profile does not declare " + input.requirement + ".");
+  }
+
+  const linkedBotIds = new Set<string>();
+  for (const resource of resources) {
+    if (resource.kind === "rakazo.bot") {
+      const id = text(resource.ref);
+      if (id) linkedBotIds.add(id);
+    }
+  }
+  for (const task of openTasks) {
+    const id = text(task.botId);
+    if (id) linkedBotIds.add(id);
+  }
+  if (!linkedBotIds.has(input.botId)) {
+    throw new Error("Binding Bot is not linked to this Project.");
+  }
+
+  const binding: CapabilityBindingSnapshot = {
+    schemaVersion: CAPABILITY_BINDING_SCHEMA_VERSION,
+    requirement: input.requirement,
+    botId: input.botId,
+    tool: input.tool,
+    route: input.route,
+  };
+  if (!(await bindingIsLive(call, binding))) {
+    throw new Error(
+      "Exact capability tool/route is not currently authorized for the linked Bot, or violates read-only requirement access.",
+    );
+  }
+
+  const resource = await call("projects/resources/upsert", {
+    projectId: input.projectId,
+    kind: "capability.binding",
+    ref: input.requirement,
+    label: "Capability binding: " + input.requirement,
+    metadata: {
+      schemaVersion: CAPABILITY_BINDING_SCHEMA_VERSION,
+      botId: input.botId,
+      tool: input.tool,
+      route: input.route,
+    },
+  });
+
+  return {
+    projectId: input.projectId,
+    binding,
+    resource,
+    note:
+      "Binding records an exact already-authorized tool route. It does not install, authorize, approve or execute the tool.",
   };
 }
