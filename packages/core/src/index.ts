@@ -1,5 +1,6 @@
 export * from "./action-approval.js";
 export * from "./agent-skill.js";
+export * from "./agent-skill-profile.js";
 export * from "./ai-consent.js";
 export * from "./answerable-ask.js";
 export * from "./async.js";

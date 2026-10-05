@@ -1,6 +1,7 @@
 import process from "node:process";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { analyzeRcclSkillMd, buildRcclSkillTemplate } from "@rakazo/core";
 import { z } from "zod";
 import {
   loadChatGptContext,
@@ -273,6 +274,47 @@ server.registerTool(
       projectSlug,
     });
     return textResult(selectChatGptProjectContextView(context, view));
+  },
+);
+
+server.registerTool(
+  "rakazo_skill_profile",
+  {
+    title: "Analyze or scaffold RCCL Agent Skills",
+    description:
+      "Pure read-only helper for Rakazo Agent Skills. Analyze an existing SKILL.md against the optional RCCL Skill Profile v1, or generate a canonical SKILL.md template. It does not save, update or execute a Skill.",
+    inputSchema: z.discriminatedUnion("action", [
+      z.object({
+        action: z.literal("analyze"),
+        content: z.string().min(1).max(100_000),
+        strict: z.boolean().default(false),
+      }),
+      z.object({
+        action: z.literal("template"),
+        name: z.string().min(1).max(80),
+        description: z.string().min(1).max(2_000),
+        capabilityRequirements: z.array(z.string().min(1).max(200)).max(50).default([]),
+      }),
+    ]),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (input) => {
+    if (input.action === "analyze") {
+      return textResult(analyzeRcclSkillMd(input.content, { strict: input.strict }));
+    }
+    return textResult({
+      profileVersion: "rccl-skill-v1",
+      content: buildRcclSkillTemplate({
+        name: input.name,
+        description: input.description,
+        capabilityRequirements: input.capabilityRequirements,
+      }),
+    });
   },
 );
 
