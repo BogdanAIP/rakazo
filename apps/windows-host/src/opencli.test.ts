@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import { WindowsHostBrowserRequestSchema } from "@rakazo/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { type OpenCliRunner, WindowsOpenCliBackend } from "./opencli.js";
@@ -17,10 +18,16 @@ function fixture(profile = "quxmf8xh") {
       urls.delete(session);
       return "closed";
     }
-    if (command[0] === "state") return tree;
+    if (command[0] === "state")
+      return `URL: ${urls.get(session) ?? "https://example.com/form"}\n\n${tree}`;
     if (command[0] === "find") return '{"matches_n":1,"entries":[{"role":"button"}]}';
     if (command[0] === "wait") return '{"found":true}';
     if (command[0] === "extract") return "# Example content";
+    if (command[0] === "scroll") return "Scrolled";
+    if (command[0] === "screenshot") {
+      writeFileSync(command[1]!, Buffer.from("89504e470d0a1a0a00000000", "hex"));
+      return "Screenshot saved";
+    }
     if (command[0] === "get" && command[1] === "url") {
       return urls.get(session) ?? "https://example.com/form";
     }
@@ -149,6 +156,103 @@ describe("WindowsOpenCliBackend", () => {
     ]);
   });
 
+  it("exposes bounded scroll and screenshot without caller-controlled file paths", async () => {
+    const { backend, runner } = fixture("");
+    const token = await openSession(backend, "bot-a");
+    const session = sessionName("bot-a", token);
+
+    expect(
+      WindowsHostBrowserRequestSchema.safeParse({
+        command: "scroll",
+        sessionToken: token,
+        direction: "down",
+        amount: 0,
+      }).success,
+    ).toBe(false);
+    expect(
+      WindowsHostBrowserRequestSchema.safeParse({
+        command: "scroll",
+        sessionToken: token,
+        direction: "down",
+        amount: 5001,
+      }).success,
+    ).toBe(false);
+    expect(
+      WindowsHostBrowserRequestSchema.safeParse({
+        command: "screenshot",
+        sessionToken: token,
+        width: 100,
+      }).success,
+    ).toBe(false);
+    expect(
+      WindowsHostBrowserRequestSchema.safeParse({
+        command: "screenshot",
+        sessionToken: token,
+        height: 5000,
+      }).success,
+    ).toBe(false);
+
+    await backend.browser("bot-a", { command: "snapshot", sessionToken: token });
+    expect(
+      await backend.browser("bot-a", {
+        command: "scroll",
+        sessionToken: token,
+        direction: "down",
+        amount: 750,
+      }),
+    ).toEqual({ ok: true });
+    expect(runner).toHaveBeenCalledWith(process.execPath, [
+      "browser",
+      session,
+      "scroll",
+      "down",
+      "--amount",
+      "750",
+    ]);
+    await expect(
+      backend.browser("bot-a", {
+        command: "act",
+        sessionToken: token,
+        actions: [{ kind: "click", ref: "e1" }],
+      }),
+    ).rejects.toThrow("Observe this browser session");
+
+    await backend.browser("bot-a", { command: "snapshot", sessionToken: token });
+    const screenshot = await backend.browser("bot-a", {
+      command: "screenshot",
+      sessionToken: token,
+      width: 800,
+      height: 600,
+    });
+    expect(screenshot).toMatchObject({
+      ok: true,
+      mimeType: "image/png",
+      imageBase64: Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64"),
+    });
+    const shotCall = runner.mock.calls.find(([, argv]) => argv.includes("screenshot"));
+    expect(shotCall).toBeTruthy();
+    const shotArgs = shotCall![1];
+    const screenshotIndex = shotArgs.indexOf("screenshot");
+    expect(shotArgs[screenshotIndex + 1]).toMatch(/rakazo-opencli-[a-f0-9-]+\.png$/u);
+    expect(shotArgs.slice(screenshotIndex + 2)).toEqual(["--width", "800", "--height", "600"]);
+
+    await backend.browser("bot-a", { command: "snapshot", sessionToken: token });
+    expect(
+      await backend.browser("bot-a", {
+        command: "screenshot",
+        sessionToken: token,
+        annotate: true,
+      }),
+    ).toMatchObject({ ok: true, mimeType: "image/png" });
+    await expect(
+      backend.browser("bot-a", {
+        command: "act",
+        sessionToken: token,
+        actions: [{ kind: "click", ref: "e1" }],
+      }),
+    ).rejects.toThrow("Observe this browser session");
+  });
+
   it("denies read-only operations using another task's session token before invoking OpenCLI", async () => {
     const { backend, runner } = fixture();
     const token = await openSession(backend, "bot-a");
@@ -173,6 +277,19 @@ describe("WindowsOpenCliBackend", () => {
         value: "Ready",
       }),
     ).rejects.toThrow("Unknown browser session");
+    await expect(
+      backend.browser("bot-b", {
+        command: "scroll",
+        sessionToken: token,
+        direction: "down",
+      }),
+    ).rejects.toThrow("Unknown browser session");
+    await expect(
+      backend.browser("bot-b", {
+        command: "screenshot",
+        sessionToken: token,
+      }),
+    ).rejects.toThrow("Unknown browser session");
     expect(runner).not.toHaveBeenCalled();
   });
 
@@ -186,7 +303,33 @@ describe("WindowsOpenCliBackend", () => {
       sessionName("bot-a", token),
       "state",
     ]);
+    expect(
+      runner.mock.calls.some(([, argv]) => argv.at(-2) === "get" && argv.at(-1) === "url"),
+    ).toBe(false);
+    expect(
+      runner.mock.calls.some(([, argv]) => argv.at(-2) === "get" && argv.at(-1) === "title"),
+    ).toBe(true);
     expect(runner.mock.calls.every(([, argv]) => !argv.includes("--profile"))).toBe(true);
+  });
+
+  it("falls back to get url when OpenCLI state lacks the v1.8.6 URL header", async () => {
+    const runner = vi.fn<OpenCliRunner>(async (_entry, argv) => {
+      const command = argv.slice(argv.indexOf("browser") + 2);
+      if (command[0] === "state") return '[1] button "Save"';
+      if (command[0] === "get" && command[1] === "url") return "https://legacy.example/form";
+      if (command[0] === "get" && command[1] === "title") return "Legacy form";
+      throw new Error("Unexpected OpenCLI request");
+    });
+    const backend = new WindowsOpenCliBackend({ entry: process.execPath, profile: "" }, runner);
+    const token = await openSession(backend, "bot-a");
+    expect(
+      await backend.browser("bot-a", { command: "snapshot", sessionToken: token }),
+    ).toMatchObject({
+      ok: true,
+      url: "https://legacy.example/form",
+      title: "Legacy form",
+    });
+    expect(runner).toHaveBeenCalledTimes(3);
   });
 
   it("fails without guessing or clicking when OpenCLI reports ambiguous profiles", async () => {

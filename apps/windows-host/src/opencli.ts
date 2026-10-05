@@ -1,11 +1,14 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
+import { readFile, stat, unlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { WindowsHostBrowserRequest, WindowsHostBrowserResult } from "@rakazo/contracts";
 
 const MAX_OUTPUT_BYTES = 64 * 1024;
+const MAX_SCREENSHOT_BYTES = 4 * 1024 * 1024;
+const PNG_SIGNATURE_HEX = "89504e470d0a1a0a";
 const COMMAND_TIMEOUT_MS = 12_000;
 const MAX_ACTIONS = 4;
 const MAX_ACTIVE_SESSIONS = 32;
@@ -108,6 +111,28 @@ interface BrowserObservation {
   elements: Array<{ ref: string; role: string; name: string }>;
 }
 
+function parseStateOutput(output: string): { tree: string; url?: string } {
+  const match = /^URL:\s*(.+?)(?:\r?\n|$)/u.exec(output);
+  if (!match) return { tree: output.slice(0, MAX_OUTPUT_BYTES) };
+
+  let url: string | undefined;
+  try {
+    const parsed = new URL(match[1]!.trim());
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      url = parsed.href.slice(0, 4_096);
+    }
+  } catch {
+    // Unknown/legacy state format: preserve the tree and let observe() fall
+    // back to the explicit get-url command below.
+  }
+
+  const tree = output
+    .slice(match[0].length)
+    .replace(/^\r?\n/u, "")
+    .slice(0, MAX_OUTPUT_BYTES);
+  return { tree, ...(url ? { url } : {}) };
+}
+
 function parseElements(tree: string): BrowserObservation["elements"] {
   const seen = new Set<string>();
   const elements: BrowserObservation["elements"] = [];
@@ -196,10 +221,10 @@ export class WindowsOpenCliBackend {
       ]);
 
     const observe = async (): Promise<BrowserObservation> => {
-      const tree = (await invoke("state")).slice(0, MAX_OUTPUT_BYTES);
-      const url = (await invoke("get", "url")).trim();
-      const title = (await invoke("get", "title")).trim();
-      const snapshot = { tree, url, title, elements: parseElements(tree) };
+      const state = parseStateOutput((await invoke("state")).slice(0, MAX_OUTPUT_BYTES));
+      const url = (state.url ?? (await invoke("get", "url")).trim()).slice(0, 4_096);
+      const title = (await invoke("get", "title")).trim().slice(0, 2_048);
+      const snapshot = { tree: state.tree, url, title, elements: parseElements(state.tree) };
       this.observations.set(token, snapshot);
       return snapshot;
     };
@@ -234,6 +259,43 @@ export class WindowsOpenCliBackend {
       if (request.start !== undefined) options.push("--start", String(request.start));
       const content = await invoke("extract", ...options);
       return { ok: true, content: content.slice(0, MAX_OUTPUT_BYTES) };
+    }
+    if (request.command === "scroll") {
+      // Scrolling can trigger lazy rendering. Drop refs before the command so
+      // a timeout/uncertain outcome can never leave a trusted stale snapshot.
+      this.observations.delete(token);
+      await invoke("scroll", request.direction, "--amount", String(request.amount ?? 500));
+      return { ok: true };
+    }
+    if (request.command === "screenshot") {
+      const screenshotPath = path.join(os.tmpdir(), `rakazo-opencli-${randomUUID()}.png`);
+      if (request.annotate) {
+        // OpenCLI annotation refreshes DOM refs internally. Never retain refs
+        // minted before that refresh.
+        this.observations.delete(token);
+      }
+      try {
+        const options = [screenshotPath];
+        if (request.annotate) options.push("--annotate");
+        if (request.width !== undefined) options.push("--width", String(request.width));
+        if (request.height !== undefined) options.push("--height", String(request.height));
+        await invoke("screenshot", ...options);
+        const imageInfo = await stat(screenshotPath);
+        if (imageInfo.size === 0 || imageInfo.size > MAX_SCREENSHOT_BYTES) {
+          throw new Error("OpenCLI screenshot exceeded the 4 MiB PNG limit");
+        }
+        const image = await readFile(screenshotPath);
+        if (image.subarray(0, 8).toString("hex") !== PNG_SIGNATURE_HEX) {
+          throw new Error("OpenCLI screenshot did not produce a PNG");
+        }
+        return {
+          ok: true,
+          imageBase64: image.toString("base64"),
+          mimeType: "image/png",
+        };
+      } finally {
+        await unlink(screenshotPath).catch(() => undefined);
+      }
     }
     if (request.command === "close") {
       // An explicit token is required: no global window/profile/tab cleanup.

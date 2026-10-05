@@ -21,14 +21,33 @@ existing R tunnel. No new browser profile, server, LLM or Codex OAuth is needed.
 - These operations preserve the snapshot/act stale-reference guard.
   They do not automatically retry uncertain mutations.
 
+## P1b: viewport control, screenshots and observation cost
+
+- OpenCLI 1.8.6 exposes scroll and screenshot on the existing browser session.
+  Rakazo exposes only up/down scrolling with 1-5000 pixels; every scroll drops
+  cached element refs before execution because lazy rendering can mutate the DOM.
+- Screenshot callers cannot supply a filesystem path. Windows Host creates a
+  random temporary PNG, validates its PNG signature, caps it at 4 MiB, returns
+  at most 6 MiB of base64, and removes the temporary file in a finally block.
+  Only viewport captures are exposed; bounded dimensions and annotation are supported.
+- Annotated screenshots refresh DOM refs inside OpenCLI, so Rakazo invalidates
+  the prior observation before requesting one.
+- Exact OpenCLI v1.8.6 source confirms state prints a leading URL header. Rakazo
+  parses that header and therefore normally reduces snapshot observation from
+  three CLI processes (state + get url + get title) to two (state + get title).
+  A missing/unrecognized header falls back to get url rather than guessing.
+- Tab management remains deliberately unexposed in this slice. Target IDs need
+  an explicit ownership model before select/close can be safe on a shared Chrome
+  profile.
+
 ## Follow-up slices
 
-P1b: controlled scrolling, screenshots and owned-tab operations, followed by
-actual output-format measurement and reduction of redundant OpenCLI processes.
-P2: explicit bind/recovery with proof of tab ownership and physical GUI
-coordination. P3: UIA/UFO semantic control inside Windows Host. P4: durable
-verification and failure reconciliation, never blindly repeating uncertain
-actions. P5: before/after speed, model/process-call and recovery benchmarks.
+P1c: owned-tab creation/selection/close with explicit target ownership and
+recovery rules. P2: explicit bind/recovery with proof of tab ownership and
+physical GUI coordination. P3: UIA/UFO semantic control inside Windows Host.
+P4: durable verification and failure reconciliation, never blindly repeating
+uncertain actions. P5: before/after speed, model/process-call and recovery
+benchmarks.
 
 This PR alone is source code, not a deployment: upgrade the native controller
 only after CI, safe checkout review, and a normal planned restart. Keep the
