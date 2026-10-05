@@ -248,6 +248,7 @@ server.registerTool(
       .object({
         projectId: z.string().min(1).optional(),
         projectSlug: z.string().min(1).max(80).optional(),
+        view: z.enum(["compact", "compiled", "full"]).default("compact"),
       })
       .superRefine((input, ctx) => {
         const selectors = Number(Boolean(input.projectId)) + Number(Boolean(input.projectSlug));
