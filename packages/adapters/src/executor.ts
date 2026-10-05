@@ -112,7 +112,6 @@ import {
   type ThreadEvents,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
-import { startPaperWorkerPreflightOnce } from "./paper-worker-start.js";
 import { parse as parseShellCommand } from "shell-quote";
 import {
   connectAgent,
@@ -254,6 +253,7 @@ import {
   modelAcceptsImageInput,
   modelIdSupportsImages,
 } from "./model-vision.js";
+import { startPaperWorkerPreflightOnce } from "./paper-worker-start.js";
 import type { CodexLiveCatalog } from "./pi-codex-catalog.js";
 import { codexLiveListsModel } from "./pi-codex-catalog.js";
 import { toOAuthCredential } from "./pi-credentials.js";

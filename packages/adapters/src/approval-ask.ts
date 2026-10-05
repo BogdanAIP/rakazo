@@ -66,10 +66,10 @@ export function buildApprovalAskBlock(
                     { id: "deny", label: "Cancel" },
                   ]
                 : [
-                  { id: "allow", label: "Allow once" },
-                  { id: "always", label: "Always allow this tool" },
-                  { id: "deny", label: "Deny" },
-                ],
+                    { id: "allow", label: "Allow once" },
+                    { id: "always", label: "Always allow this tool" },
+                    { id: "deny", label: "Deny" },
+                  ],
   };
 }
 
