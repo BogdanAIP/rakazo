@@ -18,6 +18,7 @@ describe("capability profiles", () => {
       "trading-research",
     ]);
     expect(getBuiltinCapabilityProfile("aihot")?.required).toContain("research.web");
+    expect(getBuiltinCapabilityProfile("trading-research")?.denied).toEqual(["trading.execute"]);
   });
 
   it("materializes a stable snapshot with deny taking precedence", () => {
