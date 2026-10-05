@@ -288,7 +288,10 @@ export class WindowsOpenCliBackend {
         return { ok: false, error: "OpenCLI returned an invalid tab list during recovery" };
       }
       if (pageIds.length === 0) {
-        return { ok: false, error: "No recoverable owned browser tabs found for this session token" };
+        return {
+          ok: false,
+          error: "No recoverable owned browser tabs found for this session token",
+        };
       }
       if (pageIds.length > MAX_OWNED_TABS) {
         return { ok: false, error: "OpenCLI returned too many tabs for safe recovery" };
