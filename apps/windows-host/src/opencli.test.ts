@@ -32,6 +32,18 @@ function fixture(profile = "quxmf8xh") {
       selected.delete(session);
       return "closed";
     }
+    if (command[0] === "tab" && command[1] === "list") {
+      const owned = [...(tabs.get(session) ?? new Set<string>())];
+      return JSON.stringify(
+        owned.map((page, index) => ({
+          index,
+          page,
+          url: urls.get(session) ?? "about:blank",
+          title: `Tab ${index + 1}`,
+          active: selected.get(session) === page,
+        })),
+      );
+    }
     if (command[0] === "tab" && command[1] === "new") {
       const page = createPage(session);
       if (command[2]) urls.set(session, command[2]);
@@ -450,6 +462,146 @@ describe("WindowsOpenCliBackend", () => {
     expect(runner).toHaveBeenCalledTimes(calls);
   });
 
+  it("recovers tabs only from the exact token-derived OpenCLI session after host state loss", async () => {
+    const { backend, runner } = fixture("");
+    const token = await openSession(backend, "bot-a");
+    const first = await backend.browser("bot-a", {
+      command: "navigate",
+      sessionToken: token,
+      url: "https://example.com/first",
+    });
+    const second = await backend.browser("bot-a", {
+      command: "tabNew",
+      sessionToken: token,
+      url: "https://example.com/second",
+    });
+    expect(first.pageId).toBe("page-1");
+    expect(second.pageId).toBe("page-2");
+
+    const restarted = new WindowsOpenCliBackend({ entry: process.execPath, profile: "" }, runner);
+    expect(
+      await restarted.browser("bot-a", {
+        command: "recover",
+        sessionToken: token,
+      }),
+    ).toEqual({
+      ok: true,
+      sessionToken: token,
+      pageIds: ["page-1", "page-2"],
+    });
+    expect(runner).toHaveBeenCalledWith(process.execPath, [
+      "browser",
+      sessionName("bot-a", token),
+      "tab",
+      "list",
+    ]);
+    expect(
+      await restarted.browser("bot-a", {
+        command: "tabSelect",
+        sessionToken: token,
+        pageId: "page-2",
+      }),
+    ).toEqual({ ok: true, pageId: "page-2" });
+
+    expect(
+      WindowsHostBrowserRequestSchema.safeParse({
+        command: "bind",
+        sessionToken: token,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("does not mint recovery ownership for an empty or cross-bot OpenCLI session", async () => {
+    const { backend, runner } = fixture("");
+    const token = await openSession(backend, "bot-a");
+    await backend.browser("bot-a", {
+      command: "navigate",
+      sessionToken: token,
+      url: "https://example.com/owned",
+    });
+
+    const restarted = new WindowsOpenCliBackend({ entry: process.execPath, profile: "" }, runner);
+    expect(
+      await restarted.browser("bot-b", {
+        command: "recover",
+        sessionToken: token,
+      }),
+    ).toEqual({
+      ok: false,
+      error: "No recoverable owned browser tabs found for this session token",
+    });
+    await expect(
+      restarted.browser("bot-b", {
+        command: "tabSelect",
+        sessionToken: token,
+        pageId: "page-1",
+      }),
+    ).rejects.toThrow("Unknown browser session");
+
+    const unknownToken = "123e4567-e89b-42d3-a456-426614174000";
+    expect(
+      await restarted.browser("bot-a", {
+        command: "recover",
+        sessionToken: unknownToken,
+      }),
+    ).toEqual({
+      ok: false,
+      error: "No recoverable owned browser tabs found for this session token",
+    });
+    await expect(
+      restarted.browser("bot-a", {
+        command: "snapshot",
+        sessionToken: unknownToken,
+      }),
+    ).rejects.toThrow("Unknown browser session");
+  });
+
+  it("fails closed when recovery returns too many or malformed page identities", async () => {
+    const token = "123e4567-e89b-42d3-a456-426614174000";
+    const tooManyRunner = vi.fn<OpenCliRunner>(async (_entry, argv) => {
+      const command = argv.slice(argv.indexOf("browser") + 2);
+      if (command[0] === "tab" && command[1] === "list") {
+        return JSON.stringify(
+          Array.from({ length: 9 }, (_, index) => ({
+            page: `page-${index + 1}`,
+          })),
+        );
+      }
+      throw new Error("Unexpected OpenCLI request");
+    });
+    const tooMany = new WindowsOpenCliBackend(
+      { entry: process.execPath, profile: "" },
+      tooManyRunner,
+    );
+    expect(await tooMany.browser("bot-a", { command: "recover", sessionToken: token })).toEqual({
+      ok: false,
+      error: "OpenCLI returned too many tabs for safe recovery",
+    });
+    await expect(
+      tooMany.browser("bot-a", {
+        command: "tabSelect",
+        sessionToken: token,
+        pageId: "page-1",
+      }),
+    ).rejects.toThrow("Unknown browser session");
+
+    const malformedRunner = vi.fn<OpenCliRunner>(async (_entry, argv) => {
+      const command = argv.slice(argv.indexOf("browser") + 2);
+      if (command[0] === "tab" && command[1] === "list") {
+        return JSON.stringify([{ page: "duplicate" }, { page: "duplicate" }]);
+      }
+      throw new Error("Unexpected OpenCLI request");
+    });
+    const malformed = new WindowsOpenCliBackend(
+      { entry: process.execPath, profile: "" },
+      malformedRunner,
+    );
+    expect(await malformed.browser("bot-a", { command: "recover", sessionToken: token })).toEqual({
+      ok: false,
+      error: "OpenCLI returned an invalid tab list during recovery",
+    });
+  });
+
   it("denies read-only operations using another task's session token before invoking OpenCLI", async () => {
     const { backend, runner } = fixture();
     const token = await openSession(backend, "bot-a");
@@ -705,6 +857,35 @@ describe("WindowsOpenCliBackend", () => {
       ).rejects.toThrow("expired");
       expect(runner).not.toHaveBeenCalled();
       expect(await openSession(backend, "bot-a")).not.toBe(token);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not revive an expired in-memory session through recover", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-10-03T00:00:00Z"));
+      const { backend, runner } = fixture();
+      const token = await openSession(backend, "bot-a");
+      vi.setSystemTime(new Date("2026-10-03T00:31:00Z"));
+
+      expect(
+        await backend.browser("bot-a", {
+          command: "recover",
+          sessionToken: token,
+        }),
+      ).toEqual({
+        ok: false,
+        error: "Browser session expired; open a new session first",
+      });
+      expect(runner).not.toHaveBeenCalled();
+      await expect(
+        backend.browser("bot-a", {
+          command: "snapshot",
+          sessionToken: token,
+        }),
+      ).rejects.toThrow("Unknown browser session");
     } finally {
       vi.useRealTimers();
     }
