@@ -199,7 +199,7 @@ function parseRcclAndLegacy(value: unknown): {
     const trimmed = rawLine.trim();
     if (trimmed.startsWith(backtickFence) || trimmed.startsWith("~~~")) {
       const marker = trimmed.slice(0, 3);
-      fence = fence === marker ? null : fence ?? marker;
+      fence = fence === marker ? null : (fence ?? marker);
       legacy.push(trimmed);
       continue;
     }
@@ -396,7 +396,10 @@ export function compileProjectContext(
   for (const bot of bots) {
     const botSource = source("project.bot", bot.id);
     const linkSources = Array.isArray(bot.linkSources)
-      ? bot.linkSources.map(scalar).filter((value): value is string => Boolean(value)).join(",")
+      ? bot.linkSources
+          .map(scalar)
+          .filter((value): value is string => Boolean(value))
+          .join(",")
       : "";
     addStatement(
       "RESOURCE",
