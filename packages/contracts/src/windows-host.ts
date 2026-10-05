@@ -285,6 +285,8 @@ export const WindowsHostGuiObservationSchema = z.object({
   uia: WindowsHostUiaSnapshotSchema.optional(),
 });
 
+export type WindowsHostGuiObservation = z.infer<typeof WindowsHostGuiObservationSchema>;
+
 export const WindowsHostGuiResultSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("observation"),
