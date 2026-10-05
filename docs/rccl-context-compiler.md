@@ -145,7 +145,13 @@ The compiler:
 
 ## Project bootstrap
 
-The project-centric ChatGPT bootstrap returns the existing bounded raw fields plus:
+The project-centric ChatGPT bootstrap supports three views:
+
+- compact — default. Returns Project identity plus the rendered RCCL context, authority boundary and compiler counts. It omits raw Project memory/resources/tasks and the typed statement array to minimize model context.
+- compiled — returns the full typed compiledContext with statement provenance and legacy excerpts, but omits the raw Project projection.
+- full — returns the existing bounded raw Project projection plus compiledContext for diagnostics and migrations.
+
+The full compiledContext contains:
 
     compiledContext.schemaVersion
     compiledContext.project
@@ -156,7 +162,7 @@ The project-centric ChatGPT bootstrap returns the existing bounded raw fields pl
     compiledContext.renderedTruncated
     compiledContext.counts
 
-Consumers should prefer compiledContext for orientation and use raw fields or live tools when more detail is required.
+Consumers should use compact for normal orientation, compiled when provenance is needed, and full only when raw bounded source fields are required.
 
 ## V1 non-goals
 
