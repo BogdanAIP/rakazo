@@ -2739,8 +2739,9 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
 
   it("P11C-11 persists explicit protective exit authority without closing the position", async () => {
     const ledgerId = `paper-c1-fill-${suffix}`;
-    const positionId = `paper-c1-fill-${suffix}`;
     const before = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);
+    const positionId = before.positions[0]?.positionId;
+    if (!positionId) throw new Error("expected verified open position");
     const policyBefore = await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId);
     const eventsBefore = await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } });
     const outboxBefore = await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } });
