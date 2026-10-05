@@ -362,8 +362,7 @@ export function selectChatGptProjectContextView(
     return {
       project,
       compiledContext,
-      note:
-        "RCCL compiled view includes typed statements and provenance. Request view=full only when raw bounded Project fields are required.",
+      note: "RCCL compiled view includes typed statements and provenance. Request view=full only when raw bounded Project fields are required.",
     };
   }
 
@@ -374,8 +373,7 @@ export function selectChatGptProjectContextView(
     rccl: compiledContext.rendered,
     truncated: compiledContext.renderedTruncated,
     counts: compiledContext.counts,
-    note:
-      "Compact RCCL view is the default orientation context. Verify live state before writes; request view=compiled for provenance or view=full for raw bounded fields.",
+    note: "Compact RCCL view is the default orientation context. Verify live state before writes; request view=compiled for provenance or view=full for raw bounded fields.",
   };
 }
 
