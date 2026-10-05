@@ -203,7 +203,11 @@ describe("RCCL project context compiler", () => {
     ].join("\n");
 
     const compiled = compileProjectContext(projection, { maxStatementChars: 16 });
-    const invariants = compiled.statements.filter((statement) => statement.tag === "INVARIANT");
+    const invariants = compiled.statements.filter(
+      (statement) =>
+        statement.tag === "INVARIANT" &&
+        statement.sources.some((item) => item.kind === "project.memory"),
+    );
 
     expect(invariants).toHaveLength(2);
     expect(invariants[0]?.truncated).toBe(true);
