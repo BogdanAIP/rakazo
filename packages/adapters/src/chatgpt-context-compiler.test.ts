@@ -110,6 +110,20 @@ describe("RCCL project context compiler", () => {
     );
   });
 
+  it("surfaces missing linked bots as structured blockers", () => {
+    const projection = baseProjection();
+    Object.assign(projection, { missingLinkedBotIds: ["bot-missing"] });
+
+    const compiled = compileProjectContext(projection);
+
+    expect(compiled.statements).toContainEqual(
+      expect.objectContaining({
+        tag: "BLOCKER",
+        text: expect.stringContaining('missingLinkedBotId="bot-missing"'),
+      }),
+    );
+  });
+
   it("keeps mutable resource metadata in STATE instead of RESOURCE identity", () => {
     const compiled = compileProjectContext(baseProjection());
 
