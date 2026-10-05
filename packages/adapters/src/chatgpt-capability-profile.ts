@@ -351,7 +351,7 @@ export async function resolveProjectCapabilityProfile(
     linkedBotIds: [...linkedBotIds].sort(),
     runningComputerBotIds: [...runningBots].sort(),
     resolutions,
-    readyForRequiredWork: unresolvedRequired.length === 0,
+    requiredSurfacePresent: unresolvedRequired.length === 0,
     counts: {
       required: required.length,
       unresolvedRequired: unresolvedRequired.length,
