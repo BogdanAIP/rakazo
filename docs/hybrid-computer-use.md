@@ -144,6 +144,12 @@ faster than screenshot/vision. The intended win is fewer ambiguous visual
 targeting steps when a useful semantic tree exists, while preserving the visual
 fallback when it does not.
 
+Focused local validation on the implementation branch also passed:
+- PowerShell parser: 0 errors;
+- Biome check on all changed TypeScript surfaces: PASS;
+- Windows Host, Contracts and Adapter Kit TypeScript checks: PASS;
+- `windows-gui.test.ts`: 6/6 PASS, including the uncertain-action recovery latch.
+
 ## Remaining optional slice
 
 P2b remains intentionally deferred: current-tab bind should be exposed only
