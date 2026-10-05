@@ -54,15 +54,16 @@ export function buildApprovalAskBlock(
               ? [
                   {
                     id: "allow",
-                    label: args.action === "disable" ? "Disable paper worker" : "Enable paper worker",
+                    label:
+                      args.action === "disable" ? "Disable paper worker" : "Enable paper worker",
                   },
                   { id: "deny", label: "Cancel" },
                 ]
               : [
-                { id: "allow", label: "Allow once" },
-                { id: "always", label: "Always allow this tool" },
-                { id: "deny", label: "Deny" },
-              ],
+                  { id: "allow", label: "Allow once" },
+                  { id: "always", label: "Always allow this tool" },
+                  { id: "deny", label: "Deny" },
+                ],
   };
 }
 

@@ -23,10 +23,6 @@ export {
 } from "./trading-paper-quote-evidence.js";
 export * from "./trading-paper-reservation-preflight.js";
 export {
-  applyApprovedTradingPaperWorkerControl,
-  readVerifiedTradingPaperWorkerGate,
-} from "./trading-paper-worker-gate.js";
-export {
   applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,
   PaperRiskPolicyIntegrityError,
@@ -39,6 +35,10 @@ export {
   PaperLedgerIntegrityError,
   readVerifiedTradingPaperLedger,
 } from "./trading-paper-store.js";
+export {
+  applyApprovedTradingPaperWorkerControl,
+  readVerifiedTradingPaperWorkerGate,
+} from "./trading-paper-worker-gate.js";
 export * from "./transaction-retry.js";
 export * from "./voice-credentials.js";
 export * from "./windows-hosts.js";

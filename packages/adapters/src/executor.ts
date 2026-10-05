@@ -93,8 +93,8 @@ import {
 import {
   appendEventInTransaction,
   applyApprovedTradingPaperControl,
-  applyApprovedTradingPaperWorkerControl,
   applyApprovedTradingPaperProtectiveExitControl,
+  applyApprovedTradingPaperWorkerControl,
   createSpaceForMember,
   createThreadMessageInTransaction,
   effectiveMemoryScope,

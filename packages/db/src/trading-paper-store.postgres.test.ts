@@ -3319,22 +3319,16 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       (await first.prisma.externalEffect.findUniqueOrThrow({ where: { id: enableWorker.id } }))
         .status,
     ).toBe("completed");
-    expect(await first.prisma.routine.count({ where: { spaceId: owner.spaceId, userId: owner.userId } })).toBe(
-      routineCountBefore,
-    );
+    expect(
+      await first.prisma.routine.count({ where: { spaceId: owner.spaceId, userId: owner.userId } }),
+    ).toBe(routineCountBefore);
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(0);
     expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(0);
     expect(await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId)).toEqual(
       policyBefore,
     );
 
-    const stale = await makePaperWorkerControlEffect(
-      ledgerId,
-      "d0-worker-stale",
-      "enable",
-      0,
-      15,
-    );
+    const stale = await makePaperWorkerControlEffect(ledgerId, "d0-worker-stale", "enable", 0, 15);
     await expect(
       applyApprovedTradingPaperWorkerControl(second.prisma, owner, stale.id),
     ).resolves.toMatchObject({
@@ -3372,9 +3366,9 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       gateRevision: 2,
       approvalEffectId: disableWorker.id,
     });
-    expect(await first.prisma.routine.count({ where: { spaceId: owner.spaceId, userId: owner.userId } })).toBe(
-      routineCountBefore,
-    );
+    expect(
+      await first.prisma.routine.count({ where: { spaceId: owner.spaceId, userId: owner.userId } }),
+    ).toBe(routineCountBefore);
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(0);
     expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(0);
     expect(await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId)).toEqual(

@@ -99,12 +99,7 @@ function parseRequest(value: unknown): WorkerRequest {
   }
   const row = value as Record<string, unknown>;
   const keys = Object.keys(row).sort();
-  const allowedEnable = [
-    "action",
-    "cadence_minutes",
-    "expected_policy_revision",
-    "ledger_id",
-  ];
+  const allowedEnable = ["action", "cadence_minutes", "expected_policy_revision", "ledger_id"];
   const allowedDisable = ["action", "expected_policy_revision", "ledger_id"];
   const action = row.action;
   if (action !== "enable" && action !== "disable") {
@@ -263,11 +258,7 @@ export async function applyApprovedTradingPaperWorkerControl(
         }
         const request = parseRequest(effect.request);
         await lockTradingPaperRiskPolicyInTransaction(tx, owner, request.ledgerId);
-        const policy = await verifyTradingPaperRiskPolicyInTransaction(
-          tx,
-          owner,
-          request.ledgerId,
-        );
+        const policy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, request.ledgerId);
 
         const complete = async (result: PaperWorkerControlResult) => {
           const settled = await tx.externalEffect.updateMany({
@@ -279,9 +270,7 @@ export async function applyApprovedTradingPaperWorkerControl(
           }
           return result;
         };
-        const fail = (
-          error: Extract<PaperWorkerControlResult, { ok: false }>["error"],
-        ) =>
+        const fail = (error: Extract<PaperWorkerControlResult, { ok: false }>["error"]) =>
           complete({
             ok: false,
             mode: "paper_only",
@@ -338,7 +327,6 @@ export async function applyApprovedTradingPaperWorkerControl(
           create: { ...next, gateSha256: digest(next) },
           update: { ...next, gateSha256: digest(next) },
         });
-        previous = null;
         return complete({
           ok: true,
           mode: "paper_only",
