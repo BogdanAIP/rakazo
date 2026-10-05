@@ -10,7 +10,10 @@ import {
   SEMANTIC_CAPABILITY_REQUIREMENTS,
 } from "@rakazo/core";
 import { z } from "zod";
-import { resolveProjectCapabilityProfile } from "./chatgpt-capability-profile.js";
+import {
+  assignProjectCapabilityBinding,
+  resolveProjectCapabilityProfile,
+} from "./chatgpt-capability-profile.js";
 import {
   loadChatGptContext,
   loadChatGptProjectContext,
@@ -407,6 +410,29 @@ server.registerTool(
       note: "Profile assignment does not install or authorize tools. Resolve the profile to see ready/available/missing requirements.",
     });
   },
+);
+
+server.registerTool(
+  "rakazo_capability_binding_assign",
+  {
+    title: "Bind a Project semantic capability",
+    description:
+      "Record one exact already-authorized Rakazo capability tool route for a semantic requirement in the active Project profile. The requirement must be declared and not denied, the Bot must already be linked to the Project, and the exact tool/route must be present in that Bot's current authorized catalog. This does not install, authorize, approve or execute the tool.",
+    inputSchema: z.object({
+      projectId: z.string().min(1),
+      requirement: semanticCapabilitySchema,
+      botId: z.string().min(1),
+      tool: z.string().min(1).max(300),
+      route: capabilityRouteSchema,
+    }),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (input) => textResult(await assignProjectCapabilityBinding(callRakazoRpc, input)),
 );
 
 server.registerTool(
