@@ -234,12 +234,7 @@ describe("WindowsOpenCliBackend", () => {
     const shotArgs = shotCall![1];
     const screenshotIndex = shotArgs.indexOf("screenshot");
     expect(shotArgs[screenshotIndex + 1]).toMatch(/rakazo-opencli-[a-f0-9-]+\.png$/u);
-    expect(shotArgs.slice(screenshotIndex + 2)).toEqual([
-      "--width",
-      "800",
-      "--height",
-      "600",
-    ]);
+    expect(shotArgs.slice(screenshotIndex + 2)).toEqual(["--width", "800", "--height", "600"]);
 
     await backend.browser("bot-a", { command: "snapshot", sessionToken: token });
     expect(
