@@ -26,13 +26,13 @@ type Resolution = {
 
 function record(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Unexpected Rakazo " + label + " response");
+    throw new Error(`Unexpected Rakazo ${label} response`);
   }
   return value as Record<string, unknown>;
 }
 
 function records(value: unknown, label: string): Record<string, unknown>[] {
-  if (!Array.isArray(value)) throw new Error("Unexpected Rakazo " + label + " response");
+  if (!Array.isArray(value)) throw new Error(`Unexpected Rakazo ${label} response`);
   return value.map((item) => record(item, label));
 }
 
@@ -131,7 +131,7 @@ function bindingResources(
     const key = requirement as SemanticCapabilityRequirement;
     if (result.has(key)) {
       result.set(key, {
-        error: "Project has multiple capability.binding resources for " + key + ".",
+        error: `Project has multiple capability.binding resources for ${key}.`,
       });
       continue;
     }
