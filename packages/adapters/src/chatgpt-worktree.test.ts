@@ -168,7 +168,7 @@ describe("ChatGPT project worktree manager", () => {
       if (joined.includes("show-ref --verify --quiet refs/heads/feature/task")) {
         return { stdout: "", stderr: "", code: 1 };
       }
-      if (joined.includes("rev-parse --verify origin/main^{commit}")) {
+      if (joined.includes("rev-parse --verify aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{commit}")) {
         return {
           stdout: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
           stderr: "",
@@ -184,8 +184,8 @@ describe("ChatGPT project worktree manager", () => {
           "add",
           "-b",
           "feature/task",
-          "C:/Users/test/rakazo-task",
-          "origin/main",
+          "C:\\Users\\test\\rakazo-task",
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         ]);
         return { stdout: "Preparing worktree\n", stderr: "", code: 0 };
       }
@@ -211,9 +211,9 @@ describe("ChatGPT project worktree manager", () => {
       computerBotId: "windows-bot",
       repository: "BogdanAIP/rakazo",
       repoPath: "C:/Users/test/rakazo",
-      worktreePath: "C:/Users/test/rakazo-task",
+      worktreePath: "C:\\Users\\test\\rakazo-task",
       branch: "feature/task",
-      baseRef: "origin/main",
+      baseRef: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     });
 
     expect(upserted).toBe(true);
