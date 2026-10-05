@@ -274,6 +274,9 @@ export async function manageProjectWorktree(
     if (localBranch.code === 0) {
       addArgs = ["-C", input.repoPath, "worktree", "add", worktreePath, branch];
     } else {
+      if (localBranch.code !== 1) {
+        assertOk(localBranch, "git show-ref local branch");
+      }
       const baseRef = input.baseRef?.trim();
       if (!baseRef) throw new Error("baseRef is required when the local branch does not exist");
       if (baseRef.startsWith("-")) throw new Error("baseRef must not start with '-'");
