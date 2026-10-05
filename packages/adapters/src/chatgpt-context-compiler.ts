@@ -70,18 +70,23 @@ export type RcclCompilerOptions = {
   maxLegacySourceChars?: number;
 };
 
-const SOURCE_TEXT_TAGS: RcclTag[] = [
+const MEMORY_TEXT_TAG_SET = new Set<string>([
   "PURPOSE",
   "FACT",
   "RULE",
   "INVARIANT",
   "FORBID",
   "REQUIRE",
-  "VERIFIED",
+] satisfies RcclTag[]);
+const TASK_TEXT_TAG_SET = new Set<string>([
+  "FACT",
+  "RULE",
+  "INVARIANT",
+  "FORBID",
+  "REQUIRE",
   "NEXT",
   "BLOCKER",
-];
-const SOURCE_TEXT_TAG_SET = new Set<string>(SOURCE_TEXT_TAGS);
+] satisfies RcclTag[]);
 const TAG_ORDER = new Map<RcclTag, number>(
   RCCL_TAGS.map((tag, index) => [tag, index] as [RcclTag, number]),
 );
@@ -196,7 +201,10 @@ function sortRecords(
   });
 }
 
-function parseRcclAndLegacy(value: unknown): {
+function parseRcclAndLegacy(
+  value: unknown,
+  allowedTags: ReadonlySet<string>,
+): {
   tagged: Array<{ tag: RcclTag; text: string }>;
   legacy: string;
 } {
@@ -218,7 +226,7 @@ function parseRcclAndLegacy(value: unknown): {
     }
 
     const match = fence ? null : trimmed.match(/^\[([A-Z][A-Z0-9_-]*)\]\s+(.+)$/);
-    if (match && SOURCE_TEXT_TAG_SET.has(match[1]!)) {
+    if (match && allowedTags.has(match[1]!)) {
       tagged.push({ tag: match[1] as RcclTag, text: match[2]! });
       continue;
     }
@@ -346,7 +354,7 @@ export function compileProjectContext(
   if (description) addStatement("PURPOSE", description, projectSource);
 
   const memorySource = source("project.memory", projectId, memoryRevision ?? undefined);
-  const memoryParsed = parseRcclAndLegacy(project.text ?? project.memory);
+  const memoryParsed = parseRcclAndLegacy(project.text ?? project.memory, MEMORY_TEXT_TAG_SET);
   for (const item of memoryParsed.tagged) addStatement(item.tag, item.text, memorySource);
   addLegacy(memoryParsed.legacy, memorySource);
 
@@ -397,7 +405,7 @@ export function compileProjectContext(
       ]),
       taskSource,
     );
-    const parsed = parseRcclAndLegacy(task.text ?? task.notes);
+    const parsed = parseRcclAndLegacy(task.text ?? task.notes, TASK_TEXT_TAG_SET);
     for (const item of parsed.tagged) addStatement(item.tag, item.text, taskSource);
     addLegacy(parsed.legacy, taskSource);
   }
