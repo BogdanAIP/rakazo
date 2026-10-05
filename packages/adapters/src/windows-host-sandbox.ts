@@ -6,6 +6,7 @@ import type {
   ComputerInput,
   ComputerObservation,
   ComputerRef,
+  ComputerSemanticActionRequest,
   ControlLeaseRef,
   PageBrowserCommand,
   PageBrowserResult,
@@ -21,6 +22,7 @@ import type {
   WindowsHostCommandRequest,
   WindowsHostCommandResult,
   WindowsHostGuiAction,
+  type WindowsHostGuiObservation,
 } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { computerObservation } from "./computer-support.js";
@@ -36,6 +38,26 @@ export interface WindowsHostCommandDispatcher {
 }
 
 const HOST_ONLINE_WINDOW_MS = 60_000;
+
+function mapGuiObservation(observation: WindowsHostGuiObservation): ComputerObservation {
+  return computerObservation(Uint8Array.from(Buffer.from(observation.imageBase64, "base64")), {
+    mimeType: observation.mimeType,
+    width: observation.width,
+    height: observation.height,
+    cursor: observation.cursor,
+    activeWindow: observation.activeWindow,
+    ...(observation.uia
+      ? {
+          semantic: {
+            source: observation.uia.source,
+            observationId: observation.uia.observationId,
+            truncated: observation.uia.truncated,
+            elements: observation.uia.elements,
+          },
+        }
+      : {}),
+  });
+}
 
 export class WindowsHostSandboxProvider implements SandboxProvider {
   constructor(
@@ -239,14 +261,7 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
     if (result.result.kind !== "screen") {
       throw new Error("Windows host returned an unexpected screen response");
     }
-    const observation = result.result.observation;
-    return computerObservation(Uint8Array.from(Buffer.from(observation.imageBase64, "base64")), {
-      mimeType: observation.mimeType,
-      width: observation.width,
-      height: observation.height,
-      cursor: observation.cursor,
-      activeWindow: observation.activeWindow,
-    });
+    return mapGuiObservation(result.result.observation);
   }
 
   async act(
@@ -279,18 +294,43 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
       completed: result.result.completed,
       ...(observation
         ? {
-            observation: computerObservation(
-              Uint8Array.from(Buffer.from(observation.imageBase64, "base64")),
-              {
-                mimeType: observation.mimeType,
-                width: observation.width,
-                height: observation.height,
-                cursor: observation.cursor,
-                activeWindow: observation.activeWindow,
-              },
-            ),
+            observation: mapGuiObservation(observation),
           }
         : {}),
+    };
+  }
+
+  async semanticAct(
+    computer: ComputerRef,
+    request: ComputerSemanticActionRequest,
+    context: AdapterContext,
+  ): Promise<ComputerActionResult> {
+    const result = await this.commands.dispatch(
+      computer.providerRef,
+      {
+        kind: "screen.semanticAct",
+        botId: computer.botId,
+        semantic: {
+          observationId: request.observationId,
+          windowId: request.windowId,
+          ref: request.ref,
+          action: request.action,
+        },
+        observe: request.observe !== false,
+        settleMs: request.settleMs,
+      },
+      context.signal,
+      30_000,
+      context.userId,
+    );
+    if (!result.ok) throw new Error(result.error);
+    if (result.result.kind !== "actions" || result.result.completed !== 1) {
+      throw new Error("Windows host did not confirm the semantic UIA action");
+    }
+    const observation = result.result.observation;
+    return {
+      completed: 1,
+      ...(observation ? { observation: mapGuiObservation(observation) } : {}),
     };
   }
 
