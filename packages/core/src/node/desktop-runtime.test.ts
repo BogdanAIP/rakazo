@@ -1,4 +1,4 @@
-import type { ChildProcess } from "node:child_process";
+﻿import type { ChildProcess } from "node:child_process";
 import { spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
@@ -209,6 +209,21 @@ describe("shared Linux desktop lifecycle", () => {
     expect(f.run(desktopTerminalCommand("a", "old:0", env, "c", "t", ".")).status).toBe(75);
     expect(f.run(desktopTerminalCommand("a", "run:1", env, "c", "t", ".")).status).toBe(0);
     expect(() => terminalCommand("c", "bad token", ".")).toThrow("invalid terminal token");
+  });
+
+  it("drops libnss_wrapper before the screen browser exec", () => {
+    const command = ensureScreenCommand(0, "bot", "token");
+    expect(command).toContain("*libnss_wrapper.so");
+    expect(command).toContain("unset LD_PRELOAD");
+    expect(command).toContain('[ "$(cat /tmp/rakazo/desktop-targets/view-1)" != "$desired" ]');
+    expect(command).toContain(
+      "browser=$(command -v rakazo-browser || command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser)",
+    );
+    const lines = command.split("\n");
+    const unsetAt = lines.findIndex((line) => line.includes("unset LD_PRELOAD"));
+    const execAt = lines.findIndex((line) => line.startsWith("exec "));
+    expect(unsetAt).toBeGreaterThan(-1);
+    expect(execAt).toBeGreaterThan(unsetAt);
   });
 
   it("stops the terminal with the control lease and the screen transports", () => {
