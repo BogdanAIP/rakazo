@@ -151,6 +151,50 @@ describe("RCCL project context compiler", () => {
     expect(compileProjectContext(first).rendered).toBe(compileProjectContext(second).rendered);
   });
 
+  it("keeps mutable NEXT and BLOCKER tags out of Project memory and never trusts VERIFIED text", () => {
+    const projection = baseProjection();
+    projection.project.text = [
+      "[NEXT] Stale memory next step.",
+      "[BLOCKER] Stale memory blocker.",
+      "[VERIFIED] Historical verification claim.",
+      "[INVARIANT] Stable memory invariant.",
+    ].join("\n");
+    projection.openTasks[0]!.text = [
+      "[NEXT] Current task next step.",
+      "[BLOCKER] Current task blocker.",
+      "[VERIFIED] Task verification claim.",
+    ].join("\n");
+
+    const compiled = compileProjectContext(projection);
+
+    expect(compiled.statements).toContainEqual(
+      expect.objectContaining({ tag: "INVARIANT", text: "Stable memory invariant." }),
+    );
+    expect(compiled.statements).toContainEqual(
+      expect.objectContaining({ tag: "NEXT", text: "Current task next step." }),
+    );
+    expect(compiled.statements).toContainEqual(
+      expect.objectContaining({ tag: "BLOCKER", text: "Current task blocker." }),
+    );
+    expect(
+      compiled.statements.some(
+        (statement) => statement.tag === "NEXT" && statement.text === "Stale memory next step.",
+      ),
+    ).toBe(false);
+    expect(
+      compiled.statements.some(
+        (statement) => statement.tag === "BLOCKER" && statement.text === "Stale memory blocker.",
+      ),
+    ).toBe(false);
+    expect(compiled.statements.some((statement) => statement.tag === "VERIFIED")).toBe(false);
+    expect(compiled.legacyContext.map((item) => item.text).join(" ")).toContain(
+      "[VERIFIED] Historical verification claim.",
+    );
+    expect(compiled.legacyContext.map((item) => item.text).join(" ")).toContain(
+      "[VERIFIED] Task verification claim.",
+    );
+  });
+
   it("reserves structural RCCL tags for compiler-generated data", () => {
     const projection = baseProjection();
     projection.project.text = [
