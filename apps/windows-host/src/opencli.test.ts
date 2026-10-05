@@ -6,17 +6,48 @@ import { type OpenCliRunner, WindowsOpenCliBackend } from "./opencli.js";
 function fixture(profile = "quxmf8xh") {
   let tree = '[1] button "Save"\n[2] textbox "Name"';
   const urls = new Map<string, string>();
+  const tabs = new Map<string, Set<string>>();
+  const selected = new Map<string, string>();
+  let nextPage = 1;
+  const createPage = (session: string): string => {
+    const pageId = `page-${nextPage++}`;
+    const owned = tabs.get(session) ?? new Set<string>();
+    owned.add(pageId);
+    tabs.set(session, owned);
+    selected.set(session, pageId);
+    return pageId;
+  };
   const runner = vi.fn<OpenCliRunner>(async (_entry, argv) => {
     const at = argv.indexOf("browser");
     const session = argv[at + 1]!;
     const command = argv.slice(at + 2);
     if (command[0] === "open") {
       urls.set(session, command[1]!);
-      return "opened";
+      const page = selected.get(session) ?? createPage(session);
+      return JSON.stringify({ url: command[1], page });
     }
     if (command[0] === "close") {
       urls.delete(session);
+      tabs.delete(session);
+      selected.delete(session);
       return "closed";
+    }
+    if (command[0] === "tab" && command[1] === "new") {
+      const page = createPage(session);
+      if (command[2]) urls.set(session, command[2]);
+      return JSON.stringify({ page, url: command[2] ?? null });
+    }
+    if (command[0] === "tab" && command[1] === "select") {
+      const page = command[2]!;
+      if (!tabs.get(session)?.has(page)) throw new Error("Unknown fixture page");
+      selected.set(session, page);
+      return JSON.stringify({ selected: page });
+    }
+    if (command[0] === "tab" && command[1] === "close") {
+      const page = command[2]!;
+      if (!tabs.get(session)?.delete(page)) throw new Error("Unknown fixture page");
+      if (selected.get(session) === page) selected.delete(session);
+      return JSON.stringify({ closed: page });
     }
     if (command[0] === "state")
       return `URL: ${urls.get(session) ?? "https://example.com/form"}\n\n${tree}`;
@@ -251,6 +282,151 @@ describe("WindowsOpenCliBackend", () => {
         actions: [{ kind: "click", ref: "e1" }],
       }),
     ).rejects.toThrow("Observe this browser session");
+  });
+
+  it("creates, selects and closes only tabs recorded for the same task session", async () => {
+    const { backend, runner } = fixture("");
+    const token = await openSession(backend, "bot-a");
+    const session = sessionName("bot-a", token);
+
+    const initial = await backend.browser("bot-a", {
+      command: "navigate",
+      sessionToken: token,
+      url: "https://example.com/initial",
+    });
+    expect(initial).toMatchObject({ ok: true, pageId: "page-1" });
+
+    const created = await backend.browser("bot-a", {
+      command: "tabNew",
+      sessionToken: token,
+      url: "https://example.com/second",
+    });
+    expect(created).toEqual({ ok: true, pageId: "page-2" });
+    expect(runner).toHaveBeenCalledWith(process.execPath, [
+      "browser",
+      session,
+      "tab",
+      "new",
+      "https://example.com/second",
+    ]);
+
+    await backend.browser("bot-a", { command: "snapshot", sessionToken: token });
+    expect(
+      await backend.browser("bot-a", {
+        command: "tabSelect",
+        sessionToken: token,
+        pageId: "page-1",
+      }),
+    ).toEqual({ ok: true, pageId: "page-1" });
+    expect(runner).toHaveBeenCalledWith(process.execPath, [
+      "browser",
+      session,
+      "tab",
+      "select",
+      "page-1",
+    ]);
+    await expect(
+      backend.browser("bot-a", {
+        command: "act",
+        sessionToken: token,
+        actions: [{ kind: "click", ref: "e1" }],
+      }),
+    ).rejects.toThrow("Observe this browser session");
+
+    expect(
+      await backend.browser("bot-a", {
+        command: "tabClose",
+        sessionToken: token,
+        pageId: "page-2",
+      }),
+    ).toEqual({ ok: true, pageId: "page-2" });
+    expect(runner).toHaveBeenCalledWith(process.execPath, [
+      "browser",
+      session,
+      "tab",
+      "close",
+      "page-2",
+    ]);
+    const calls = runner.mock.calls.length;
+    await expect(
+      backend.browser("bot-a", {
+        command: "tabSelect",
+        sessionToken: token,
+        pageId: "page-2",
+      }),
+    ).rejects.toThrow("Unknown browser tab");
+    expect(runner).toHaveBeenCalledTimes(calls);
+  });
+
+  it("never accepts a page identity owned by another token or an unsafe tab URL", async () => {
+    const { backend, runner } = fixture("");
+    const a = await openSession(backend, "bot-a");
+    const b = await openSession(backend, "bot-a");
+    const first = await backend.browser("bot-a", {
+      command: "navigate",
+      sessionToken: a,
+      url: "https://example.com/a",
+    });
+    const second = await backend.browser("bot-a", {
+      command: "navigate",
+      sessionToken: b,
+      url: "https://example.com/b",
+    });
+    expect(first.pageId).toBeTruthy();
+    expect(second.pageId).toBeTruthy();
+    expect(first.pageId).not.toBe(second.pageId);
+
+    let calls = runner.mock.calls.length;
+    await expect(
+      backend.browser("bot-a", {
+        command: "tabSelect",
+        sessionToken: b,
+        pageId: first.pageId!,
+      }),
+    ).rejects.toThrow("Unknown browser tab");
+    expect(runner).toHaveBeenCalledTimes(calls);
+
+    calls = runner.mock.calls.length;
+    await expect(
+      backend.browser("bot-a", {
+        command: "tabNew",
+        sessionToken: b,
+        url: "file:///C:/Users/secret",
+      }),
+    ).rejects.toThrow("HTTP(S)");
+    expect(runner).toHaveBeenCalledTimes(calls);
+
+    expect(
+      WindowsHostBrowserRequestSchema.safeParse({
+        command: "tabSelect",
+        sessionToken: b,
+        pageId: "",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("fails closed when tab creation does not return a trackable page identity", async () => {
+    const runner = vi.fn<OpenCliRunner>(async (_entry, argv) => {
+      const command = argv.slice(argv.indexOf("browser") + 2);
+      if (command[0] === "tab" && command[1] === "new") return "{}";
+      throw new Error("Unexpected OpenCLI request");
+    });
+    const backend = new WindowsOpenCliBackend({ entry: process.execPath, profile: "" }, runner);
+    const token = await openSession(backend, "bot-a");
+    expect(await backend.browser("bot-a", { command: "tabNew", sessionToken: token })).toEqual({
+      ok: false,
+      uncertain: true,
+      error: "OpenCLI created a tab but did not return a valid page identity",
+    });
+    const calls = runner.mock.calls.length;
+    await expect(
+      backend.browser("bot-a", {
+        command: "tabClose",
+        sessionToken: token,
+        pageId: "untracked-page",
+      }),
+    ).rejects.toThrow("Unknown browser tab");
+    expect(runner).toHaveBeenCalledTimes(calls);
   });
 
   it("denies read-only operations using another task's session token before invoking OpenCLI", async () => {
