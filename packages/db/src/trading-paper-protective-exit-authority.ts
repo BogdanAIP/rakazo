@@ -238,8 +238,7 @@ export async function assessTradingPaperProtectiveExitAuthorityInTransaction(
     include: { run: { select: { id: true, spaceId: true, userId: true } } },
   });
   if (
-    !effect ||
-    effect.status !== "completed" ||
+    effect?.status !== "completed" ||
     effect.kind !== "paper_position_control" ||
     effect.spaceId !== owner.spaceId ||
     effect.run.id !== authority.runId ||
@@ -280,10 +279,7 @@ export async function assessTradingPaperProtectiveExitAuthorityInTransaction(
   }
 
   const nowMs = now.getTime();
-  if (
-    nowMs < Date.parse(authority.authorizedAt) ||
-    nowMs >= Date.parse(authority.expiresAt)
-  ) {
+  if (nowMs < Date.parse(authority.authorizedAt) || nowMs >= Date.parse(authority.expiresAt)) {
     return { status: "deny", mode: "paper_only", effectId, reason: "authority_expired" };
   }
 
