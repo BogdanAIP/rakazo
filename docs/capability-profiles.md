@@ -216,18 +216,29 @@ Actions:
 - catalog — return the built-in profile catalog and semantic requirement registry;
 - resolve — resolve one Project active profile against current state.
 
-Write helper:
+Write helpers:
 
     rakazo_capability_profile_assign
+    rakazo_capability_binding_assign
 
-The assign helper:
+The profile assign helper:
 
 1. validates a built-in profile;
 2. applies explicit addRequired/addOptional/deny overrides;
 3. materializes a versioned snapshot;
 4. upserts only capability.profile/active.
 
-It does not install, authenticate, bind or execute a tool.
+The binding assign helper fails closed unless:
+
+1. an active profile exists and is valid;
+2. the semantic requirement is required or optional, not denied;
+3. the selected Bot is already linked to the Project by rakazo.bot or an open Project task;
+4. the exact tool and route are currently present in that Bot's authorized capabilities/tools catalog;
+5. a read-only semantic requirement is bound only to a tool that declares readOnly=true.
+
+Only after these checks does it upsert capability.binding/<requirement>.
+
+Neither helper installs, authenticates, approves or executes a tool.
 
 ## RCCL bootstrap
 
