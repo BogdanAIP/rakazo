@@ -228,20 +228,20 @@ export async function manageProjectWorktree(
   }
   if (!input.repoPath.trim()) throw new Error("repoPath is required");
   const repoPath = absolutePath(input.repoPath, "repoPath");
-  let worktreePath: string | undefined;
+  let requestedWorktreePath: string | undefined;
   if (input.action !== "list") {
     if (!input.worktreePath?.trim()) {
       throw new Error("worktreePath is required for verify/ensure");
     }
-    worktreePath = absolutePath(input.worktreePath, "worktreePath");
-    if (canonicalPath(worktreePath) === canonicalPath(repoPath)) {
+    requestedWorktreePath = absolutePath(input.worktreePath, "worktreePath");
+    if (canonicalPath(requestedWorktreePath) === canonicalPath(repoPath)) {
       throw new Error("worktreePath must differ from repoPath");
     }
   }
   input = {
     ...input,
     repoPath,
-    ...(worktreePath ? { worktreePath } : {}),
+    ...(requestedWorktreePath ? { worktreePath: requestedWorktreePath } : {}),
   };
 
   const projectContext = object(
