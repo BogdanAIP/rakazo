@@ -7,6 +7,7 @@ export * from "./async.js";
 export * from "./attachments.js";
 export * from "./avatar-motion.js";
 export * from "./avatar-shape.js";
+export * from "./barge-in.js";
 export * from "./bot-avatar-colors.js";
 export * from "./bot-avatar-shapes.js";
 export * from "./bot-messages.js";
