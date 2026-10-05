@@ -14,6 +14,7 @@ export * from "./model-credentials.js";
 export * from "./repos.js";
 export * from "./scope.js";
 export * from "./spaces.js";
+export { applyApprovedTradingPaperProtectiveExitControl } from "./trading-paper-protective-exit-authority.js";
 export {
   PaperQuoteEvidenceError,
   readVerifiedPaperQuoteEvidence,
@@ -21,7 +22,6 @@ export {
   recordPublicAdapterPaperQuoteEvidence,
 } from "./trading-paper-quote-evidence.js";
 export * from "./trading-paper-reservation-preflight.js";
-export { applyApprovedTradingPaperProtectiveExitControl } from "./trading-paper-protective-exit-authority.js";
 export {
   applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,

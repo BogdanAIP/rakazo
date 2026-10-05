@@ -12,6 +12,11 @@ import {
   PaperLifecycleAuditError,
 } from "./trading-paper-lifecycle-audit.js";
 import {
+  applyApprovedTradingPaperProtectiveExitControl,
+  PaperProtectiveExitAuthorityIntegrityError,
+  readVerifiedTradingPaperProtectiveExitAuthority,
+} from "./trading-paper-protective-exit-authority.js";
+import {
   PaperQuoteEvidenceError,
   readVerifiedPaperQuoteEvidence,
   readVerifiedPublicPaperQuoteEvidence,
@@ -19,11 +24,6 @@ import {
   recordSyntheticPaperQuoteEvidence,
 } from "./trading-paper-quote-evidence.js";
 import { reconcileTradingPaperReservations } from "./trading-paper-reconciliation.js";
-import {
-  applyApprovedTradingPaperProtectiveExitControl,
-  PaperProtectiveExitAuthorityIntegrityError,
-  readVerifiedTradingPaperProtectiveExitAuthority,
-} from "./trading-paper-protective-exit-authority.js";
 import { readTradingPaperRecoveryStatus } from "./trading-paper-recovery-status.js";
 import { preflightTradingPaperReservation } from "./trading-paper-reservation-preflight.js";
 import {

@@ -60,7 +60,9 @@ export type PaperProtectiveExitControlResult =
 
 function parseRequest(value: unknown): Request {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new PaperProtectiveExitAuthorityIntegrityError("Invalid protective exit approval payload");
+    throw new PaperProtectiveExitAuthorityIntegrityError(
+      "Invalid protective exit approval payload",
+    );
   }
   const row = value as Record<string, unknown>;
   const keys = Object.keys(row).sort();
@@ -87,7 +89,9 @@ function parseRequest(value: unknown): Request {
     !Number.isSafeInteger(revision) ||
     (revision as number) < 0
   ) {
-    throw new PaperProtectiveExitAuthorityIntegrityError("Invalid protective exit approval payload");
+    throw new PaperProtectiveExitAuthorityIntegrityError(
+      "Invalid protective exit approval payload",
+    );
   }
   return { action, ledgerId, positionId, expectedPolicyRevision: revision as number };
 }
@@ -219,9 +223,7 @@ export async function applyApprovedTradingPaperProtectiveExitControl(
           }
           return result;
         };
-        const fail = (
-          error: Extract<PaperProtectiveExitControlResult, { ok: false }>["error"],
-        ) =>
+        const fail = (error: Extract<PaperProtectiveExitControlResult, { ok: false }>["error"]) =>
           complete({
             ok: false,
             mode: "paper_only",
@@ -248,11 +250,7 @@ export async function applyApprovedTradingPaperProtectiveExitControl(
         if (lifecycle.openReservations > 0) {
           return fail("reconciliation_required");
         }
-        const recovered = await recoverTradingPaperLedgerInTransaction(
-          tx,
-          owner,
-          request.ledgerId,
-        );
+        const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, request.ledgerId);
         const position = recovered.state.positions.find(
           (entry) => entry.positionId === request.positionId,
         );
