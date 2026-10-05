@@ -214,8 +214,23 @@ export const WindowsHostGuiActionSchema = z.discriminatedUnion("kind", [
 
 export type WindowsHostGuiAction = z.infer<typeof WindowsHostGuiActionSchema>;
 
+export const WindowsHostUiaActionSchema = z.object({
+  observationId: z.string().regex(/^[a-f0-9]{64}$/u),
+  windowId: z.string().min(1).max(100),
+  ref: z.string().regex(/^u\d{1,4}$/u),
+  action: z.enum(["focus", "invoke", "click"]),
+});
+
+export type WindowsHostUiaAction = z.infer<typeof WindowsHostUiaActionSchema>;
+
 export const WindowsHostGuiRequestSchema = z.discriminatedUnion("command", [
   z.object({ command: z.literal("observe") }),
+  z.object({
+    command: z.literal("semanticAct"),
+    semantic: WindowsHostUiaActionSchema,
+    observe: z.boolean().default(true),
+    settleMs: z.number().int().min(0).max(5_000).optional(),
+  }),
   z.object({
     command: z.literal("act"),
     actions: z.array(WindowsHostGuiActionSchema).min(1).max(24),
@@ -248,6 +263,7 @@ export type WindowsHostUiaElement = z.infer<typeof WindowsHostUiaElementSchema>;
 
 export const WindowsHostUiaSnapshotSchema = z.object({
   source: z.literal("uia"),
+  observationId: z.string().regex(/^[a-f0-9]{64}$/u),
   truncated: z.boolean(),
   elements: z.array(WindowsHostUiaElementSchema).max(256),
 });
@@ -334,6 +350,13 @@ export const WindowsHostCommandRequestSchema = z.discriminatedUnion("kind", [
     kind: z.literal("screen.act"),
     botId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
     actions: z.array(WindowsHostGuiActionSchema).min(1).max(24),
+    observe: z.boolean().default(true),
+    settleMs: z.number().int().min(0).max(5_000).optional(),
+  }),
+  z.object({
+    kind: z.literal("screen.semanticAct"),
+    botId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
+    semantic: WindowsHostUiaActionSchema,
     observe: z.boolean().default(true),
     settleMs: z.number().int().min(0).max(5_000).optional(),
   }),
