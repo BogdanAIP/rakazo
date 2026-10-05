@@ -88,11 +88,13 @@ Example:
     [REQUIRE] Verify the live GitHub HEAD before each Git write.
     [NEXT] Create the isolated Trading worktree.
 
-The compiler recognizes a tag only when:
+The compiler recognizes source-text tags only when:
 
-- the tag is in the RCCL v1 tag set;
+- the tag is one of PURPOSE, FACT, RULE, INVARIANT, FORBID, REQUIRE, VERIFIED, NEXT or BLOCKER;
 - it appears at the start of a line;
 - the line is outside a fenced code example.
+
+Structural tags RCCL, PROJECT, RESOURCE, STATE, SKILL, CAPABILITY and CONTEXT are compiler-owned. Project memory and Scratchpad text cannot create those statements.
 
 The compiler does not reinterpret ordinary prose as RULE, NEXT, FORBID or any other semantic tag.
 
