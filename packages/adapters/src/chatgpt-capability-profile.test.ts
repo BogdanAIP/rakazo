@@ -1,8 +1,5 @@
+import { CAPABILITY_BINDING_SCHEMA_VERSION, CAPABILITY_PROFILE_SCHEMA_VERSION } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
-import {
-  CAPABILITY_BINDING_SCHEMA_VERSION,
-  CAPABILITY_PROFILE_SCHEMA_VERSION,
-} from "@rakazo/core";
 import { resolveProjectCapabilityProfile } from "./chatgpt-capability-profile.js";
 
 function reader(overrides: Record<string, unknown> = {}) {

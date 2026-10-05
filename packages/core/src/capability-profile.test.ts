@@ -33,13 +33,7 @@ describe("capability profiles", () => {
       catalogVersion: 1,
       profile: "web-development",
       required: ["repo.read", "browser.semantic"],
-      optional: [
-        "computer.files",
-        "computer.exec",
-        "browser.debug",
-        "browser.visual",
-        "citations",
-      ],
+      optional: ["computer.files", "computer.exec", "browser.debug", "browser.visual", "citations"],
       denied: ["repo.write"],
     });
   });

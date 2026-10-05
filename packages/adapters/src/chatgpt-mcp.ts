@@ -3,20 +3,20 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   analyzeRcclSkillMd,
-  buildRcclSkillTemplate,
   BUILTIN_CAPABILITY_PROFILES,
+  buildRcclSkillTemplate,
   materializeCapabilityProfile,
   SEMANTIC_CAPABILITY_REQUIREMENT_NAMES,
   SEMANTIC_CAPABILITY_REQUIREMENTS,
 } from "@rakazo/core";
 import { z } from "zod";
+import { resolveProjectCapabilityProfile } from "./chatgpt-capability-profile.js";
 import {
   loadChatGptContext,
   loadChatGptProjectContext,
   searchChatGptCapabilities,
   selectChatGptProjectContextView,
 } from "./chatgpt-context.js";
-import { resolveProjectCapabilityProfile } from "./chatgpt-capability-profile.js";
 import type { ProcedureMode } from "./chatgpt-rakazo.js";
 import {
   actRakazoComputer,
@@ -359,8 +359,7 @@ server.registerTool(
           name,
           ...SEMANTIC_CAPABILITY_REQUIREMENTS[name],
         })),
-        note:
-          "Catalog entries are templates only. A Project gets a versioned snapshot only after explicit assignment.",
+        note: "Catalog entries are templates only. A Project gets a versioned snapshot only after explicit assignment.",
       });
     }
     return textResult(await resolveProjectCapabilityProfile(callRakazoRpc, input.projectId));
@@ -405,8 +404,7 @@ server.registerTool(
       projectId,
       snapshot,
       resource,
-      note:
-        "Profile assignment does not install or authorize tools. Resolve the profile to see ready/available/missing requirements.",
+      note: "Profile assignment does not install or authorize tools. Resolve the profile to see ready/available/missing requirements.",
     });
   },
 );

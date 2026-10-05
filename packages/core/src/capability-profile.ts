@@ -19,8 +19,7 @@ export const SEMANTIC_CAPABILITY_REQUIREMENT_NAMES = [
   "database.read",
 ] as const;
 
-export type SemanticCapabilityRequirement =
-  (typeof SEMANTIC_CAPABILITY_REQUIREMENT_NAMES)[number];
+export type SemanticCapabilityRequirement = (typeof SEMANTIC_CAPABILITY_REQUIREMENT_NAMES)[number];
 
 export const SEMANTIC_CAPABILITY_REQUIREMENTS: Record<
   SemanticCapabilityRequirement,
@@ -41,7 +40,8 @@ export const SEMANTIC_CAPABILITY_REQUIREMENTS: Record<
     class: "project",
   },
   "browser.semantic": {
-    description: "Inspect and operate a web page through a structured semantic DOM/accessibility surface.",
+    description:
+      "Inspect and operate a web page through a structured semantic DOM/accessibility surface.",
     discoveryQuery: "browser playwright accessibility semantic",
     class: "external",
   },
@@ -56,7 +56,8 @@ export const SEMANTIC_CAPABILITY_REQUIREMENTS: Record<
     class: "computer",
   },
   "computer.exec": {
-    description: "Run bounded commands on a Project execution computer under normal control policy.",
+    description:
+      "Run bounded commands on a Project execution computer under normal control policy.",
     discoveryQuery: "computer terminal command execution",
     class: "computer",
   },
@@ -120,7 +121,8 @@ export const BUILTIN_CAPABILITY_PROFILES: readonly CapabilityProfileDefinition[]
   {
     slug: "web-development",
     name: "Web development",
-    description: "Repository-centered web application development with optional browser diagnostics.",
+    description:
+      "Repository-centered web application development with optional browser diagnostics.",
     required: ["repo.read"],
     optional: [
       "repo.write",
@@ -231,9 +233,7 @@ function requirements(value: unknown): SemanticCapabilityRequirement[] | null {
   return uniqueRequirements(parsed);
 }
 
-export function getBuiltinCapabilityProfile(
-  slug: string,
-): CapabilityProfileDefinition | undefined {
+export function getBuiltinCapabilityProfile(slug: string): CapabilityProfileDefinition | undefined {
   return BUILTIN_CAPABILITY_PROFILES.find((profile) => profile.slug === slug.trim());
 }
 
@@ -291,7 +291,9 @@ export function parseCapabilityProfileResource(
   }
   const requiredSet = new Set(required);
   if (optional.some((item) => requiredSet.has(item) || deniedSet.has(item))) {
-    return { error: "capability.profile optional capabilities must not duplicate required/denied." };
+    return {
+      error: "capability.profile optional capabilities must not duplicate required/denied.",
+    };
   }
   return {
     snapshot: {

@@ -1,9 +1,9 @@
 import {
+  type CapabilityBindingSnapshot,
+  type CapabilityProfileSnapshot,
   parseCapabilityBindingResource,
   parseCapabilityProfileResource,
   SEMANTIC_CAPABILITY_REQUIREMENTS,
-  type CapabilityBindingSnapshot,
-  type CapabilityProfileSnapshot,
   type SemanticCapabilityRequirement,
 } from "@rakazo/core";
 import type { ContextReader } from "./chatgpt-context.js";
@@ -40,10 +40,7 @@ function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function routeMatches(
-  actualValue: unknown,
-  expected: CapabilityBindingSnapshot["route"],
-): boolean {
+function routeMatches(actualValue: unknown, expected: CapabilityBindingSnapshot["route"]): boolean {
   const actual = record(actualValue, "capability route");
   if (actual.connectorId !== expected.connectorId || actual.toolName !== expected.toolName) {
     return false;
@@ -78,10 +75,7 @@ async function bindingIsLive(
   );
 }
 
-async function runningComputerBotIds(
-  read: ContextReader,
-  botIds: string[],
-): Promise<Set<string>> {
+async function runningComputerBotIds(read: ContextReader, botIds: string[]): Promise<Set<string>> {
   const running = new Set<string>();
   await Promise.all(
     botIds.map(async (botId) => {
@@ -98,12 +92,16 @@ async function runningComputerBotIds(
 
 function profileResource(
   resources: Record<string, unknown>[],
-): { resource: Record<string, unknown>; snapshot: CapabilityProfileSnapshot } | { error: string } | null {
+):
+  | { resource: Record<string, unknown>; snapshot: CapabilityProfileSnapshot }
+  | { error: string }
+  | null {
   const matches = resources.filter(
     (resource) => resource.kind === "capability.profile" && resource.ref === "active",
   );
   if (matches.length === 0) return null;
-  if (matches.length > 1) return { error: "Project has multiple active capability.profile resources." };
+  if (matches.length > 1)
+    return { error: "Project has multiple active capability.profile resources." };
   const parsed = parseCapabilityProfileResource(matches[0]!);
   if (!parsed) return null;
   if ("error" in parsed) return parsed;
@@ -112,7 +110,10 @@ function profileResource(
 
 function bindingResources(
   resources: Record<string, unknown>[],
-): Map<SemanticCapabilityRequirement, { resource: Record<string, unknown>; binding: CapabilityBindingSnapshot } | { error: string }> {
+): Map<
+  SemanticCapabilityRequirement,
+  { resource: Record<string, unknown>; binding: CapabilityBindingSnapshot } | { error: string }
+> {
   const result = new Map<
     SemanticCapabilityRequirement,
     { resource: Record<string, unknown>; binding: CapabilityBindingSnapshot } | { error: string }
@@ -125,7 +126,9 @@ function bindingResources(
     if (!requirement || !(requirement in SEMANTIC_CAPABILITY_REQUIREMENTS)) continue;
     const key = requirement as SemanticCapabilityRequirement;
     if (result.has(key)) {
-      result.set(key, { error: "Project has multiple capability.binding resources for " + key + "." });
+      result.set(key, {
+        error: "Project has multiple capability.binding resources for " + key + ".",
+      });
       continue;
     }
     result.set(key, "error" in parsed ? parsed : { resource, binding: parsed.binding });
@@ -140,7 +143,9 @@ function githubResources(resources: Record<string, unknown>[]): Record<string, u
 function repoWriteReady(resources: Record<string, unknown>[]): boolean {
   return githubResources(resources).some((resource) => {
     const metadata =
-      resource.metadata && typeof resource.metadata === "object" && !Array.isArray(resource.metadata)
+      resource.metadata &&
+      typeof resource.metadata === "object" &&
+      !Array.isArray(resource.metadata)
         ? (resource.metadata as Record<string, unknown>)
         : {};
     return metadata.githubAccess === "autonomous_write";
@@ -162,8 +167,7 @@ export async function resolveProjectCapabilityProfile(
       project: { id: project.id, slug: project.slug, name: project.name },
       assigned: false,
       resolutions: [],
-      note:
-        "No active capability.profile resource is assigned. Resolver does not install, authorize or broaden capabilities.",
+      note: "No active capability.profile resource is assigned. Resolver does not install, authorize or broaden capabilities.",
     };
   }
   if ("error" in active) {
@@ -298,7 +302,8 @@ export async function resolveProjectCapabilityProfile(
           requirement,
           level,
           status: "stale",
-          reason: "Capability binding could not be verified against the current authorized tool catalog.",
+          reason:
+            "Capability binding could not be verified against the current authorized tool catalog.",
           discoveryQuery: info.discoveryQuery,
         };
       }
@@ -349,7 +354,6 @@ export async function resolveProjectCapabilityProfile(
       optional: resolutions.filter((item) => item.level === "optional").length,
       denied: resolutions.filter((item) => item.level === "denied").length,
     },
-    note:
-      "Resolution is read-only. ready/available does not bypass existing Project grants, capability assignments, Computer control leases, approvals or tool policy. Missing capabilities are not installed automatically.",
+    note: "Resolution is read-only. ready/available does not bypass existing Project grants, capability assignments, Computer control leases, approvals or tool policy. Missing capabilities are not installed automatically.",
   };
 }
