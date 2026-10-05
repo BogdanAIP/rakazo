@@ -132,7 +132,6 @@ export const WindowsHostBrowserRequestSchema = z.discriminatedUnion("command", [
   z.object({
     command: z.literal("screenshot"),
     sessionToken: WindowsHostBrowserSessionTokenSchema,
-    fullPage: z.boolean().optional(),
     annotate: z.boolean().optional(),
     width: z.number().int().min(320).max(4_096).optional(),
     height: z.number().int().min(200).max(4_096).optional(),
