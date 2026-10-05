@@ -25,6 +25,7 @@ import type {
   CloudAgentSnapshot,
   CommandRequest,
   ComputerActionRequest,
+  ComputerSemanticActionRequest,
   ComputerActionResult,
   ComputerFileEntry,
   ComputerInput,
@@ -144,6 +145,11 @@ export interface SandboxProvider {
   act(
     computer: ComputerRef,
     request: ComputerActionRequest,
+    context: AdapterContext,
+  ): Promise<ComputerActionResult>;
+  semanticAct?(
+    computer: ComputerRef,
+    request: ComputerSemanticActionRequest,
     context: AdapterContext,
   ): Promise<ComputerActionResult>;
   listFiles(
