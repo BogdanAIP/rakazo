@@ -138,6 +138,12 @@ Before any future protective close may consume C11 authority, an internal read-o
 
 The verifier returns `usable` only inside the server-authored TTL. Expired authority, policy revision change, missing position or changed scope is denied; malformed approval provenance throws an integrity error. A disposable PostgreSQL regression proves a mid-TTL authority is usable, the exact expiry boundary is denied, tampering with the completed effect fails closed, and ledger/policy/outbox/guard plus `fill_sell` count remain unchanged. C12 creates no tool, price poller, scheduler, close event, broker I/O or live path.
 
+## P11C-13 — historical protective-approval provenance bridge (read-only)
+
+The existing lifecycle audit treats every historical `fill_sell` as belonging to the original owner-approved paper `enable`. A future close while the kill-switch stays latched must not counterfeit that provenance. C13 therefore adds an internal read-only historical verifier for C11 authority. It revalidates the hashed authority row plus the completed `paper_position_control` ExternalEffect request/result, then compares an expected ledger, position, policy revision, buy-fill sequence, persisted stop and action timestamp. Historical verification remains possible after the authority later expires, but the recorded action timestamp must have been inside the original server-authored 60-second window.
+
+A disposable PostgreSQL regression proves exact scope succeeds, the expiry boundary and altered position/fill sequence fail closed, malformed approval state raises an integrity error, and no ledger/policy or `fill_sell` mutation occurs. C13 deliberately does not modify lifecycle close acceptance yet and does not create a close writer. It is the provenance primitive required before such a writer can be reviewed safely.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.

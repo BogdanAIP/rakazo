@@ -16,6 +16,7 @@ import {
   PaperProtectiveExitAuthorityIntegrityError,
   readTradingPaperProtectiveExitAuthorityUseStatus,
   readVerifiedTradingPaperProtectiveExitAuthority,
+  verifyHistoricalTradingPaperProtectiveExitApprovalInTransaction,
 } from "./trading-paper-protective-exit-authority.js";
 import {
   PaperQuoteEvidenceError,
@@ -2948,6 +2949,70 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     );
     expect(await first.prisma.tradingPaperStopGuard.count({ where: { ledgerId } })).toBe(
       guardsBefore,
+    );
+    expect(
+      await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_sell" } }),
+    ).toBe(0);
+  });
+
+  it("P11C-13 verifies historical protective approval scope without mutation", async () => {
+    const ledgerId = `paper-c1-fill-${suffix}`;
+    const authority = await first.prisma.tradingPaperProtectiveExitAuthority.findFirstOrThrow({
+      where: { ledgerId },
+      orderBy: { authorizedAt: "desc" },
+    });
+    const before = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);
+    const policyBefore = await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId);
+    const actedAt = new Date(authority.authorizedAt.getTime() + 30_000).toISOString();
+    const verify = (overrides: Partial<{
+      ledgerId: string;
+      positionId: string;
+      policyRevision: number;
+      buyFillEventSequence: number;
+      stopPriceQuote: string;
+      actedAt: string;
+    }> = {}) =>
+      first.prisma.$transaction((tx) =>
+        verifyHistoricalTradingPaperProtectiveExitApprovalInTransaction(
+          tx,
+          owner,
+          authority.effectId,
+          {
+            ledgerId,
+            positionId: authority.positionId,
+            policyRevision: authority.policyRevision,
+            buyFillEventSequence: authority.buyFillEventSequence,
+            stopPriceQuote: authority.stopPriceQuote,
+            actedAt,
+            ...overrides,
+          },
+        ),
+      );
+
+    await expect(verify()).resolves.toBe(true);
+    await expect(verify({ actedAt: authority.expiresAt.toISOString() })).resolves.toBe(false);
+    await expect(verify({ positionId: `${authority.positionId}-other` })).resolves.toBe(false);
+    await expect(
+      verify({ buyFillEventSequence: authority.buyFillEventSequence + 1 }),
+    ).resolves.toBe(false);
+
+    const effect = await first.prisma.externalEffect.findUniqueOrThrow({
+      where: { id: authority.effectId },
+    });
+    await first.prisma.externalEffect.update({
+      where: { id: authority.effectId },
+      data: { status: "executing" },
+    });
+    await expect(verify()).rejects.toBeInstanceOf(PaperProtectiveExitAuthorityIntegrityError);
+    await first.prisma.externalEffect.update({
+      where: { id: authority.effectId },
+      data: { status: effect.status },
+    });
+    await expect(verify()).resolves.toBe(true);
+
+    expect(await readVerifiedTradingPaperLedger(second.prisma, owner, ledgerId)).toEqual(before);
+    expect(await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId)).toEqual(
+      policyBefore,
     );
     expect(
       await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_sell" } }),

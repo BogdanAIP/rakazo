@@ -179,6 +179,85 @@ export async function readVerifiedTradingPaperProtectiveExitAuthority(
   );
 }
 
+export type HistoricalPaperProtectiveExitScope = {
+  ledgerId: string;
+  positionId: string;
+  policyRevision: number;
+  buyFillEventSequence: number;
+  stopPriceQuote: string;
+  actedAt: string;
+};
+
+/** INTERNAL READ-ONLY historical provenance verifier for a future lifecycle audit.
+ * It validates the original explicit approval and immutable scope even after TTL
+ * expiry; actedAt itself must still have fallen inside the authority window. */
+export async function verifyHistoricalTradingPaperProtectiveExitApprovalInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  effectId: string,
+  expected: HistoricalPaperProtectiveExitScope,
+): Promise<boolean> {
+  const authority = await verifyTradingPaperProtectiveExitAuthorityInTransaction(
+    tx,
+    owner,
+    effectId,
+  );
+  if (!authority) return false;
+  const effect = await tx.externalEffect.findUnique({
+    where: { id: effectId },
+    include: { run: { select: { id: true, spaceId: true, userId: true } } },
+  });
+  if (
+    effect?.status !== "completed" ||
+    effect.kind !== "paper_position_control" ||
+    effect.spaceId !== owner.spaceId ||
+    effect.run.id !== authority.runId ||
+    effect.run.spaceId !== owner.spaceId ||
+    effect.run.userId !== owner.userId
+  ) {
+    throw new PaperProtectiveExitAuthorityIntegrityError(
+      "Historical protective exit authority lacks explicit approval provenance",
+    );
+  }
+  const request = parseRequest(effect.request);
+  const result = completedEffectResult(effect.result);
+  if (
+    request.ledgerId !== authority.ledgerId ||
+    request.positionId !== authority.positionId ||
+    request.expectedPolicyRevision !== authority.policyRevision ||
+    result?.ok !== true ||
+    result.mode !== "paper_only" ||
+    result.action !== ACTION ||
+    result.ledgerId !== authority.ledgerId ||
+    result.positionId !== authority.positionId ||
+    result.policyRevision !== authority.policyRevision ||
+    result.enabled !== false ||
+    result.killSwitch !== true ||
+    result.authorityEffectId !== effectId ||
+    result.authorizedAt !== authority.authorizedAt ||
+    result.expiresAt !== authority.expiresAt
+  ) {
+    throw new PaperProtectiveExitAuthorityIntegrityError(
+      "Historical protective exit approval disagrees with stored authority",
+    );
+  }
+  const actedAt = Date.parse(expected.actedAt);
+  if (!Number.isFinite(actedAt)) {
+    throw new PaperProtectiveExitAuthorityIntegrityError(
+      "Historical protective exit action timestamp is invalid",
+    );
+  }
+  return (
+    expected.ledgerId === authority.ledgerId &&
+    expected.positionId === authority.positionId &&
+    expected.policyRevision === authority.policyRevision &&
+    expected.buyFillEventSequence === authority.buyFillEventSequence &&
+    expected.stopPriceQuote === authority.stopPriceQuote &&
+    actedAt >= Date.parse(authority.authorizedAt) &&
+    actedAt < Date.parse(authority.expiresAt)
+  );
+}
+
 export type PaperProtectiveExitAuthorityUseStatus =
   | {
       status: "usable";
