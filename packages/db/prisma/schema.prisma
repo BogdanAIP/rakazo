@@ -1398,6 +1398,7 @@ model TradingPaperLedger {
   releaseAudits        TradingPaperReleaseAudit[]
   fillDecisions         TradingPaperFillDecision[]
   closeDecisions        TradingPaperCloseDecision[]
+  protectiveExitAuthorities TradingPaperProtectiveExitAuthority[]
 
   @@index([spaceId, ownerUserId])
   @@map("trading_paper_ledgers")
@@ -1568,6 +1569,28 @@ model TradingPaperCloseDecision {
   @@unique([ledgerId, closeEventId])
   @@index([ledgerId, createdAt])
   @@map("trading_paper_close_decisions")
+}
+
+/** Short-lived owner-approved authority for one protective synthetic PAPER exit.
+ * Creating this row never closes a position and never enables new entries. */
+model TradingPaperProtectiveExitAuthority {
+  effectId             String             @id
+  ledgerId             String
+  ledger               TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId              String
+  userId               String
+  runId                String
+  positionId           String
+  policyRevision       Int
+  buyFillEventSequence Int
+  stopPriceQuote       String
+  authorizedAt         DateTime
+  expiresAt            DateTime
+  authoritySha256      String
+  createdAt            DateTime           @default(now())
+
+  @@index([ledgerId, positionId, expiresAt])
+  @@map("trading_paper_protective_exit_authorities")
 }
 
 /** Evidence only: no broker data, account keys or risk approval.

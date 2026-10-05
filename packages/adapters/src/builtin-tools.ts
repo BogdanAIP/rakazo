@@ -873,6 +873,22 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    name: "paper_position_control",
+    description:
+      "Propose a short-lived, one-time authorization for a protective synthetic PAPER exit of exactly one already-open position while the paper kill-switch remains latched. Use only when the user explicitly asks to authorize management of that existing paper position. This always requires a fresh confirmation card and cannot be auto-reviewed or permanently allowed. This authorization step does not close the position, enable new entries, contact an exchange, or authorize live trading.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["authorize_protective_stop_exit"] },
+        ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+        position_id: { type: "string", minLength: 1, maxLength: 128 },
+        expected_policy_revision: { type: "integer", minimum: 0 },
+      },
+      required: ["action", "ledger_id", "position_id", "expected_policy_revision"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "spawn_bot",
     description:
       "Create a full, regular bot — the same kind the user creates from the + button. It gets its own thread, computer, and memory, and appears as a peer in the bot list. Do not also call run_subagent. Creating the bot is the whole action. Only set prompt if the user asked that new bot to start work immediately.",

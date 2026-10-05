@@ -33,7 +33,11 @@ const APPROVAL_REQUIRED_BUILTIN_TOOLS = new Set([
   "cloud_agent_reply",
   "cloud_agent_cancel",
 ]);
-const EXPLICIT_APPROVAL_BUILTIN_TOOLS = new Set(["create_space", "paper_trading_control"]);
+const EXPLICIT_APPROVAL_BUILTIN_TOOLS = new Set([
+  "create_space",
+  "paper_trading_control",
+  "paper_position_control",
+]);
 
 const UNATTENDED_SAFE_BUILTIN_TOOLS = new Set([
   "browser_snapshot",

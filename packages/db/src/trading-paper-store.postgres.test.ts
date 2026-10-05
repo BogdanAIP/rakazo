@@ -19,6 +19,11 @@ import {
   recordSyntheticPaperQuoteEvidence,
 } from "./trading-paper-quote-evidence.js";
 import { reconcileTradingPaperReservations } from "./trading-paper-reconciliation.js";
+import {
+  applyApprovedTradingPaperProtectiveExitControl,
+  PaperProtectiveExitAuthorityIntegrityError,
+  readVerifiedTradingPaperProtectiveExitAuthority,
+} from "./trading-paper-protective-exit-authority.js";
 import { readTradingPaperRecoveryStatus } from "./trading-paper-recovery-status.js";
 import { preflightTradingPaperReservation } from "./trading-paper-reservation-preflight.js";
 import {
@@ -140,6 +145,69 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
         idempotencyKey: `paper-control-helper-key-${label}-${suffix}`,
         status: "executing",
         request: { action, ledger_id: ledgerId, expected_policy_revision: revision },
+      },
+    });
+  };
+
+  const makePaperPositionControlEffect = async (
+    ledgerId: string,
+    positionId: string,
+    label: string,
+    revision: number,
+  ) => {
+    const botId = `paper-position-control-helper-bot-${label}-${suffix}`;
+    const threadId = `paper-position-control-helper-thread-${label}-${suffix}`;
+    const taskId = `paper-position-control-helper-task-${label}-${suffix}`;
+    const runId = `paper-position-control-helper-run-${label}-${suffix}`;
+    await first.prisma.bot.create({
+      data: {
+        id: botId,
+        spaceId: owner.spaceId,
+        userId: owner.userId,
+        name: "Paper Position Control Helper",
+        color: "#000000",
+      },
+    });
+    await first.prisma.thread.create({
+      data: { id: threadId, spaceId: owner.spaceId, botId, userId: owner.userId },
+    });
+    await first.prisma.task.create({
+      data: {
+        id: taskId,
+        spaceId: owner.spaceId,
+        botId,
+        threadId,
+        userId: owner.userId,
+        prompt: "paper position control helper",
+        status: "running",
+      },
+    });
+    await first.prisma.run.create({
+      data: {
+        id: runId,
+        spaceId: owner.spaceId,
+        botId,
+        threadId,
+        taskId,
+        userId: owner.userId,
+        status: "running",
+        trigger: "user",
+      },
+    });
+    return first.prisma.externalEffect.create({
+      data: {
+        id: `paper-position-control-helper-effect-${label}-${suffix}`,
+        spaceId: owner.spaceId,
+        runId,
+        kind: "paper_position_control",
+        idempotencyKey: `paper-position-control-helper-key-${label}-${suffix}`,
+        status: "executing",
+        request: {
+          action: "authorize_protective_stop_exit",
+          ledger_id: ledgerId,
+          position_id: positionId,
+          expected_policy_revision: revision,
+        },
       },
     });
   };
@@ -2667,6 +2735,131 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     expect(await first.prisma.tradingPaperStopGuard.count({ where: { ledgerId } })).toBe(
       guardsBefore,
     );
+  });
+
+  it("P11C-11 persists explicit protective exit authority without closing the position", async () => {
+    const ledgerId = `paper-c1-fill-${suffix}`;
+    const positionId = `paper-c1-fill-${suffix}`;
+    const before = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);
+    const policyBefore = await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId);
+    const eventsBefore = await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } });
+    const outboxBefore = await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } });
+    const guardsBefore = await first.prisma.tradingPaperStopGuard.count({ where: { ledgerId } });
+    const sellsBefore = await first.prisma.tradingPaperLedgerEvent.count({
+      where: { ledgerId, kind: "fill_sell" },
+    });
+    expect(policyBefore.policy).toMatchObject({ enabled: false, killSwitch: true });
+    expect(before.positions).toHaveLength(1);
+    expect(before.positions[0]?.positionId).toBe(positionId);
+    expect(before.reservations).toHaveLength(0);
+
+    const effect = await makePaperPositionControlEffect(
+      ledgerId,
+      positionId,
+      "c11-authorize",
+      policyBefore.revision,
+    );
+    const authorized = await applyApprovedTradingPaperProtectiveExitControl(
+      second.prisma,
+      owner,
+      effect.id,
+    );
+    expect(authorized).toMatchObject({
+      ok: true,
+      mode: "paper_only",
+      action: "authorize_protective_stop_exit",
+      ledgerId,
+      positionId,
+      policyRevision: policyBefore.revision,
+      enabled: false,
+      killSwitch: true,
+    });
+    if (!authorized.ok) throw new Error("expected protective exit authority");
+    expect(Date.parse(authorized.expiresAt)).toBeGreaterThan(Date.parse(authorized.authorizedAt));
+    expect(Date.parse(authorized.expiresAt) - Date.parse(authorized.authorizedAt)).toBe(60_000);
+
+    const verified = await readVerifiedTradingPaperProtectiveExitAuthority(
+      first.prisma,
+      owner,
+      effect.id,
+    );
+    expect(verified).toMatchObject({
+      effectId: effect.id,
+      ledgerId,
+      positionId,
+      policyRevision: policyBefore.revision,
+      expiresAt: authorized.expiresAt,
+    });
+    expect(
+      (await first.prisma.externalEffect.findUniqueOrThrow({ where: { id: effect.id } })).status,
+    ).toBe("completed");
+    expect(
+      await first.prisma.tradingPaperProtectiveExitAuthority.count({ where: { ledgerId } }),
+    ).toBe(1);
+    expect(await readVerifiedTradingPaperLedger(second.prisma, owner, ledgerId)).toEqual(before);
+    expect(await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId)).toEqual(
+      policyBefore,
+    );
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(
+      eventsBefore,
+    );
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+      outboxBefore,
+    );
+    expect(await first.prisma.tradingPaperStopGuard.count({ where: { ledgerId } })).toBe(
+      guardsBefore,
+    );
+    expect(
+      await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_sell" } }),
+    ).toBe(sellsBefore);
+
+    const duplicate = await makePaperPositionControlEffect(
+      ledgerId,
+      positionId,
+      "c11-duplicate",
+      policyBefore.revision,
+    );
+    await expect(
+      applyApprovedTradingPaperProtectiveExitControl(second.prisma, owner, duplicate.id),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: "authority_already_active",
+      currentPolicyRevision: policyBefore.revision,
+    });
+    if (policyBefore.revision > 0) {
+      const stale = await makePaperPositionControlEffect(
+        ledgerId,
+        positionId,
+        "c11-stale",
+        policyBefore.revision - 1,
+      );
+      await expect(
+        applyApprovedTradingPaperProtectiveExitControl(second.prisma, owner, stale.id),
+      ).resolves.toMatchObject({
+        ok: false,
+        error: "stale_policy_revision",
+        currentPolicyRevision: policyBefore.revision,
+      });
+    }
+
+    const authorityRow = await first.prisma.tradingPaperProtectiveExitAuthority.findUniqueOrThrow({
+      where: { effectId: effect.id },
+    });
+    await first.prisma.tradingPaperProtectiveExitAuthority.update({
+      where: { effectId: effect.id },
+      data: { authoritySha256: "0".repeat(64) },
+    });
+    await expect(
+      readVerifiedTradingPaperProtectiveExitAuthority(second.prisma, owner, effect.id),
+    ).rejects.toBeInstanceOf(PaperProtectiveExitAuthorityIntegrityError);
+    await first.prisma.tradingPaperProtectiveExitAuthority.update({
+      where: { effectId: effect.id },
+      data: { authoritySha256: authorityRow.authoritySha256 },
+    });
+    expect(
+      (await readVerifiedTradingPaperProtectiveExitAuthority(second.prisma, owner, effect.id))
+        ?.authoritySha256,
+    ).toBe(authorityRow.authoritySha256);
   });
 
   it("P11C-8 rejects a forged inert-outbox delivery marker without money mutation", async () => {

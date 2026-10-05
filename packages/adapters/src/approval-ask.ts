@@ -19,7 +19,9 @@ export function buildApprovalAskBlock(
     approvalEffectId: effectId,
     text: truncate(
       redactSecrets(
-        toolName === "create_space" || toolName === "paper_trading_control"
+        toolName === "create_space" ||
+          toolName === "paper_trading_control" ||
+          toolName === "paper_position_control"
           ? `${summary}?`
           : `Review before ${summary}`,
         secrets,
@@ -42,7 +44,12 @@ export function buildApprovalAskBlock(
               },
               { id: "deny", label: "Cancel" },
             ]
-          : [
+          : toolName === "paper_position_control"
+            ? [
+                { id: "allow", label: "Authorize protective paper exit" },
+                { id: "deny", label: "Cancel" },
+              ]
+            : [
               { id: "allow", label: "Allow once" },
               { id: "always", label: "Always allow this tool" },
               { id: "deny", label: "Deny" },
@@ -69,6 +76,11 @@ function describeApprovalAction(toolName: string, args: Record<string, unknown>)
     const ledger = args.ledger_id ? String(args.ledger_id) : "unknown ledger";
     return `${verb} paper-only trading for “${ledger}”`;
   }
+  if (toolName === "paper_position_control") {
+    const ledger = args.ledger_id ? String(args.ledger_id) : "unknown ledger";
+    const position = args.position_id ? String(args.position_id) : "unknown position";
+    return `Authorize protective paper exit for “${position}” on “${ledger}”`;
+  }
   const target = pickScopeLabel(args);
   return target ? `${toolName} → ${target}` : toolName;
 }
@@ -91,6 +103,14 @@ function formatApprovalDetail(
     lines.push(
       "This changes only the synthetic paper-only capability. It does not authorize live orders or change risk limits.",
       `ledger: ${String(args.ledger_id ?? "")}`,
+      `expected policy revision: ${String(args.expected_policy_revision ?? "")}`,
+    );
+  }
+  if (toolName === "paper_position_control") {
+    lines.push(
+      "This records only a short-lived authorization for one protective synthetic paper exit. It does not close the position now, enable new entries, or authorize live orders.",
+      `ledger: ${String(args.ledger_id ?? "")}`,
+      `position: ${String(args.position_id ?? "")}`,
       `expected policy revision: ${String(args.expected_policy_revision ?? "")}`,
     );
   }

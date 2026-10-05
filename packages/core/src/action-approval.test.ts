@@ -29,6 +29,8 @@ describe("toolRequiresApproval", () => {
     expect(toolRequiresExplicitApproval("create_space")).toBe(true);
     expect(toolRequiresApproval("paper_trading_control", false)).toBe(true);
     expect(toolRequiresExplicitApproval("paper_trading_control")).toBe(true);
+    expect(toolRequiresApproval("paper_position_control", false)).toBe(true);
+    expect(toolRequiresExplicitApproval("paper_position_control")).toBe(true);
     expect(toolRequiresExplicitApproval("archive_bot")).toBe(false);
   });
 

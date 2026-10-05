@@ -21,6 +21,7 @@ export {
   recordPublicAdapterPaperQuoteEvidence,
 } from "./trading-paper-quote-evidence.js";
 export * from "./trading-paper-reservation-preflight.js";
+export { applyApprovedTradingPaperProtectiveExitControl } from "./trading-paper-protective-exit-authority.js";
 export {
   applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,

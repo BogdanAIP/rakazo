@@ -72,6 +72,33 @@ describe("buildApprovalAskBlock", () => {
     expect(enable.detail).toContain("expected policy revision: 2");
   });
 
+  it("uses one-time protective paper position authorization with no always allow", () => {
+    const block = buildApprovalAskBlock(
+      "effect-paper-exit",
+      "paper_position_control",
+      {
+        action: "authorize_protective_stop_exit",
+        ledger_id: "paper-1",
+        position_id: "position-1",
+        expected_policy_revision: 4,
+      },
+      [],
+    );
+    expect(block).toMatchObject({
+      kind: "ask",
+      text: "Authorize protective paper exit for “position-1” on “paper-1”?",
+      actions: [
+        { id: "allow", label: "Authorize protective paper exit" },
+        { id: "deny", label: "Cancel" },
+      ],
+    });
+    expect(JSON.stringify(block)).not.toContain("Always allow");
+    if (block.kind !== "ask") throw new Error("expected ask block");
+    expect(block.detail).toContain("does not close the position now");
+    expect(block.detail).toContain("position: position-1");
+    expect(block.detail).toContain("expected policy revision: 4");
+  });
+
   it("uses a one-time create or cancel choice for a new security boundary", () => {
     const block = buildApprovalAskBlock(
       "effect-1",
