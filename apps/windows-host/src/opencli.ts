@@ -12,6 +12,7 @@ const PNG_SIGNATURE_HEX = "89504e470d0a1a0a";
 const COMMAND_TIMEOUT_MS = 12_000;
 const MAX_ACTIONS = 4;
 const MAX_ACTIVE_SESSIONS = 32;
+const MAX_OWNED_TABS = 8;
 // OpenCLI releases inactive owned tabs itself after ten minutes. A longer
 // host-side TTL bounds abandoned bearer capabilities without racing that cleanup.
 const SESSION_TOKEN_TTL_MS = 30 * 60_000;
@@ -111,6 +112,24 @@ interface BrowserObservation {
   elements: Array<{ ref: string; role: string; name: string }>;
 }
 
+interface BrowserSessionState {
+  botId: string;
+  lastActivity: number;
+  ownedPages: Set<string>;
+}
+
+function parseOpenCliPageId(output: string): string | undefined {
+  try {
+    const parsed = JSON.parse(output) as { page?: unknown };
+    if (typeof parsed.page !== "string") return undefined;
+    const pageId = parsed.page.trim();
+    if (!pageId || pageId.length > 256) return undefined;
+    return pageId;
+  } catch {
+    return undefined;
+  }
+}
+
 function parseStateOutput(output: string): { tree: string; url?: string } {
   const match = /^URL:\s*(.+?)(?:\r?\n|$)/u.exec(output);
   if (!match) return { tree: output.slice(0, MAX_OUTPUT_BYTES) };
@@ -157,7 +176,7 @@ function parseElements(tree: string): BrowserObservation["elements"] {
  */
 export class WindowsOpenCliBackend {
   private readonly observations = new Map<string, BrowserObservation>();
-  private readonly sessions = new Map<string, { botId: string; lastActivity: number }>();
+  private readonly sessions = new Map<string, BrowserSessionState>();
 
   constructor(
     private readonly config: OpenCliConfiguration = loadOpenCliConfiguration(),
@@ -196,7 +215,7 @@ export class WindowsOpenCliBackend {
         );
       }
       const sessionToken = randomUUID();
-      this.sessions.set(sessionToken, { botId, lastActivity: now });
+      this.sessions.set(sessionToken, { botId, lastActivity: now, ownedPages: new Set<string>() });
       return { ok: true, sessionToken };
     }
 
@@ -219,6 +238,11 @@ export class WindowsOpenCliBackend {
         session,
         ...args,
       ]);
+    const rememberPage = (output: string): string | undefined => {
+      const pageId = parseOpenCliPageId(output);
+      if (pageId) owned.ownedPages.add(pageId);
+      return pageId;
+    };
 
     const observe = async (): Promise<BrowserObservation> => {
       const state = parseStateOutput((await invoke("state")).slice(0, MAX_OUTPUT_BYTES));
@@ -297,6 +321,76 @@ export class WindowsOpenCliBackend {
         await unlink(screenshotPath).catch(() => undefined);
       }
     }
+    if (request.command === "tabNew") {
+      if (owned.ownedPages.size >= MAX_OWNED_TABS) {
+        throw new Error("Too many owned browser tabs in this session");
+      }
+      let targetUrl: string | undefined;
+      if (request.url) {
+        const parsed = new URL(request.url);
+        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+          throw new Error("Only HTTP(S) browser navigation is allowed");
+        }
+        targetUrl = parsed.href;
+      }
+      this.observations.delete(token);
+      try {
+        const output = await invoke("tab", "new", ...(targetUrl ? [targetUrl] : []));
+        const pageId = rememberPage(output);
+        if (!pageId) {
+          return {
+            ok: false,
+            uncertain: true,
+            error: "OpenCLI created a tab but did not return a valid page identity",
+          };
+        }
+        return { ok: true, pageId };
+      } catch (error) {
+        return {
+          ok: false,
+          uncertain: true,
+          error:
+            error instanceof Error ? error.message.slice(0, 500) : "Browser tab creation failed",
+        };
+      }
+    }
+    if (request.command === "tabSelect") {
+      if (!owned.ownedPages.has(request.pageId)) {
+        throw new Error("Unknown browser tab for this session");
+      }
+      this.observations.delete(token);
+      try {
+        await invoke("tab", "select", request.pageId);
+        return { ok: true, pageId: request.pageId };
+      } catch (error) {
+        return {
+          ok: false,
+          uncertain: true,
+          error:
+            error instanceof Error ? error.message.slice(0, 500) : "Browser tab selection failed",
+        };
+      }
+    }
+    if (request.command === "tabClose") {
+      if (!owned.ownedPages.has(request.pageId)) {
+        throw new Error("Unknown browser tab for this session");
+      }
+      this.observations.delete(token);
+      try {
+        await invoke("tab", "close", request.pageId);
+        owned.ownedPages.delete(request.pageId);
+        return { ok: true, pageId: request.pageId };
+      } catch (error) {
+        // A failed/uncertain close must not leave a reusable ownership grant.
+        // The whole owned OpenCLI session can still be closed safely later.
+        owned.ownedPages.delete(request.pageId);
+        return {
+          ok: false,
+          uncertain: true,
+          error: error instanceof Error ? error.message.slice(0, 500) : "Browser tab close failed",
+        };
+      }
+    }
     if (request.command === "close") {
       // An explicit token is required: no global window/profile/tab cleanup.
       // OpenCLI may retain its OWN reusable blank tab; never remove or ungroup
@@ -312,8 +406,9 @@ export class WindowsOpenCliBackend {
       if (url.protocol !== "https:" && url.protocol !== "http:") {
         throw new Error("Only HTTP(S) browser navigation is allowed");
       }
-      await invoke("open", url.href);
-      return { ok: true, ...(await observe()) };
+      const opened = await invoke("open", url.href);
+      const pageId = rememberPage(opened);
+      return { ok: true, ...(pageId ? { pageId } : {}), ...(await observe()) };
     }
     if (request.command === "snapshot") {
       return { ok: true, ...(await observe()) };

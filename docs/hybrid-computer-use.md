@@ -40,10 +40,26 @@ existing R tunnel. No new browser profile, server, LLM or Codex OAuth is needed.
   an explicit ownership model before select/close can be safe on a shared Chrome
   profile.
 
+## P1c: owned tab lifecycle
+
+- Rakazo records only page target IDs returned by OpenCLI from navigation or
+  tab creation inside the token-owned browser session. Caller-supplied arbitrary
+  target IDs are never accepted as ownership proof.
+- A task may create at most eight recorded tabs. Optional tab URLs are restricted
+  to HTTP(S). Select and close require the page ID to already belong to that
+  same opaque sessionToken; another token on the same bot cannot reuse it.
+- Selecting or closing a tab clears cached element refs before OpenCLI runs.
+  A successful close revokes the recorded page ID. A failed/uncertain close
+  also drops that ownership grant, so callers cannot blindly repeat an
+  ambiguous close; closing the whole owned session remains the safe cleanup path.
+- If OpenCLI reports successful tab creation without a valid page identity,
+  Rakazo returns an uncertain failure and does not mint ownership from guesses.
+- Raw tab listing and bind/unbind remain unexposed. This avoids discovering or
+  attaching to user-managed Chrome tabs outside the task-owned automation session.
+
 ## Follow-up slices
 
-P1c: owned-tab creation/selection/close with explicit target ownership and
-recovery rules. P2: explicit bind/recovery with proof of tab ownership and
+P2: explicit bind/recovery with proof of tab ownership and
 physical GUI coordination. P3: UIA/UFO semantic control inside Windows Host.
 P4: durable verification and failure reconciliation, never blindly repeating
 uncertain actions. P5: before/after speed, model/process-call and recovery

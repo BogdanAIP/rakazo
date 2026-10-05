@@ -136,6 +136,21 @@ export const WindowsHostBrowserRequestSchema = z.discriminatedUnion("command", [
     width: z.number().int().min(320).max(4_096).optional(),
     height: z.number().int().min(200).max(4_096).optional(),
   }),
+  z.object({
+    command: z.literal("tabNew"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    url: z.string().url().max(4_096).optional(),
+  }),
+  z.object({
+    command: z.literal("tabSelect"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    pageId: z.string().min(1).max(256),
+  }),
+  z.object({
+    command: z.literal("tabClose"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    pageId: z.string().min(1).max(256),
+  }),
   z.object({ command: z.literal("close"), sessionToken: WindowsHostBrowserSessionTokenSchema }),
   z.object({
     command: z.literal("act"),
@@ -157,6 +172,7 @@ export const WindowsHostBrowserResultSchema = z.object({
   content: z.string().max(65_536).optional(),
   imageBase64: z.string().min(1).max(6_000_000).optional(),
   mimeType: z.literal("image/png").optional(),
+  pageId: z.string().min(1).max(256).optional(),
   elements: z
     .array(
       z.object({
