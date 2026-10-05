@@ -31,7 +31,7 @@ function baseProjection() {
         label: "PR #12",
         metadata: { status: "draft", head: "bbbbbbbb", number: 12 },
       },
-    ],
+    ] as Array<Record<string, unknown>>,
     openTasks: [
       {
         id: "task-1",
