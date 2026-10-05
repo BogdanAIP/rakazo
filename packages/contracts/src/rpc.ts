@@ -101,6 +101,7 @@ import {
   WindowsHostBrowserResultSchema,
   WindowsHostCapabilitySchema,
   WindowsHostProcessResultSchema,
+  WindowsHostUiaSnapshotSchema,
 } from "./windows-host.js";
 
 const botId = z.object({ botId: Id });
@@ -473,6 +474,7 @@ export const appContract = {
         }),
       )
       .output(WindowsHostBrowserResultSchema),
+    uia: oc.input(botId).output(WindowsHostUiaSnapshotSchema),
     observe: oc.input(botId).output(
       z.object({
         frameId: z.string(),
