@@ -5,8 +5,8 @@ import {
   type PaperWorkerPreflightJobResult,
 } from "./paper-worker-background.js";
 import {
-  enqueueAuthorizedPaperWorkerSuccessor,
   type AuthorizedPaperWorkerSuccessorScheduleResult,
+  enqueueAuthorizedPaperWorkerSuccessor,
 } from "./paper-worker-recurrence-scheduler.js";
 
 type HandlePreflight = typeof handlePaperWorkerPreflight;
