@@ -22,7 +22,7 @@ import type {
   WindowsHostCommandRequest,
   WindowsHostCommandResult,
   WindowsHostGuiAction,
-  type WindowsHostGuiObservation,
+  WindowsHostGuiObservation,
 } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { computerObservation } from "./computer-support.js";
