@@ -48,9 +48,9 @@ describe("handlePaperWorkerPreflight", () => {
       workerApprovalEffectId: "new-worker-effect",
       paperApprovalEffectId: "paper-effect",
     }));
-    await expect(
-      handlePaperWorkerPreflight({} as PrismaClient, payload, read),
-    ).resolves.toEqual({ status: "stale_gate_revision" });
+    await expect(handlePaperWorkerPreflight({} as PrismaClient, payload, read)).resolves.toEqual({
+      status: "stale_gate_revision",
+    });
   });
 
   it("keeps preflight denial inert", async () => {
@@ -60,8 +60,9 @@ describe("handlePaperWorkerPreflight", () => {
       ledgerId: "paper-1",
       reason: "worker_gate_disabled" as const,
     }));
-    await expect(
-      handlePaperWorkerPreflight({} as PrismaClient, payload, read),
-    ).resolves.toEqual({ status: "deny", reason: "worker_gate_disabled" });
+    await expect(handlePaperWorkerPreflight({} as PrismaClient, payload, read)).resolves.toEqual({
+      status: "deny",
+      reason: "worker_gate_disabled",
+    });
   });
 });

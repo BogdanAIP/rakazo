@@ -21,7 +21,10 @@ vi.mock("./messaging-delivery.js", () => ({
   mirrorMessagingOutbound: vi.fn(async () => undefined),
 }));
 vi.mock("./paper-worker-background.js", () => ({
-  handlePaperWorkerPreflight: vi.fn(async () => ({ status: "deny", reason: "worker_gate_disabled" })),
+  handlePaperWorkerPreflight: vi.fn(async () => ({
+    status: "deny",
+    reason: "worker_gate_disabled",
+  })),
 }));
 
 describe("createBackgroundJobHandlers", () => {
