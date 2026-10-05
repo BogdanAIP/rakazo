@@ -227,6 +227,28 @@ describe("ChatGPT project worktree manager", () => {
     });
   });
 
+  it("rejects option-shaped worktree paths before computer takeover", async () => {
+    const calls: string[] = [];
+    const call: RakazoCaller = async (procedure) => {
+      calls.push(procedure);
+      throw new Error("Unexpected procedure: " + procedure);
+    };
+
+    await expect(
+      manageProjectWorktree(call, {
+        action: "ensure",
+        projectId: "project-1",
+        computerBotId: "windows-bot",
+        repository: "BogdanAIP/rakazo",
+        repoPath: "C:/Users/test/rakazo",
+        worktreePath: "--force",
+        branch: "feature/task",
+        baseRef: "origin/main",
+      }),
+    ).rejects.toThrow("worktreePath must be an absolute path");
+    expect(calls).toEqual([]);
+  });
+
   it("fails closed when local origin does not match the project repository", async () => {
     let mutationAfterTakeover = false;
     const call: RakazoCaller = async (procedure, input) => {
