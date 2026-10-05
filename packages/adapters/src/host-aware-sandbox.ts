@@ -144,7 +144,11 @@ export class HostAwareSandbox implements SandboxProvider {
     return this.route(computer).act(computer, request, context);
   }
 
-  semanticAct(computer: ComputerRef, request: ComputerSemanticActionRequest, context: AdapterContext) {
+  semanticAct(
+    computer: ComputerRef,
+    request: ComputerSemanticActionRequest,
+    context: AdapterContext,
+  ) {
     const provider = this.route(computer);
     if (!provider.semanticAct) {
       return Promise.reject(new Error("semantic desktop actions are unavailable on this computer"));
