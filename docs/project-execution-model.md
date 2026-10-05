@@ -5,7 +5,7 @@ Rakazo separates durable project state from execution identities and physical wo
 ## Canonical roles
 
 - **Project** is the source of truth for a long-lived body of work.
-  - `Project.memory`: durable architecture, decisions, invariants, roadmap, milestone summaries.
+  - `Project.memory`: durable architecture, decisions, invariants, roadmap, milestone summaries. It is context, not executable authority.
   - `ProjectResource`: live references such as repositories, branches, pull requests, bots, runtimes and worktrees.
   - project-scoped Scratchpad items: current checkpoint, live CI state and exact next action.
 - **Bot** is an execution role and policy boundary. A project does not require a dedicated bot.
@@ -71,9 +71,10 @@ The intended helper is bounded and project-aware rather than a general shell ali
 
 1. verify project, repository resource, computer and requested branch/path;
 2. require absolute repository/worktree paths and inspect `git worktree list --porcelain`;
-3. create or verify the exact worktree using direct Git argv through the existing Computer execution path;
-4. fail closed on path/branch/repository mismatch;
-5. register or refresh the `workspace.worktree` project resource only after Git verification.
+3. for a new local branch, require an exact 40-character commit SHA already verified from live GitHub state; fetch only that exact commit from the verified project origin if the object is absent locally;
+4. create or verify the exact worktree using direct Git argv through the existing Computer execution path;
+5. fail closed on path/branch/repository mismatch;
+6. register or refresh the `workspace.worktree` project resource only after Git verification.
 
 The helper must not introduce a new unrestricted process or shell capability and must preserve normal Computer control-lease rules.
 
