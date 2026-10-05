@@ -215,24 +215,32 @@ export async function loadChatGptProjectContext(
   const resources = objects(projectContext.resources, "projects/context resources");
   const openTasks = objects(projectContext.openTasks, "projects/context openTasks");
   const bots = objects(botsValue, "bots/list");
+  const explicitBotIds = new Set<string>();
+  const taskBotIds = new Set<string>();
   const linkedBotIds = new Set<string>();
 
   for (const resource of resources) {
     if (resource.kind === "rakazo.bot") {
       const id = str(resource.ref);
-      if (id) linkedBotIds.add(id);
+      if (id) {
+        explicitBotIds.add(id);
+        linkedBotIds.add(id);
+      }
     }
   }
   for (const task of openTasks) {
     const id = str(task.botId);
-    if (id) linkedBotIds.add(id);
+    if (id) {
+      taskBotIds.add(id);
+      linkedBotIds.add(id);
+    }
   }
 
   const linkedBots = bots.filter((bot) => linkedBotIds.has(str(bot.id)));
   const foundBotIds = new Set(linkedBots.map((bot) => str(bot.id)));
   const missingLinkedBotIds = [...linkedBotIds].filter((id) => !foundBotIds.has(id));
   const runs = objects(object(runsValue, "runs/list").runs, "runs/list");
-  const activeRuns = runs.filter((run) => linkedBotIds.has(str(run.botId)));
+  const activeRuns = runs.filter((run) => explicitBotIds.has(str(run.botId)));
   const worktrees = resources.filter((resource) => {
     const kind = str(resource.kind);
     return kind === "workspace.worktree" || kind === "git.worktree" || kind.endsWith(".worktree");
@@ -283,6 +291,10 @@ export async function loadChatGptProjectContext(
       memoryScope: bot.memoryScope,
       computerMode: bot.computerMode,
       spawnKey: bot.spawnKey,
+      linkSources: [
+        ...(explicitBotIds.has(str(bot.id)) ? ["resource"] : []),
+        ...(taskBotIds.has(str(bot.id)) ? ["task"] : []),
+      ],
     })),
     missingLinkedBotIds,
     activeRuns: activeRuns.slice(0, MAX_ITEMS).map((run) => ({
@@ -311,12 +323,14 @@ export async function loadChatGptProjectContext(
       worktrees: worktrees.length,
       openTasks: openTasks.length,
       linkedBots: linkedBots.length,
+      explicitBots: explicitBotIds.size,
+      taskBots: taskBotIds.size,
       missingLinkedBots: missingLinkedBotIds.length,
       activeRuns: activeRuns.length,
       skills: skills.length,
       installedCapabilities: installs.length,
     },
-    note: "Project is the durable source of truth. Linked bots are execution roles derived from rakazo.bot resources and project tasks; worktrees are physical checkout resources. Recheck live GitHub/computer state before writes.",
+    note: "Project is the durable source of truth. Linked bots are execution anchors derived from rakazo.bot resources and project tasks. Active runs are attributed only to explicit rakazo.bot resources because a task-linked shared bot may serve several projects. Worktrees are physical checkout resources. Recheck live GitHub/computer state before writes.",
   };
 }
 
