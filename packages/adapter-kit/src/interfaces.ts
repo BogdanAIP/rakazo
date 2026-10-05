@@ -1,4 +1,8 @@
-import type { WindowsHostBrowserRequest, WindowsHostBrowserResult } from "@rakazo/contracts";
+import type {
+  WindowsHostBrowserRequest,
+  WindowsHostBrowserResult,
+  WindowsHostUiaSnapshot,
+} from "@rakazo/contracts";
 import type {
   AdapterContext,
   AdapterDescriptor,
@@ -95,6 +99,11 @@ export interface SandboxProvider {
     request: WindowsHostBrowserRequest,
     context: AdapterContext,
   ): Promise<WindowsHostBrowserResult>;
+  /** Host-only read-only semantic snapshot of the active physical Windows window. */
+  desktopUiaSnapshot?(
+    computer: ComputerRef,
+    context: AdapterContext,
+  ): Promise<WindowsHostUiaSnapshot>;
   /** Allocate or reconnect the computer, returning its reference before fallible setup. */
   provision(
     request: {
