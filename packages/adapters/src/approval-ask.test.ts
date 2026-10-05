@@ -126,6 +126,28 @@ describe("buildApprovalAskBlock", () => {
     expect(block.detail).toContain("cadence minutes: 15");
   });
 
+  it("uses one-time paper worker start approval with no recurrence or always allow", () => {
+    const block = buildApprovalAskBlock(
+      "effect-paper-worker-start",
+      "paper_worker_start",
+      { ledger_id: "paper-1", expected_gate_revision: 7 },
+      [],
+    );
+    expect(block).toMatchObject({
+      kind: "ask",
+      text: "Schedule one read-only paper preflight for “paper-1”?",
+      actions: [
+        { id: "allow", label: "Schedule one paper preflight" },
+        { id: "deny", label: "Cancel" },
+      ],
+    });
+    expect(JSON.stringify(block)).not.toContain("Always allow");
+    if (block.kind !== "ask") throw new Error("expected ask block");
+    expect(block.detail).toContain("exactly one delayed read-only PAPER preflight");
+    expect(block.detail).toContain("does not schedule recurrence");
+    expect(block.detail).toContain("expected worker gate revision: 7");
+  });
+
   it("uses a one-time create or cancel choice for a new security boundary", () => {
     const block = buildApprovalAskBlock(
       "effect-1",

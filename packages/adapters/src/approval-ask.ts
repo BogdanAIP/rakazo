@@ -22,7 +22,8 @@ export function buildApprovalAskBlock(
         toolName === "create_space" ||
           toolName === "paper_trading_control" ||
           toolName === "paper_position_control" ||
-          toolName === "paper_worker_control"
+          toolName === "paper_worker_control" ||
+          toolName === "paper_worker_start"
           ? `${summary}?`
           : `Review before ${summary}`,
         secrets,
@@ -59,7 +60,12 @@ export function buildApprovalAskBlock(
                   },
                   { id: "deny", label: "Cancel" },
                 ]
-              : [
+              : toolName === "paper_worker_start"
+                ? [
+                    { id: "allow", label: "Schedule one paper preflight" },
+                    { id: "deny", label: "Cancel" },
+                  ]
+                : [
                   { id: "allow", label: "Allow once" },
                   { id: "always", label: "Always allow this tool" },
                   { id: "deny", label: "Deny" },
@@ -95,6 +101,10 @@ function describeApprovalAction(toolName: string, args: Record<string, unknown>)
     const verb = args.action === "disable" ? "Disable" : "Enable";
     const ledger = args.ledger_id ? String(args.ledger_id) : "unknown ledger";
     return `${verb} background paper-worker gate for “${ledger}”`;
+  }
+  if (toolName === "paper_worker_start") {
+    const ledger = args.ledger_id ? String(args.ledger_id) : "unknown ledger";
+    return `Schedule one read-only paper preflight for “${ledger}”`;
   }
   const target = pickScopeLabel(args);
   return target ? `${toolName} → ${target}` : toolName;
@@ -137,6 +147,13 @@ function formatApprovalDetail(
       ...(args.action === "enable"
         ? [`cadence minutes: ${String(args.cadence_minutes ?? "")}`]
         : []),
+    );
+  }
+  if (toolName === "paper_worker_start") {
+    lines.push(
+      "This schedules exactly one delayed read-only PAPER preflight using the already-approved worker cadence. It does not schedule recurrence, wake a model, poll market data, mutate the trading ledger, or authorize live orders.",
+      `ledger: ${String(args.ledger_id ?? "")}`,
+      `expected worker gate revision: ${String(args.expected_gate_revision ?? "")}`,
     );
   }
   for (const key of ["collection", "title", "to", "subject", "amount", "body"]) {

@@ -176,6 +176,12 @@ D3 prepares the first queue side effect without activating background trading. A
 
 The helper is deliberately **not exported from the adapters package index and has no production caller** in D3. The D2 handler still does not enqueue a successor, so there is no recurrence. The primitive has no market-data adapter, model runtime, trading writer, exchange credential or broker dependency; it can only enqueue the read-only preflight job. Unit coverage proves exact delayed payload construction, owner-scoped D1 invocation, deny/stale no-enqueue behavior and queue-failure propagation. Wiring an initial user-approved start, and later any recurrence, remains a separate review gate.
 
+## P11D-4 — explicit owner-approved one-shot start wiring
+
+D4 is the first production caller of the D3 one-shot enqueuer, but it remains intentionally non-recurring and read-only. A new `paper_worker_start` builtin always requires a fresh explicit confirmation; Auto Review and permanent “Always allow” cannot bypass it. The approved request contains only a ledger id and exact expected worker-gate revision. Cadence is not caller-supplied: D3 re-reads the verified gate and D1 approval chain at the server clock, then may enqueue exactly one delayed D2 `paper.worker-preflight` job.
+
+The executor requires the approved ExternalEffect to be claimed before calling the start helper and persists the one-shot scheduling result back to that effect. Denied or stale state schedules nothing. Queue uncertainty is not converted into a blind retry, and the ledger-scoped D2 replace key remains an additional idempotency boundary. Neither the D2 handler nor D4 schedules a successor, so recurrence is still absent. D4 has no market-data adapter, model wake, trading writer, exchange credential, broker/private endpoint or live order capability.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.

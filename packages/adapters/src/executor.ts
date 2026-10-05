@@ -112,6 +112,7 @@ import {
   type ThreadEvents,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
+import { startPaperWorkerPreflightOnce } from "./paper-worker-start.js";
 import { parse as parseShellCommand } from "shell-quote";
 import {
   connectAgent,
@@ -3564,6 +3565,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
               deps.prisma,
               { spaceId: run.spaceId, userId: run.userId },
               applied.effect.id,
+            );
+          }
+          if (name === "paper_worker_start") {
+            if (!applied || !claimedEffect) {
+              throw new Error("Paper worker start requires a claimed explicit approval.");
+            }
+            return finish(
+              await startPaperWorkerPreflightOnce(
+                { prisma: deps.prisma, jobs: deps.jobs },
+                { spaceId: run.spaceId, userId: run.userId },
+                args,
+              ),
             );
           }
           if (name === "paper_position_control") {

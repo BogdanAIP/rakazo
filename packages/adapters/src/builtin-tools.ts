@@ -905,6 +905,20 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    name: "paper_worker_start",
+    description:
+      "Propose scheduling exactly one delayed read-only PAPER worker preflight for one ledger at an exact already-approved worker-gate revision. This always requires a fresh confirmation card and cannot be auto-reviewed or permanently allowed. The configured gate cadence is used; this action does not create recurrence, wake a model, poll market data, mutate the trading ledger, place any order, contact an exchange, or authorize live trading.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+        expected_gate_revision: { type: "integer", minimum: 0 },
+      },
+      required: ["ledger_id", "expected_gate_revision"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "spawn_bot",
     description:
       "Create a full, regular bot — the same kind the user creates from the + button. It gets its own thread, computer, and memory, and appears as a peer in the bot list. Do not also call run_subagent. Creating the bot is the whole action. Only set prompt if the user asked that new bot to start work immediately.",
