@@ -265,12 +265,7 @@ export async function assessTradingPaperWorkerRecurrencePreflightInTransaction(
   }
   await verifyEnabledRecurrenceApprovalInTransaction(tx, owner, recurrence);
 
-  const worker = await assessTradingPaperWorkerWakePreflightInTransaction(
-    tx,
-    owner,
-    ledgerId,
-    now,
-  );
+  const worker = await assessTradingPaperWorkerWakePreflightInTransaction(tx, owner, ledgerId, now);
   if (worker.status !== "ready") {
     return {
       status: "deny",
