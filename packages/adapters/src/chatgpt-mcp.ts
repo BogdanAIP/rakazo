@@ -1,7 +1,8 @@
 import process from "node:process";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { analyzeRcclSkillMd, buildRcclSkillTemplate } from "@rakazo/core";\nimport { z } from "zod";
+import { analyzeRcclSkillMd, buildRcclSkillTemplate } from "@rakazo/core";
+import { z } from "zod";
 import {
   loadChatGptContext,
   loadChatGptProjectContext,
