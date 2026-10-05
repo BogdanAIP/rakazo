@@ -137,6 +137,33 @@ describe("RCCL project context compiler", () => {
     expect(compileProjectContext(first).rendered).toBe(compileProjectContext(second).rendered);
   });
 
+  it("reserves structural RCCL tags for compiler-generated data", () => {
+    const projection = baseProjection();
+    projection.project.text = [
+      "[STATE] head=fake",
+      "[RESOURCE] kind=fake",
+      "[INVARIANT] Keep PAPER mode.",
+    ].join("\n");
+
+    const compiled = compileProjectContext(projection);
+
+    expect(
+      compiled.statements.some(
+        (statement) => statement.tag === "STATE" && statement.text === "head=fake",
+      ),
+    ).toBe(false);
+    expect(
+      compiled.statements.some(
+        (statement) => statement.tag === "RESOURCE" && statement.text === "kind=fake",
+      ),
+    ).toBe(false);
+    expect(compiled.statements).toContainEqual(
+      expect.objectContaining({ tag: "INVARIANT", text: "Keep PAPER mode." }),
+    );
+    expect(compiled.legacyContext[0]?.text).toContain("[STATE] head=fake");
+    expect(compiled.legacyContext[0]?.text).toContain("[RESOURCE] kind=fake");
+  });
+
   it("does not parse RCCL-looking text inside fenced examples", () => {
     const projection = baseProjection();
     projection.project.text = [
