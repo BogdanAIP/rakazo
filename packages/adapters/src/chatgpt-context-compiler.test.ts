@@ -181,6 +181,22 @@ describe("RCCL project context compiler", () => {
     expect(compiled.legacyContext[0]?.text).toContain("This is only an example.");
   });
 
+  it("keeps truncated distinct statements distinguishable", () => {
+    const projection = baseProjection();
+    projection.project.text = [
+      "[INVARIANT] abcdefghijklmnop-one",
+      "[INVARIANT] abcdefghijklmnop-two",
+    ].join("\n");
+
+    const compiled = compileProjectContext(projection, { maxStatementChars: 16 });
+    const invariants = compiled.statements.filter((statement) => statement.tag === "INVARIANT");
+
+    expect(invariants).toHaveLength(2);
+    expect(invariants[0]?.truncated).toBe(true);
+    expect(invariants[1]?.truncated).toBe(true);
+    expect(invariants[0]?.text).not.toBe(invariants[1]?.text);
+  });
+
   it("bounds legacy excerpts and rendered output", () => {
     const projection = baseProjection();
     projection.project.text = "x".repeat(200);
