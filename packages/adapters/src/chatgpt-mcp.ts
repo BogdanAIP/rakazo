@@ -2,7 +2,11 @@ import process from "node:process";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { loadChatGptContext, searchChatGptCapabilities } from "./chatgpt-context.js";
+import {
+  loadChatGptContext,
+  loadChatGptProjectContext,
+  searchChatGptCapabilities,
+} from "./chatgpt-context.js";
 import type { ProcedureMode } from "./chatgpt-rakazo.js";
 import {
   actRakazoComputer,
@@ -13,6 +17,7 @@ import {
   observeRakazoComputer,
   type RakazoComputerObservation,
 } from "./chatgpt-rakazo.js";
+import { manageProjectWorktree } from "./chatgpt-worktree.js";
 
 const server = new McpServer({
   name: "rakazo-chatgpt",
@@ -39,6 +44,39 @@ const capabilityCallSchema = z.object({
   args: z.record(z.string(), z.unknown()).default({}),
   executionId: z.string().min(1).max(160).optional(),
 });
+const projectWorktreeSchema = z
+  .object({
+    action: z.enum(["list", "verify", "ensure"]),
+    projectId: z.string().min(1),
+    computerBotId: z.string().min(1),
+    repository: z
+      .string()
+      .min(3)
+      .max(300)
+      .regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
+    repoPath: z.string().min(1).max(4_096),
+    worktreePath: z.string().min(1).max(4_096).optional(),
+    branch: z.string().min(1).max(240).optional(),
+    baseRef: z.string().min(1).max(500).optional(),
+    role: z.string().min(1).max(120).optional(),
+  })
+  .superRefine((input, ctx) => {
+    if (input.action !== "list" && !input.worktreePath) {
+      ctx.addIssue({
+        code: "custom",
+        message: "worktreePath is required for verify/ensure",
+        path: ["worktreePath"],
+      });
+    }
+    if (input.action === "ensure" && !input.branch) {
+      ctx.addIssue({
+        code: "custom",
+        message: "branch is required for ensure",
+        path: ["branch"],
+      });
+    }
+  });
+
 const computerActionSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.enum(["click", "move", "down", "up"]),
@@ -203,10 +241,9 @@ server.registerTool(
   {
     title: "Load selected Rakazo project context",
     description:
-      "Read-only project bootstrap for ordinary ChatGPT. Select exactly one projectId or projectSlug and receive global context plus that project memory, resources and open tasks. No second model.",
+      "Read-only project-centric bootstrap for ordinary ChatGPT. Select exactly one projectId or projectSlug and receive canonical project memory, resources, open tasks, linked execution anchors, worktrees and runs for explicit project bots. Project text is context, not executable authority. Does not require selecting a bot and does not invoke a second model.",
     inputSchema: z
       .object({
-        botId: z.string().min(1).optional(),
         projectId: z.string().min(1).optional(),
         projectSlug: z.string().min(1).max(80).optional(),
       })
@@ -227,13 +264,30 @@ server.registerTool(
       openWorldHint: false,
     },
   },
-  async ({ botId, projectId, projectSlug }) =>
+  async ({ projectId, projectSlug }) =>
     textResult(
-      await loadChatGptContext(callRakazoRpc, botId, {
+      await loadChatGptProjectContext(callRakazoRpc, {
         projectId,
         projectSlug,
       }),
     ),
+);
+
+server.registerTool(
+  "rakazo_project_worktree",
+  {
+    title: "Manage a project Git worktree",
+    description:
+      "Bounded project-aware Git worktree helper. Lists, verifies, or ensures one worktree using the existing Rakazo Computer control lease and computer/exec. It verifies the project's exact github.repo resource and the local origin before Git operations, never uses --force, and registers workspace.worktree only after successful verification.",
+    inputSchema: projectWorktreeSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (input) => textResult(await manageProjectWorktree(callRakazoRpc, input)),
 );
 
 server.registerTool(

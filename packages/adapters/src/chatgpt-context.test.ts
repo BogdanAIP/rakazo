@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { loadChatGptContext, searchChatGptCapabilities } from "./chatgpt-context.js";
+import {
+  loadChatGptContext,
+  loadChatGptProjectContext,
+  searchChatGptCapabilities,
+} from "./chatgpt-context.js";
 
 describe("ChatGPT shared context", () => {
   it("loads one bot's state without mutations", async () => {
@@ -97,6 +101,108 @@ describe("ChatGPT shared context", () => {
     await expect(loadChatGptContext(read, "bot-1", { projectSlug: "missing" })).rejects.toThrow(
       "not accessible",
     );
+  });
+
+  it("loads project-centric context without selecting a bot", async () => {
+    const answers: Record<string, unknown> = {
+      "projects/list": [
+        {
+          id: "project-1",
+          slug: "rakazo",
+          name: "Rakazo",
+          description: "Control plane",
+          memoryRevision: 2,
+        },
+      ],
+      "projects/context": {
+        project: {
+          id: "project-1",
+          slug: "rakazo",
+          name: "Rakazo",
+          description: "Control plane",
+          memoryRevision: 2,
+          memory: "Canonical project memory",
+        },
+        resources: [
+          {
+            id: "bot-resource",
+            kind: "rakazo.bot",
+            ref: "bot-2",
+            label: "Worker",
+            metadata: {},
+          },
+          {
+            id: "worktree-resource",
+            kind: "workspace.worktree",
+            ref: "C:/work/rakazo",
+            label: "Project checkout",
+            metadata: { branch: "feature/project" },
+          },
+        ],
+        openTasks: [
+          {
+            id: "task-1",
+            botId: "bot-1",
+            projectId: "project-1",
+            title: "Continue",
+            status: "open",
+            notes: "Next",
+          },
+        ],
+      },
+      "bots/list": [
+        { id: "bot-1", name: "ChatGPT Windows", status: "idle", computerMode: "dedicated" },
+        { id: "bot-2", name: "Worker", status: "running", computerMode: "team" },
+        { id: "bot-3", name: "Unrelated", status: "idle", computerMode: "team" },
+      ],
+      "agentSkills/list": [],
+      "runs/list": {
+        runs: [
+          { runId: "run-1", botId: "bot-1", status: "running" },
+          { runId: "run-2", botId: "bot-2", status: "queued" },
+          { runId: "run-3", botId: "bot-3", status: "running" },
+        ],
+      },
+      "capabilities/list": [],
+    };
+    const read = async (name: string): Promise<unknown> => {
+      if (!(name in answers)) throw new Error("Unexpected procedure: " + name);
+      return answers[name];
+    };
+
+    const output = await loadChatGptProjectContext(read, { projectSlug: "rakazo" });
+
+    expect(output.project).toMatchObject({
+      id: "project-1",
+      slug: "rakazo",
+      text: "Canonical project memory",
+      truncated: false,
+    });
+    expect(output.linkedBots).toEqual([
+      expect.objectContaining({
+        id: "bot-1",
+        name: "ChatGPT Windows",
+        linkSources: ["task"],
+      }),
+      expect.objectContaining({
+        id: "bot-2",
+        name: "Worker",
+        linkSources: ["resource"],
+      }),
+    ]);
+    expect(output.worktrees).toEqual([
+      expect.objectContaining({ kind: "workspace.worktree", ref: "C:/work/rakazo" }),
+    ]);
+    expect(output.activeRuns).toEqual([
+      expect.objectContaining({ runId: "run-2", botId: "bot-2" }),
+    ]);
+    expect(output.counts).toMatchObject({
+      linkedBots: 2,
+      explicitBots: 1,
+      taskBots: 1,
+      worktrees: 1,
+      activeRuns: 1,
+    });
   });
 
   it("capability search discovers without installing or executing", async () => {
