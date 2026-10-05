@@ -1,7 +1,4 @@
-export type RakazoCaller = (
-  procedure: string,
-  input?: Record<string, unknown>,
-) => Promise<unknown>;
+export type RakazoCaller = (procedure: string, input?: Record<string, unknown>) => Promise<unknown>;
 
 export type ProjectWorktreeAction = "list" | "verify" | "ensure";
 
@@ -103,7 +100,10 @@ async function git(
   };
 }
 
-function assertOk(result: { stdout: string; stderr: string; code: number }, operation: string): void {
+function assertOk(
+  result: { stdout: string; stderr: string; code: number },
+  operation: string,
+): void {
   if (result.code === 0) return;
   const detail = (result.stderr || result.stdout).trim().slice(0, 2_000);
   throw new Error(operation + " failed" + (detail ? ": " + detail : ""));
@@ -123,10 +123,7 @@ function requireProjectRepository(
   return resources;
 }
 
-async function verifyOrigin(
-  call: RakazoCaller,
-  input: ProjectWorktreeInput,
-): Promise<string> {
+async function verifyOrigin(call: RakazoCaller, input: ProjectWorktreeInput): Promise<string> {
   const remote = await git(call, input.computerBotId, [
     "-C",
     input.repoPath,
@@ -201,7 +198,12 @@ async function verifyWorktree(
     throw new Error("Worktree branch mismatch: expected " + expectedBranch + ", got " + branch);
   }
 
-  const headResult = await git(call, input.computerBotId, ["-C", expectedPath, "rev-parse", "HEAD"]);
+  const headResult = await git(call, input.computerBotId, [
+    "-C",
+    expectedPath,
+    "rev-parse",
+    "HEAD",
+  ]);
   assertOk(headResult, "git rev-parse HEAD");
   return { path: expectedPath, branch, head: headResult.stdout.trim() };
 }
@@ -231,9 +233,7 @@ export async function manageProjectWorktree(
       repoPath: input.repoPath,
       origin,
       worktrees,
-      registeredWorktrees: resources.filter((resource) =>
-        str(resource.kind).endsWith(".worktree"),
-      ),
+      registeredWorktrees: resources.filter((resource) => str(resource.kind).endsWith(".worktree")),
     };
   }
 
@@ -251,7 +251,11 @@ export async function manageProjectWorktree(
   const branch = input.branch?.trim();
   if (!branch) throw new Error("branch is required for ensure");
 
-  const branchFormat = await git(call, input.computerBotId, ["check-ref-format", "--branch", branch]);
+  const branchFormat = await git(call, input.computerBotId, [
+    "check-ref-format",
+    "--branch",
+    branch,
+  ]);
   assertOk(branchFormat, "git check-ref-format --branch");
 
   if (existing) {
