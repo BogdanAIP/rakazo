@@ -90,6 +90,8 @@ export async function runWindowsGui(request: WindowsHostGuiRequest): Promise<Win
 }
 
 export class WindowsGuiBackend {
+  private semanticRecoveryRequired = false;
+
   constructor(
     private readonly runner: WindowsGuiRunner = runWindowsGui,
     private readonly isAvailable: () => boolean = windowsGuiAvailable,
@@ -101,8 +103,24 @@ export class WindowsGuiBackend {
 
   async execute(request: WindowsHostGuiRequest): Promise<WindowsHostGuiResult> {
     if (!this.available()) throw new Error("Physical Windows GUI is not enabled");
-    return WindowsHostGuiResultSchema.parse(
-      await this.runner(WindowsHostGuiRequestSchema.parse(request)),
-    );
+    const parsed = WindowsHostGuiRequestSchema.parse(request);
+    if (parsed.command === "semanticAct" && this.semanticRecoveryRequired) {
+      throw new Error("Fresh Windows observation required after an uncertain semantic action");
+    }
+
+    try {
+      const result = WindowsHostGuiResultSchema.parse(await this.runner(parsed));
+      if (parsed.command === "observe") this.semanticRecoveryRequired = false;
+      return result;
+    } catch (error) {
+      if (
+        parsed.command === "semanticAct" &&
+        error instanceof Error &&
+        error.message.toLowerCase().includes("outcome is uncertain")
+      ) {
+        this.semanticRecoveryRequired = true;
+      }
+      throw error;
+    }
   }
 }
