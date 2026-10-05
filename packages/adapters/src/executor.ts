@@ -95,6 +95,7 @@ import {
   applyApprovedTradingPaperControl,
   applyApprovedTradingPaperProtectiveExitControl,
   applyApprovedTradingPaperWorkerControl,
+  applyApprovedTradingPaperWorkerRecurrenceControl,
   createSpaceForMember,
   createThreadMessageInTransaction,
   effectiveMemoryScope,
@@ -3577,6 +3578,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 { spaceId: run.spaceId, userId: run.userId },
                 args,
               ),
+            );
+          }
+          if (name === "paper_worker_recurrence_control") {
+            if (!applied || !claimedEffect) {
+              throw new Error(
+                "Paper worker recurrence control requires a claimed explicit approval.",
+              );
+            }
+            return applyApprovedTradingPaperWorkerRecurrenceControl(
+              deps.prisma,
+              { spaceId: run.spaceId, userId: run.userId },
+              applied.effect.id,
             );
           }
           if (name === "paper_position_control") {

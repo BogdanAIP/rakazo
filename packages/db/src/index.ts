@@ -40,6 +40,10 @@ export {
   readTradingPaperWorkerWakePreflight,
   readVerifiedTradingPaperWorkerGate,
 } from "./trading-paper-worker-gate.js";
+export {
+  applyApprovedTradingPaperWorkerRecurrenceControl,
+  readVerifiedTradingPaperWorkerRecurrence,
+} from "./trading-paper-worker-recurrence-gate.js";
 export * from "./transaction-retry.js";
 export * from "./voice-credentials.js";
 export * from "./windows-hosts.js";

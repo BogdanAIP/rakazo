@@ -148,6 +148,27 @@ describe("buildApprovalAskBlock", () => {
     expect(block.detail).toContain("expected worker gate revision: 7");
   });
 
+  it("uses explicit recurrence permission approval with no always allow", () => {
+    const enable = buildApprovalAskBlock(
+      "effect-paper-worker-recurrence",
+      "paper_worker_recurrence_control",
+      { action: "enable", ledger_id: "paper-1", expected_gate_revision: 7 },
+      [],
+    );
+    expect(enable).toMatchObject({
+      kind: "ask",
+      text: "Authorize recurring read-only paper preflights for “paper-1”?",
+      actions: [
+        { id: "allow", label: "Authorize recurring paper preflights" },
+        { id: "deny", label: "Cancel" },
+      ],
+    });
+    expect(JSON.stringify(enable)).not.toContain("Always allow");
+    if (enable.kind !== "ask") throw new Error("expected ask block");
+    expect(enable.detail).toContain("does not enqueue a job or activate recurrence by itself");
+    expect(enable.detail).toContain("expected worker gate revision: 7");
+  });
+
   it("uses a one-time create or cancel choice for a new security boundary", () => {
     const block = buildApprovalAskBlock(
       "effect-1",

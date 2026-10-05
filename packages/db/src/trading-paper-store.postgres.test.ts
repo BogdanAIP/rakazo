@@ -58,6 +58,10 @@ import {
   readTradingPaperWorkerWakePreflight,
   readVerifiedTradingPaperWorkerGate,
 } from "./trading-paper-worker-gate.js";
+import {
+  applyApprovedTradingPaperWorkerRecurrenceControl,
+  readVerifiedTradingPaperWorkerRecurrence,
+} from "./trading-paper-worker-recurrence-gate.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
@@ -283,6 +287,68 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
           ledger_id: ledgerId,
           expected_policy_revision: revision,
           ...(action === "enable" ? { cadence_minutes: cadenceMinutes } : {}),
+        },
+      },
+    });
+  };
+
+  const makePaperWorkerRecurrenceEffect = async (
+    ledgerId: string,
+    label: string,
+    action: "enable" | "disable",
+    gateRevision: number,
+  ) => {
+    const botId = `paper-worker-recurrence-helper-bot-${label}-${suffix}`;
+    const threadId = `paper-worker-recurrence-helper-thread-${label}-${suffix}`;
+    const taskId = `paper-worker-recurrence-helper-task-${label}-${suffix}`;
+    const runId = `paper-worker-recurrence-helper-run-${label}-${suffix}`;
+    await first.prisma.bot.create({
+      data: {
+        id: botId,
+        spaceId: owner.spaceId,
+        userId: owner.userId,
+        name: "Paper Worker Recurrence Helper",
+        color: "#000000",
+      },
+    });
+    await first.prisma.thread.create({
+      data: { id: threadId, spaceId: owner.spaceId, botId, userId: owner.userId },
+    });
+    await first.prisma.task.create({
+      data: {
+        id: taskId,
+        spaceId: owner.spaceId,
+        botId,
+        threadId,
+        userId: owner.userId,
+        prompt: "paper worker recurrence helper",
+        status: "running",
+      },
+    });
+    await first.prisma.run.create({
+      data: {
+        id: runId,
+        spaceId: owner.spaceId,
+        botId,
+        threadId,
+        taskId,
+        userId: owner.userId,
+        status: "running",
+        trigger: "user",
+      },
+    });
+    return first.prisma.externalEffect.create({
+      data: {
+        id: `paper-worker-recurrence-helper-effect-${label}-${suffix}`,
+        spaceId: owner.spaceId,
+        runId,
+        kind: "paper_worker_recurrence_control",
+        idempotencyKey: `paper-worker-recurrence-helper-key-${label}-${suffix}`,
+        status: "executing",
+        request: {
+          action,
+          ledger_id: ledgerId,
+          expected_gate_revision: gateRevision,
         },
       },
     });
@@ -3487,6 +3553,159 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     );
     expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
       outboxBefore,
+    );
+  });
+
+  it("P11D-6 persists explicit recurrence permission without enqueueing work", async () => {
+    const ledgerId = `paper-d6-recurrence-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: new Date(Date.now() - 30_000).toISOString(),
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "500",
+    });
+    await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+      allowedVenues: ["okx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "300",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    });
+    const enableTrading = await makePaperControlEffect(ledgerId, "d6-paper-enable", "enable", 0);
+    await expect(
+      applyApprovedTradingPaperControl(first.prisma, owner, enableTrading.id),
+    ).resolves.toMatchObject({ ok: true, enabled: true, policyRevision: 1 });
+
+    const enableWorker = await makePaperWorkerControlEffect(
+      ledgerId,
+      "d6-worker-enable",
+      "enable",
+      1,
+      15,
+    );
+    await expect(
+      applyApprovedTradingPaperWorkerControl(second.prisma, owner, enableWorker.id),
+    ).resolves.toMatchObject({ ok: true, enabled: true, gateRevision: 1, cadenceMinutes: 15 });
+    await expect(
+      readTradingPaperWorkerWakePreflight(second.prisma, owner, ledgerId),
+    ).resolves.toMatchObject({ status: "ready", gateRevision: 1, cadenceMinutes: 15 });
+    expect(await readVerifiedTradingPaperWorkerRecurrence(first.prisma, owner, ledgerId)).toEqual({
+      configured: false,
+      mode: "paper_only",
+      ledgerId,
+      enabled: false,
+    });
+
+    const policyBefore = await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId);
+    const workerBefore = await readVerifiedTradingPaperWorkerGate(first.prisma, owner, ledgerId);
+    const routineCountBefore = await first.prisma.routine.count({
+      where: { spaceId: owner.spaceId, userId: owner.userId },
+    });
+    const eventsBefore = await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } });
+    const outboxBefore = await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } });
+
+    const enableRecurrence = await makePaperWorkerRecurrenceEffect(
+      ledgerId,
+      "d6-recurrence-enable",
+      "enable",
+      1,
+    );
+    await expect(
+      applyApprovedTradingPaperWorkerRecurrenceControl(
+        second.prisma,
+        owner,
+        enableRecurrence.id,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      mode: "paper_only",
+      action: "enable",
+      ledgerId,
+      enabled: true,
+      gateRevision: 1,
+      recurrenceRevision: 1,
+    });
+    expect(
+      await readVerifiedTradingPaperWorkerRecurrence(first.prisma, owner, ledgerId),
+    ).toMatchObject({
+      configured: true,
+      mode: "paper_only",
+      ledgerId,
+      enabled: true,
+      gateRevision: 1,
+      recurrenceRevision: 1,
+      approvalEffectId: enableRecurrence.id,
+    });
+
+    const stale = await makePaperWorkerRecurrenceEffect(
+      ledgerId,
+      "d6-recurrence-stale",
+      "enable",
+      0,
+    );
+    await expect(
+      applyApprovedTradingPaperWorkerRecurrenceControl(second.prisma, owner, stale.id),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: "stale_gate_revision",
+      expectedGateRevision: 0,
+      currentGateRevision: 1,
+    });
+    expect(
+      await readVerifiedTradingPaperWorkerRecurrence(first.prisma, owner, ledgerId),
+    ).toMatchObject({
+      enabled: true,
+      gateRevision: 1,
+      recurrenceRevision: 1,
+      approvalEffectId: enableRecurrence.id,
+    });
+
+    const disable = await makePaperWorkerRecurrenceEffect(
+      ledgerId,
+      "d6-recurrence-disable",
+      "disable",
+      0,
+    );
+    await expect(
+      applyApprovedTradingPaperWorkerRecurrenceControl(second.prisma, owner, disable.id),
+    ).resolves.toMatchObject({
+      ok: true,
+      action: "disable",
+      enabled: false,
+      gateRevision: 1,
+      recurrenceRevision: 2,
+    });
+    expect(
+      await readVerifiedTradingPaperWorkerRecurrence(first.prisma, owner, ledgerId),
+    ).toMatchObject({
+      configured: true,
+      enabled: false,
+      gateRevision: 1,
+      recurrenceRevision: 2,
+      approvalEffectId: disable.id,
+    });
+
+    expect(
+      await first.prisma.routine.count({ where: { spaceId: owner.spaceId, userId: owner.userId } }),
+    ).toBe(routineCountBefore);
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(
+      eventsBefore,
+    );
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+      outboxBefore,
+    );
+    expect(await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId)).toEqual(
+      policyBefore,
+    );
+    expect(await readVerifiedTradingPaperWorkerGate(second.prisma, owner, ledgerId)).toEqual(
+      workerBefore,
     );
   });
 

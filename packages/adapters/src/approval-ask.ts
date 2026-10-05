@@ -23,7 +23,8 @@ export function buildApprovalAskBlock(
           toolName === "paper_trading_control" ||
           toolName === "paper_position_control" ||
           toolName === "paper_worker_control" ||
-          toolName === "paper_worker_start"
+          toolName === "paper_worker_start" ||
+          toolName === "paper_worker_recurrence_control"
           ? `${summary}?`
           : `Review before ${summary}`,
         secrets,
@@ -65,7 +66,18 @@ export function buildApprovalAskBlock(
                     { id: "allow", label: "Schedule one paper preflight" },
                     { id: "deny", label: "Cancel" },
                   ]
-                : [
+                : toolName === "paper_worker_recurrence_control"
+                  ? [
+                      {
+                        id: "allow",
+                        label:
+                          args.action === "disable"
+                            ? "Revoke recurring paper preflights"
+                            : "Authorize recurring paper preflights",
+                      },
+                      { id: "deny", label: "Cancel" },
+                    ]
+                  : [
                     { id: "allow", label: "Allow once" },
                     { id: "always", label: "Always allow this tool" },
                     { id: "deny", label: "Deny" },
@@ -105,6 +117,11 @@ function describeApprovalAction(toolName: string, args: Record<string, unknown>)
   if (toolName === "paper_worker_start") {
     const ledger = args.ledger_id ? String(args.ledger_id) : "unknown ledger";
     return `Schedule one read-only paper preflight for “${ledger}”`;
+  }
+  if (toolName === "paper_worker_recurrence_control") {
+    const verb = args.action === "disable" ? "Revoke" : "Authorize";
+    const ledger = args.ledger_id ? String(args.ledger_id) : "unknown ledger";
+    return `${verb} recurring read-only paper preflights for “${ledger}”`;
   }
   const target = pickScopeLabel(args);
   return target ? `${toolName} → ${target}` : toolName;
@@ -152,6 +169,13 @@ function formatApprovalDetail(
   if (toolName === "paper_worker_start") {
     lines.push(
       "This schedules exactly one delayed read-only PAPER preflight using the already-approved worker cadence. It does not schedule recurrence, wake a model, poll market data, mutate the trading ledger, or authorize live orders.",
+      `ledger: ${String(args.ledger_id ?? "")}`,
+      `expected worker gate revision: ${String(args.expected_gate_revision ?? "")}`,
+    );
+  }
+  if (toolName === "paper_worker_recurrence_control") {
+    lines.push(
+      "This changes only permission for future recurring read-only PAPER preflights. It does not enqueue a job or activate recurrence by itself, and it never authorizes trading or live orders.",
       `ledger: ${String(args.ledger_id ?? "")}`,
       `expected worker gate revision: ${String(args.expected_gate_revision ?? "")}`,
     );

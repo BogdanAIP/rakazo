@@ -35,6 +35,8 @@ describe("toolRequiresApproval", () => {
     expect(toolRequiresExplicitApproval("paper_worker_control")).toBe(true);
     expect(toolRequiresApproval("paper_worker_start", false)).toBe(true);
     expect(toolRequiresExplicitApproval("paper_worker_start")).toBe(true);
+    expect(toolRequiresApproval("paper_worker_recurrence_control", false)).toBe(true);
+    expect(toolRequiresExplicitApproval("paper_worker_recurrence_control")).toBe(true);
     expect(toolRequiresExplicitApproval("archive_bot")).toBe(false);
   });
 

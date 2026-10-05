@@ -188,6 +188,12 @@ D5 does not activate recurrence. The read-only D2 handler now returns the verifi
 
 The planner preserves owner/space/ledger and gate revision, validates the 5–1440 minute cadence, and calculates the first cadence boundary strictly after the supplied trusted clock. If a worker wakes late, missed intervals are skipped instead of burst-replayed. Deny/stale results or a revision mismatch produce no successor plan. Unit coverage proves normal planning, missed-interval skipping, fail-closed stale/deny behavior and invalid-clock/cadence rejection. A later separately reviewed slice is required before any handler may enqueue this planned successor.
 
+## P11D-6 — explicit persisted recurrence authorization (permission only)
+
+Recurrence activation gets its own owner approval boundary instead of inheriting the D0 worker gate or D4 one-shot approval. A new `paper_worker_recurrence_control` builtin always requires fresh explicit confirmation and persists only a SHA-256 protected, revisioned recurrence permission row. Enabling requires the full D1 read-only preflight to be `ready` and the exact current worker-gate revision. Disabling is deliberately allowed even when the caller's gate revision is stale, so revocation cannot be blocked by configuration drift.
+
+The D6 database control has no `JobPublisher`: enabling permission does not enqueue a preflight, attach the D5 planner, create a Routine, wake a model or perform trading work. A disposable PostgreSQL regression proves default-deny state, ready+exact enable, stale enable refusal, stale-safe disable, unchanged paper/worker policy, unchanged Routine count and zero ledger/outbox mutation. Production recurrence remains inactive until a later slice separately verifies this authorization at each successor and wires an enqueue.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.

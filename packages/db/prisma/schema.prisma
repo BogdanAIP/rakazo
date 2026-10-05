@@ -1400,6 +1400,7 @@ model TradingPaperLedger {
   closeDecisions        TradingPaperCloseDecision[]
   protectiveExitAuthorities TradingPaperProtectiveExitAuthority[]
   workerGate            TradingPaperWorkerGate?
+  workerRecurrence      TradingPaperWorkerRecurrence?
 
   @@index([spaceId, ownerUserId])
   @@map("trading_paper_ledgers")
@@ -1612,6 +1613,25 @@ model TradingPaperWorkerGate {
 
   @@index([spaceId, userId])
   @@map("trading_paper_worker_gates")
+}
+
+/** Explicit owner-approved permission for recurring read-only PAPER preflights.
+ * This row never schedules, enqueues or executes work by itself. */
+model TradingPaperWorkerRecurrence {
+  ledgerId             String             @id
+  ledger               TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId              String
+  userId               String
+  enabled              Boolean            @default(false)
+  gateRevision         Int
+  recurrenceRevision   Int                @default(0)
+  approvalEffectId     String
+  recurrenceSha256     String
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([spaceId, userId])
+  @@map("trading_paper_worker_recurrences")
 }
 
 /** Evidence only: no broker data, account keys or risk approval.

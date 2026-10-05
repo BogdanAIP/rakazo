@@ -39,6 +39,7 @@ const EXPLICIT_APPROVAL_BUILTIN_TOOLS = new Set([
   "paper_position_control",
   "paper_worker_control",
   "paper_worker_start",
+  "paper_worker_recurrence_control",
 ]);
 
 const UNATTENDED_SAFE_BUILTIN_TOOLS = new Set([
