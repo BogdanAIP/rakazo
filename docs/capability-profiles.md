@@ -76,7 +76,9 @@ Example metadata:
 
 The resolver verifies the exact tool and route against the current authorized capabilities/tools catalog.
 
-If the route no longer matches, the binding is stale.
+For semantic requirements classified as read-only, the bound tool must also declare readOnly=true. A write-capable tool cannot satisfy a read-only semantic requirement.
+
+If the route no longer matches, or a read-only requirement points at a write tool, the binding is stale.
 
 V1 does not infer an external binding from a similar tool name.
 
@@ -99,6 +101,7 @@ V1 defines:
 - market.data
 - defi.data
 - database.read
+- trading.execute
 
 Each requirement has a short description and a discovery query.
 
@@ -178,9 +181,9 @@ Optional:
 
 Denied:
 
-- messaging.telegram
+- trading.execute
 
-The trading profile is a research profile. It does not authorize live trading.
+The trading profile is a research profile. It explicitly denies trading.execute, which means submission of a real exchange or broker order that can create financial exposure. PAPER-only internal simulation does not require that live-execution capability.
 
 ## Resolver states
 
