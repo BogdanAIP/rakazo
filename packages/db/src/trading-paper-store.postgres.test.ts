@@ -3618,11 +3618,7 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       1,
     );
     await expect(
-      applyApprovedTradingPaperWorkerRecurrenceControl(
-        second.prisma,
-        owner,
-        enableRecurrence.id,
-      ),
+      applyApprovedTradingPaperWorkerRecurrenceControl(second.prisma, owner, enableRecurrence.id),
     ).resolves.toMatchObject({
       ok: true,
       mode: "paper_only",

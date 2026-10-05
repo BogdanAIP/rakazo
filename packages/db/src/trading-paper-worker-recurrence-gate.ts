@@ -65,10 +65,7 @@ function parseRequest(value: unknown): RecurrenceRequest {
   }
   const row = value as Record<string, unknown>;
   const keys = Object.keys(row).sort();
-  if (
-    JSON.stringify(keys) !==
-    JSON.stringify(["action", "expected_gate_revision", "ledger_id"])
-  ) {
+  if (JSON.stringify(keys) !== JSON.stringify(["action", "expected_gate_revision", "ledger_id"])) {
     throw new PaperWorkerRecurrenceIntegrityError(
       "Unexpected paper worker recurrence approval fields",
     );
@@ -243,15 +240,12 @@ export async function applyApprovedTradingPaperWorkerRecurrenceControl(
         });
         if (previous) {
           if (previous.spaceId !== owner.spaceId || previous.userId !== owner.userId) {
-            throw new PaperWorkerRecurrenceIntegrityError(
-              "Paper worker recurrence owner mismatch",
-            );
+            throw new PaperWorkerRecurrenceIntegrityError("Paper worker recurrence owner mismatch");
           }
           normalizeRecurrence(previous);
         }
 
-        let gateRevision =
-          previous?.gateRevision ?? request.expectedGateRevision;
+        let gateRevision = previous?.gateRevision ?? request.expectedGateRevision;
 
         if (request.action === "enable") {
           const preflight = await assessTradingPaperWorkerWakePreflightInTransaction(
