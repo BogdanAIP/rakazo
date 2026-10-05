@@ -3927,16 +3927,12 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       await first.prisma.tradingPaperWorkerSuccessorIntent.count({ where: { ledgerId } }),
     ).toBe(1);
 
-    const verified = await readVerifiedTradingPaperWorkerSuccessorIntent(
-      second.prisma,
-      owner,
-      {
-        ledgerId,
-        sourceScheduledFor: sourceScheduledFor.toISOString(),
-        gateRevision: 1,
-        recurrenceRevision: 1,
-      },
-    );
+    const verified = await readVerifiedTradingPaperWorkerSuccessorIntent(second.prisma, owner, {
+      ledgerId,
+      sourceScheduledFor: sourceScheduledFor.toISOString(),
+      gateRevision: 1,
+      recurrenceRevision: 1,
+    });
     expect(verified).toMatchObject({
       ledgerId,
       gateRevision: 1,
@@ -3988,11 +3984,7 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       1,
     );
     await expect(
-      applyApprovedTradingPaperWorkerRecurrenceControl(
-        second.prisma,
-        owner,
-        disableRecurrence.id,
-      ),
+      applyApprovedTradingPaperWorkerRecurrenceControl(second.prisma, owner, disableRecurrence.id),
     ).resolves.toMatchObject({ ok: true, enabled: false, recurrenceRevision: 2 });
     await expect(
       prepareTradingPaperWorkerSuccessorIntent(first.prisma, owner, {
@@ -4025,7 +4017,9 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     expect(await readVerifiedTradingPaperWorkerGate(second.prisma, owner, ledgerId)).toEqual(
       workerBefore,
     );
-    expect(await readVerifiedTradingPaperWorkerRecurrence(second.prisma, owner, ledgerId)).toMatchObject({
+    expect(
+      await readVerifiedTradingPaperWorkerRecurrence(second.prisma, owner, ledgerId),
+    ).toMatchObject({
       ...recurrenceBefore,
       enabled: false,
       recurrenceRevision: 2,
