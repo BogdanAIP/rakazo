@@ -28,6 +28,7 @@ describe("handlePaperWorkerPreflight", () => {
     await expect(handlePaperWorkerPreflight(prisma, payload, read)).resolves.toEqual({
       status: "ready",
       gateRevision: 7,
+      cadenceMinutes: 15,
     });
     expect(read).toHaveBeenCalledWith(
       prisma,

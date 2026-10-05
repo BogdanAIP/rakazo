@@ -3,7 +3,7 @@ import type { PrismaClient } from "@rakazo/db";
 import { readTradingPaperWorkerWakePreflight } from "@rakazo/db";
 
 export type PaperWorkerPreflightJobResult =
-  | { status: "ready"; gateRevision: number }
+  | { status: "ready"; gateRevision: number; cadenceMinutes: number }
   | { status: "deny"; reason: string }
   | { status: "stale_gate_revision" };
 
@@ -28,5 +28,9 @@ export async function handlePaperWorkerPreflight(
   if (preflight.gateRevision !== payload.gateRevision) {
     return { status: "stale_gate_revision" };
   }
-  return { status: "ready", gateRevision: preflight.gateRevision };
+  return {
+    status: "ready",
+    gateRevision: preflight.gateRevision,
+    cadenceMinutes: preflight.cadenceMinutes,
+  };
 }
