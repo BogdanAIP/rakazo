@@ -349,7 +349,8 @@ export class WindowsOpenCliBackend {
         return {
           ok: false,
           uncertain: true,
-          error: error instanceof Error ? error.message.slice(0, 500) : "Browser tab creation failed",
+          error:
+            error instanceof Error ? error.message.slice(0, 500) : "Browser tab creation failed",
         };
       }
     }
@@ -365,7 +366,8 @@ export class WindowsOpenCliBackend {
         return {
           ok: false,
           uncertain: true,
-          error: error instanceof Error ? error.message.slice(0, 500) : "Browser tab selection failed",
+          error:
+            error instanceof Error ? error.message.slice(0, 500) : "Browser tab selection failed",
         };
       }
     }
@@ -385,7 +387,8 @@ export class WindowsOpenCliBackend {
         return {
           ok: false,
           uncertain: true,
-          error: error instanceof Error ? error.message.slice(0, 500) : "Browser tab close failed",
+          error:
+            error instanceof Error ? error.message.slice(0, 500) : "Browser tab close failed",
         };
       }
     }
