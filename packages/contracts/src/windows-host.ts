@@ -226,6 +226,34 @@ export const WindowsHostGuiRequestSchema = z.discriminatedUnion("command", [
 
 export type WindowsHostGuiRequest = z.infer<typeof WindowsHostGuiRequestSchema>;
 
+export const WindowsHostUiaElementSchema = z.object({
+  ref: z.string().regex(/^u\d{1,4}$/u),
+  role: z.string().max(100),
+  name: z.string().max(512),
+  automationId: z.string().max(256).optional(),
+  className: z.string().max(256).optional(),
+  enabled: z.boolean().optional(),
+  focused: z.boolean().optional(),
+  rect: z
+    .object({
+      x: z.number().int().min(0).max(10_000),
+      y: z.number().int().min(0).max(10_000),
+      width: z.number().int().min(1).max(10_000),
+      height: z.number().int().min(1).max(10_000),
+    })
+    .optional(),
+});
+
+export type WindowsHostUiaElement = z.infer<typeof WindowsHostUiaElementSchema>;
+
+export const WindowsHostUiaSnapshotSchema = z.object({
+  source: z.literal("uia"),
+  truncated: z.boolean(),
+  elements: z.array(WindowsHostUiaElementSchema).max(256),
+});
+
+export type WindowsHostUiaSnapshot = z.infer<typeof WindowsHostUiaSnapshotSchema>;
+
 export const WindowsHostGuiObservationSchema = z.object({
   imageBase64: z.string().min(1).max(8_000_000),
   mimeType: z.literal("image/png"),
@@ -238,6 +266,7 @@ export const WindowsHostGuiObservationSchema = z.object({
       title: z.string().max(512).optional(),
     })
     .optional(),
+  uia: WindowsHostUiaSnapshotSchema.optional(),
 });
 
 export const WindowsHostGuiResultSchema = z.discriminatedUnion("kind", [
