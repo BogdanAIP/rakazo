@@ -21,6 +21,7 @@ import type {
   WindowsHostCommandRequest,
   WindowsHostCommandResult,
   WindowsHostGuiAction,
+  type WindowsHostUiaSnapshot,
 } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { computerObservation } from "./computer-support.js";
@@ -91,6 +92,24 @@ export class WindowsHostSandboxProvider implements SandboxProvider {
       throw new Error("Windows host returned an unexpected browser response");
     }
     return result.result.response;
+  }
+
+  async desktopUiaSnapshot(
+    computer: ComputerRef,
+    context: AdapterContext,
+  ): Promise<WindowsHostUiaSnapshot> {
+    const result = await this.commands.dispatch(
+      computer.providerRef,
+      { kind: "uia.snapshot", botId: computer.botId },
+      context.signal,
+      30_000,
+      context.userId,
+    );
+    if (!result.ok) throw new Error(result.error);
+    if (result.result.kind !== "uia") {
+      throw new Error("Windows host returned an unexpected UI Automation response");
+    }
+    return result.result.snapshot;
   }
 
   async provision(
