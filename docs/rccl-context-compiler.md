@@ -88,11 +88,12 @@ Example:
     [REQUIRE] Verify the live GitHub HEAD before each Git write.
     [NEXT] Create the isolated Trading worktree.
 
-The compiler recognizes source-text tags only when:
+The compiler applies different source-text tag profiles:
 
-- the tag is one of PURPOSE, FACT, RULE, INVARIANT, FORBID, REQUIRE, VERIFIED, NEXT or BLOCKER;
-- it appears at the start of a line;
-- the line is outside a fenced code example.
+- Project Memory can provide PURPOSE, FACT, RULE, INVARIANT, FORBID and REQUIRE. It cannot provide NEXT or BLOCKER because durable memory must not masquerade as current execution state.
+- Open Scratchpad tasks can provide FACT, RULE, INVARIANT, FORBID, REQUIRE, NEXT and BLOCKER.
+- VERIFIED is reserved in V1. Neither Project Memory nor Scratchpad prose can create a VERIFIED statement. A future trusted verification record can use this tag after the verification source and freshness model are defined.
+- A source-text tag is recognized only at the start of a line and outside a fenced code example.
 
 Structural tags RCCL, PROJECT, RESOURCE, STATE, SKILL, CAPABILITY and CONTEXT are compiler-owned. Project memory and Scratchpad text cannot create those statements.
 
