@@ -98,6 +98,7 @@ export const WindowsHostBrowserSessionTokenSchema = z.string().uuid();
 
 export const WindowsHostBrowserRequestSchema = z.discriminatedUnion("command", [
   z.object({ command: z.literal("open") }),
+  z.object({ command: z.literal("recover"), sessionToken: WindowsHostBrowserSessionTokenSchema }),
   z.object({
     command: z.literal("navigate"),
     sessionToken: WindowsHostBrowserSessionTokenSchema,
@@ -173,6 +174,7 @@ export const WindowsHostBrowserResultSchema = z.object({
   imageBase64: z.string().min(1).max(6_000_000).optional(),
   mimeType: z.literal("image/png").optional(),
   pageId: z.string().min(1).max(256).optional(),
+  pageIds: z.array(z.string().min(1).max(256)).max(8).optional(),
   elements: z
     .array(
       z.object({
