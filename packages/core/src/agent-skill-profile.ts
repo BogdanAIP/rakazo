@@ -138,7 +138,7 @@ export function analyzeRcclSkillMd(
     findings.push({
       code: "unknown-profile",
       severity: "warning",
-      message: "Unknown rakazo-profile: " + declaredProfile + ".",
+      message: `Unknown rakazo-profile: ${declaredProfile}.`,
     });
   }
   if (!profileDeclared) {
@@ -171,7 +171,7 @@ export function analyzeRcclSkillMd(
       findings.push({
         code: "missing-required-section",
         severity: level,
-        message: "Missing required section: " + section.name + ".",
+        message: `Missing required section: ${section.name}.`,
         section: section.name,
       });
     }
@@ -179,7 +179,7 @@ export function analyzeRcclSkillMd(
       findings.push({
         code: "duplicate-section",
         severity: level,
-        message: "Section " + section.name + " appears more than once.",
+        message: `Section ${section.name} appears more than once.`,
         section: section.name,
       });
     }
@@ -187,7 +187,7 @@ export function analyzeRcclSkillMd(
       findings.push({
         code: "empty-section",
         severity: level,
-        message: "Section " + section.name + " is empty.",
+        message: `Section ${section.name} is empty.`,
         section: section.name,
       });
     }
@@ -214,7 +214,7 @@ export function analyzeRcclSkillMd(
       findings.push({
         code: "section-not-list",
         severity: findingSeverity(enforce),
-        message: sectionName + " should use explicit list items.",
+        message: `${sectionName} should use explicit list items.`,
         section: sectionName,
       });
     }
@@ -239,12 +239,12 @@ export function buildRcclSkillTemplate(input: {
   const requirements =
     input.capabilityRequirements && input.capabilityRequirements.length > 0
       ? input.capabilityRequirements
-          .map((value) => "- [REQUIRE] Capability: " + value.trim())
+          .map((value) => `- [REQUIRE] Capability: ${value.trim()}`)
           .join("\n")
       : "- [REQUIRE] State the required Project capability or write NONE.";
 
   const body = [
-    "# " + input.name.trim(),
+    `# ${input.name.trim()}`,
     "",
     "## PURPOSE",
     "",
