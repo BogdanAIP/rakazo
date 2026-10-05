@@ -1,7 +1,35 @@
 export const CAPABILITY_PROFILE_SCHEMA_VERSION = "capability-profile-v1" as const;
 export const CAPABILITY_BINDING_SCHEMA_VERSION = "capability-binding-v1" as const;
 
-export const SEMANTIC_CAPABILITY_REQUIREMENTS = {
+export const SEMANTIC_CAPABILITY_REQUIREMENT_NAMES = [
+  "repo.read",
+  "repo.write",
+  "browser.semantic",
+  "browser.debug",
+  "browser.visual",
+  "computer.exec",
+  "computer.files",
+  "research.web",
+  "documents.read",
+  "citations",
+  "media.capture",
+  "messaging.telegram",
+  "market.data",
+  "defi.data",
+  "database.read",
+] as const;
+
+export type SemanticCapabilityRequirement =
+  (typeof SEMANTIC_CAPABILITY_REQUIREMENT_NAMES)[number];
+
+export const SEMANTIC_CAPABILITY_REQUIREMENTS: Record<
+  SemanticCapabilityRequirement,
+  {
+    description: string;
+    discoveryQuery: string;
+    class: "project" | "computer" | "external";
+  }
+> = {
   "repo.read": {
     description: "Read the Project source repository and repository metadata.",
     discoveryQuery: "repository source control read",
@@ -78,8 +106,6 @@ export const SEMANTIC_CAPABILITY_REQUIREMENTS = {
     class: "external",
   },
 } as const;
-
-export type SemanticCapabilityRequirement = keyof typeof SEMANTIC_CAPABILITY_REQUIREMENTS;
 
 export type CapabilityProfileDefinition = {
   slug: string;
