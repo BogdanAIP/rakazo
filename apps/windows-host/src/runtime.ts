@@ -24,6 +24,7 @@ import {
 } from "./transport.js";
 import { WindowsHostFileMutationBackend } from "./windows-files.js";
 import { WindowsGuiBackend } from "./windows-gui.js";
+import { WindowsUiaBackend } from "./windows-uia.js";
 
 export const WINDOWS_HOST_RUNTIME_VERSION = "0.1.0";
 
@@ -46,6 +47,7 @@ export async function buildAdvertisement(
   browserAvailable = false,
   guiAvailable = false,
   processEnabled = false,
+  uiaAvailable = false,
 ): Promise<WindowsHostAdvertisement> {
   const identity = await loadOrCreateWindowsHostIdentity(stateDir);
   return WindowsHostAdvertisementSchema.parse({
@@ -57,6 +59,7 @@ export async function buildAdvertisement(
       ...(browserAvailable ? ["browser" as const] : []),
       ...(guiAvailable ? (["screen", "input"] as const) : []),
       ...(processEnabled ? (["terminal"] as const) : []),
+      ...(uiaAvailable ? (["uia"] as const) : []),
     ],
     startedAt,
   });
@@ -138,6 +141,7 @@ export class WindowsHostRuntime {
     private readonly fileMutationBackend: WindowsHostFileMutationBackend = new WindowsHostFileMutationBackend(
       config.stateDir,
     ),
+    private readonly uiaBackend: WindowsUiaBackend = new WindowsUiaBackend(),
   ) {}
 
   async probe() {
@@ -147,6 +151,7 @@ export class WindowsHostRuntime {
       this.browserBackend.available(),
       this.guiBackend.available(),
       this.processBackend.available(),
+      this.uiaBackend.available(),
     );
   }
 
@@ -236,6 +241,7 @@ export class WindowsHostRuntime {
             this.guiBackend,
             this.processBackend,
             this.fileMutationBackend,
+            this.uiaBackend,
           );
         } catch (error) {
           result = {
@@ -266,6 +272,7 @@ export async function executeWindowsHostCommand(
   guiBackend: WindowsGuiBackend = new WindowsGuiBackend(),
   processBackend: WindowsProcessBackend = new WindowsProcessBackend("."),
   fileMutationBackend: WindowsHostFileMutationBackend = new WindowsHostFileMutationBackend("."),
+  uiaBackend: WindowsUiaBackend = new WindowsUiaBackend(),
 ): Promise<WindowsHostCommandResult> {
   switch (command.request.kind) {
     case "identity.get":
@@ -313,6 +320,12 @@ export async function executeWindowsHostCommand(
       );
       return { id: command.id, ok: true, result: { kind: "process", value } };
     }
+    case "uia.snapshot":
+      return {
+        id: command.id,
+        ok: true,
+        result: { kind: "uia", snapshot: await uiaBackend.snapshot() },
+      };
     case "screen.observe": {
       const result = await guiBackend.execute({ command: "observe" });
       if (result.kind !== "observation") throw new Error("Unexpected Windows GUI observation");
