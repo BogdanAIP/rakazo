@@ -213,7 +213,7 @@ describe("ChatGPT shared context", () => {
       },
     });
     expect((output.compiledContext as { rendered: string }).rendered).toContain(
-      "[PROJECT] id=\"project-1\"",
+      '[PROJECT] id="project-1"',
     );
   });
 
