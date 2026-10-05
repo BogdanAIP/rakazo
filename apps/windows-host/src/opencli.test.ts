@@ -358,6 +358,27 @@ describe("WindowsOpenCliBackend", () => {
     expect(runner).toHaveBeenCalledTimes(calls);
   });
 
+  it("caps caller-created owned tabs before invoking OpenCLI again", async () => {
+    const { backend, runner } = fixture("");
+    const token = await openSession(backend, "bot-a");
+    for (let index = 0; index < 8; index += 1) {
+      expect(
+        await backend.browser("bot-a", {
+          command: "tabNew",
+          sessionToken: token,
+        }),
+      ).toMatchObject({ ok: true, pageId: `page-${index + 1}` });
+    }
+    const calls = runner.mock.calls.length;
+    await expect(
+      backend.browser("bot-a", {
+        command: "tabNew",
+        sessionToken: token,
+      }),
+    ).rejects.toThrow("Too many owned browser tabs");
+    expect(runner).toHaveBeenCalledTimes(calls);
+  });
+
   it("never accepts a page identity owned by another token or an unsafe tab URL", async () => {
     const { backend, runner } = fixture("");
     const a = await openSession(backend, "bot-a");
