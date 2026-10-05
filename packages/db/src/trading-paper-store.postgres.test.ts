@@ -2612,7 +2612,7 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       killSwitch: true,
       openReservations: 0,
       openPositions: 1,
-      nextAction: "separate_owner_approval_to_enable",
+      nextAction: "owner_decision_required_for_open_position",
     });
     const damagedLegacy = await readTradingPaperRecoveryStatus(
       second.prisma,
@@ -2632,6 +2632,43 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       ),
     ).rejects.toBeInstanceOf(PaperRiskPolicyIntegrityError);
   });
+  it("P11C-10 reports disabled open position as owner decision without mutation", async () => {
+    const ledgerId = `paper-c1-fill-${suffix}`;
+    const before = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);
+    const policyBefore = await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId);
+    const eventsBefore = await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } });
+    const outboxBefore = await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } });
+    const guardsBefore = await first.prisma.tradingPaperStopGuard.count({ where: { ledgerId } });
+    expect(before.positions).toHaveLength(1);
+    expect(before.reservations).toHaveLength(0);
+    expect(guardsBefore).toBe(1);
+
+    const status = await readTradingPaperRecoveryStatus(second.prisma, owner, ledgerId);
+    expect(status).toMatchObject({
+      mode: "paper_only",
+      status: "verified",
+      enabled: false,
+      killSwitch: true,
+      openReservations: 0,
+      openPositions: 1,
+      nextAction: "owner_decision_required_for_open_position",
+    });
+
+    expect(await readVerifiedTradingPaperLedger(second.prisma, owner, ledgerId)).toEqual(before);
+    expect(await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId)).toEqual(
+      policyBefore,
+    );
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(
+      eventsBefore,
+    );
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+      outboxBefore,
+    );
+    expect(await first.prisma.tradingPaperStopGuard.count({ where: { ledgerId } })).toBe(
+      guardsBefore,
+    );
+  });
+
   it("P11C-8 rejects a forged inert-outbox delivery marker without money mutation", async () => {
     const ledgerId = `paper-c5-recovery-${suffix}`;
     const before = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);

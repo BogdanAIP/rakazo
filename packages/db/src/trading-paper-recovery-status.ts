@@ -31,7 +31,11 @@ export type PaperRecoveryStatus =
       policyRevision: number;
       enabled: boolean;
       killSwitch: boolean;
-      nextAction: "none" | "internal_reconcile_holds" | "separate_owner_approval_to_enable";
+      nextAction:
+        | "none"
+        | "internal_reconcile_holds"
+        | "owner_decision_required_for_open_position"
+        | "separate_owner_approval_to_enable";
       openReservations: number;
       openPositions: number;
       acceptedEvents: number;
@@ -64,9 +68,11 @@ export async function readTradingPaperRecoveryStatus(
           const nextAction =
             !policy.enabled && report.openReservations > 0
               ? "internal_reconcile_holds"
-              : !policy.enabled
-                ? "separate_owner_approval_to_enable"
-                : "none";
+              : !policy.enabled && report.openPositions > 0
+                ? "owner_decision_required_for_open_position"
+                : !policy.enabled
+                  ? "separate_owner_approval_to_enable"
+                  : "none";
           return {
             mode: "paper_only",
             status: "verified",
