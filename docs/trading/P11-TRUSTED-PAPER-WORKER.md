@@ -206,6 +206,12 @@ D8 connects the D7 recurrence authorization result to the existing D5 planner **
 
 The D8 module has no Prisma client, JobPublisher, background handler registration, model runtime, market adapter or trading writer. It cannot enqueue the planned job. Unit coverage proves exact ready composition, deny/stale fail-closed behavior, and preservation of D5 missed-interval skipping. A later separately reviewed slice is still required before any production handler may enqueue the planned successor.
 
+## P11D-9 — internal authorized successor enqueuer (no production caller)
+
+D9 prepares the first recurrence queue side effect without wiring it into the background handler. The internal primitive re-runs the full D7 recurrence preflight at a trusted server clock immediately before scheduling, then feeds that verified result into the pure D8 planner. Only a `planned` result may enqueue one typed `paper.worker-preflight` successor. Recurrence denial, changed ledger/gate scope or invalid state enqueues nothing.
+
+The primitive accepts only Prisma plus `JobPublisher.enqueue`; it has no model runtime, market-data adapter, trading writer, exchange credential or broker dependency. Queue failure propagates and is never reported as success. The module is not exported through an adapters public index and has no production caller in D9, so recurrence is still inactive. Unit coverage proves one exact enqueue on ready state, deny/no-enqueue behavior, scope-change no-enqueue behavior and queue-failure propagation. A later separately reviewed slice is required before the production D2 handler may call this primitive.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.
