@@ -266,7 +266,7 @@ export function compileProjectContext(
     const normalized = normalizeText(rawText);
     if (!normalized) return;
     const bounded = truncate(normalized, maxStatementChars);
-    const key = tag + "\u0000" + bounded.value;
+    const key = tag + "\u0000" + normalized;
     const existing = statementIndex.get(key);
     if (existing) {
       const existingSources = new Set(existing.sources.map(sourceKey));
