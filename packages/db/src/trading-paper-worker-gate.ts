@@ -4,6 +4,7 @@ import { Prisma } from "./client.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
 import {
   lockTradingPaperRiskPolicyInTransaction,
+  verifyCurrentTradingPaperEnableAuditInTransaction,
   verifyTradingPaperRiskPolicyInTransaction,
 } from "./trading-paper-risk-policy.js";
 import { withTransactionRetry } from "./transaction-retry.js";
@@ -222,6 +223,167 @@ export async function readVerifiedTradingPaperWorkerGate(
         }
         return normalizeGate(row);
       },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    ),
+  );
+}
+
+export type TradingPaperWorkerWakePreflight =
+  | {
+      status: "ready";
+      mode: "paper_only";
+      ledgerId: string;
+      cadenceMinutes: number;
+      policyRevision: number;
+      gateRevision: number;
+      workerApprovalEffectId: string;
+      paperApprovalEffectId: string;
+    }
+  | {
+      status: "deny";
+      mode: "paper_only";
+      ledgerId: string;
+      reason:
+        | "worker_gate_disabled"
+        | "policy_revision_changed"
+        | "paper_capability_disabled"
+        | "paper_capability_unapproved";
+      currentPolicyRevision?: number;
+    };
+
+function objectResult(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+async function verifyEnabledWorkerGateApprovalInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  gate: Extract<TradingPaperWorkerGateStatus, { configured: true }>,
+): Promise<void> {
+  if (!gate.enabled || gate.cadenceMinutes === null) {
+    throw new PaperWorkerGateIntegrityError("Enabled worker gate expected");
+  }
+  const effect = await tx.externalEffect.findUnique({
+    where: { id: gate.approvalEffectId },
+    include: { run: { select: { id: true, spaceId: true, userId: true } } },
+  });
+  if (
+    effect?.status !== "completed" ||
+    effect.kind !== "paper_worker_control" ||
+    effect.spaceId !== owner.spaceId ||
+    effect.run.spaceId !== owner.spaceId ||
+    effect.run.userId !== owner.userId
+  ) {
+    throw new PaperWorkerGateIntegrityError(
+      "Paper worker gate lacks completed explicit approval provenance",
+    );
+  }
+  const request = parseRequest(effect.request);
+  const result = objectResult(effect.result);
+  if (
+    request.action !== "enable" ||
+    request.ledgerId !== gate.ledgerId ||
+    request.expectedPolicyRevision !== gate.policyRevision ||
+    request.cadenceMinutes !== gate.cadenceMinutes ||
+    result?.ok !== true ||
+    result.mode !== "paper_only" ||
+    result.action !== "enable" ||
+    result.ledgerId !== gate.ledgerId ||
+    result.enabled !== true ||
+    result.cadenceMinutes !== gate.cadenceMinutes ||
+    result.policyRevision !== gate.policyRevision ||
+    result.gateRevision !== gate.gateRevision
+  ) {
+    throw new PaperWorkerGateIntegrityError(
+      "Paper worker approval request/result disagrees with persisted gate",
+    );
+  }
+}
+
+/** INTERNAL READ-ONLY barrier for a future Graphile wake.
+ * It enqueues nothing and mutates neither routines nor the paper ledger. */
+export async function assessTradingPaperWorkerWakePreflightInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  ledgerId: string,
+  now: Date,
+): Promise<TradingPaperWorkerWakePreflight> {
+  if (!Number.isFinite(now.getTime())) {
+    throw new PaperWorkerGateIntegrityError("Invalid paper worker preflight clock");
+  }
+  await requireOwnedLedger(tx, owner, ledgerId);
+  const row = await tx.tradingPaperWorkerGate.findUnique({ where: { ledgerId } });
+  if (!row) {
+    return { status: "deny", mode: "paper_only", ledgerId, reason: "worker_gate_disabled" };
+  }
+  if (row.spaceId !== owner.spaceId || row.userId !== owner.userId) {
+    throw new PaperWorkerGateIntegrityError("Paper worker gate owner mismatch");
+  }
+  const verifiedGate = normalizeGate(row);
+  if (!verifiedGate.enabled || verifiedGate.cadenceMinutes === null) {
+    return { status: "deny", mode: "paper_only", ledgerId, reason: "worker_gate_disabled" };
+  }
+  await verifyEnabledWorkerGateApprovalInTransaction(tx, owner, verifiedGate);
+
+  const policy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
+  if (policy.revision !== verifiedGate.policyRevision) {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "policy_revision_changed",
+      currentPolicyRevision: policy.revision,
+    };
+  }
+  if (!policy.policy.enabled || policy.policy.killSwitch) {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "paper_capability_disabled",
+      currentPolicyRevision: policy.revision,
+    };
+  }
+  const paperApproval = await verifyCurrentTradingPaperEnableAuditInTransaction(
+    tx,
+    owner,
+    ledgerId,
+    policy.revision,
+    policy.policy,
+  );
+  if (!paperApproval) {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "paper_capability_unapproved",
+      currentPolicyRevision: policy.revision,
+    };
+  }
+  await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, now);
+  return {
+    status: "ready",
+    mode: "paper_only",
+    ledgerId,
+    cadenceMinutes: verifiedGate.cadenceMinutes,
+    policyRevision: verifiedGate.policyRevision,
+    gateRevision: verifiedGate.gateRevision,
+    workerApprovalEffectId: verifiedGate.approvalEffectId,
+    paperApprovalEffectId: paperApproval.effectId,
+  };
+}
+
+export async function readTradingPaperWorkerWakePreflight(
+  prisma: Db,
+  owner: Owner,
+  ledgerId: string,
+  now: Date = new Date(),
+): Promise<TradingPaperWorkerWakePreflight> {
+  return withTransactionRetry(() =>
+    prisma.$transaction(
+      (tx) => assessTradingPaperWorkerWakePreflightInTransaction(tx, owner, ledgerId, now),
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
   );

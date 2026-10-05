@@ -37,6 +37,7 @@ export {
 } from "./trading-paper-store.js";
 export {
   applyApprovedTradingPaperWorkerControl,
+  readTradingPaperWorkerWakePreflight,
   readVerifiedTradingPaperWorkerGate,
 } from "./trading-paper-worker-gate.js";
 export * from "./transaction-retry.js";
