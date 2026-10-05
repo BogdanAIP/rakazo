@@ -17,6 +17,7 @@ export const SEMANTIC_CAPABILITY_REQUIREMENT_NAMES = [
   "market.data",
   "defi.data",
   "database.read",
+  "trading.execute",
 ] as const;
 
 export type SemanticCapabilityRequirement = (typeof SEMANTIC_CAPABILITY_REQUIREMENT_NAMES)[number];
@@ -27,84 +28,106 @@ export const SEMANTIC_CAPABILITY_REQUIREMENTS: Record<
     description: string;
     discoveryQuery: string;
     class: "project" | "computer" | "external";
+    access: "read" | "write" | "execute";
   }
 > = {
   "repo.read": {
     description: "Read the Project source repository and repository metadata.",
     discoveryQuery: "repository source control read",
     class: "project",
+    access: "read",
   },
   "repo.write": {
     description: "Write to the exact Project repository under existing Project policy.",
     discoveryQuery: "repository source control write",
     class: "project",
+    access: "write",
   },
   "browser.semantic": {
     description:
       "Inspect and operate a web page through a structured semantic DOM/accessibility surface.",
     discoveryQuery: "browser playwright accessibility semantic",
     class: "external",
+    access: "execute",
   },
   "browser.debug": {
     description: "Inspect browser console, network, DOM and performance/debug state.",
     discoveryQuery: "browser devtools console network debug",
     class: "external",
+    access: "read",
   },
   "browser.visual": {
     description: "Observe a browser or desktop visually through the Project execution computer.",
     discoveryQuery: "browser screenshot visual",
     class: "computer",
+    access: "read",
   },
   "computer.exec": {
     description:
       "Run bounded commands on a Project execution computer under normal control policy.",
     discoveryQuery: "computer terminal command execution",
     class: "computer",
+    access: "execute",
   },
   "computer.files": {
     description: "Read or transfer files through a Project execution computer.",
     discoveryQuery: "computer filesystem files",
     class: "computer",
+    access: "read",
   },
   "research.web": {
     description: "Search and inspect external research/web sources.",
     discoveryQuery: "web research search",
     class: "external",
+    access: "read",
   },
   "documents.read": {
     description: "Read and extract structured content from Project documents.",
     discoveryQuery: "pdf docx xlsx document reader extraction",
     class: "external",
+    access: "read",
   },
   citations: {
     description: "Return source provenance/citations for research outputs.",
     discoveryQuery: "citations sources research",
     class: "external",
+    access: "read",
   },
   "media.capture": {
     description: "Capture screenshots or short screen recordings for Project media workflows.",
     discoveryQuery: "screenshot screen recording media capture",
     class: "external",
+    access: "read",
   },
   "messaging.telegram": {
     description: "Read or deliver Project-scoped Telegram content through an authorized connector.",
     discoveryQuery: "telegram messaging",
     class: "external",
+    access: "execute",
   },
   "market.data": {
     description: "Read current market data for analysis.",
     discoveryQuery: "market price orderbook trading data",
     class: "external",
+    access: "read",
   },
   "defi.data": {
     description: "Read DeFi protocol/on-chain data for analysis.",
     discoveryQuery: "defi onchain protocol data",
     class: "external",
+    access: "read",
   },
   "database.read": {
     description: "Read Project-approved database data without mutation.",
     discoveryQuery: "database sql read only",
     class: "external",
+    access: "read",
+  },
+  "trading.execute": {
+    description: "Submit a real exchange or broker order that can create financial exposure.",
+    discoveryQuery: "exchange broker live order execution",
+    class: "external",
+    access: "execute",
   },
 } as const;
 
@@ -166,7 +189,7 @@ export const BUILTIN_CAPABILITY_PROFILES: readonly CapabilityProfileDefinition[]
     description: "PAPER-only trading research and data analysis.",
     required: ["repo.read", "market.data"],
     optional: ["repo.write", "research.web", "defi.data", "database.read", "citations"],
-    denied: ["messaging.telegram"],
+    denied: ["trading.execute"],
   },
 ] as const;
 
@@ -220,7 +243,10 @@ function uniqueRequirements(
 export function isSemanticCapabilityRequirement(
   value: unknown,
 ): value is SemanticCapabilityRequirement {
-  return typeof value === "string" && value in SEMANTIC_CAPABILITY_REQUIREMENTS;
+  return (
+    typeof value === "string" &&
+    Object.prototype.hasOwnProperty.call(SEMANTIC_CAPABILITY_REQUIREMENTS, value)
+  );
 }
 
 function requirements(value: unknown): SemanticCapabilityRequirement[] | null {
