@@ -2889,6 +2889,31 @@ export function createRouter(deps: RouterDeps) {
           ...(result.error === undefined ? {} : { error: result.error }),
         };
       }),
+      uia: authed.computer.uia.handler(async ({ context, input }) => {
+        let bot = await repos.getBot(context.actor, input.botId);
+        if (await expireStaleComputerControl(deps, bot.computer)) {
+          bot = await repos.getBot(context.actor, input.botId);
+        }
+        const computer = bot.computer;
+        if (!computer?.providerRef || computer.state !== "running") {
+          throw new ORPCError("BAD_REQUEST", { message: "computer must be running" });
+        }
+        if (computer.kind !== "desktop" || !deps.sandbox.desktopUiaSnapshot) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Windows UI Automation requires a physical desktop computer",
+          });
+        }
+        if (!hasActiveComputerControl(computer) || computer.controlBotId !== bot.id) {
+          throw new ORPCError("FORBIDDEN", { message: "Take control first." });
+        }
+
+        const snapshot = await deps.sandbox.desktopUiaSnapshot(
+          toComputerRef(computer),
+          computerContext(context.actor, bot.id, "uia"),
+        );
+        await keepComputerAwake(deps, computer.id);
+        return snapshot;
+      }),
       observe: authed.computer.observe.handler(async ({ context, input }) => {
         let bot = await repos.getBot(context.actor, input.botId);
         if (await expireStaleComputerControl(deps, bot.computer)) {
