@@ -2925,6 +2925,61 @@ export function createRouter(deps: RouterDeps) {
           height: observation.height,
           cursor: observation.cursor,
           activeWindow: observation.activeWindow,
+          uia: observation.semantic,
+        };
+      }),
+      uiaAct: authed.computer.uiaAct.handler(async ({ context, input }) => {
+        let bot = await repos.getBot(context.actor, input.botId);
+        if (await expireStaleComputerControl(deps, bot.computer)) {
+          bot = await repos.getBot(context.actor, input.botId);
+        }
+        const computer = bot.computer;
+        if (!computer?.providerRef || computer.state !== "running") {
+          throw new ORPCError("BAD_REQUEST", { message: "computer must be running" });
+        }
+        if (computer.kind !== "desktop" || !deps.sandbox.semanticAct) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "UIA semantic actions require a supported physical desktop computer",
+          });
+        }
+        if (!hasActiveComputerControl(computer) || computer.controlBotId !== bot.id) {
+          throw new ORPCError("FORBIDDEN", { message: "Take control first." });
+        }
+
+        const result = await deps.sandbox.semanticAct(
+          toComputerRef(computer),
+          {
+            observationId: input.semantic.observationId,
+            windowId: input.semantic.windowId,
+            ref: input.semantic.ref,
+            action: input.semantic.action,
+            observe: input.observe,
+            settleMs: input.settleMs,
+          },
+          computerContext(context.actor, bot.id, "uia"),
+        );
+        if (result.completed !== 1) {
+          throw new ORPCError("CONFLICT", { message: "semantic UIA action was not completed" });
+        }
+        await keepComputerAwake(deps, computer.id);
+        const observation = result.observation;
+        return {
+          completed: 1 as const,
+          ...(observation
+            ? {
+                observation: {
+                  frameId: observation.frameId,
+                  capturedAt: observation.capturedAt,
+                  mimeType: observation.mimeType,
+                  imageBase64: Buffer.from(observation.image).toString("base64"),
+                  width: observation.width,
+                  height: observation.height,
+                  cursor: observation.cursor,
+                  activeWindow: observation.activeWindow,
+                  uia: observation.semantic,
+                },
+              }
+            : {}),
         };
       }),
       downloadFile: authed.computer.downloadFile.handler(async ({ context, input }) => {
