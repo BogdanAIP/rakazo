@@ -8,7 +8,6 @@ import {
   searchChatGptCapabilities,
 } from "./chatgpt-context.js";
 import type { ProcedureMode } from "./chatgpt-rakazo.js";
-import { manageProjectWorktree } from "./chatgpt-worktree.js";
 import {
   actRakazoComputer,
   callRakazoRpc,
@@ -18,6 +17,7 @@ import {
   observeRakazoComputer,
   type RakazoComputerObservation,
 } from "./chatgpt-rakazo.js";
+import { manageProjectWorktree } from "./chatgpt-worktree.js";
 
 const server = new McpServer({
   name: "rakazo-chatgpt",
