@@ -2,7 +2,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $script = Join-Path $PSScriptRoot 'Rakazo.ps1'
-foreach ($name in @('Rakazo.ps1', 'Tunnel.Diagnostics.ps1', 'Tunnel.Control.ps1', 'Check-ExistingR.ps1', 'Install-Shortcut.ps1', 'Native.Update.ps1', 'Native.TrayUpdates.ps1', 'Refresh-PluginR.ps1')) {
+foreach ($name in @('Rakazo.ps1', 'Tunnel.Diagnostics.ps1', 'Tunnel.Control.ps1', 'Check-ExistingR.ps1', 'Install-Shortcut.ps1', 'Native.Update.ps1', 'Native.TrayUpdates.ps1', 'Native.PostgresEvidence.ps1', 'Refresh-PluginR.ps1')) {
     $file = Join-Path $PSScriptRoot $name
     $tokens = $null
     $parseErrors = $null
@@ -130,6 +130,80 @@ foreach ($needed in @('$ctlProcess.WaitForExit(70000)', 'pg_ctl returned; verify
     if (-not $text.Contains($needed)) {
         throw "Bounded native PostgreSQL process startup guard absent: $needed"
     }
+}
+foreach ($needed in @(
+    "Native.PostgresEvidence.ps1",
+    "Get-NativePostgresPidFileEvidence -Spec $spec",
+    "stale postgres pidfile verified; delegating recovery to pg_ctl",
+    "safe recovery is not proven:"
+)) {
+    if (-not $text.Contains($needed)) {
+        throw "Native PostgreSQL stale-PID recovery guard absent: $needed"
+    }
+}
+if ($text.Contains("The native PostgreSQL PID file exists but ownership cannot be verified. Manual recovery required.")) {
+    throw 'Old unconditional stale postmaster.pid failure path is still present.'
+}
+$postgresEvidencePath = Join-Path $PSScriptRoot 'Native.PostgresEvidence.ps1'
+$postgresEvidenceText = [IO.File]::ReadAllText($postgresEvidencePath)
+foreach ($needed in @(
+    'SafeToDelegateRecovery',
+    'stale-no-process',
+    'pid-reused-by-other-process',
+    'unexpected-data-directory',
+    'matching-postgres-process-still-running'
+)) {
+    if (-not $postgresEvidenceText.Contains($needed)) {
+        throw "PostgreSQL PID evidence guard absent: $needed"
+    }
+}
+
+# Deterministic regression tests for stale postmaster.pid classification.
+# They use only a temporary directory and the current PowerShell PID; no
+# PostgreSQL service, port, database, or external process is changed.
+. $postgresEvidencePath
+$evidenceRoot = Join-Path ([IO.Path]::GetTempPath()) ('rakazo-pg-evidence-' + [guid]::NewGuid().ToString('N'))
+try {
+    $testData = Join-Path $evidenceRoot 'data'
+    $testBin = Join-Path $evidenceRoot 'bin'
+    New-Item -ItemType Directory -Path $testData, $testBin -Force | Out-Null
+    $testSpec = [pscustomobject]@{ Data = $testData; Bin = $testBin; Port = 5434 }
+    $pidFile = Join-Path $testData 'postmaster.pid'
+    $epoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+
+    [int]$stalePid = [int]::MaxValue
+    while ($null -ne (Get-Process -Id $stalePid -ErrorAction SilentlyContinue)) { $stalePid-- }
+    Set-Content -LiteralPath $pidFile -Encoding ASCII -Value @(
+        [string]$stalePid, $testData, [string]$epoch, '5434', '', ''
+    )
+    $stale = Get-NativePostgresPidFileEvidence -Spec $testSpec
+    if (-not ($stale.Present -and $stale.MetadataVerified -and
+        $stale.SafeToDelegateRecovery -and $stale.Reason -ceq 'stale-no-process')) {
+        throw 'Stale postmaster.pid with an absent PID was not classified as delegated recovery.'
+    }
+
+    $current = Get-Process -Id $PID -ErrorAction Stop
+    $currentEpoch = [DateTimeOffset]::new($current.StartTime.ToUniversalTime()).ToUnixTimeSeconds()
+    Set-Content -LiteralPath $pidFile -Encoding ASCII -Value @(
+        [string]$PID, $testData, [string]$currentEpoch, '5434', '', ''
+    )
+    $reused = Get-NativePostgresPidFileEvidence -Spec $testSpec
+    if (-not $reused.ProcessExists -or $reused.SafeToDelegateRecovery -or
+        $reused.Reason -cne 'pid-reused-by-other-process') {
+        throw 'A reused PID owned by another executable did not fail closed.'
+    }
+
+    $otherData = Join-Path $evidenceRoot 'other-data'
+    Set-Content -LiteralPath $pidFile -Encoding ASCII -Value @(
+        [string]$stalePid, $otherData, [string]$epoch, '5434', '', ''
+    )
+    $wrongData = Get-NativePostgresPidFileEvidence -Spec $testSpec
+    if ($wrongData.MetadataVerified -or $wrongData.SafeToDelegateRecovery -or
+        $wrongData.Reason -cne 'unexpected-data-directory') {
+        throw 'A PID file for another data directory did not fail closed.'
+    }
+} finally {
+    Remove-Item -LiteralPath $evidenceRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 # Regression gate: tunnel-client reports an unzoned UTC start timestamp.
 # The ownership check must preserve the existing PID/path/20s guards.
