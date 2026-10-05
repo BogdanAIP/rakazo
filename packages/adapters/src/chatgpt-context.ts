@@ -341,6 +341,44 @@ export async function loadChatGptProjectContext(
   };
 }
 
+export type ChatGptProjectContextView = "compact" | "compiled" | "full";
+
+export function selectChatGptProjectContextView(
+  context: Record<string, unknown>,
+  view: ChatGptProjectContextView,
+): Record<string, unknown> {
+  if (view === "full") return context;
+
+  const compiledContext = object(context.compiledContext, "compiled project context");
+  const compiledProject = object(compiledContext.project, "compiled project");
+  const project = {
+    id: compiledProject.id,
+    slug: compiledProject.slug,
+    name: compiledProject.name,
+    memoryRevision: compiledProject.memoryRevision,
+  };
+
+  if (view === "compiled") {
+    return {
+      project,
+      compiledContext,
+      note:
+        "RCCL compiled view includes typed statements and provenance. Request view=full only when raw bounded Project fields are required.",
+    };
+  }
+
+  return {
+    project,
+    rcclVersion: compiledContext.schemaVersion,
+    authority: compiledContext.authority,
+    rccl: compiledContext.rendered,
+    truncated: compiledContext.renderedTruncated,
+    counts: compiledContext.counts,
+    note:
+      "Compact RCCL view is the default orientation context. Verify live state before writes; request view=compiled for provenance or view=full for raw bounded fields.",
+  };
+}
+
 export async function searchChatGptCapabilities(
   read: ContextReader,
   query: string,
