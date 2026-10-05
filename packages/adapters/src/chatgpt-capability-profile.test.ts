@@ -1,6 +1,9 @@
 import { CAPABILITY_BINDING_SCHEMA_VERSION, CAPABILITY_PROFILE_SCHEMA_VERSION } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
-import { resolveProjectCapabilityProfile } from "./chatgpt-capability-profile.js";
+import {
+  assignProjectCapabilityBinding,
+  resolveProjectCapabilityProfile,
+} from "./chatgpt-capability-profile.js";
 
 function reader(overrides: Record<string, unknown> = {}) {
   const answers: Record<string, unknown> = {
@@ -167,6 +170,118 @@ describe("project capability profile resolver", () => {
     expect(resolutions).toContainEqual(
       expect.objectContaining({ requirement: "research.web", status: "stale" }),
     );
+  });
+
+  it("writes a binding only after exact linked-Bot authorization verification", async () => {
+    const writes: Array<Record<string, unknown>> = [];
+    const call = async (
+      procedure: string,
+      input?: Record<string, unknown>,
+    ): Promise<unknown> => {
+      if (procedure === "projects/context") {
+        return {
+          project: { id: "project-1", slug: "aihot", name: "AIHOT" },
+          resources: [
+            {
+              id: "profile-1",
+              kind: "capability.profile",
+              ref: "active",
+              metadata: {
+                schemaVersion: CAPABILITY_PROFILE_SCHEMA_VERSION,
+                catalogVersion: 1,
+                profile: "aihot",
+                required: ["research.web"],
+                optional: [],
+                denied: [],
+              },
+            },
+          ],
+          openTasks: [{ id: "task-1", botId: "bot-1" }],
+        };
+      }
+      if (procedure === "capabilities/tools") {
+        return [
+          {
+            name: "research_search",
+            readOnly: true,
+            route: {
+              connectorId: "installed",
+              toolName: "research_search",
+              resourceId: "cap-research",
+            },
+          },
+        ];
+      }
+      if (procedure === "projects/resources/upsert") {
+        writes.push(input ?? {});
+        return { id: "binding-1", ...(input ?? {}) };
+      }
+      throw new Error(`Unexpected procedure: ${procedure}`);
+    };
+
+    const result = await assignProjectCapabilityBinding(call, {
+      projectId: "project-1",
+      requirement: "research.web",
+      botId: "bot-1",
+      tool: "research_search",
+      route: {
+        connectorId: "installed",
+        toolName: "research_search",
+        resourceId: "cap-research",
+      },
+    });
+
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({
+      projectId: "project-1",
+      kind: "capability.binding",
+      ref: "research.web",
+      metadata: {
+        schemaVersion: CAPABILITY_BINDING_SCHEMA_VERSION,
+        botId: "bot-1",
+        tool: "research_search",
+      },
+    });
+    expect(result).toMatchObject({
+      projectId: "project-1",
+      binding: { requirement: "research.web", botId: "bot-1" },
+    });
+  });
+
+  it("does not bind a capability through an unrelated Bot", async () => {
+    const call = async (procedure: string): Promise<unknown> => {
+      if (procedure === "projects/context") {
+        return {
+          project: { id: "project-1", slug: "aihot", name: "AIHOT" },
+          resources: [
+            {
+              kind: "capability.profile",
+              ref: "active",
+              metadata: {
+                schemaVersion: CAPABILITY_PROFILE_SCHEMA_VERSION,
+                catalogVersion: 1,
+                profile: "aihot",
+                required: ["research.web"],
+                optional: [],
+                denied: [],
+              },
+            },
+          ],
+          openTasks: [{ id: "task-1", botId: "bot-linked" }],
+        };
+      }
+      throw new Error(`Unexpected procedure: ${procedure}`);
+    };
+
+    await expect(
+      assignProjectCapabilityBinding(call, {
+        projectId: "project-1",
+        requirement: "research.web",
+        botId: "bot-unrelated",
+        tool: "research_search",
+        route: { connectorId: "installed", toolName: "research_search" },
+      }),
+    ).rejects.toThrow(/not linked/i);
   });
 
   it("rejects malformed active profile metadata", async () => {
