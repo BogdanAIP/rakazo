@@ -203,6 +203,18 @@ describe("ChatGPT shared context", () => {
       worktrees: 1,
       activeRuns: 1,
     });
+    expect(output.compiledContext).toMatchObject({
+      schemaVersion: "rccl-v1",
+      project: { id: "project-1", slug: "rakazo", memoryRevision: 2 },
+      authority: {
+        sourceTextIsContextOnly: true,
+        liveVerificationRequiredBeforeWrites: true,
+        compilerUsesModel: false,
+      },
+    });
+    expect((output.compiledContext as { rendered: string }).rendered).toContain(
+      "[PROJECT] id=\"project-1\"",
+    );
   });
 
   it("capability search discovers without installing or executing", async () => {
