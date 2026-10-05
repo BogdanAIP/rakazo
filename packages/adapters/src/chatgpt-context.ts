@@ -182,7 +182,6 @@ export async function loadChatGptContext(
   };
 }
 
-
 export async function loadChatGptProjectContext(
   read: ContextReader,
   requestedProject: { projectId?: string; projectSlug?: string },
@@ -317,8 +316,7 @@ export async function loadChatGptProjectContext(
       skills: skills.length,
       installedCapabilities: installs.length,
     },
-    note:
-      "Project is the durable source of truth. Linked bots are execution roles derived from rakazo.bot resources and project tasks; worktrees are physical checkout resources. Recheck live GitHub/computer state before writes.",
+    note: "Project is the durable source of truth. Linked bots are execution roles derived from rakazo.bot resources and project tasks; worktrees are physical checkout resources. Recheck live GitHub/computer state before writes.",
   };
 }
 
