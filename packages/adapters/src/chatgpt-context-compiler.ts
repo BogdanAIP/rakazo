@@ -163,11 +163,24 @@ function source(kind: string, id?: unknown, revision?: unknown): RcclSource {
   };
 }
 
+function shortFingerprint(value: string): string {
+  let hash = 2_166_136_261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16_777_619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
 function truncate(value: string, max: number): { value: string; truncated: boolean } {
   if (max <= 0) return { value: "", truncated: value.length > 0 };
   if (value.length <= max) return { value, truncated: false };
-  if (max === 1) return { value: "…", truncated: true };
-  return { value: value.slice(0, max - 1).trimEnd() + "…", truncated: true };
+  const suffix = "…#" + shortFingerprint(value);
+  if (max <= suffix.length) return { value: suffix.slice(0, max), truncated: true };
+  return {
+    value: value.slice(0, max - suffix.length).trimEnd() + suffix,
+    truncated: true,
+  };
 }
 
 function sortRecords(
