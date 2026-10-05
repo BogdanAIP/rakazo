@@ -397,7 +397,7 @@ server.registerTool(
       projectId,
       kind: "capability.profile",
       ref: "active",
-      label: "Capability profile: " + profile,
+      label: `Capability profile: ${profile}`,
       metadata: snapshot,
     });
     return textResult({
