@@ -329,7 +329,8 @@ export async function executeWindowsHostCommand(
         observe: command.request.observe,
         settleMs: command.request.settleMs,
       });
-      if (result.kind !== "actions") throw new Error("Unexpected Windows GUI semantic action result");
+      if (result.kind !== "actions")
+        throw new Error("Unexpected Windows GUI semantic action result");
       return {
         id: command.id,
         ok: true,
