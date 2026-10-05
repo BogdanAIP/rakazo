@@ -99,6 +99,33 @@ describe("buildApprovalAskBlock", () => {
     expect(block.detail).toContain("expected policy revision: 4");
   });
 
+  it("uses one-time paper worker control and never offers always allow", () => {
+    const block = buildApprovalAskBlock(
+      "effect-paper-worker",
+      "paper_worker_control",
+      {
+        action: "enable",
+        ledger_id: "paper-1",
+        expected_policy_revision: 5,
+        cadence_minutes: 15,
+      },
+      [],
+    );
+    expect(block).toMatchObject({
+      kind: "ask",
+      text: "Enable background paper-worker gate for “paper-1”?",
+      actions: [
+        { id: "allow", label: "Enable paper worker" },
+        { id: "deny", label: "Cancel" },
+      ],
+    });
+    expect(JSON.stringify(block)).not.toContain("Always allow");
+    if (block.kind !== "ask") throw new Error("expected ask block");
+    expect(block.detail).toContain("does not create a schedule or enqueue work");
+    expect(block.detail).toContain("expected policy revision: 5");
+    expect(block.detail).toContain("cadence minutes: 15");
+  });
+
   it("uses a one-time create or cancel choice for a new security boundary", () => {
     const block = buildApprovalAskBlock(
       "effect-1",

@@ -1399,6 +1399,7 @@ model TradingPaperLedger {
   fillDecisions         TradingPaperFillDecision[]
   closeDecisions        TradingPaperCloseDecision[]
   protectiveExitAuthorities TradingPaperProtectiveExitAuthority[]
+  workerGate            TradingPaperWorkerGate?
 
   @@index([spaceId, ownerUserId])
   @@map("trading_paper_ledgers")
@@ -1591,6 +1592,26 @@ model TradingPaperProtectiveExitAuthority {
 
   @@index([ledgerId, positionId, expiresAt])
   @@map("trading_paper_protective_exit_authorities")
+}
+
+/** Default-deny owner-approved gate for a future deterministic PAPER worker.
+ * This row is permission/config only; it does not enqueue or execute work. */
+model TradingPaperWorkerGate {
+  ledgerId          String             @id
+  ledger            TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId           String
+  userId            String
+  enabled           Boolean            @default(false)
+  cadenceMinutes    Int?
+  policyRevision    Int
+  gateRevision      Int                @default(0)
+  approvalEffectId  String
+  gateSha256        String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([spaceId, userId])
+  @@map("trading_paper_worker_gates")
 }
 
 /** Evidence only: no broker data, account keys or risk approval.

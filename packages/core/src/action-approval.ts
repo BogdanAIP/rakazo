@@ -37,6 +37,7 @@ const EXPLICIT_APPROVAL_BUILTIN_TOOLS = new Set([
   "create_space",
   "paper_trading_control",
   "paper_position_control",
+  "paper_worker_control",
 ]);
 
 const UNATTENDED_SAFE_BUILTIN_TOOLS = new Set([

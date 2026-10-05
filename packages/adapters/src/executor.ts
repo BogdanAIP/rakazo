@@ -93,6 +93,7 @@ import {
 import {
   appendEventInTransaction,
   applyApprovedTradingPaperControl,
+  applyApprovedTradingPaperWorkerControl,
   applyApprovedTradingPaperProtectiveExitControl,
   createSpaceForMember,
   createThreadMessageInTransaction,
@@ -3554,6 +3555,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
               ok: true,
               result: String(args.task ?? "done."),
             };
+          }
+          if (name === "paper_worker_control") {
+            if (!applied || !claimedEffect) {
+              throw new Error("Paper worker control requires a claimed explicit approval.");
+            }
+            return applyApprovedTradingPaperWorkerControl(
+              deps.prisma,
+              { spaceId: run.spaceId, userId: run.userId },
+              applied.effect.id,
+            );
           }
           if (name === "paper_position_control") {
             if (!applied || !claimedEffect) {

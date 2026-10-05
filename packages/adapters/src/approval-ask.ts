@@ -21,7 +21,8 @@ export function buildApprovalAskBlock(
       redactSecrets(
         toolName === "create_space" ||
           toolName === "paper_trading_control" ||
-          toolName === "paper_position_control"
+          toolName === "paper_position_control" ||
+          toolName === "paper_worker_control"
           ? `${summary}?`
           : `Review before ${summary}`,
         secrets,
@@ -49,7 +50,15 @@ export function buildApprovalAskBlock(
                 { id: "allow", label: "Authorize protective paper exit" },
                 { id: "deny", label: "Cancel" },
               ]
-            : [
+            : toolName === "paper_worker_control"
+              ? [
+                  {
+                    id: "allow",
+                    label: args.action === "disable" ? "Disable paper worker" : "Enable paper worker",
+                  },
+                  { id: "deny", label: "Cancel" },
+                ]
+              : [
                 { id: "allow", label: "Allow once" },
                 { id: "always", label: "Always allow this tool" },
                 { id: "deny", label: "Deny" },
@@ -80,6 +89,11 @@ function describeApprovalAction(toolName: string, args: Record<string, unknown>)
     const ledger = args.ledger_id ? String(args.ledger_id) : "unknown ledger";
     const position = args.position_id ? String(args.position_id) : "unknown position";
     return `Authorize protective paper exit for “${position}” on “${ledger}”`;
+  }
+  if (toolName === "paper_worker_control") {
+    const verb = args.action === "disable" ? "Disable" : "Enable";
+    const ledger = args.ledger_id ? String(args.ledger_id) : "unknown ledger";
+    return `${verb} background paper-worker gate for “${ledger}”`;
   }
   const target = pickScopeLabel(args);
   return target ? `${toolName} → ${target}` : toolName;
@@ -112,6 +126,16 @@ function formatApprovalDetail(
       `ledger: ${String(args.ledger_id ?? "")}`,
       `position: ${String(args.position_id ?? "")}`,
       `expected policy revision: ${String(args.expected_policy_revision ?? "")}`,
+    );
+  }
+  if (toolName === "paper_worker_control") {
+    lines.push(
+      "This changes only a default-deny PAPER background-worker permission. It does not create a schedule or enqueue work, and it never authorizes live orders.",
+      `ledger: ${String(args.ledger_id ?? "")}`,
+      `expected policy revision: ${String(args.expected_policy_revision ?? "")}`,
+      ...(args.action === "enable"
+        ? [`cadence minutes: ${String(args.cadence_minutes ?? "")}`]
+        : []),
     );
   }
   for (const key of ["collection", "title", "to", "subject", "amount", "body"]) {

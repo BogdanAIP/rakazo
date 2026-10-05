@@ -52,6 +52,10 @@ import {
   PaperLedgerIntegrityError,
   readVerifiedTradingPaperLedger,
 } from "./trading-paper-store.js";
+import {
+  applyApprovedTradingPaperWorkerControl,
+  readVerifiedTradingPaperWorkerGate,
+} from "./trading-paper-worker-gate.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
@@ -213,6 +217,70 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
           ledger_id: ledgerId,
           position_id: positionId,
           expected_policy_revision: revision,
+        },
+      },
+    });
+  };
+
+  const makePaperWorkerControlEffect = async (
+    ledgerId: string,
+    label: string,
+    action: "enable" | "disable",
+    revision: number,
+    cadenceMinutes?: number,
+  ) => {
+    const botId = `paper-worker-control-helper-bot-${label}-${suffix}`;
+    const threadId = `paper-worker-control-helper-thread-${label}-${suffix}`;
+    const taskId = `paper-worker-control-helper-task-${label}-${suffix}`;
+    const runId = `paper-worker-control-helper-run-${label}-${suffix}`;
+    await first.prisma.bot.create({
+      data: {
+        id: botId,
+        spaceId: owner.spaceId,
+        userId: owner.userId,
+        name: "Paper Worker Control Helper",
+        color: "#000000",
+      },
+    });
+    await first.prisma.thread.create({
+      data: { id: threadId, spaceId: owner.spaceId, botId, userId: owner.userId },
+    });
+    await first.prisma.task.create({
+      data: {
+        id: taskId,
+        spaceId: owner.spaceId,
+        botId,
+        threadId,
+        userId: owner.userId,
+        prompt: "paper worker control helper",
+        status: "running",
+      },
+    });
+    await first.prisma.run.create({
+      data: {
+        id: runId,
+        spaceId: owner.spaceId,
+        botId,
+        threadId,
+        taskId,
+        userId: owner.userId,
+        status: "running",
+        trigger: "user",
+      },
+    });
+    return first.prisma.externalEffect.create({
+      data: {
+        id: `paper-worker-control-helper-effect-${label}-${suffix}`,
+        spaceId: owner.spaceId,
+        runId,
+        kind: "paper_worker_control",
+        idempotencyKey: `paper-worker-control-helper-key-${label}-${suffix}`,
+        status: "executing",
+        request: {
+          action,
+          ledger_id: ledgerId,
+          expected_policy_revision: revision,
+          ...(action === "enable" ? { cadence_minutes: cadenceMinutes } : {}),
         },
       },
     });
@@ -3173,6 +3241,145 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
         changedEvidence.id,
       ),
     ).rejects.toBeInstanceOf(PaperCloseConflictError);
+  });
+
+  it("P11D-0 persists an explicit default-deny paper worker gate without scheduling work", async () => {
+    const ledgerId = `paper-d0-worker-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: new Date(Date.now() - 30_000).toISOString(),
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "500",
+    });
+    await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+      allowedVenues: ["okx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "300",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    });
+    expect(await readVerifiedTradingPaperWorkerGate(first.prisma, owner, ledgerId)).toEqual({
+      configured: false,
+      mode: "paper_only",
+      ledgerId,
+      enabled: false,
+    });
+
+    const enableTrading = await makePaperControlEffect(ledgerId, "d0-paper-enable", "enable", 0);
+    const trading = await applyApprovedTradingPaperControl(first.prisma, owner, enableTrading.id);
+    expect(trading).toMatchObject({
+      ok: true,
+      action: "enable",
+      policyRevision: 1,
+      enabled: true,
+      killSwitch: false,
+    });
+    const policyBefore = await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId);
+    const routineCountBefore = await first.prisma.routine.count({
+      where: { spaceId: owner.spaceId, userId: owner.userId },
+    });
+
+    const enableWorker = await makePaperWorkerControlEffect(
+      ledgerId,
+      "d0-worker-enable",
+      "enable",
+      policyBefore.revision,
+      15,
+    );
+    await expect(
+      applyApprovedTradingPaperWorkerControl(second.prisma, owner, enableWorker.id),
+    ).resolves.toMatchObject({
+      ok: true,
+      mode: "paper_only",
+      action: "enable",
+      ledgerId,
+      enabled: true,
+      cadenceMinutes: 15,
+      policyRevision: policyBefore.revision,
+      gateRevision: 1,
+    });
+    expect(await readVerifiedTradingPaperWorkerGate(first.prisma, owner, ledgerId)).toMatchObject({
+      configured: true,
+      mode: "paper_only",
+      ledgerId,
+      enabled: true,
+      cadenceMinutes: 15,
+      policyRevision: policyBefore.revision,
+      gateRevision: 1,
+      approvalEffectId: enableWorker.id,
+    });
+    expect(
+      (await first.prisma.externalEffect.findUniqueOrThrow({ where: { id: enableWorker.id } }))
+        .status,
+    ).toBe("completed");
+    expect(await first.prisma.routine.count({ where: { spaceId: owner.spaceId, userId: owner.userId } })).toBe(
+      routineCountBefore,
+    );
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(0);
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(0);
+    expect(await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId)).toEqual(
+      policyBefore,
+    );
+
+    const stale = await makePaperWorkerControlEffect(
+      ledgerId,
+      "d0-worker-stale",
+      "enable",
+      0,
+      15,
+    );
+    await expect(
+      applyApprovedTradingPaperWorkerControl(second.prisma, owner, stale.id),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: "stale_policy_revision",
+      currentPolicyRevision: policyBefore.revision,
+    });
+    expect(await readVerifiedTradingPaperWorkerGate(first.prisma, owner, ledgerId)).toMatchObject({
+      enabled: true,
+      gateRevision: 1,
+      approvalEffectId: enableWorker.id,
+    });
+
+    const disableWorker = await makePaperWorkerControlEffect(
+      ledgerId,
+      "d0-worker-disable",
+      "disable",
+      policyBefore.revision,
+    );
+    await expect(
+      applyApprovedTradingPaperWorkerControl(second.prisma, owner, disableWorker.id),
+    ).resolves.toMatchObject({
+      ok: true,
+      action: "disable",
+      enabled: false,
+      cadenceMinutes: null,
+      policyRevision: policyBefore.revision,
+      gateRevision: 2,
+    });
+    expect(await readVerifiedTradingPaperWorkerGate(first.prisma, owner, ledgerId)).toMatchObject({
+      configured: true,
+      enabled: false,
+      cadenceMinutes: null,
+      policyRevision: policyBefore.revision,
+      gateRevision: 2,
+      approvalEffectId: disableWorker.id,
+    });
+    expect(await first.prisma.routine.count({ where: { spaceId: owner.spaceId, userId: owner.userId } })).toBe(
+      routineCountBefore,
+    );
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(0);
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(0);
+    expect(await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId)).toEqual(
+      policyBefore,
+    );
   });
 
   it("P11C-8 rejects a forged inert-outbox delivery marker without money mutation", async () => {

@@ -889,6 +889,22 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    name: "paper_worker_control",
+    description:
+      "Propose enabling or disabling a default-deny background PAPER-worker gate for one ledger at an exact paper-policy revision. This always requires a fresh confirmation card and cannot be auto-reviewed or permanently allowed. Enabling records only permission plus a 5-1440 minute cadence; it does not create a schedule, enqueue Graphile work, wake a model, place any order, contact an exchange, or enable live trading.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["enable", "disable"] },
+        ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+        expected_policy_revision: { type: "integer", minimum: 0 },
+        cadence_minutes: { type: "integer", minimum: 5, maximum: 1440 },
+      },
+      required: ["action", "ledger_id", "expected_policy_revision"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "spawn_bot",
     description:
       "Create a full, regular bot — the same kind the user creates from the + button. It gets its own thread, computer, and memory, and appears as a peer in the bot list. Do not also call run_subagent. Creating the bot is the whole action. Only set prompt if the user asked that new bot to start work immediately.",
