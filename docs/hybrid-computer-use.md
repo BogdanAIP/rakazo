@@ -73,11 +73,29 @@ existing R tunnel. No new browser profile, server, LLM or Codex OAuth is needed.
   best-effort after a short Windows Host restart; expired sessions must be
   reopened rather than guessed or rebound to a user tab.
 
+## P3a: read-only Windows UI Automation semantics
+
+- Physical screen observations remain screenshot-first, but Windows Host also
+  attempts a bounded UI Automation ControlView snapshot for the foreground
+  window. Failure to load or query UIA never removes the screenshot fallback.
+- The semantic snapshot is read-only in this slice: up to 256 controls, maximum
+  traversal depth 8, bounded names/roles/automation IDs/class names and optional
+  virtual-screen-relative rectangles. References such as u1 are observation-local
+  labels only and cannot yet be used to invoke controls.
+- Only the foreground window subtree is inspected; Rakazo does not enumerate
+  every desktop process/window and does not launch a second UI agent or LLM.
+- Windows GUI hosts advertise the existing uia capability only with the same
+  explicit GUI opt-in. Native Windows CI parses the GUI executor and verifies
+  the standard UIAutomationClient/UIAutomationTypes assemblies are loadable.
+- P3b will add narrowly typed semantic actions with stale-observation/window
+  guards; coordinate/pixel input remains the fallback rather than the primary
+  targeting model.
+
 ## Follow-up slices
 
 P2b: current-tab bind only after a trustworthy local user-confirmation primitive
 can prove intentional handoff of the active tab; raw bind/unbind stay unexposed
-until then. P3: UIA/UFO semantic control inside Windows Host.
+until then. P3b: guarded UIA semantic actions inside Windows Host.
 P4: durable verification and failure reconciliation, never blindly repeating
 uncertain actions. P5: before/after speed, model/process-call and recovery
 benchmarks.
