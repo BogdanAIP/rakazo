@@ -79,8 +79,9 @@ existing R tunnel. No new browser profile, server, LLM or Codex OAuth is needed.
   attempts a bounded UI Automation ControlView snapshot for the foreground
   window. Failure to load or query UIA never removes the screenshot fallback.
 - The semantic snapshot is read-only in this slice: up to 256 controls, maximum
-  traversal depth 8, bounded names/roles/automation IDs/class names and optional
-  virtual-screen-relative rectangles. References such as u1 are observation-local
+  traversal depth 8, bounded names/stable invariant control roles/automation
+  IDs/class names and optional virtual-screen-relative rectangles. References
+  such as u1 are observation-local
   labels only and cannot yet be used to invoke controls.
 - Only the foreground window subtree is inspected; Rakazo does not enumerate
   every desktop process/window and does not launch a second UI agent or LLM.
