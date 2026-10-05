@@ -255,16 +255,21 @@ export class WindowsOpenCliBackend {
       ]);
 
     if (request.command === "recover") {
+      const now = Date.now();
       const existing = this.sessions.get(token);
       if (existing) {
         if (existing.botId !== botId) {
           throw new Error("Unknown browser session; open a new session first");
         }
-        existing.lastActivity = Date.now();
+        if (now - existing.lastActivity >= SESSION_TOKEN_TTL_MS) {
+          this.sessions.delete(token);
+          this.observations.delete(token);
+          return { ok: false, error: "Browser session expired; open a new session first" };
+        }
+        existing.lastActivity = now;
         return { ok: true, sessionToken: token, pageIds: [...existing.ownedPages] };
       }
 
-      const now = Date.now();
       for (const [existingToken, state] of this.sessions) {
         if (now - state.lastActivity >= SESSION_TOKEN_TTL_MS) {
           this.sessions.delete(existingToken);
