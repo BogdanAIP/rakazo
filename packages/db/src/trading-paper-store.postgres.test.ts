@@ -2964,14 +2964,16 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     const before = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);
     const policyBefore = await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId);
     const actedAt = new Date(authority.authorizedAt.getTime() + 30_000).toISOString();
-    const verify = (overrides: Partial<{
-      ledgerId: string;
-      positionId: string;
-      policyRevision: number;
-      buyFillEventSequence: number;
-      stopPriceQuote: string;
-      actedAt: string;
-    }> = {}) =>
+    const verify = (
+      overrides: Partial<{
+        ledgerId: string;
+        positionId: string;
+        policyRevision: number;
+        buyFillEventSequence: number;
+        stopPriceQuote: string;
+        actedAt: string;
+      }> = {},
+    ) =>
       first.prisma.$transaction((tx) =>
         verifyHistoricalTradingPaperProtectiveExitApprovalInTransaction(
           tx,
