@@ -51,6 +51,7 @@ const READ_ACTIONS = new Set([
   "status",
   "summary",
   "tools",
+  "uia",
   "updates",
   "voices",
 ]);
