@@ -284,7 +284,7 @@ export async function applyApprovedTradingPaperWorkerControl(
           return fail("stale_policy_revision");
         }
 
-        let previous = await tx.tradingPaperWorkerGate.findUnique({
+        const previous = await tx.tradingPaperWorkerGate.findUnique({
           where: { ledgerId: request.ledgerId },
         });
         if (request.action === "enable") {
