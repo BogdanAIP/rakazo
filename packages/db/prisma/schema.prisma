@@ -1401,6 +1401,7 @@ model TradingPaperLedger {
   protectiveExitAuthorities TradingPaperProtectiveExitAuthority[]
   workerGate            TradingPaperWorkerGate?
   workerRecurrence      TradingPaperWorkerRecurrence?
+  workerSuccessorIntents TradingPaperWorkerSuccessorIntent[]
 
   @@index([spaceId, ownerUserId])
   @@map("trading_paper_ledgers")
@@ -1632,6 +1633,28 @@ model TradingPaperWorkerRecurrence {
 
   @@index([spaceId, userId])
   @@map("trading_paper_worker_recurrences")
+}
+
+/** Immutable deterministic intent for one recurring read-only PAPER preflight successor.
+ * Persisting an intent never enqueues or executes work. */
+model TradingPaperWorkerSuccessorIntent {
+  ledgerId                    String
+  sourceScheduledFor          DateTime
+  gateRevision                Int
+  recurrenceRevision          Int
+  ledger                      TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId                     String
+  userId                      String
+  recurrenceApprovalEffectId  String
+  workerApprovalEffectId      String
+  paperApprovalEffectId       String
+  successorScheduledFor       DateTime
+  intentSha256                String
+  createdAt                   DateTime           @default(now())
+
+  @@id([ledgerId, sourceScheduledFor, gateRevision, recurrenceRevision])
+  @@index([spaceId, userId, createdAt])
+  @@map("trading_paper_worker_successor_intents")
 }
 
 /** Evidence only: no broker data, account keys or risk approval.

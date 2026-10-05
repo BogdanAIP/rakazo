@@ -46,6 +46,12 @@ export {
   readVerifiedTradingPaperWorkerRecurrence,
   type TradingPaperWorkerRecurrencePreflight,
 } from "./trading-paper-worker-recurrence-gate.js";
+export {
+  PaperWorkerSuccessorIntentIntegrityError,
+  prepareTradingPaperWorkerSuccessorIntent,
+  readVerifiedTradingPaperWorkerSuccessorIntent,
+  type TradingPaperWorkerSuccessorIntentResult,
+} from "./trading-paper-worker-successor-intent.js";
 export * from "./transaction-retry.js";
 export * from "./voice-credentials.js";
 export * from "./windows-hosts.js";

@@ -218,6 +218,12 @@ D10 composes the inert D2 read-only handler with the D9 authorized-successor enq
 
 The wrapper has no market-data adapter, model runtime, trading writer, exchange credential or broker dependency. It validates the trusted recurrence clock before work, propagates queue uncertainty, and exposes the D2 result together with the D9 successor outcome for tests/audit. Unit coverage proves deny/stale short-circuiting, one authorized successor call on ready state, recurrence-denial no-successor behavior and queue-error propagation. Because the production handler map remains on D2, recurrence is still inactive after D10.
 
+## P11D-11 — durable deterministic successor intent (no enqueue)
+
+Before recurrence can be registered in the production handler, D11 adds an immutable database idempotency boundary for successor scheduling. After a full D7 recurrence preflight, the DB computes the same next cadence boundary from the source job's scheduled timestamp and trusted clock, then persists the exact successor timestamp plus gate/recurrence revisions and all three approval provenance ids. The intent is SHA-256 protected and uniquely keyed by ledger, source schedule, gate revision and recurrence revision.
+
+Repeating the same request returns the same stored intent instead of recalculating a new successor time. A conflicting/tampered stored intent fails closed. Recurrence denial or changed gate scope creates no row. The D11 module has no JobPublisher and cannot enqueue work. PostgreSQL coverage uses a separate disposable ledger to prove prepared→duplicate replay, hash-tamper detection, recurrence-disable no-new-intent behavior, unchanged Routine count and zero ledger/outbox mutation. A later slice must make D9 enqueue from this persisted intent before production recurrence may be registered.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.

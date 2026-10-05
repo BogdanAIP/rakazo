@@ -64,6 +64,11 @@ import {
   readTradingPaperWorkerRecurrencePreflight,
   readVerifiedTradingPaperWorkerRecurrence,
 } from "./trading-paper-worker-recurrence-gate.js";
+import {
+  PaperWorkerSuccessorIntentIntegrityError,
+  prepareTradingPaperWorkerSuccessorIntent,
+  readVerifiedTradingPaperWorkerSuccessorIntent,
+} from "./trading-paper-worker-successor-intent.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
@@ -3818,6 +3823,214 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
       outboxBefore,
     );
+  });
+
+  it("P11D-11 persists one deterministic successor intent without enqueueing work", async () => {
+    const ledgerId = `paper-d11-successor-intent-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: new Date(Date.now() - 30_000).toISOString(),
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "500",
+    });
+    await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+      allowedVenues: ["okx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "300",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    });
+    const enableTrading = await makePaperControlEffect(ledgerId, "d11-paper-enable", "enable", 0);
+    await expect(
+      applyApprovedTradingPaperControl(first.prisma, owner, enableTrading.id),
+    ).resolves.toMatchObject({ ok: true, enabled: true, policyRevision: 1 });
+
+    const enableWorker = await makePaperWorkerControlEffect(
+      ledgerId,
+      "d11-worker-enable",
+      "enable",
+      1,
+      15,
+    );
+    await expect(
+      applyApprovedTradingPaperWorkerControl(second.prisma, owner, enableWorker.id),
+    ).resolves.toMatchObject({ ok: true, enabled: true, gateRevision: 1, cadenceMinutes: 15 });
+
+    const enableRecurrence = await makePaperWorkerRecurrenceEffect(
+      ledgerId,
+      "d11-recurrence-enable",
+      "enable",
+      1,
+    );
+    await expect(
+      applyApprovedTradingPaperWorkerRecurrenceControl(second.prisma, owner, enableRecurrence.id),
+    ).resolves.toMatchObject({
+      ok: true,
+      enabled: true,
+      gateRevision: 1,
+      recurrenceRevision: 1,
+    });
+
+    const policyBefore = await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId);
+    const workerBefore = await readVerifiedTradingPaperWorkerGate(first.prisma, owner, ledgerId);
+    const recurrenceBefore = await readVerifiedTradingPaperWorkerRecurrence(
+      first.prisma,
+      owner,
+      ledgerId,
+    );
+    const routineCountBefore = await first.prisma.routine.count({
+      where: { spaceId: owner.spaceId, userId: owner.userId },
+    });
+    const eventsBefore = await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } });
+    const outboxBefore = await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } });
+
+    const sourceScheduledFor = new Date(Date.now() - 60_000);
+    const now = new Date(sourceScheduledFor.getTime() + 60_000);
+    const successorScheduledFor = new Date(sourceScheduledFor.getTime() + 15 * 60_000);
+    const input = {
+      ledgerId,
+      sourceScheduledFor: sourceScheduledFor.toISOString(),
+      gateRevision: 1,
+      now,
+    };
+    const prepared = await prepareTradingPaperWorkerSuccessorIntent(first.prisma, owner, input);
+    expect(prepared).toMatchObject({
+      status: "prepared",
+      mode: "paper_only",
+      ledgerId,
+      gateRevision: 1,
+      recurrenceRevision: 1,
+      sourceScheduledFor: sourceScheduledFor.toISOString(),
+      successorScheduledFor: successorScheduledFor.toISOString(),
+      recurrenceApprovalEffectId: enableRecurrence.id,
+      workerApprovalEffectId: enableWorker.id,
+      paperApprovalEffectId: enableTrading.id,
+    });
+    await expect(
+      prepareTradingPaperWorkerSuccessorIntent(second.prisma, owner, input),
+    ).resolves.toMatchObject({
+      status: "duplicate",
+      ledgerId,
+      gateRevision: 1,
+      recurrenceRevision: 1,
+      sourceScheduledFor: sourceScheduledFor.toISOString(),
+      successorScheduledFor: successorScheduledFor.toISOString(),
+    });
+    expect(
+      await first.prisma.tradingPaperWorkerSuccessorIntent.count({ where: { ledgerId } }),
+    ).toBe(1);
+
+    const verified = await readVerifiedTradingPaperWorkerSuccessorIntent(
+      second.prisma,
+      owner,
+      {
+        ledgerId,
+        sourceScheduledFor: sourceScheduledFor.toISOString(),
+        gateRevision: 1,
+        recurrenceRevision: 1,
+      },
+    );
+    expect(verified).toMatchObject({
+      ledgerId,
+      gateRevision: 1,
+      recurrenceRevision: 1,
+      successorScheduledFor: successorScheduledFor.toISOString(),
+      recurrenceApprovalEffectId: enableRecurrence.id,
+      workerApprovalEffectId: enableWorker.id,
+      paperApprovalEffectId: enableTrading.id,
+    });
+
+    const intentRow = await first.prisma.tradingPaperWorkerSuccessorIntent.findFirstOrThrow({
+      where: { ledgerId },
+    });
+    await first.prisma.tradingPaperWorkerSuccessorIntent.update({
+      where: {
+        ledgerId_sourceScheduledFor_gateRevision_recurrenceRevision: {
+          ledgerId,
+          sourceScheduledFor,
+          gateRevision: 1,
+          recurrenceRevision: 1,
+        },
+      },
+      data: { intentSha256: "0".repeat(64) },
+    });
+    await expect(
+      readVerifiedTradingPaperWorkerSuccessorIntent(second.prisma, owner, {
+        ledgerId,
+        sourceScheduledFor: sourceScheduledFor.toISOString(),
+        gateRevision: 1,
+        recurrenceRevision: 1,
+      }),
+    ).rejects.toBeInstanceOf(PaperWorkerSuccessorIntentIntegrityError);
+    await first.prisma.tradingPaperWorkerSuccessorIntent.update({
+      where: {
+        ledgerId_sourceScheduledFor_gateRevision_recurrenceRevision: {
+          ledgerId,
+          sourceScheduledFor,
+          gateRevision: 1,
+          recurrenceRevision: 1,
+        },
+      },
+      data: { intentSha256: intentRow.intentSha256 },
+    });
+
+    const disableRecurrence = await makePaperWorkerRecurrenceEffect(
+      ledgerId,
+      "d11-recurrence-disable",
+      "disable",
+      1,
+    );
+    await expect(
+      applyApprovedTradingPaperWorkerRecurrenceControl(
+        second.prisma,
+        owner,
+        disableRecurrence.id,
+      ),
+    ).resolves.toMatchObject({ ok: true, enabled: false, recurrenceRevision: 2 });
+    await expect(
+      prepareTradingPaperWorkerSuccessorIntent(first.prisma, owner, {
+        ledgerId,
+        sourceScheduledFor: new Date(sourceScheduledFor.getTime() + 1).toISOString(),
+        gateRevision: 1,
+        now,
+      }),
+    ).resolves.toMatchObject({
+      status: "stop",
+      reason: "recurrence_denied",
+      recurrenceReason: "recurrence_disabled",
+    });
+    expect(
+      await first.prisma.tradingPaperWorkerSuccessorIntent.count({ where: { ledgerId } }),
+    ).toBe(1);
+
+    expect(
+      await first.prisma.routine.count({ where: { spaceId: owner.spaceId, userId: owner.userId } }),
+    ).toBe(routineCountBefore);
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(
+      eventsBefore,
+    );
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+      outboxBefore,
+    );
+    expect(await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId)).toEqual(
+      policyBefore,
+    );
+    expect(await readVerifiedTradingPaperWorkerGate(second.prisma, owner, ledgerId)).toEqual(
+      workerBefore,
+    );
+    expect(await readVerifiedTradingPaperWorkerRecurrence(second.prisma, owner, ledgerId)).toMatchObject({
+      ...recurrenceBefore,
+      enabled: false,
+      recurrenceRevision: 2,
+      approvalEffectId: disableRecurrence.id,
+    });
   });
 
   it("P11C-8 rejects a forged inert-outbox delivery marker without money mutation", async () => {
