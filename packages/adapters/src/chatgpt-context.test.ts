@@ -179,17 +179,30 @@ describe("ChatGPT shared context", () => {
       truncated: false,
     });
     expect(output.linkedBots).toEqual([
-      expect.objectContaining({ id: "bot-1", name: "ChatGPT Windows" }),
-      expect.objectContaining({ id: "bot-2", name: "Worker" }),
+      expect.objectContaining({
+        id: "bot-1",
+        name: "ChatGPT Windows",
+        linkSources: ["task"],
+      }),
+      expect.objectContaining({
+        id: "bot-2",
+        name: "Worker",
+        linkSources: ["resource"],
+      }),
     ]);
     expect(output.worktrees).toEqual([
       expect.objectContaining({ kind: "workspace.worktree", ref: "C:/work/rakazo" }),
     ]);
     expect(output.activeRuns).toEqual([
-      expect.objectContaining({ runId: "run-1", botId: "bot-1" }),
       expect.objectContaining({ runId: "run-2", botId: "bot-2" }),
     ]);
-    expect(output.counts).toMatchObject({ linkedBots: 2, worktrees: 1, activeRuns: 2 });
+    expect(output.counts).toMatchObject({
+      linkedBots: 2,
+      explicitBots: 1,
+      taskBots: 1,
+      worktrees: 1,
+      activeRuns: 1,
+    });
   });
 
   it("capability search discovers without installing or executing", async () => {
