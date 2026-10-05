@@ -227,7 +227,22 @@ export async function manageProjectWorktree(
     throw new Error("repository must be exact owner/name");
   }
   if (!input.repoPath.trim()) throw new Error("repoPath is required");
-  input = { ...input, repoPath: absolutePath(input.repoPath, "repoPath") };
+  const repoPath = absolutePath(input.repoPath, "repoPath");
+  let worktreePath: string | undefined;
+  if (input.action !== "list") {
+    if (!input.worktreePath?.trim()) {
+      throw new Error("worktreePath is required for verify/ensure");
+    }
+    worktreePath = absolutePath(input.worktreePath, "worktreePath");
+    if (canonicalPath(worktreePath) === canonicalPath(repoPath)) {
+      throw new Error("worktreePath must differ from repoPath");
+    }
+  }
+  input = {
+    ...input,
+    repoPath,
+    ...(worktreePath ? { worktreePath } : {}),
+  };
 
   const projectContext = object(
     await call("projects/context", { projectId: input.projectId }),
