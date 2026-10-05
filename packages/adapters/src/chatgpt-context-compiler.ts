@@ -70,8 +70,21 @@ export type RcclCompilerOptions = {
   maxLegacySourceChars?: number;
 };
 
-const TAG_SET = new Set<string>(RCCL_TAGS);
-const TAG_ORDER = new Map<RcclTag, number>(RCCL_TAGS.map((tag, index) => [tag, index]));
+const SOURCE_TEXT_TAGS: RcclTag[] = [
+  "PURPOSE",
+  "FACT",
+  "RULE",
+  "INVARIANT",
+  "FORBID",
+  "REQUIRE",
+  "VERIFIED",
+  "NEXT",
+  "BLOCKER",
+];
+const SOURCE_TEXT_TAG_SET = new Set<string>(SOURCE_TEXT_TAGS);
+const TAG_ORDER = new Map<RcclTag, number>(
+  RCCL_TAGS.map((tag, index) => [tag, index] as [RcclTag, number]),
+);
 const DEFAULT_MAX_RENDERED_CHARS = 16_000;
 const DEFAULT_MAX_STATEMENT_CHARS = 1_000;
 const DEFAULT_MAX_LEGACY_CHARS = 6_000;
@@ -192,7 +205,7 @@ function parseRcclAndLegacy(value: unknown): {
     }
 
     const match = fence ? null : trimmed.match(/^\[([A-Z][A-Z0-9_-]*)\]\s+(.+)$/);
-    if (match && TAG_SET.has(match[1]!)) {
+    if (match && SOURCE_TEXT_TAG_SET.has(match[1]!)) {
       tagged.push({ tag: match[1] as RcclTag, text: match[2]! });
       continue;
     }
