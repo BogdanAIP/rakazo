@@ -34,6 +34,7 @@ function Write-RakazoLaunchStage([string]$stage) {
 . (Join-Path $PSScriptRoot 'Tunnel.Diagnostics.ps1')
 . (Join-Path $PSScriptRoot 'Tunnel.Control.ps1')
 . (Join-Path $PSScriptRoot 'Native.TrayUpdates.ps1')
+. (Join-Path $PSScriptRoot 'Native.PostgresEvidence.ps1')
 
 function Test-Http([string]$url) {
     try {
@@ -369,8 +370,13 @@ function Ensure-NativePostgres {
         if ($before.NativePostgresReady) { return }
         throw 'The identified native PostgreSQL is running but not ready. No duplicate start.'
     }
-    if (Test-Path -LiteralPath (Join-Path $spec.Data 'postmaster.pid')) {
-        throw 'The native PostgreSQL PID file exists but ownership cannot be verified. Manual recovery required.'
+    $pidEvidence = Get-NativePostgresPidFileEvidence -Spec $spec
+    if ($pidEvidence.Present) {
+        if (-not $pidEvidence.SafeToDelegateRecovery) {
+            throw ('The native PostgreSQL PID file exists but safe recovery is not proven: ' +
+                $pidEvidence.Reason + '. Manual recovery required.')
+        }
+        Write-RakazoLaunchStage 'stale postgres pidfile verified; delegating recovery to pg_ctl'
     }
     if (Test-Port $spec.Port) {
         throw 'The target PostgreSQL port is occupied by an unverified process.'
