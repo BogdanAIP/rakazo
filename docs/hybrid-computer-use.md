@@ -57,10 +57,27 @@ existing R tunnel. No new browser profile, server, LLM or Codex OAuth is needed.
 - Raw tab listing and bind/unbind remain unexposed. This avoids discovering or
   attaching to user-managed Chrome tabs outside the task-owned automation session.
 
+## P2a: owned-session recovery after host restart
+
+- Recovery accepts only the prior opaque sessionToken; callers still cannot
+  supply an OpenCLI session name or enumerate arbitrary browser sessions.
+- The token plus bot identity deterministically reconstructs the exact prior
+  Rakazo OpenCLI session name. Windows Host internally runs tab list for that
+  session and restores ownership only from valid unique page IDs returned there.
+- An empty list, malformed/duplicate IDs, more than eight tabs, a different bot,
+  or a tab-list failure does not mint session ownership. Recovery never calls
+  bind and never exposes raw tab listing as a public browser command.
+- If the in-memory Rakazo session still exists, recovery simply returns its
+  already-recorded owned page IDs without probing OpenCLI again.
+- OpenCLI owned sessions have their own idle lease, so recovery is intentionally
+  best-effort after a short Windows Host restart; expired sessions must be
+  reopened rather than guessed or rebound to a user tab.
+
 ## Follow-up slices
 
-P2: explicit bind/recovery with proof of tab ownership and
-physical GUI coordination. P3: UIA/UFO semantic control inside Windows Host.
+P2b: current-tab bind only after a trustworthy local user-confirmation primitive
+can prove intentional handoff of the active tab; raw bind/unbind stay unexposed
+until then. P3: UIA/UFO semantic control inside Windows Host.
 P4: durable verification and failure reconciliation, never blindly repeating
 uncertain actions. P5: before/after speed, model/process-call and recovery
 benchmarks.
