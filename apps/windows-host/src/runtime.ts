@@ -55,7 +55,7 @@ export async function buildAdvertisement(
     capabilities: [
       ...INITIAL_CAPABILITIES,
       ...(browserAvailable ? ["browser" as const] : []),
-      ...(guiAvailable ? (["screen", "input"] as const) : []),
+      ...(guiAvailable ? (["screen", "input", "uia"] as const) : []),
       ...(processEnabled ? (["terminal"] as const) : []),
     ],
     startedAt,
