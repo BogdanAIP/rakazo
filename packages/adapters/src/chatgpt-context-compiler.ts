@@ -435,6 +435,23 @@ export function compileProjectContext(
     );
   }
 
+  const missingLinkedBotIds = Array.isArray(projection.missingLinkedBotIds)
+    ? projection.missingLinkedBotIds
+        .map(scalar)
+        .filter((value): value is string => Boolean(value))
+        .sort(stableCompare)
+    : [];
+  for (const missingBotId of missingLinkedBotIds) {
+    addStatement(
+      "BLOCKER",
+      fields([
+        ["missingLinkedBotId", missingBotId],
+        ["reason", "Linked Bot is not accessible"],
+      ]),
+      source("project.bot-link", missingBotId),
+    );
+  }
+
   const runs = sortRecords(records(projection.activeRuns), [
     (item) => text(item.botId),
     (item) => text(item.runId),
