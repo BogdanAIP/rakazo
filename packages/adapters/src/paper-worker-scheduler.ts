@@ -1,4 +1,4 @@
-import { paperWorkerPreflightJob, type JobPublisher } from "@rakazo/adapter-kit";
+import { type JobPublisher, paperWorkerPreflightJob } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
 import { readTradingPaperWorkerWakePreflight } from "@rakazo/db";
 
