@@ -10,6 +10,7 @@ const observation = {
   activeWindow: { id: "101", title: "Notepad" },
   uia: {
     source: "uia" as const,
+    observationId: "a".repeat(64),
     truncated: false,
     elements: [
       {
@@ -51,6 +52,7 @@ describe("WindowsGuiBackend", () => {
         height: 1080,
         uia: {
           source: "uia",
+          observationId: "a".repeat(64),
           truncated: false,
           elements: [
             expect.objectContaining({ ref: "u1", role: "window", name: "Notepad" }),
@@ -88,5 +90,61 @@ describe("WindowsGuiBackend", () => {
       completed: 1,
     });
     expect(runner).toHaveBeenCalledWith(request);
+  });
+
+  it("routes a semantic action only with the prior UIA observation guard", async () => {
+    const runner = vi.fn(async () => ({
+      kind: "actions" as const,
+      completed: 1,
+      observation,
+    }));
+    const backend = new WindowsGuiBackend(runner, () => true);
+    const request = {
+      command: "semanticAct" as const,
+      semantic: {
+        observationId: "a".repeat(64),
+        windowId: "101",
+        ref: "u2",
+        action: "focus" as const,
+      },
+      observe: true,
+    };
+    await expect(backend.execute(request)).resolves.toMatchObject({
+      kind: "actions",
+      completed: 1,
+      observation: { activeWindow: { id: "101" } },
+    });
+    expect(runner).toHaveBeenCalledWith(request);
+  });
+
+  it("blocks semantic retries after an uncertain action until a fresh observation", async () => {
+    const runner = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Windows GUI timed out; action outcome is uncertain"))
+      .mockResolvedValueOnce({ kind: "observation" as const, observation })
+      .mockResolvedValueOnce({ kind: "actions" as const, completed: 1, observation });
+    const backend = new WindowsGuiBackend(runner, () => true);
+    const semantic = {
+      command: "semanticAct" as const,
+      semantic: {
+        observationId: "a".repeat(64),
+        windowId: "101",
+        ref: "u2",
+        action: "focus" as const,
+      },
+      observe: true,
+    };
+
+    await expect(backend.execute(semantic)).rejects.toThrow("outcome is uncertain");
+    await expect(backend.execute(semantic)).rejects.toThrow("Fresh Windows observation required");
+    expect(runner).toHaveBeenCalledTimes(1);
+
+    await expect(backend.execute({ command: "observe" })).resolves.toMatchObject({
+      kind: "observation",
+    });
+    await expect(backend.execute(semantic)).resolves.toMatchObject({
+      kind: "actions",
+      completed: 1,
+    });
   });
 });
