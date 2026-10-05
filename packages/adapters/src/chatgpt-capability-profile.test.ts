@@ -65,7 +65,7 @@ function reader(overrides: Record<string, unknown> = {}) {
   };
 
   return async (procedure: string): Promise<unknown> => {
-    if (!(procedure in answers)) throw new Error("Unexpected procedure: " + procedure);
+    if (!(procedure in answers)) throw new Error(`Unexpected procedure: ${procedure}`);
     return answers[procedure];
   };
 }
