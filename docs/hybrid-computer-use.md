@@ -29,7 +29,7 @@ existing R tunnel. No new browser profile, server, LLM or Codex OAuth is needed.
 - Screenshot callers cannot supply a filesystem path. Windows Host creates a
   random temporary PNG, validates its PNG signature, caps it at 4 MiB, returns
   at most 6 MiB of base64, and removes the temporary file in a finally block.
-  Full-page, annotation, and bounded viewport dimensions are supported.
+  Only viewport captures are exposed; bounded dimensions and annotation are supported.
 - Annotated screenshots refresh DOM refs inside OpenCLI, so Rakazo invalidates
   the prior observation before requesting one.
 - Exact OpenCLI v1.8.6 source confirms state prints a leading URL header. Rakazo
