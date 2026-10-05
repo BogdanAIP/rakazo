@@ -862,6 +862,35 @@ describe("WindowsOpenCliBackend", () => {
     }
   });
 
+  it("does not revive an expired in-memory session through recover", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-10-03T00:00:00Z"));
+      const { backend, runner } = fixture();
+      const token = await openSession(backend, "bot-a");
+      vi.setSystemTime(new Date("2026-10-03T00:31:00Z"));
+
+      expect(
+        await backend.browser("bot-a", {
+          command: "recover",
+          sessionToken: token,
+        }),
+      ).toEqual({
+        ok: false,
+        error: "Browser session expired; open a new session first",
+      });
+      expect(runner).not.toHaveBeenCalled();
+      await expect(
+        backend.browser("bot-a", {
+          command: "snapshot",
+          sessionToken: token,
+        }),
+      ).rejects.toThrow("Unknown browser session");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("enforces origin checks before entering content", async () => {
     const { backend, runner } = fixture();
     const token = await openSession(backend, "bot-a");
