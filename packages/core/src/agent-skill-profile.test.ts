@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { buildSkillMd } from "./agent-skill.js";
 import {
   analyzeRcclSkillMd,
   buildRcclSkillTemplate,
   RCCL_SKILL_PROFILE_VERSION,
 } from "./agent-skill-profile.js";
-import { buildSkillMd } from "./agent-skill.js";
 
 describe("RCCL Skill Profile", () => {
   it("builds a strict-ready canonical template", () => {
