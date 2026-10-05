@@ -144,6 +144,31 @@ describe("project capability profile resolver", () => {
     );
   });
 
+  it("does not accept a write tool for a read-only semantic requirement", async () => {
+    const result = await resolveProjectCapabilityProfile(
+      reader({
+        "capabilities/tools": [
+          {
+            name: "research_search",
+            readOnly: false,
+            route: {
+              connectorId: "installed",
+              toolName: "research_search",
+              resourceId: "cap-research",
+            },
+          },
+        ],
+      }),
+      "project-1",
+    );
+    const resolutions = result.resolutions as Array<Record<string, unknown>>;
+
+    expect(result.readyForRequiredWork).toBe(false);
+    expect(resolutions).toContainEqual(
+      expect.objectContaining({ requirement: "research.web", status: "stale" }),
+    );
+  });
+
   it("rejects malformed active profile metadata", async () => {
     const result = await resolveProjectCapabilityProfile(
       reader({
