@@ -130,6 +130,31 @@ function parseOpenCliPageId(output: string): string | undefined {
   }
 }
 
+function browserSessionName(botId: string, token: string): string {
+  return `rakazo-${botId}-${token.replace(/-/gu, "")}`;
+}
+
+function parseOpenCliPageIds(output: string): string[] | undefined {
+  try {
+    const parsed = JSON.parse(output) as unknown;
+    if (!Array.isArray(parsed)) return undefined;
+    const seen = new Set<string>();
+    const pageIds: string[] = [];
+    for (const entry of parsed) {
+      if (typeof entry !== "object" || entry === null || !("page" in entry)) return undefined;
+      const page = (entry as { page?: unknown }).page;
+      if (typeof page !== "string") return undefined;
+      const pageId = page.trim();
+      if (!pageId || pageId.length > 256 || seen.has(pageId)) return undefined;
+      seen.add(pageId);
+      pageIds.push(pageId);
+    }
+    return pageIds;
+  } catch {
+    return undefined;
+  }
+}
+
 function parseStateOutput(output: string): { tree: string; url?: string } {
   const match = /^URL:\s*(.+?)(?:\r?\n|$)/u.exec(output);
   if (!match) return { tree: output.slice(0, MAX_OUTPUT_BYTES) };
@@ -220,6 +245,64 @@ export class WindowsOpenCliBackend {
     }
 
     const token = request.sessionToken;
+    const session = browserSessionName(botId, token);
+    const invoke = (...args: string[]) =>
+      this.runner(this.config.entry, [
+        ...(this.config.profile ? ["--profile", this.config.profile] : []),
+        "browser",
+        session,
+        ...args,
+      ]);
+
+    if (request.command === "recover") {
+      const existing = this.sessions.get(token);
+      if (existing) {
+        if (existing.botId !== botId) {
+          throw new Error("Unknown browser session; open a new session first");
+        }
+        existing.lastActivity = Date.now();
+        return { ok: true, sessionToken: token, pageIds: [...existing.ownedPages] };
+      }
+
+      const now = Date.now();
+      for (const [existingToken, state] of this.sessions) {
+        if (now - state.lastActivity >= SESSION_TOKEN_TTL_MS) {
+          this.sessions.delete(existingToken);
+          this.observations.delete(existingToken);
+        }
+      }
+      if (this.sessions.size >= MAX_ACTIVE_SESSIONS) {
+        throw new Error(
+          "Too many live browser sessions; close your own session or wait for expiry",
+        );
+      }
+
+      let listed: string;
+      try {
+        listed = await invoke("tab", "list");
+      } catch {
+        return { ok: false, error: "Browser session recovery failed" };
+      }
+      const pageIds = parseOpenCliPageIds(listed);
+      if (!pageIds) {
+        return { ok: false, error: "OpenCLI returned an invalid tab list during recovery" };
+      }
+      if (pageIds.length === 0) {
+        return { ok: false, error: "No recoverable owned browser tabs found for this session token" };
+      }
+      if (pageIds.length > MAX_OWNED_TABS) {
+        return { ok: false, error: "OpenCLI returned too many tabs for safe recovery" };
+      }
+
+      this.sessions.set(token, {
+        botId,
+        lastActivity: now,
+        ownedPages: new Set(pageIds),
+      });
+      this.observations.delete(token);
+      return { ok: true, sessionToken: token, pageIds };
+    }
+
     const owned = this.sessions.get(token);
     if (!owned || owned.botId !== botId) {
       throw new Error("Unknown browser session; open a new session first");
@@ -230,14 +313,6 @@ export class WindowsOpenCliBackend {
       throw new Error("Browser session expired; open a new session first");
     }
     owned.lastActivity = Date.now();
-    const session = "rakazo-" + botId + "-" + token.replace(/-/gu, "");
-    const invoke = (...args: string[]) =>
-      this.runner(this.config.entry, [
-        ...(this.config.profile ? ["--profile", this.config.profile] : []),
-        "browser",
-        session,
-        ...args,
-      ]);
     const rememberPage = (output: string): string | undefined => {
       const pageId = parseOpenCliPageId(output);
       if (pageId) owned.ownedPages.add(pageId);
