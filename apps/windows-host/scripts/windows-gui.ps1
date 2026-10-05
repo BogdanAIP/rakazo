@@ -1,6 +1,9 @@
 # Rakazo-owned Windows desktop backend. Reads one bounded JSON request from stdin.
 # No HTTP listener, credentials, planner, dynamic PowerShell source or independent LLM.
 $ErrorActionPreference = "Stop"
+$utf8 = [System.Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8
+[Console]::OutputEncoding = $utf8
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 $script:UiaAvailable = $true
