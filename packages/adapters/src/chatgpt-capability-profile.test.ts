@@ -78,7 +78,7 @@ describe("project capability profile resolver", () => {
     expect(result).toMatchObject({
       assigned: true,
       valid: true,
-      readyForRequiredWork: true,
+      requiredSurfacePresent: true,
       linkedBotIds: ["bot-1"],
       runningComputerBotIds: ["bot-1"],
     });
@@ -138,7 +138,7 @@ describe("project capability profile resolver", () => {
       "project-1",
     );
     const resolutions = result.resolutions as Array<Record<string, unknown>>;
-    expect(result.readyForRequiredWork).toBe(false);
+    expect(result.requiredSurfacePresent).toBe(false);
     expect(resolutions).toContainEqual(
       expect.objectContaining({ requirement: "research.web", status: "stale" }),
     );
@@ -163,7 +163,7 @@ describe("project capability profile resolver", () => {
     );
     const resolutions = result.resolutions as Array<Record<string, unknown>>;
 
-    expect(result.readyForRequiredWork).toBe(false);
+    expect(result.requiredSurfacePresent).toBe(false);
     expect(resolutions).toContainEqual(
       expect.objectContaining({ requirement: "research.web", status: "stale" }),
     );
