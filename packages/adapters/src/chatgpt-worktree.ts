@@ -191,7 +191,8 @@ async function verifyWorktree(
     "--show-toplevel",
   ]);
   assertOk(top, "git rev-parse --show-toplevel");
-  if (canonicalPath(top.stdout) !== canonicalPath(expectedPath)) {
+  const actualPath = top.stdout.trim();
+  if (canonicalPath(actualPath) !== canonicalPath(expectedPath)) {
     throw new Error("Verified worktree root differs from requested path");
   }
 
@@ -215,7 +216,7 @@ async function verifyWorktree(
     "HEAD",
   ]);
   assertOk(headResult, "git rev-parse HEAD");
-  return { path: expectedPath, branch, head: headResult.stdout.trim() };
+  return { path: actualPath, branch, head: headResult.stdout.trim() };
 }
 
 export async function manageProjectWorktree(
@@ -294,16 +295,41 @@ export async function manageProjectWorktree(
       }
       const baseRef = input.baseRef?.trim();
       if (!baseRef) throw new Error("baseRef is required when the local branch does not exist");
-      if (baseRef.startsWith("-")) throw new Error("baseRef must not start with '-'");
-      const base = await git(call, input.computerBotId, [
+      if (!/^[0-9a-fA-F]{40}$/.test(baseRef)) {
+        throw new Error("baseRef must be an exact 40-character commit SHA");
+      }
+
+      let base = await git(call, input.computerBotId, [
         "-C",
         input.repoPath,
         "rev-parse",
         "--verify",
         baseRef + "^{commit}",
       ]);
+      if (base.code !== 0) {
+        const fetched = await git(call, input.computerBotId, [
+          "-C",
+          input.repoPath,
+          "fetch",
+          "--no-tags",
+          "origin",
+          baseRef,
+        ]);
+        assertOk(fetched, "git fetch exact base commit");
+        base = await git(call, input.computerBotId, [
+          "-C",
+          input.repoPath,
+          "rev-parse",
+          "--verify",
+          baseRef + "^{commit}",
+        ]);
+      }
       assertOk(base, "git rev-parse baseRef");
-      addArgs = ["-C", input.repoPath, "worktree", "add", "-b", branch, worktreePath, baseRef];
+      const resolvedBase = base.stdout.trim();
+      if (resolvedBase.toLowerCase() !== baseRef.toLowerCase()) {
+        throw new Error("Resolved base commit differs from requested baseRef");
+      }
+      addArgs = ["-C", input.repoPath, "worktree", "add", "-b", branch, worktreePath, resolvedBase];
     }
 
     const added = await git(call, input.computerBotId, addArgs);
