@@ -14,6 +14,7 @@ import {
 import {
   applyApprovedTradingPaperProtectiveExitControl,
   PaperProtectiveExitAuthorityIntegrityError,
+  readTradingPaperProtectiveExitAuthorityUseStatus,
   readVerifiedTradingPaperProtectiveExitAuthority,
 } from "./trading-paper-protective-exit-authority.js";
 import {
@@ -2861,6 +2862,96 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       (await readVerifiedTradingPaperProtectiveExitAuthority(second.prisma, owner, effect.id))
         ?.authoritySha256,
     ).toBe(authorityRow.authoritySha256);
+  });
+
+  it("P11C-12 verifies protective exit authority usability without mutation", async () => {
+    const ledgerId = `paper-c1-fill-${suffix}`;
+    const authority = await first.prisma.tradingPaperProtectiveExitAuthority.findFirstOrThrow({
+      where: { ledgerId },
+      orderBy: { authorizedAt: "desc" },
+    });
+    const before = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);
+    const policyBefore = await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId);
+    const eventsBefore = await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } });
+    const outboxBefore = await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } });
+    const guardsBefore = await first.prisma.tradingPaperStopGuard.count({ where: { ledgerId } });
+
+    const usableAt = new Date(authority.authorizedAt.getTime() + 30_000);
+    await expect(
+      readTradingPaperProtectiveExitAuthorityUseStatus(
+        second.prisma,
+        owner,
+        authority.effectId,
+        usableAt,
+      ),
+    ).resolves.toMatchObject({
+      status: "usable",
+      mode: "paper_only",
+      effectId: authority.effectId,
+      ledgerId,
+      positionId: authority.positionId,
+      policyRevision: authority.policyRevision,
+      buyFillEventSequence: authority.buyFillEventSequence,
+      stopPriceQuote: authority.stopPriceQuote,
+    });
+    await expect(
+      readTradingPaperProtectiveExitAuthorityUseStatus(
+        second.prisma,
+        owner,
+        authority.effectId,
+        authority.expiresAt,
+      ),
+    ).resolves.toEqual({
+      status: "deny",
+      mode: "paper_only",
+      effectId: authority.effectId,
+      reason: "authority_expired",
+    });
+
+    const effect = await first.prisma.externalEffect.findUniqueOrThrow({
+      where: { id: authority.effectId },
+    });
+    await first.prisma.externalEffect.update({
+      where: { id: authority.effectId },
+      data: { status: "executing" },
+    });
+    await expect(
+      readTradingPaperProtectiveExitAuthorityUseStatus(
+        second.prisma,
+        owner,
+        authority.effectId,
+        usableAt,
+      ),
+    ).rejects.toBeInstanceOf(PaperProtectiveExitAuthorityIntegrityError);
+    await first.prisma.externalEffect.update({
+      where: { id: authority.effectId },
+      data: { status: effect.status },
+    });
+    await expect(
+      readTradingPaperProtectiveExitAuthorityUseStatus(
+        second.prisma,
+        owner,
+        authority.effectId,
+        usableAt,
+      ),
+    ).resolves.toMatchObject({ status: "usable" });
+
+    expect(await readVerifiedTradingPaperLedger(second.prisma, owner, ledgerId)).toEqual(before);
+    expect(await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId)).toEqual(
+      policyBefore,
+    );
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(
+      eventsBefore,
+    );
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+      outboxBefore,
+    );
+    expect(await first.prisma.tradingPaperStopGuard.count({ where: { ledgerId } })).toBe(
+      guardsBefore,
+    );
+    expect(
+      await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_sell" } }),
+    ).toBe(0);
   });
 
   it("P11C-8 rejects a forged inert-outbox delivery marker without money mutation", async () => {

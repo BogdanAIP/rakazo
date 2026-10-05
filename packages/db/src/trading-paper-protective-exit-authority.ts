@@ -179,6 +179,210 @@ export async function readVerifiedTradingPaperProtectiveExitAuthority(
   );
 }
 
+export type PaperProtectiveExitAuthorityUseStatus =
+  | {
+      status: "usable";
+      mode: "paper_only";
+      effectId: string;
+      ledgerId: string;
+      positionId: string;
+      policyRevision: number;
+      buyFillEventSequence: number;
+      stopPriceQuote: string;
+      authorizedAt: string;
+      expiresAt: string;
+    }
+  | {
+      status: "deny";
+      mode: "paper_only";
+      effectId: string;
+      reason:
+        | "authority_unavailable"
+        | "authority_expired"
+        | "policy_revision_changed"
+        | "kill_switch_not_latched"
+        | "reconciliation_required"
+        | "position_unavailable"
+        | "authority_scope_changed";
+      currentPolicyRevision?: number;
+    };
+
+function completedEffectResult(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/** INTERNAL READ-ONLY verifier for a future protective close writer.
+ * This never consumes authority and never mutates policy, ledger, outbox or guards. */
+export async function assessTradingPaperProtectiveExitAuthorityInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  effectId: string,
+  now: Date,
+): Promise<PaperProtectiveExitAuthorityUseStatus> {
+  if (!Number.isFinite(now.getTime())) {
+    throw new PaperProtectiveExitAuthorityIntegrityError("Invalid protective exit authority clock");
+  }
+  const authority = await verifyTradingPaperProtectiveExitAuthorityInTransaction(
+    tx,
+    owner,
+    effectId,
+  );
+  if (!authority) {
+    return { status: "deny", mode: "paper_only", effectId, reason: "authority_unavailable" };
+  }
+
+  const effect = await tx.externalEffect.findUnique({
+    where: { id: effectId },
+    include: { run: { select: { id: true, spaceId: true, userId: true } } },
+  });
+  if (
+    !effect ||
+    effect.status !== "completed" ||
+    effect.kind !== "paper_position_control" ||
+    effect.spaceId !== owner.spaceId ||
+    effect.run.id !== authority.runId ||
+    effect.run.spaceId !== owner.spaceId ||
+    effect.run.userId !== owner.userId
+  ) {
+    throw new PaperProtectiveExitAuthorityIntegrityError(
+      "Protective exit authority lacks completed explicit approval provenance",
+    );
+  }
+  const request = parseRequest(effect.request);
+  if (
+    request.ledgerId !== authority.ledgerId ||
+    request.positionId !== authority.positionId ||
+    request.expectedPolicyRevision !== authority.policyRevision
+  ) {
+    throw new PaperProtectiveExitAuthorityIntegrityError(
+      "Protective exit approval request disagrees with authority",
+    );
+  }
+  const result = completedEffectResult(effect.result);
+  if (
+    result?.ok !== true ||
+    result.mode !== "paper_only" ||
+    result.action !== ACTION ||
+    result.ledgerId !== authority.ledgerId ||
+    result.positionId !== authority.positionId ||
+    result.policyRevision !== authority.policyRevision ||
+    result.enabled !== false ||
+    result.killSwitch !== true ||
+    result.authorityEffectId !== effectId ||
+    result.authorizedAt !== authority.authorizedAt ||
+    result.expiresAt !== authority.expiresAt
+  ) {
+    throw new PaperProtectiveExitAuthorityIntegrityError(
+      "Protective exit approval result disagrees with authority",
+    );
+  }
+
+  const nowMs = now.getTime();
+  if (
+    nowMs < Date.parse(authority.authorizedAt) ||
+    nowMs >= Date.parse(authority.expiresAt)
+  ) {
+    return { status: "deny", mode: "paper_only", effectId, reason: "authority_expired" };
+  }
+
+  const policy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, authority.ledgerId);
+  if (policy.revision !== authority.policyRevision) {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      effectId,
+      reason: "policy_revision_changed",
+      currentPolicyRevision: policy.revision,
+    };
+  }
+  if (policy.policy.enabled || !policy.policy.killSwitch) {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      effectId,
+      reason: "kill_switch_not_latched",
+      currentPolicyRevision: policy.revision,
+    };
+  }
+
+  const lifecycle = await auditTradingPaperLifecycleInTransaction(
+    tx,
+    owner,
+    authority.ledgerId,
+    now,
+  );
+  if (lifecycle.openReservations > 0) {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      effectId,
+      reason: "reconciliation_required",
+      currentPolicyRevision: policy.revision,
+    };
+  }
+  const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, authority.ledgerId);
+  const position = recovered.state.positions.find(
+    (entry) => entry.positionId === authority.positionId,
+  );
+  if (!position) {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      effectId,
+      reason: "position_unavailable",
+      currentPolicyRevision: policy.revision,
+    };
+  }
+  const guards = await verifyTradingPaperStopGuardsInTransaction(
+    tx,
+    authority.ledgerId,
+    recovered.events,
+    recovered.state,
+  );
+  const guard = guards?.find((entry) => entry.positionId === authority.positionId);
+  if (
+    !guard ||
+    guard.openedSequence !== authority.buyFillEventSequence ||
+    guard.stopPriceQuote !== authority.stopPriceQuote
+  ) {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      effectId,
+      reason: "authority_scope_changed",
+      currentPolicyRevision: policy.revision,
+    };
+  }
+  return {
+    status: "usable",
+    mode: "paper_only",
+    effectId,
+    ledgerId: authority.ledgerId,
+    positionId: authority.positionId,
+    policyRevision: authority.policyRevision,
+    buyFillEventSequence: authority.buyFillEventSequence,
+    stopPriceQuote: authority.stopPriceQuote,
+    authorizedAt: authority.authorizedAt,
+    expiresAt: authority.expiresAt,
+  };
+}
+
+export async function readTradingPaperProtectiveExitAuthorityUseStatus(
+  prisma: Db,
+  owner: Owner,
+  effectId: string,
+  now: Date = new Date(),
+): Promise<PaperProtectiveExitAuthorityUseStatus> {
+  return withTransactionRetry(() =>
+    prisma.$transaction(
+      (tx) => assessTradingPaperProtectiveExitAuthorityInTransaction(tx, owner, effectId, now),
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    ),
+  );
+}
+
 /** Applies an already claimed explicit owner approval. Authority creation only:
  * no policy toggle, ledger event, synthetic close, quote read or broker I/O. */
 export async function applyApprovedTradingPaperProtectiveExitControl(
