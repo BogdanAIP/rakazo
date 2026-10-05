@@ -290,6 +290,31 @@ export async function callRakazoRpc(
   return callable(payload);
 }
 
+const computerUiaSnapshotSchema = z.object({
+  source: z.literal("uia"),
+  observationId: z.string().regex(/^[a-f0-9]{64}$/u),
+  truncated: z.boolean(),
+  elements: z.array(
+    z.object({
+      ref: z.string().regex(/^u\d{1,4}$/u),
+      role: z.string(),
+      name: z.string(),
+      automationId: z.string().optional(),
+      className: z.string().optional(),
+      enabled: z.boolean().optional(),
+      focused: z.boolean().optional(),
+      rect: z
+        .object({
+          x: z.number().int(),
+          y: z.number().int(),
+          width: z.number().int().positive(),
+          height: z.number().int().positive(),
+        })
+        .optional(),
+    }),
+  ),
+});
+
 const computerObservationSchema = z.object({
   frameId: z.string(),
   capturedAt: z.string(),
@@ -299,6 +324,7 @@ const computerObservationSchema = z.object({
   height: z.number().int().positive(),
   cursor: z.object({ x: z.number(), y: z.number() }).optional(),
   activeWindow: z.object({ id: z.string(), title: z.string().optional() }).optional(),
+  uia: computerUiaSnapshotSchema.optional(),
 });
 
 export type RakazoComputerObservation = z.infer<typeof computerObservationSchema>;
@@ -317,6 +343,32 @@ export type RakazoComputerAction =
 
 export async function observeRakazoComputer(botId: string): Promise<RakazoComputerObservation> {
   return computerObservationSchema.parse(await callRakazoRpc("computer/observe", { botId }));
+}
+
+export async function actRakazoUia(
+  botId: string,
+  semantic: {
+    observationId: string;
+    windowId: string;
+    ref: string;
+    action: "focus" | "invoke" | "click";
+  },
+  options: { observe?: boolean; settleMs?: number } = {},
+): Promise<{ completed: 1; observation?: RakazoComputerObservation }> {
+  const output = z
+    .object({
+      completed: z.literal(1),
+      observation: computerObservationSchema.optional(),
+    })
+    .parse(
+      await callRakazoRpc("computer/uiaAct", {
+        botId,
+        semantic,
+        observe: options.observe ?? true,
+        ...(options.settleMs === undefined ? {} : { settleMs: options.settleMs }),
+      }),
+    );
+  return output;
 }
 
 export async function actRakazoComputer(
