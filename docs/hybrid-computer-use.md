@@ -92,14 +92,63 @@ existing R tunnel. No new browser profile, server, LLM or Codex OAuth is needed.
   guards; coordinate/pixel input remains the fallback rather than the primary
   targeting model.
 
-## Follow-up slices
+## P3b: guarded UIA semantic actions
 
-P2b: current-tab bind only after a trustworthy local user-confirmation primitive
-can prove intentional handoff of the active tab; raw bind/unbind stay unexposed
-until then. P3b: guarded UIA semantic actions inside Windows Host.
-P4: durable verification and failure reconciliation, never blindly repeating
-uncertain actions. P5: before/after speed, model/process-call and recovery
-benchmarks.
+- A semantic action accepts only the observation-local UIA ref returned by a
+  prior Rakazo observation plus the exact foreground window id and a SHA-256
+  observationId for that bounded UIA tree.
+- Windows Host supports only focus, InvokePattern invoke, and a guarded center
+  click using the current UIA bounding rectangle. It does not expose arbitrary
+  UIA patterns, unrestricted value setting, raw PowerShell, process-wide window
+  enumeration, or another UI agent.
+- Immediately before acting, the native script verifies that the foreground
+  window and UIA tree still match the caller's observation. After resolving the
+  local ref it verifies the same window/tree again to narrow the race window.
+  Stale state fails closed and requires a fresh observation.
+- The normal Rakazo Computer control lease still applies. Semantic refs are not
+  authority and cannot bypass takeover, Project policy, or Computer ownership.
+- Coordinate/pixel input remains a fallback for applications whose UIA tree is
+  incomplete.
+
+## P4: durable uncertain-action recovery
+
+- Before every semantic UIA mutation, Windows Host writes a small recovery
+  latch under the Rakazo Windows Host local state directory.
+- The latch is cleared only after the host receives a definite successful
+  result, or after a fresh observation explicitly re-establishes current state.
+- If the PowerShell child, Windows Host, transport, or caller disappears while
+  the mutation outcome is uncertain, the latch survives restart and blocks
+  another semantic mutation until a new observation.
+- This prevents blind retry of a potentially completed click/invoke. A
+  deterministic stale/unsupported-control failure may conservatively require
+  one extra observation; safety is preferred over guessing.
+- No action replay log is introduced in this slice. Recovery is deliberately
+  fail-closed rather than trying to infer whether an uncertain mutation should
+  be repeated.
+
+## P5: physical observation benchmark
+
+A read-only physical Windows acceptance run on 2026-10-05 used the checked-in
+PowerShell executor directly three times with the same foreground window. The
+cold/warm observation times were 1894 ms, 1127 ms and 1107 ms; median 1127 ms.
+Each run returned 68 UIA ControlView elements, truncated=false, and a valid
+64-hex observationId.
+
+The earlier browser optimization remains relevant: OpenCLI snapshot normally
+uses two CLI processes after parsing the URL from state, with a bounded fallback
+to the previous extra URL lookup when the header is unavailable. Owned-session
+recovery remains one bounded tab-list probe after a short host restart.
+
+These measurements are a practical baseline, not a claim that UIA is always
+faster than screenshot/vision. The intended win is fewer ambiguous visual
+targeting steps when a useful semantic tree exists, while preserving the visual
+fallback when it does not.
+
+## Remaining optional slice
+
+P2b remains intentionally deferred: current-tab bind should be exposed only
+after a trustworthy local user-confirmation primitive proves intentional
+handoff of the active tab. Raw bind/unbind remain unexposed.
 
 This PR alone is source code, not a deployment: upgrade the native controller
 only after CI, safe checkout review, and a normal planned restart. Keep the
