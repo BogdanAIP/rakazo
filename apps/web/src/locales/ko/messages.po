@@ -3004,8 +3004,12 @@ msgid "Read replies aloud"
 msgstr "답변을 자동으로 읽기"
 
 #: src/pages/KnowledgeSection.tsx
-msgid "read-only"
-msgstr "읽기 전용"
+msgid "Built-in"
+msgstr "기본 제공"
+
+#: src/pages/KnowledgeSection.tsx
+msgid "Plugin"
+msgstr "플러그인"
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -3553,8 +3557,8 @@ msgid "Skill {0}"
 msgstr "작업 기술 {0}"
 
 #: src/pages/KnowledgeSection.tsx
-msgid "Skills"
-msgstr "스킬"
+msgid "Shared skills"
+msgstr "공유 스킬"
 
 #: src/components/integrations/IntegrationSetup.tsx
 #: src/pages/Shell.tsx

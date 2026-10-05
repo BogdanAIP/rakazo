@@ -3004,8 +3004,12 @@ msgid "Read replies aloud"
 msgstr "Lire les réponses à voix haute"
 
 #: src/pages/KnowledgeSection.tsx
-msgid "read-only"
-msgstr "lecture seule"
+msgid "Built-in"
+msgstr "Intégré"
+
+#: src/pages/KnowledgeSection.tsx
+msgid "Plugin"
+msgstr "Plugin"
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -3553,8 +3557,8 @@ msgid "Skill {0}"
 msgstr "Compétence {0}"
 
 #: src/pages/KnowledgeSection.tsx
-msgid "Skills"
-msgstr "Compétences"
+msgid "Shared skills"
+msgstr "Compétences partagées"
 
 #: src/components/integrations/IntegrationSetup.tsx
 #: src/pages/Shell.tsx
