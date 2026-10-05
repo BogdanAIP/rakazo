@@ -243,10 +243,7 @@ function uniqueRequirements(
 export function isSemanticCapabilityRequirement(
   value: unknown,
 ): value is SemanticCapabilityRequirement {
-  return (
-    typeof value === "string" &&
-    Object.hasOwn(SEMANTIC_CAPABILITY_REQUIREMENTS, value)
-  );
+  return typeof value === "string" && Object.hasOwn(SEMANTIC_CAPABILITY_REQUIREMENTS, value);
 }
 
 function requirements(value: unknown): SemanticCapabilityRequirement[] | null {
