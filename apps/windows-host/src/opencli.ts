@@ -348,7 +348,7 @@ export class WindowsOpenCliBackend {
       } catch (error) {
         return {
           ok: false,
-          uncertain: error instanceof Error && /outcome is uncertain/u.test(error.message),
+          uncertain: true,
           error: error instanceof Error ? error.message.slice(0, 500) : "Browser tab creation failed",
         };
       }
@@ -364,7 +364,7 @@ export class WindowsOpenCliBackend {
       } catch (error) {
         return {
           ok: false,
-          uncertain: error instanceof Error && /outcome is uncertain/u.test(error.message),
+          uncertain: true,
           error: error instanceof Error ? error.message.slice(0, 500) : "Browser tab selection failed",
         };
       }
@@ -384,7 +384,7 @@ export class WindowsOpenCliBackend {
         owned.ownedPages.delete(request.pageId);
         return {
           ok: false,
-          uncertain: error instanceof Error && /outcome is uncertain/u.test(error.message),
+          uncertain: true,
           error: error instanceof Error ? error.message.slice(0, 500) : "Browser tab close failed",
         };
       }
