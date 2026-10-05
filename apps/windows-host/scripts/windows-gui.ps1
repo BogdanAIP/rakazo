@@ -52,9 +52,13 @@ function Get-UiAutomationSnapshot($window, $screen) {
             $element = $item.Element
             try {
                 $current = $element.Current
-                $role = Limit-UiaText ([string]$current.LocalizedControlType) 100
+                $role = Limit-UiaText ([string]$current.ControlType.ProgrammaticName) 100
+                if ($role.StartsWith("ControlType.", [StringComparison]::Ordinal)) {
+                    $role = $role.Substring("ControlType.".Length)
+                }
+                $role = $role.ToLowerInvariant()
                 if ([string]::IsNullOrEmpty($role)) {
-                    $role = Limit-UiaText ([string]$current.ControlType.ProgrammaticName) 100
+                    $role = (Limit-UiaText ([string]$current.LocalizedControlType) 100).ToLowerInvariant()
                 }
                 $entry = [ordered]@{
                     ref = "u" + ($elements.Count + 1)
