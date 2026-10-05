@@ -60,6 +60,8 @@ import {
 } from "./trading-paper-worker-gate.js";
 import {
   applyApprovedTradingPaperWorkerRecurrenceControl,
+  PaperWorkerRecurrenceIntegrityError,
+  readTradingPaperWorkerRecurrencePreflight,
   readVerifiedTradingPaperWorkerRecurrence,
 } from "./trading-paper-worker-recurrence-gate.js";
 
@@ -3702,6 +3704,119 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     );
     expect(await readVerifiedTradingPaperWorkerGate(second.prisma, owner, ledgerId)).toEqual(
       workerBefore,
+    );
+  });
+
+  it("P11D-7 revalidates recurrence approval and exact worker gate before successors", async () => {
+    const ledgerId = `paper-d6-recurrence-${suffix}`;
+    const policy = await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId);
+    expect(policy.policy).toMatchObject({ enabled: true, killSwitch: false });
+    await expect(
+      readTradingPaperWorkerRecurrencePreflight(second.prisma, owner, ledgerId),
+    ).resolves.toEqual({
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "recurrence_disabled",
+    });
+
+    const routineCountBefore = await first.prisma.routine.count({
+      where: { spaceId: owner.spaceId, userId: owner.userId },
+    });
+    const eventsBefore = await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } });
+    const outboxBefore = await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } });
+
+    const enable = await makePaperWorkerRecurrenceEffect(
+      ledgerId,
+      "d7-recurrence-enable",
+      "enable",
+      1,
+    );
+    await expect(
+      applyApprovedTradingPaperWorkerRecurrenceControl(second.prisma, owner, enable.id),
+    ).resolves.toMatchObject({
+      ok: true,
+      enabled: true,
+      gateRevision: 1,
+      recurrenceRevision: 3,
+    });
+    await expect(
+      readTradingPaperWorkerRecurrencePreflight(second.prisma, owner, ledgerId),
+    ).resolves.toMatchObject({
+      status: "ready",
+      mode: "paper_only",
+      ledgerId,
+      cadenceMinutes: 15,
+      gateRevision: 1,
+      recurrenceRevision: 3,
+      recurrenceApprovalEffectId: enable.id,
+    });
+
+    const approvedEffect = await first.prisma.externalEffect.findUniqueOrThrow({
+      where: { id: enable.id },
+    });
+    await first.prisma.externalEffect.update({
+      where: { id: enable.id },
+      data: { status: "executing" },
+    });
+    await expect(
+      readTradingPaperWorkerRecurrencePreflight(second.prisma, owner, ledgerId),
+    ).rejects.toBeInstanceOf(PaperWorkerRecurrenceIntegrityError);
+    await first.prisma.externalEffect.update({
+      where: { id: enable.id },
+      data: { status: approvedEffect.status },
+    });
+    await expect(
+      readTradingPaperWorkerRecurrencePreflight(second.prisma, owner, ledgerId),
+    ).resolves.toMatchObject({ status: "ready", gateRevision: 1 });
+
+    const disableWorker = await makePaperWorkerControlEffect(
+      ledgerId,
+      "d7-worker-disable",
+      "disable",
+      policy.revision,
+    );
+    await expect(
+      applyApprovedTradingPaperWorkerControl(second.prisma, owner, disableWorker.id),
+    ).resolves.toMatchObject({ ok: true, enabled: false, gateRevision: 2 });
+    await expect(
+      readTradingPaperWorkerRecurrencePreflight(second.prisma, owner, ledgerId),
+    ).resolves.toEqual({
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "worker_preflight_denied",
+      workerReason: "worker_gate_disabled",
+    });
+
+    const reenableWorker = await makePaperWorkerControlEffect(
+      ledgerId,
+      "d7-worker-reenable",
+      "enable",
+      policy.revision,
+      15,
+    );
+    await expect(
+      applyApprovedTradingPaperWorkerControl(second.prisma, owner, reenableWorker.id),
+    ).resolves.toMatchObject({ ok: true, enabled: true, gateRevision: 3 });
+    await expect(
+      readTradingPaperWorkerRecurrencePreflight(second.prisma, owner, ledgerId),
+    ).resolves.toEqual({
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "recurrence_gate_changed",
+      currentGateRevision: 3,
+    });
+
+    expect(
+      await first.prisma.routine.count({ where: { spaceId: owner.spaceId, userId: owner.userId } }),
+    ).toBe(routineCountBefore);
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(
+      eventsBefore,
+    );
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+      outboxBefore,
     );
   });
 

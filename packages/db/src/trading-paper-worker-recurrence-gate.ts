@@ -172,6 +172,150 @@ function asInputJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
+export type TradingPaperWorkerRecurrencePreflight =
+  | {
+      status: "ready";
+      mode: "paper_only";
+      ledgerId: string;
+      cadenceMinutes: number;
+      gateRevision: number;
+      recurrenceRevision: number;
+      recurrenceApprovalEffectId: string;
+      workerApprovalEffectId: string;
+      paperApprovalEffectId: string;
+    }
+  | {
+      status: "deny";
+      mode: "paper_only";
+      ledgerId: string;
+      reason: "recurrence_disabled" | "recurrence_gate_changed" | "worker_preflight_denied";
+      workerReason?: string;
+      currentGateRevision?: number;
+    };
+
+function objectResult(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+async function verifyEnabledRecurrenceApprovalInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  recurrence: Extract<TradingPaperWorkerRecurrenceStatus, { configured: true }>,
+): Promise<void> {
+  if (!recurrence.enabled) {
+    throw new PaperWorkerRecurrenceIntegrityError("Enabled recurrence permission expected");
+  }
+  const effect = await tx.externalEffect.findUnique({
+    where: { id: recurrence.approvalEffectId },
+    include: { run: { select: { spaceId: true, userId: true } } },
+  });
+  if (
+    effect?.status !== "completed" ||
+    effect.kind !== "paper_worker_recurrence_control" ||
+    effect.spaceId !== owner.spaceId ||
+    effect.run.spaceId !== owner.spaceId ||
+    effect.run.userId !== owner.userId
+  ) {
+    throw new PaperWorkerRecurrenceIntegrityError(
+      "Paper worker recurrence lacks completed explicit approval provenance",
+    );
+  }
+  const request = parseRequest(effect.request);
+  const result = objectResult(effect.result);
+  if (
+    request.action !== "enable" ||
+    request.ledgerId !== recurrence.ledgerId ||
+    request.expectedGateRevision !== recurrence.gateRevision ||
+    result?.ok !== true ||
+    result.mode !== "paper_only" ||
+    result.action !== "enable" ||
+    result.ledgerId !== recurrence.ledgerId ||
+    result.enabled !== true ||
+    result.gateRevision !== recurrence.gateRevision ||
+    result.recurrenceRevision !== recurrence.recurrenceRevision
+  ) {
+    throw new PaperWorkerRecurrenceIntegrityError(
+      "Paper worker recurrence approval disagrees with persisted permission",
+    );
+  }
+}
+
+export async function assessTradingPaperWorkerRecurrencePreflightInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  ledgerId: string,
+  now: Date,
+): Promise<TradingPaperWorkerRecurrencePreflight> {
+  if (!Number.isFinite(now.getTime())) {
+    throw new PaperWorkerRecurrenceIntegrityError("Invalid recurrence preflight clock");
+  }
+  await requireOwnedLedger(tx, owner, ledgerId);
+  const row = await tx.tradingPaperWorkerRecurrence.findUnique({ where: { ledgerId } });
+  if (!row) {
+    return { status: "deny", mode: "paper_only", ledgerId, reason: "recurrence_disabled" };
+  }
+  if (row.spaceId !== owner.spaceId || row.userId !== owner.userId) {
+    throw new PaperWorkerRecurrenceIntegrityError("Paper worker recurrence owner mismatch");
+  }
+  const recurrence = normalizeRecurrence(row);
+  if (!recurrence.enabled) {
+    return { status: "deny", mode: "paper_only", ledgerId, reason: "recurrence_disabled" };
+  }
+  await verifyEnabledRecurrenceApprovalInTransaction(tx, owner, recurrence);
+
+  const worker = await assessTradingPaperWorkerWakePreflightInTransaction(
+    tx,
+    owner,
+    ledgerId,
+    now,
+  );
+  if (worker.status !== "ready") {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "worker_preflight_denied",
+      workerReason: worker.reason,
+    };
+  }
+  if (worker.gateRevision !== recurrence.gateRevision) {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "recurrence_gate_changed",
+      currentGateRevision: worker.gateRevision,
+    };
+  }
+  return {
+    status: "ready",
+    mode: "paper_only",
+    ledgerId,
+    cadenceMinutes: worker.cadenceMinutes,
+    gateRevision: worker.gateRevision,
+    recurrenceRevision: recurrence.recurrenceRevision,
+    recurrenceApprovalEffectId: recurrence.approvalEffectId,
+    workerApprovalEffectId: worker.workerApprovalEffectId,
+    paperApprovalEffectId: worker.paperApprovalEffectId,
+  };
+}
+
+export async function readTradingPaperWorkerRecurrencePreflight(
+  prisma: Db,
+  owner: Owner,
+  ledgerId: string,
+  now: Date = new Date(),
+): Promise<TradingPaperWorkerRecurrencePreflight> {
+  return withTransactionRetry(() =>
+    prisma.$transaction(
+      (tx) => assessTradingPaperWorkerRecurrencePreflightInTransaction(tx, owner, ledgerId, now),
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    ),
+  );
+}
+
 export async function readVerifiedTradingPaperWorkerRecurrence(
   prisma: Db,
   owner: Owner,

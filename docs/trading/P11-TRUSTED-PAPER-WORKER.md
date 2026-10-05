@@ -194,6 +194,12 @@ Recurrence activation gets its own owner approval boundary instead of inheriting
 
 The D6 database control has no `JobPublisher`: enabling permission does not enqueue a preflight, attach the D5 planner, create a Routine, wake a model or perform trading work. A disposable PostgreSQL regression proves default-deny state, ready+exact enable, stale enable refusal, stale-safe disable, unchanged paper/worker policy, unchanged Routine count and zero ledger/outbox mutation. Production recurrence remains inactive until a later slice separately verifies this authorization at each successor and wires an enqueue.
 
+## P11D-7 — read-only recurrence successor preflight
+
+Before D5 may ever be attached to a production handler, D7 adds another serializable read-only barrier for recurrence itself. An enabled recurrence row must have a completed explicit `paper_worker_recurrence_control` enable effect whose request/result exactly match ledger, gate revision and recurrence revision. D7 then runs the full D1 worker preflight and requires that its current verified gate revision still equals the recurrence authorization.
+
+Disabled recurrence denies immediately. Tampered/incomplete recurrence approval provenance raises an integrity error. A disabled paper worker propagates a read-only worker-preflight denial; if the worker is later re-enabled at a new gate revision, the old recurrence permission remains inert with `recurrence_gate_changed` until separately re-authorized. PostgreSQL coverage proves these transitions without changing Routine count or ledger/outbox state. D7 has no JobPublisher and does not call the D5 planner, so recurrence is still not active.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.

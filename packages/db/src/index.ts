@@ -42,6 +42,7 @@ export {
 } from "./trading-paper-worker-gate.js";
 export {
   applyApprovedTradingPaperWorkerRecurrenceControl,
+  readTradingPaperWorkerRecurrencePreflight,
   readVerifiedTradingPaperWorkerRecurrence,
 } from "./trading-paper-worker-recurrence-gate.js";
 export * from "./transaction-retry.js";
