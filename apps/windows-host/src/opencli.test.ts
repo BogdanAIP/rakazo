@@ -18,7 +18,8 @@ function fixture(profile = "quxmf8xh") {
       urls.delete(session);
       return "closed";
     }
-    if (command[0] === "state") return `URL: ${urls.get(session) ?? "https://example.com/form"}\n\n${tree}`;
+    if (command[0] === "state")
+      return `URL: ${urls.get(session) ?? "https://example.com/form"}\n\n${tree}`;
     if (command[0] === "find") return '{"matches_n":1,"entries":[{"role":"button"}]}';
     if (command[0] === "wait") return '{"found":true}';
     if (command[0] === "extract") return "# Example content";
@@ -328,7 +329,9 @@ describe("WindowsOpenCliBackend", () => {
     });
     const backend = new WindowsOpenCliBackend({ entry: process.execPath, profile: "" }, runner);
     const token = await openSession(backend, "bot-a");
-    expect(await backend.browser("bot-a", { command: "snapshot", sessionToken: token })).toMatchObject({
+    expect(
+      await backend.browser("bot-a", { command: "snapshot", sessionToken: token }),
+    ).toMatchObject({
       ok: true,
       url: "https://legacy.example/form",
       title: "Legacy form",
