@@ -113,19 +113,24 @@ describe("RCCL project context compiler", () => {
 
   it("exposes the active capability profile in compiled RCCL", () => {
     const projection = baseProjection();
-    projection.resources.push({
-      id: "profile-1",
-      kind: "capability.profile",
-      ref: "active",
-      label: "Capability profile: trading-research",
-      metadata: {
-        schemaVersion: CAPABILITY_PROFILE_SCHEMA_VERSION,
-        catalogVersion: 1,
-        profile: "trading-research",
-        required: ["repo.read", "market.data"],
-        optional: ["research.web"],
-        denied: ["messaging.telegram"],
-      },
+    Object.assign(projection, {
+      resources: [
+        ...projection.resources,
+        {
+          id: "profile-1",
+          kind: "capability.profile",
+          ref: "active",
+          label: "Capability profile: trading-research",
+          metadata: {
+            schemaVersion: CAPABILITY_PROFILE_SCHEMA_VERSION,
+            catalogVersion: 1,
+            profile: "trading-research",
+            required: ["repo.read", "market.data"],
+            optional: ["research.web"],
+            denied: ["messaging.telegram"],
+          },
+        },
+      ] satisfies Array<Record<string, unknown>>,
     });
 
     const compiled = compileProjectContext(projection);
