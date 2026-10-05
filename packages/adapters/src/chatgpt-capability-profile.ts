@@ -363,7 +363,6 @@ export async function resolveProjectCapabilityProfile(
   };
 }
 
-
 export async function assignProjectCapabilityBinding(
   call: ContextReader,
   input: {
@@ -439,7 +438,6 @@ export async function assignProjectCapabilityBinding(
     projectId: input.projectId,
     binding,
     resource,
-    note:
-      "Binding records an exact already-authorized tool route. It does not install, authorize, approve or execute the tool.",
+    note: "Binding records an exact already-authorized tool route. It does not install, authorize, approve or execute the tool.",
   };
 }
