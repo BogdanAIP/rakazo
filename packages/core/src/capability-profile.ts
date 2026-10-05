@@ -245,7 +245,7 @@ export function isSemanticCapabilityRequirement(
 ): value is SemanticCapabilityRequirement {
   return (
     typeof value === "string" &&
-    Object.prototype.hasOwnProperty.call(SEMANTIC_CAPABILITY_REQUIREMENTS, value)
+    Object.hasOwn(SEMANTIC_CAPABILITY_REQUIREMENTS, value)
   );
 }
 
@@ -270,7 +270,7 @@ export function materializeCapabilityProfile(input: {
   deny?: SemanticCapabilityRequirement[];
 }): CapabilityProfileSnapshot {
   const base = getBuiltinCapabilityProfile(input.profile);
-  if (!base) throw new Error("Unknown capability profile: " + input.profile);
+  if (!base) throw new Error(`Unknown capability profile: ${input.profile}`);
 
   const denied = uniqueRequirements([...base.denied, ...(input.deny ?? [])]);
   const deniedSet = new Set(denied);
