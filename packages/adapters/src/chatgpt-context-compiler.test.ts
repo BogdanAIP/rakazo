@@ -177,9 +177,7 @@ describe("RCCL project context compiler", () => {
     const compiled = compileProjectContext(projection);
     const forbids = compiled.statements.filter((statement) => statement.tag === "FORBID");
 
-    expect(forbids).toEqual([
-      expect.objectContaining({ text: "This is an actual rule." }),
-    ]);
+    expect(forbids).toEqual([expect.objectContaining({ text: "This is an actual rule." })]);
     expect(compiled.legacyContext[0]?.text).toContain("This is only an example.");
   });
 
