@@ -170,6 +170,12 @@ Rakazo's existing background-job type system now knows a `paper.worker-preflight
 
 The worker host receives a handler, but that handler has no trading writer, market-data adapter, model runtime or recurrence logic. It calls only the D1 read-only preflight and returns internally as `ready`, `deny` or `stale_gate_revision`; a superseded gate cannot become work. Unit coverage verifies typed parsing/dispatch, malformed payload rejection, stale-revision denial and that the actual background handler neither enqueues another job nor calls run/routine model execution. D2 therefore introduces a safe queue vocabulary and inert handler, not scheduling or trading automation.
 
+## P11D-3 — one-shot preflight enqueuer primitive (no production caller)
+
+D3 prepares the first queue side effect without activating background trading. An internal adapter primitive re-runs the D1 read-only preflight at the caller's trusted clock and requires the caller's exact worker-gate revision. Only a `ready` result with that same revision can enqueue **one** typed D2 `paper.worker-preflight` job for `now + cadenceMinutes`. A denied preflight or superseded gate enqueues nothing. The ledger-scoped replace key and three-attempt cap come from the D2 job contract.
+
+The helper is deliberately **not exported from the adapters package index and has no production caller** in D3. The D2 handler still does not enqueue a successor, so there is no recurrence. The primitive has no market-data adapter, model runtime, trading writer, exchange credential or broker dependency; it can only enqueue the read-only preflight job. Unit coverage proves exact delayed payload construction, owner-scoped D1 invocation, deny/stale no-enqueue behavior and queue-failure propagation. Wiring an initial user-approved start, and later any recurrence, remains a separate review gate.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.
