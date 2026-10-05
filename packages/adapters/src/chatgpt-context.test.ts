@@ -3,6 +3,7 @@ import {
   loadChatGptContext,
   loadChatGptProjectContext,
   searchChatGptCapabilities,
+  selectChatGptProjectContextView,
 } from "./chatgpt-context.js";
 
 describe("ChatGPT shared context", () => {
@@ -215,6 +216,21 @@ describe("ChatGPT shared context", () => {
     expect((output.compiledContext as { rendered: string }).rendered).toContain(
       '[PROJECT] id="project-1"',
     );
+
+    const compact = selectChatGptProjectContextView(output, "compact");
+    expect(compact).toMatchObject({
+      project: { id: "project-1", slug: "rakazo", memoryRevision: 2 },
+      rcclVersion: "rccl-v1",
+      truncated: false,
+    });
+    expect(compact).not.toHaveProperty("resources");
+    expect(compact).not.toHaveProperty("compiledContext");
+
+    const compiled = selectChatGptProjectContextView(output, "compiled");
+    expect(compiled).toHaveProperty("compiledContext");
+    expect(compiled).not.toHaveProperty("resources");
+
+    expect(selectChatGptProjectContextView(output, "full")).toBe(output);
   });
 
   it("capability search discovers without installing or executing", async () => {
