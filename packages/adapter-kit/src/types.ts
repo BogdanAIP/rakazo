@@ -136,6 +136,33 @@ export type ComputerAction =
   | { kind: "open"; path: string }
   | { kind: "launch"; application: string; uri?: string };
 
+export interface ComputerSemanticElement {
+  ref: string;
+  role: string;
+  name: string;
+  automationId?: string;
+  className?: string;
+  enabled?: boolean;
+  focused?: boolean;
+  rect?: { x: number; y: number; width: number; height: number };
+}
+
+export interface ComputerSemanticSnapshot {
+  source: "uia";
+  observationId: string;
+  truncated: boolean;
+  elements: ComputerSemanticElement[];
+}
+
+export interface ComputerSemanticActionRequest {
+  observationId: string;
+  windowId: string;
+  ref: string;
+  action: "focus" | "invoke" | "click";
+  observe?: boolean;
+  settleMs?: number;
+}
+
 export interface ComputerObservation {
   frameId: string;
   capturedAt: string;
@@ -145,6 +172,7 @@ export interface ComputerObservation {
   height: number;
   cursor?: { x: number; y: number };
   activeWindow?: { id: string; title?: string };
+  semantic?: ComputerSemanticSnapshot;
 }
 
 export interface ComputerActionRequest {
