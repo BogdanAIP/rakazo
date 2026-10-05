@@ -254,6 +254,37 @@ export const WindowsHostGuiResultSchema = z.discriminatedUnion("kind", [
 
 export type WindowsHostGuiResult = z.infer<typeof WindowsHostGuiResultSchema>;
 
+export const WindowsHostUiaBoundsSchema = z.object({
+  x: z.number().finite().min(-100_000).max(100_000),
+  y: z.number().finite().min(-100_000).max(100_000),
+  width: z.number().finite().min(0).max(100_000),
+  height: z.number().finite().min(0).max(100_000),
+});
+
+export const WindowsHostUiaNodeSchema = z.object({
+  ref: z.string().regex(/^u\d{1,4}$/u),
+  parentRef: z.string().regex(/^u\d{1,4}$/u).optional(),
+  depth: z.number().int().min(0).max(8),
+  controlType: z.string().trim().min(1).max(128),
+  name: z.string().max(512),
+  automationId: z.string().max(512).optional(),
+  enabled: z.boolean(),
+  focusable: z.boolean(),
+  offscreen: z.boolean(),
+  bounds: WindowsHostUiaBoundsSchema.optional(),
+});
+
+export const WindowsHostUiaSnapshotSchema = z.object({
+  activeWindow: z.object({
+    id: z.string().min(1).max(100),
+    title: z.string().max(512),
+  }),
+  nodes: z.array(WindowsHostUiaNodeSchema).max(400),
+  truncated: z.boolean(),
+});
+
+export type WindowsHostUiaSnapshot = z.infer<typeof WindowsHostUiaSnapshotSchema>;
+
 export const WindowsHostProcessResultSchema = z.object({
   stdout: z.string().max(65_536),
   stderr: z.string().max(65_536),
@@ -299,6 +330,10 @@ export const WindowsHostCommandRequestSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("screen.observe"),
+    botId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
+  }),
+  z.object({
+    kind: z.literal("uia.snapshot"),
     botId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
   }),
   z.object({
@@ -375,6 +410,10 @@ export const WindowsHostCommandResultSchema = z.discriminatedUnion("ok", [
       z.object({
         kind: z.literal("screen"),
         observation: WindowsHostGuiObservationSchema,
+      }),
+      z.object({
+        kind: z.literal("uia"),
+        snapshot: WindowsHostUiaSnapshotSchema,
       }),
       z.object({
         kind: z.literal("actions"),
