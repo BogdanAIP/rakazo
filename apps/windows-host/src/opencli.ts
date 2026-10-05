@@ -387,8 +387,7 @@ export class WindowsOpenCliBackend {
         return {
           ok: false,
           uncertain: true,
-          error:
-            error instanceof Error ? error.message.slice(0, 500) : "Browser tab close failed",
+          error: error instanceof Error ? error.message.slice(0, 500) : "Browser tab close failed",
         };
       }
     }
