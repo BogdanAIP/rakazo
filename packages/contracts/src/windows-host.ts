@@ -123,6 +123,20 @@ export const WindowsHostBrowserRequestSchema = z.discriminatedUnion("command", [
     selector: z.string().min(1).max(500).optional(),
     start: z.number().int().min(0).max(1_000_000).optional(),
   }),
+  z.object({
+    command: z.literal("scroll"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    direction: z.enum(["up", "down"]),
+    amount: z.number().int().min(1).max(5_000).optional(),
+  }),
+  z.object({
+    command: z.literal("screenshot"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    fullPage: z.boolean().optional(),
+    annotate: z.boolean().optional(),
+    width: z.number().int().min(320).max(4_096).optional(),
+    height: z.number().int().min(200).max(4_096).optional(),
+  }),
   z.object({ command: z.literal("close"), sessionToken: WindowsHostBrowserSessionTokenSchema }),
   z.object({
     command: z.literal("act"),
@@ -142,6 +156,8 @@ export const WindowsHostBrowserResultSchema = z.object({
   title: z.string().max(2_048).optional(),
   tree: z.string().max(65_536).optional(),
   content: z.string().max(65_536).optional(),
+  imageBase64: z.string().min(1).max(6_000_000).optional(),
+  mimeType: z.literal("image/png").optional(),
   elements: z
     .array(
       z.object({
