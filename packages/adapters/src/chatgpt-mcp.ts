@@ -2,7 +2,11 @@ import process from "node:process";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { loadChatGptContext, searchChatGptCapabilities } from "./chatgpt-context.js";
+import {
+  loadChatGptContext,
+  loadChatGptProjectContext,
+  searchChatGptCapabilities,
+} from "./chatgpt-context.js";
 import type { ProcedureMode } from "./chatgpt-rakazo.js";
 import {
   actRakazoComputer,
@@ -203,10 +207,9 @@ server.registerTool(
   {
     title: "Load selected Rakazo project context",
     description:
-      "Read-only project bootstrap for ordinary ChatGPT. Select exactly one projectId or projectSlug and receive global context plus that project memory, resources and open tasks. No second model.",
+      "Read-only project-centric bootstrap for ordinary ChatGPT. Select exactly one projectId or projectSlug and receive the canonical project memory, resources, open tasks, linked execution bots, worktrees and active project runs. Does not require selecting a bot and does not invoke a second model.",
     inputSchema: z
       .object({
-        botId: z.string().min(1).optional(),
         projectId: z.string().min(1).optional(),
         projectSlug: z.string().min(1).max(80).optional(),
       })
@@ -227,9 +230,9 @@ server.registerTool(
       openWorldHint: false,
     },
   },
-  async ({ botId, projectId, projectSlug }) =>
+  async ({ projectId, projectSlug }) =>
     textResult(
-      await loadChatGptContext(callRakazoRpc, botId, {
+      await loadChatGptProjectContext(callRakazoRpc, {
         projectId,
         projectSlug,
       }),
