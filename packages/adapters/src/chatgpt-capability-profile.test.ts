@@ -174,10 +174,7 @@ describe("project capability profile resolver", () => {
 
   it("writes a binding only after exact linked-Bot authorization verification", async () => {
     const writes: Array<Record<string, unknown>> = [];
-    const call = async (
-      procedure: string,
-      input?: Record<string, unknown>,
-    ): Promise<unknown> => {
+    const call = async (procedure: string, input?: Record<string, unknown>): Promise<unknown> => {
       if (procedure === "projects/context") {
         return {
           project: { id: "project-1", slug: "aihot", name: "AIHOT" },
