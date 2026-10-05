@@ -2,7 +2,11 @@ import { createHash, randomUUID } from "node:crypto";
 import { TradingInstrumentSchema, TradingPaperPolicySchema } from "@rakazo/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb } from "./client.js";
-import { closeTradingPaperPositionOnStop, PaperCloseConflictError } from "./trading-paper-close.js";
+import {
+  closeTradingPaperPositionOnAuthorizedProtectiveStop,
+  closeTradingPaperPositionOnStop,
+  PaperCloseConflictError,
+} from "./trading-paper-close.js";
 import {
   fillApprovedTradingPaperReservation,
   PaperFillConflictError,
@@ -3019,6 +3023,156 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     expect(
       await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_sell" } }),
     ).toBe(0);
+  });
+
+  it("P11C-14 closes only the authorized protective paper position while kill-switch stays latched", async () => {
+    const ledgerId = `paper-c1-fill-${suffix}`;
+    const authority = await first.prisma.tradingPaperProtectiveExitAuthority.findFirstOrThrow({
+      where: { ledgerId },
+      orderBy: { authorizedAt: "desc" },
+    });
+    const policyBefore = await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId);
+    const before = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);
+    expect(policyBefore.policy).toMatchObject({ enabled: false, killSwitch: true });
+    expect(before.positions).toHaveLength(1);
+    expect(before.positions[0]?.positionId).toBe(authority.positionId);
+
+    const safeAt = new Date().toISOString();
+    const safeEvidence = await recordPublicAdapterPaperQuoteEvidence(
+      first.prisma,
+      owner,
+      ledgerId,
+      market,
+      {
+        venue: "okx",
+        kind: "spot",
+        symbol: "SOL-USDT",
+        observedAt: safeAt,
+        fetchedAt: safeAt,
+        bid: "95.5",
+        ask: "95.51",
+        quoteVolume24h: "100000",
+      },
+    );
+    await expect(
+      closeTradingPaperPositionOnStop(
+        second.prisma,
+        owner,
+        ledgerId,
+        authority.positionId,
+        safeEvidence.id,
+      ),
+    ).resolves.toMatchObject({ status: "deny", reason: "policy_disabled" });
+    await expect(
+      closeTradingPaperPositionOnAuthorizedProtectiveStop(
+        second.prisma,
+        owner,
+        authority.effectId,
+        safeEvidence.id,
+      ),
+    ).resolves.toMatchObject({ status: "deny", reason: "stop_not_triggered" });
+    expect(
+      (await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId)).positions,
+    ).toHaveLength(1);
+    expect(
+      await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_sell" } }),
+    ).toBe(0);
+
+    const stopAt = new Date().toISOString();
+    const stopEvidence = await recordPublicAdapterPaperQuoteEvidence(
+      first.prisma,
+      owner,
+      ledgerId,
+      market,
+      {
+        venue: "okx",
+        kind: "spot",
+        symbol: "SOL-USDT",
+        observedAt: stopAt,
+        fetchedAt: stopAt,
+        bid: "94.99",
+        ask: "95",
+        quoteVolume24h: "100000",
+      },
+    );
+    const closed = await closeTradingPaperPositionOnAuthorizedProtectiveStop(
+      second.prisma,
+      owner,
+      authority.effectId,
+      stopEvidence.id,
+    );
+    expect(closed.status).toBe("closed");
+    if (closed.status !== "closed") throw new Error("expected protective paper close");
+    expect(closed.positionId).toBe(authority.positionId);
+    expect(closed.policyRevision).toBe(policyBefore.revision);
+    expect(Number(closed.executedPriceQuote)).toBeLessThan(95);
+
+    const after = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);
+    expect(after.positions).toHaveLength(0);
+    expect(Number(after.realizedPnlQuote)).toBeLessThan(0);
+    expect(await first.prisma.tradingPaperStopGuard.count({ where: { ledgerId } })).toBe(0);
+    expect(
+      await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_sell" } }),
+    ).toBe(1);
+    const decision = await first.prisma.tradingPaperCloseDecision.findUniqueOrThrow({
+      where: { ledgerId_positionId: { ledgerId, positionId: authority.positionId } },
+    });
+    expect(decision.policyApprovalEffectId).toBe(authority.effectId);
+    expect(decision.policyRevision).toBe(policyBefore.revision);
+    expect(await readVerifiedTradingPaperRiskPolicy(second.prisma, owner, ledgerId)).toEqual(
+      policyBefore,
+    );
+    expect(await auditTradingPaperLifecycle(second.prisma, owner, ledgerId)).toMatchObject({
+      status: "verified",
+      openPositions: 0,
+      closeDecisions: 1,
+    });
+    expect(await readTradingPaperRecoveryStatus(second.prisma, owner, ledgerId)).toMatchObject({
+      status: "verified",
+      enabled: false,
+      killSwitch: true,
+      openPositions: 0,
+      nextAction: "separate_owner_approval_to_enable",
+    });
+
+    await expect(
+      closeTradingPaperPositionOnAuthorizedProtectiveStop(
+        first.prisma,
+        owner,
+        authority.effectId,
+        stopEvidence.id,
+      ),
+    ).resolves.toMatchObject({
+      status: "duplicate",
+      closeEventId: closed.closeEventId,
+      positionId: authority.positionId,
+    });
+
+    const changedAt = new Date().toISOString();
+    const changedEvidence = await recordPublicAdapterPaperQuoteEvidence(
+      first.prisma,
+      owner,
+      ledgerId,
+      market,
+      {
+        venue: "okx",
+        kind: "spot",
+        symbol: "SOL-USDT",
+        observedAt: changedAt,
+        fetchedAt: changedAt,
+        bid: "94.98",
+        ask: "94.99",
+        quoteVolume24h: "100000",
+      },
+    );
+    await expect(
+      closeTradingPaperPositionOnAuthorizedProtectiveStop(
+        second.prisma,
+        owner,
+        authority.effectId,
+        changedEvidence.id,
+      ),
+    ).rejects.toBeInstanceOf(PaperCloseConflictError);
   });
 
   it("P11C-8 rejects a forged inert-outbox delivery marker without money mutation", async () => {

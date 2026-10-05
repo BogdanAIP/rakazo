@@ -3,6 +3,7 @@ import type { TradingPaperLedgerEvent } from "@rakazo/contracts";
 import { deriveTradingPaperRiskState } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { verifyHistoricalTradingPaperProtectiveExitApprovalInTransaction } from "./trading-paper-protective-exit-authority.js";
 import { verifyTradingPaperStopGuardsInTransaction } from "./trading-paper-stop-guard.js";
 import { recoverTradingPaperLedgerInTransaction } from "./trading-paper-store.js";
 import { withTransactionRetry } from "./transaction-retry.js";
@@ -114,6 +115,27 @@ export async function auditTradingPaperLifecycleInTransaction(
         entry.toRevision === revision,
       "Missing or mismatched historical owner-enable approval",
     );
+  }
+  async function approvedClose(record: (typeof closes)[number]) {
+    const enable = byApproval.get(record.policyApprovalEffectId);
+    if (enable) {
+      approved(record.policyApprovalEffectId, record.policyRevision);
+      return;
+    }
+    const protective = await verifyHistoricalTradingPaperProtectiveExitApprovalInTransaction(
+      tx,
+      owner,
+      record.policyApprovalEffectId,
+      {
+        ledgerId: record.ledgerId,
+        positionId: record.positionId,
+        policyRevision: record.policyRevision,
+        buyFillEventSequence: record.buyFillEventSequence,
+        stopPriceQuote: record.stopPriceQuote,
+        actedAt: record.closedAt.toISOString(),
+      },
+    );
+    assert(protective, "Missing or mismatched historical protective-exit approval");
   }
 
   for (const event of reserves) {
@@ -287,7 +309,7 @@ export async function auditTradingPaperLifecycleInTransaction(
         ]),
       "Close decision digest mismatch",
     );
-    approved(record.policyApprovalEffectId, record.policyRevision);
+    await approvedClose(record);
     const received =
       (units(event.quantityBase) * units(event.executedPriceQuote)) / SCALE - units(event.feeQuote);
     realized += received - cost;

@@ -6,6 +6,10 @@ import {
   verifyTradingPaperOpenFillInTransaction,
 } from "./trading-paper-fill.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
+import {
+  assessTradingPaperProtectiveExitAuthorityInTransaction,
+  verifyTradingPaperProtectiveExitAuthorityInTransaction,
+} from "./trading-paper-protective-exit-authority.js";
 import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import {
   lockTradingPaperRiskPolicyInTransaction,
@@ -145,6 +149,7 @@ async function readExistingClose(
   ledgerId: string,
   positionId: string,
   evidenceId: string,
+  expectedApprovalEffectId?: string,
 ): Promise<TradingPaperCloseDuplicate | null> {
   const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
   const row = await tx.tradingPaperCloseDecision.findUnique({
@@ -153,6 +158,9 @@ async function readExistingClose(
   if (!row) return null;
   if (row.requestSha256 !== requestDigest(owner, ledgerId, positionId, evidenceId)) {
     throw new PaperCloseConflictError("Closed position retried with different evidence");
+  }
+  if (expectedApprovalEffectId && row.policyApprovalEffectId !== expectedApprovalEffectId) {
+    throw new PaperCloseConflictError("Closed position retried with different approval authority");
   }
   const normalized: CloseDigestInput = {
     ledgerId: row.ledgerId,
@@ -217,6 +225,30 @@ async function readExistingClose(
 
 /** INTERNAL ONLY stop-triggered synthetic close. A model cannot select exit
  * price, fee, quantity, stop, timestamp or event id. No broker I/O exists. */
+export type TradingPaperProtectiveCloseResult =
+  | {
+      status: "deny";
+      mode: "paper_only";
+      reason:
+        | "authority_unavailable"
+        | "authority_expired"
+        | "policy_revision_changed"
+        | "kill_switch_not_latched"
+        | "reconciliation_required"
+        | "authority_scope_changed"
+        | "position_unverified"
+        | "position_unavailable"
+        | "trusted_market_snapshot_unavailable"
+        | "market_snapshot_stale"
+        | "market_snapshot_mismatch"
+        | "market_spread_exceeded"
+        | "stop_not_triggered"
+        | "close_price_unrepresentable"
+        | "risk_state_unavailable";
+    }
+  | TradingPaperCloseCreated
+  | TradingPaperCloseDuplicate;
+
 export async function closeTradingPaperPositionOnStop(
   prisma: PaperDb,
   owner: Owner,
@@ -397,6 +429,241 @@ export async function closeTradingPaperPositionOnStop(
           closeEventId,
           closeEventSequence,
           policyRevision: policy.revision,
+          quantityBase: opened.quantityBase,
+          executedPriceQuote,
+          feeQuote,
+          stopPriceQuote: opened.stopPriceQuote,
+          closedAt,
+        };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  return withTransactionRetry(operation);
+}
+
+/** INTERNAL ONLY protective synthetic stop close while the paper kill-switch
+ * remains latched. Authority, ledger and position are derived from the explicit
+ * owner approval; callers can supply only fresh public evidence. No broker I/O. */
+export async function closeTradingPaperPositionOnAuthorizedProtectiveStop(
+  prisma: PaperDb,
+  owner: Owner,
+  authorityEffectId: string,
+  evidenceId: string,
+): Promise<TradingPaperProtectiveCloseResult> {
+  const operation = async (): Promise<TradingPaperProtectiveCloseResult> =>
+    prisma.$transaction(
+      async (tx) => {
+        const authority = await verifyTradingPaperProtectiveExitAuthorityInTransaction(
+          tx,
+          owner,
+          authorityEffectId,
+        );
+        if (!authority) {
+          return { status: "deny", mode: "paper_only", reason: "authority_unavailable" };
+        }
+        await lockTradingPaperRiskPolicyInTransaction(tx, owner, authority.ledgerId);
+
+        const prior = await readExistingClose(
+          tx,
+          owner,
+          authority.ledgerId,
+          authority.positionId,
+          evidenceId,
+          authorityEffectId,
+        );
+        if (prior) {
+          await auditTradingPaperLifecycleInTransaction(tx, owner, authority.ledgerId, new Date());
+          return prior;
+        }
+
+        const now = Date.now();
+        const usable = await assessTradingPaperProtectiveExitAuthorityInTransaction(
+          tx,
+          owner,
+          authorityEffectId,
+          new Date(now),
+        );
+        if (usable.status === "deny") {
+          return { status: "deny", mode: "paper_only", reason: usable.reason };
+        }
+
+        const policy = await verifyTradingPaperRiskPolicyInTransaction(
+          tx,
+          owner,
+          usable.ledgerId,
+        );
+        if (
+          policy.revision !== usable.policyRevision ||
+          policy.policy.enabled ||
+          !policy.policy.killSwitch
+        ) {
+          return { status: "deny", mode: "paper_only", reason: "policy_revision_changed" };
+        }
+
+        const opened = await verifyTradingPaperOpenFillInTransaction(
+          tx,
+          owner,
+          usable.ledgerId,
+          usable.positionId,
+        );
+        if (!opened) {
+          return { status: "deny", mode: "paper_only", reason: "position_unverified" };
+        }
+        if (
+          opened.fillEventSequence !== usable.buyFillEventSequence ||
+          opened.stopPriceQuote !== usable.stopPriceQuote
+        ) {
+          throw new PaperCloseIntegrityError(
+            "Protective authority disagrees with verified open fill",
+          );
+        }
+
+        const recovered = await recoverTradingPaperLedgerInTransaction(
+          tx,
+          owner,
+          usable.ledgerId,
+        );
+        if (!recovered.state.positions.some((entry) => entry.positionId === usable.positionId)) {
+          return { status: "deny", mode: "paper_only", reason: "position_unavailable" };
+        }
+
+        const evidence = await verifyPublicPaperQuoteEvidenceInTransaction(
+          tx,
+          owner,
+          usable.ledgerId,
+          evidenceId,
+        );
+        if (!evidence) {
+          return {
+            status: "deny",
+            mode: "paper_only",
+            reason: "trusted_market_snapshot_unavailable",
+          };
+        }
+        if (JSON.stringify(evidence.market) !== JSON.stringify(opened.market)) {
+          return { status: "deny", mode: "paper_only", reason: "market_snapshot_mismatch" };
+        }
+        const observed = Date.parse(evidence.ticker.observedAt);
+        const fetched = Date.parse(evidence.ticker.fetchedAt);
+        if (
+          observed > fetched + 2_000 ||
+          fetched > now + 2_000 ||
+          observed > now + 2_000 ||
+          now - observed > policy.policy.maxAgeMs ||
+          now - fetched > policy.policy.maxAgeMs
+        ) {
+          return { status: "deny", mode: "paper_only", reason: "market_snapshot_stale" };
+        }
+
+        const bid = units(evidence.ticker.bid);
+        const ask = units(evidence.ticker.ask);
+        const stop = units(opened.stopPriceQuote);
+        const spreadCap = bpsScaled(policy.policy.maxSpreadBps);
+        const feeBps = bpsScaled(policy.policy.assumedFeeBpsPerSide);
+        const slippageBps = bpsScaled(policy.policy.assumedSlippageBpsPerSide);
+        if (spreadCap === null || feeBps === null || slippageBps === null) {
+          return { status: "deny", mode: "paper_only", reason: "risk_state_unavailable" };
+        }
+        if (2n * (ask - bid) * BPS_SCALE > spreadCap * (ask + bid)) {
+          return { status: "deny", mode: "paper_only", reason: "market_spread_exceeded" };
+        }
+        if (bid > stop) {
+          return { status: "deny", mode: "paper_only", reason: "stop_not_triggered" };
+        }
+
+        const tickText = opened.market.priceIncrement;
+        if (tickText === null) throw new PaperFillIntegrityError("Open position lacks price tick");
+        const tick = units(tickText);
+        const slippedBid = (bid * (BPS_SCALE - slippageBps)) / BPS_SCALE;
+        const executed = (slippedBid / tick) * tick;
+        if (executed <= 0n) {
+          return { status: "deny", mode: "paper_only", reason: "close_price_unrepresentable" };
+        }
+        const quantity = units(opened.quantityBase);
+        const proceeds = (quantity * executed) / SCALE;
+        const fee = ceilDiv(proceeds * feeBps, BPS_SCALE);
+        if (fee >= proceeds) {
+          return { status: "deny", mode: "paper_only", reason: "close_price_unrepresentable" };
+        }
+
+        const lastAt = recovered.events.at(-1)
+          ? Date.parse(recovered.events.at(-1)!.recordedAt)
+          : recovered.row.openedAt.getTime();
+        if (lastAt > now + 2_000) {
+          throw new PaperCloseIntegrityError(
+            "Paper journal is future-dated relative to protective close clock",
+          );
+        }
+        const closedAtMs = Math.max(now, lastAt);
+        if (closedAtMs >= Date.parse(usable.expiresAt)) {
+          return { status: "deny", mode: "paper_only", reason: "authority_expired" };
+        }
+        const closedAt = new Date(closedAtMs).toISOString();
+        const closeEventId = `paper-protective-close:${randomUUID()}`;
+        const closeEventSequence = recovered.state.nextSequence;
+        const executedPriceQuote = decimal(executed);
+        const feeQuote = decimal(fee);
+        const appended = await appendTradingPaperLedgerEventInTransaction(tx, owner, {
+          ledgerId: usable.ledgerId,
+          eventId: closeEventId,
+          sequence: closeEventSequence,
+          kind: "fill_sell",
+          recordedAt: closedAt,
+          positionId: usable.positionId,
+          quantityBase: opened.quantityBase,
+          executedPriceQuote,
+          feeQuote,
+        });
+        if (appended.status !== "appended") {
+          throw new PaperCloseIntegrityError("Fresh protective close unexpectedly duplicated");
+        }
+        const removed = await tx.tradingPaperStopGuard.deleteMany({
+          where: { ledgerId: usable.ledgerId, positionId: usable.positionId },
+        });
+        if (removed.count !== 1) {
+          throw new PaperCloseIntegrityError(
+            "Protective close did not remove exactly one stop guard",
+          );
+        }
+
+        const requestSha256 = requestDigest(
+          owner,
+          usable.ledgerId,
+          usable.positionId,
+          evidenceId,
+        );
+        const normalized: CloseDigestInput = {
+          ledgerId: usable.ledgerId,
+          positionId: usable.positionId,
+          requestSha256,
+          evidenceId,
+          policyApprovalEffectId: authorityEffectId,
+          policyRevision: usable.policyRevision,
+          buyFillEventSequence: opened.fillEventSequence,
+          closeEventSequence,
+          closeEventId,
+          quantityBase: opened.quantityBase,
+          executedPriceQuote,
+          feeQuote,
+          stopPriceQuote: opened.stopPriceQuote,
+          closedAt,
+        };
+        await tx.tradingPaperCloseDecision.create({
+          data: {
+            ...normalized,
+            closedAt: new Date(closedAt),
+            decisionSha256: decisionDigest(normalized),
+          },
+        });
+        await auditTradingPaperLifecycleInTransaction(tx, owner, usable.ledgerId, new Date());
+        return {
+          status: "closed",
+          mode: "paper_only",
+          positionId: usable.positionId,
+          signalId: opened.signalId,
+          closeEventId,
+          closeEventSequence,
+          policyRevision: usable.policyRevision,
           quantityBase: opened.quantityBase,
           executedPriceQuote,
           feeQuote,
