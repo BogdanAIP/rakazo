@@ -139,16 +139,12 @@ export class WindowsGuiBackend {
     }
 
     if (parsed.command === "semanticAct") this.markSemanticPending();
-    try {
-      const result = WindowsHostGuiResultSchema.parse(await this.runner(parsed));
-      if (parsed.command === "observe" || parsed.command === "semanticAct") {
-        this.clearSemanticPending();
-      }
-      return result;
-    } catch (error) {
-      // The durable latch was written before the semantic mutation. Any failure
-      // leaves it in place because the action outcome may be uncertain.
-      throw error;
+    // The durable latch is deliberately left in place if the runner throws:
+    // the semantic mutation may have happened before transport/process failure.
+    const result = WindowsHostGuiResultSchema.parse(await this.runner(parsed));
+    if (parsed.command === "observe" || parsed.command === "semanticAct") {
+      this.clearSemanticPending();
     }
+    return result;
   }
 }
