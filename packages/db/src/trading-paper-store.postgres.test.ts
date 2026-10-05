@@ -4020,8 +4020,11 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
     expect(
       await readVerifiedTradingPaperWorkerRecurrence(second.prisma, owner, ledgerId),
     ).toMatchObject({
-      ...recurrenceBefore,
+      configured: true,
+      mode: "paper_only",
+      ledgerId,
       enabled: false,
+      gateRevision: recurrenceBefore.gateRevision,
       recurrenceRevision: 2,
       approvalEffectId: disableRecurrence.id,
     });
