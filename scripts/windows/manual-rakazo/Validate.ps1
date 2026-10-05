@@ -133,7 +133,7 @@ foreach ($needed in @('$ctlProcess.WaitForExit(70000)', 'pg_ctl returned; verify
 }
 foreach ($needed in @(
     "Native.PostgresEvidence.ps1",
-    "Get-NativePostgresPidFileEvidence -Spec $spec",
+    'Get-NativePostgresPidFileEvidence -Spec $spec',
     "stale postgres pidfile verified; delegating recovery to pg_ctl",
     "safe recovery is not proven:"
 )) {
