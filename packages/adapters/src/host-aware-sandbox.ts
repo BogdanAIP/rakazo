@@ -5,6 +5,7 @@ import type {
   ComputerActionRequest,
   ComputerInput,
   ComputerRef,
+  ComputerSemanticActionRequest,
   ControlLeaseRef,
   PortableFile,
   ProcessEvent,
@@ -141,6 +142,14 @@ export class HostAwareSandbox implements SandboxProvider {
 
   act(computer: ComputerRef, request: ComputerActionRequest, context: AdapterContext) {
     return this.route(computer).act(computer, request, context);
+  }
+
+  semanticAct(computer: ComputerRef, request: ComputerSemanticActionRequest, context: AdapterContext) {
+    const provider = this.route(computer);
+    if (!provider.semanticAct) {
+      return Promise.reject(new Error("semantic desktop actions are unavailable on this computer"));
+    }
+    return provider.semanticAct(computer, request, context);
   }
 
   listFiles(computer: ComputerRef, path: string, context: AdapterContext) {
