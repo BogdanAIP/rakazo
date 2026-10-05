@@ -200,6 +200,12 @@ Before D5 may ever be attached to a production handler, D7 adds another serializ
 
 Disabled recurrence denies immediately. Tampered/incomplete recurrence approval provenance raises an integrity error. A disabled paper worker propagates a read-only worker-preflight denial; if the worker is later re-enabled at a new gate revision, the old recurrence permission remains inert with `recurrence_gate_changed` until separately re-authorized. PostgreSQL coverage proves these transitions without changing Routine count or ledger/outbox state. D7 has no JobPublisher and does not call the D5 planner, so recurrence is still not active.
 
+## P11D-8 — pure authorized-successor composition (no enqueue)
+
+D8 connects the D7 recurrence authorization result to the existing D5 planner **only as a pure function**. It accepts the current preflight job payload plus a D7 recurrence-preflight result and a trusted clock. A denied recurrence result stops immediately. A gate-revision mismatch also stops. Only a `ready` D7 result for the exact same ledger/gate is translated into the D5 ready shape and planned.
+
+The D8 module has no Prisma client, JobPublisher, background handler registration, model runtime, market adapter or trading writer. It cannot enqueue the planned job. Unit coverage proves exact ready composition, deny/stale fail-closed behavior, and preservation of D5 missed-interval skipping. A later separately reviewed slice is still required before any production handler may enqueue the planned successor.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.
