@@ -42,6 +42,14 @@ function canonicalPath(value: string): string {
   return /^[A-Za-z]:\//.test(normalized) ? normalized.toLowerCase() : normalized;
 }
 
+function absolutePath(value: string, name: string): string {
+  const trimmed = value.trim();
+  if (!/^(?:[A-Za-z]:[\\/]|\/)/.test(trimmed)) {
+    throw new Error(name + " must be an absolute path");
+  }
+  return trimmed;
+}
+
 function githubRepoFromRemote(remote: string): string | null {
   const value = remote.trim().replace(/\.git$/, "");
   const https = value.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)$/i);
@@ -160,8 +168,10 @@ async function listWorktrees(
 }
 
 function requireWorktreePath(input: ProjectWorktreeInput): string {
-  const value = input.worktreePath?.trim();
-  if (!value) throw new Error("worktreePath is required for verify/ensure");
+  if (!input.worktreePath?.trim()) {
+    throw new Error("worktreePath is required for verify/ensure");
+  }
+  const value = absolutePath(input.worktreePath, "worktreePath");
   if (canonicalPath(value) === canonicalPath(input.repoPath)) {
     throw new Error("worktreePath must differ from repoPath");
   }
@@ -216,6 +226,7 @@ export async function manageProjectWorktree(
     throw new Error("repository must be exact owner/name");
   }
   if (!input.repoPath.trim()) throw new Error("repoPath is required");
+  input = { ...input, repoPath: absolutePath(input.repoPath, "repoPath") };
 
   const projectContext = object(
     await call("projects/context", { projectId: input.projectId }),
