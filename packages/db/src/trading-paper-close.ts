@@ -487,11 +487,7 @@ export async function closeTradingPaperPositionOnAuthorizedProtectiveStop(
           return { status: "deny", mode: "paper_only", reason: usable.reason };
         }
 
-        const policy = await verifyTradingPaperRiskPolicyInTransaction(
-          tx,
-          owner,
-          usable.ledgerId,
-        );
+        const policy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, usable.ledgerId);
         if (
           policy.revision !== usable.policyRevision ||
           policy.policy.enabled ||
@@ -518,11 +514,7 @@ export async function closeTradingPaperPositionOnAuthorizedProtectiveStop(
           );
         }
 
-        const recovered = await recoverTradingPaperLedgerInTransaction(
-          tx,
-          owner,
-          usable.ledgerId,
-        );
+        const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, usable.ledgerId);
         if (!recovered.state.positions.some((entry) => entry.positionId === usable.positionId)) {
           return { status: "deny", mode: "paper_only", reason: "position_unavailable" };
         }
@@ -626,12 +618,7 @@ export async function closeTradingPaperPositionOnAuthorizedProtectiveStop(
           );
         }
 
-        const requestSha256 = requestDigest(
-          owner,
-          usable.ledgerId,
-          usable.positionId,
-          evidenceId,
-        );
+        const requestSha256 = requestDigest(owner, usable.ledgerId, usable.positionId, evidenceId);
         const normalized: CloseDigestInput = {
           ledgerId: usable.ledgerId,
           positionId: usable.positionId,
