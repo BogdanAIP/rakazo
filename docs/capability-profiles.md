@@ -27,6 +27,8 @@ A Capability Profile does not:
 
 The resolver is read-only.
 
+The aggregate field requiredSurfacePresent means only that every required semantic surface is ready or available. It does not mean that an operation is approved or executable.
+
 A requirement reported as ready or available still executes through the existing Rakazo policy and authorization path.
 
 Missing capabilities fail closed and include only a discovery query.
