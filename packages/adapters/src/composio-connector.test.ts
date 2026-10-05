@@ -223,6 +223,22 @@ describe("composio tool mapping", () => {
     expect(sanitizeComposioError("COMPOSIO_API_KEY=ak_shouldnotleak")).not.toContain(
       "ak_shouldnotleak",
     );
+    expect(sanitizeComposioError('COMPOSIO_API_KEY="alpha beta"')).toBe(
+      'COMPOSIO_API_KEY="[redacted]"',
+    );
+    expect(sanitizeComposioError("COMPOSIO_API_KEY plain-secret-value")).toBe(
+      "COMPOSIO_API_KEY=[redacted]",
+    );
+    expect(sanitizeComposioError('COMPOSIO_API_KEY "alpha beta"')).toBe(
+      "COMPOSIO_API_KEY=[redacted]",
+    );
+    expect(sanitizeComposioError("denied password=p@ss;word")).toBe('denied password="[redacted]"');
+    expect(sanitizeComposioError("denied password=bad;status=failed")).toBe(
+      'denied password="[redacted]";status=failed',
+    );
+    expect(sanitizeComposioError('denied password="p\\"secret"')).toBe(
+      'denied password="[redacted]"',
+    );
   });
 
   it("keeps each tool's error when a multi-execute batch fails", () => {
@@ -246,6 +262,12 @@ describe("composio tool mapping", () => {
     expect(composioResultError("2 out of 3 tools failed", data)).toBe(
       "2 out of 3 tools failed: TOOL_MISSING: The requested message was not found.; TOOL_NESTED: Query failed.",
     );
+    const longSecret = `${"p".repeat(470)} password="alpha beta-secret-tail" done ${"q".repeat(80)}`;
+    const longMessage = composioResultError("1 out of 1 tools failed", {
+      results: [{ tool_slug: "TOOL", error: longSecret }],
+    });
+    expect(longMessage).toContain("[redacted]");
+    expect(longMessage).not.toContain("beta-secret");
     expect(composioResultError("1 out of 1 tools failed", { results: [] })).toBe(
       "1 out of 1 tools failed",
     );
@@ -615,7 +637,8 @@ describe("composio tool mapping", () => {
         results: [
           {
             tool_slug: "GITHUB_GET_REPOS",
-            error: "Repository not found.",
+            error:
+              'Repository not found. access_token="opaque-access-value" client_secret: "opaque-client-secret" api_key=opaque-api-key password=opaque-password',
             response: { successful: false },
           },
         ],
@@ -654,7 +677,84 @@ describe("composio tool mapping", () => {
     expect(events).toEqual([
       {
         type: "error",
-        message: "1 out of 1 tools failed: GITHUB_GET_REPOS: Repository not found.",
+        message:
+          '1 out of 1 tools failed: GITHUB_GET_REPOS: Repository not found. access_token="[redacted]" client_secret: "[redacted]" api_key="[redacted]" password="[redacted]"',
+      },
+    ]);
+  });
+
+  it("redacts credential values in successful tool results without dropping the payload", async () => {
+    composioSdkState.created.length = 0;
+    composioSdkState.executions.length = 0;
+    composioSdkState.sessions.clear();
+    composioToolkitDirectory.invalidate();
+    composioSdkState.executeResult = {
+      data: {
+        body: "Reset your password: hunter2 today",
+        quoted: 'cfg password="x"',
+        secret: { a: 1 },
+        has_password: true,
+        flag: "has_password: true",
+        joined: "password=p@ss;word",
+        escaped: 'note password="p\\"secret" tail',
+        meta: { name: "ada", api_key: "live-key-value" },
+        lookup_ak_ABC123: "first",
+        lookup_ak_DEF456: "second",
+        COMPOSIO_API_KEY: "plain-secret-value",
+        id: 1,
+      },
+      error: null,
+    };
+
+    const connector = new ComposioConnector();
+    const context: AdapterContext = {
+      operationId: "composio-payload-redaction",
+      traceId: "composio-payload-redaction",
+      spaceId: "workspace",
+      userId: "user-1",
+      signal: new AbortController().signal,
+      connectedConnections: [
+        {
+          id: "connection-github",
+          connectorId: "composio",
+          externalId: "github",
+          displayName: "GitHub",
+        },
+      ],
+    };
+
+    const events: ConnectorEvent[] = [];
+    try {
+      for await (const event of connector.execute(
+        { tool: "GITHUB_GET_REPOS", args: {}, executionId: "composio-payload-redaction" },
+        context,
+      )) {
+        events.push(event);
+      }
+    } finally {
+      composioSdkState.executeResult = null;
+    }
+
+    expect(events).toEqual([
+      {
+        type: "result",
+        data: {
+          data: {
+            body: 'Reset your password: "[redacted]" today',
+            quoted: 'cfg password="[redacted]"',
+            secret: "[redacted]",
+            has_password: true,
+            flag: "has_password: true",
+            joined: 'password="[redacted]"',
+            escaped: 'note password="[redacted]" tail',
+            meta: { name: "ada", api_key: "[redacted]" },
+            "lookup_[redacted]": "first",
+            "lookup_[redacted]~2": "second",
+            COMPOSIO_API_KEY: "[redacted]",
+            id: 1,
+          },
+          logId: "log-github",
+        },
       },
     ]);
   });
