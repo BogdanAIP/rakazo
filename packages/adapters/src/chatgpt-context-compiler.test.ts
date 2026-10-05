@@ -159,11 +159,13 @@ describe("RCCL project context compiler", () => {
       "[VERIFIED] Historical verification claim.",
       "[INVARIANT] Stable memory invariant.",
     ].join("\n");
-    projection.openTasks[0]!.text = [
-      "[NEXT] Current task next step.",
-      "[BLOCKER] Current task blocker.",
-      "[VERIFIED] Task verification claim.",
-    ].join("\n");
+    Object.assign(projection.openTasks[0]!, {
+      text: [
+        "[NEXT] Current task next step.",
+        "[BLOCKER] Current task blocker.",
+        "[VERIFIED] Task verification claim.",
+      ].join("\n"),
+    });
 
     const compiled = compileProjectContext(projection);
 
