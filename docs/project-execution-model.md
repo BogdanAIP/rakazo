@@ -24,9 +24,9 @@ Ordinary ChatGPT conversations should bootstrap by project, not by bot, when the
 - canonical project memory;
 - project resources;
 - open project tasks;
-- linked bots derived from `rakazo.bot` resources and task `botId` values;
+- linked bots derived from `rakazo.bot` resources and task `botId` values, with the link source exposed;
 - worktree resources;
-- active runs belonging to linked bots;
+- active runs only for explicit `rakazo.bot` resources; task-only shared bots are not treated as project-owned runs;
 - available skills and installed capabilities.
 
 `rakazo_context_bootstrap({ botId, ... })` remains bot-centric for execution-specific context.
@@ -70,8 +70,8 @@ The resource records intended state. Live Git/Computer state must still be verif
 The intended helper is bounded and project-aware rather than a general shell alias:
 
 1. verify project, repository resource, computer and requested branch/path;
-2. inspect `git worktree list --porcelain`;
-3. create or verify the exact worktree using the existing Computer execution path;
+2. require absolute repository/worktree paths and inspect `git worktree list --porcelain`;
+3. create or verify the exact worktree using direct Git argv through the existing Computer execution path;
 4. fail closed on path/branch/repository mismatch;
 5. register or refresh the `workspace.worktree` project resource only after Git verification.
 
