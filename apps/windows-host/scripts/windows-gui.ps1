@@ -3,6 +3,15 @@
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+$script:UiaAvailable = $true
+try {
+    Add-Type -AssemblyName UIAutomationClient
+    Add-Type -AssemblyName UIAutomationTypes
+}
+catch {
+    # Screen capture remains useful on systems where UI Automation is unavailable.
+    $script:UiaAvailable = $false
+}
 Add-Type -TypeDefinition @"
 using System;
 using System.Text;
@@ -17,6 +26,97 @@ public static class RakazoWin32 {
     [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X; public int Y; }
 }
 "@
+
+function Limit-UiaText([string]$value, [int]$maxLength) {
+    if ([string]::IsNullOrEmpty($value)) { return "" }
+    if ($value.Length -le $maxLength) { return $value }
+    return $value.Substring(0, $maxLength)
+}
+
+function Get-UiAutomationSnapshot($window, $screen) {
+    if (-not $script:UiaAvailable -or $window -eq [IntPtr]::Zero) { return $null }
+
+    try {
+        $root = [System.Windows.Automation.AutomationElement]::FromHandle($window)
+        if ($null -eq $root) { return $null }
+
+        $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+        $queue = [System.Collections.Queue]::new()
+        $queue.Enqueue([pscustomobject]@{ Element = $root; Depth = 0 })
+        $elements = [System.Collections.Generic.List[object]]::new()
+        $maxElements = 256
+        $maxDepth = 8
+
+        while ($queue.Count -gt 0 -and $elements.Count -lt $maxElements) {
+            $item = $queue.Dequeue()
+            $element = $item.Element
+            try {
+                $current = $element.Current
+                $role = Limit-UiaText ([string]$current.LocalizedControlType) 100
+                if ([string]::IsNullOrEmpty($role)) {
+                    $role = Limit-UiaText ([string]$current.ControlType.ProgrammaticName) 100
+                }
+                $entry = [ordered]@{
+                    ref = "u" + ($elements.Count + 1)
+                    role = $role
+                    name = Limit-UiaText ([string]$current.Name) 512
+                    enabled = [bool]$current.IsEnabled
+                    focused = [bool]$current.HasKeyboardFocus
+                }
+                $automationId = Limit-UiaText ([string]$current.AutomationId) 256
+                if (-not [string]::IsNullOrEmpty($automationId)) { $entry.automationId = $automationId }
+                $className = Limit-UiaText ([string]$current.ClassName) 256
+                if (-not [string]::IsNullOrEmpty($className)) { $entry.className = $className }
+
+                $rect = $current.BoundingRectangle
+                if (-not $rect.IsEmpty -and
+                    -not [double]::IsNaN($rect.Left) -and -not [double]::IsInfinity($rect.Left) -and
+                    -not [double]::IsNaN($rect.Top) -and -not [double]::IsInfinity($rect.Top) -and
+                    $rect.Right -gt $screen.Left -and $rect.Bottom -gt $screen.Top -and
+                    $rect.Left -lt $screen.Right -and $rect.Top -lt $screen.Bottom) {
+                    $left = [int][Math]::Max(0, [Math]::Floor($rect.Left - $screen.Left))
+                    $top = [int][Math]::Max(0, [Math]::Floor($rect.Top - $screen.Top))
+                    $right = [int][Math]::Min($screen.Width, [Math]::Ceiling($rect.Right - $screen.Left))
+                    $bottom = [int][Math]::Min($screen.Height, [Math]::Ceiling($rect.Bottom - $screen.Top))
+                    if ($right -gt $left -and $bottom -gt $top) {
+                        $entry.rect = @{
+                            x = $left
+                            y = $top
+                            width = $right - $left
+                            height = $bottom - $top
+                        }
+                    }
+                }
+                [void]$elements.Add([pscustomobject]$entry)
+            }
+            catch {
+                # A disappearing window/control is normal; skip that node.
+            }
+
+            if ([int]$item.Depth -lt $maxDepth) {
+                try {
+                    $child = $walker.GetFirstChild($element)
+                    while ($null -ne $child) {
+                        $queue.Enqueue([pscustomobject]@{ Element = $child; Depth = ([int]$item.Depth + 1) })
+                        $child = $walker.GetNextSibling($child)
+                    }
+                }
+                catch {
+                    # Continue with other queued controls if this subtree vanished.
+                }
+            }
+        }
+
+        return @{
+            source = "uia"
+            truncated = $queue.Count -gt 0
+            elements = @($elements)
+        }
+    }
+    catch {
+        return $null
+    }
+}
 
 function Get-DesktopSnapshot {
     $screen = [System.Windows.Forms.SystemInformation]::VirtualScreen
@@ -35,7 +135,7 @@ function Get-DesktopSnapshot {
         $window = [RakazoWin32]::GetForegroundWindow()
         $windowTitle = New-Object System.Text.StringBuilder(512)
         [void][RakazoWin32]::GetWindowText($window, $windowTitle, $windowTitle.Capacity)
-        return @{
+        $observation = @{
             imageBase64 = [Convert]::ToBase64String($buffer.ToArray())
             mimeType = "image/png"
             width = $screen.Width
@@ -43,6 +143,9 @@ function Get-DesktopSnapshot {
             cursor = @{ x = $pointer.X - $screen.Left; y = $pointer.Y - $screen.Top }
             activeWindow = @{ id = $window.ToInt64().ToString(); title = $windowTitle.ToString() }
         }
+        $uia = Get-UiAutomationSnapshot $window $screen
+        if ($null -ne $uia) { $observation.uia = $uia }
+        return $observation
     }
     finally {
         $graphics.Dispose()
