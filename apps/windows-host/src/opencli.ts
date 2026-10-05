@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readFile, unlink } from "node:fs/promises";
+import { readFile, stat, unlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { WindowsHostBrowserRequest, WindowsHostBrowserResult } from "@rakazo/contracts";
@@ -276,15 +276,15 @@ export class WindowsOpenCliBackend {
       }
       try {
         const options = [screenshotPath];
-        if (request.fullPage) options.push("--full-page");
         if (request.annotate) options.push("--annotate");
         if (request.width !== undefined) options.push("--width", String(request.width));
         if (request.height !== undefined) options.push("--height", String(request.height));
         await invoke("screenshot", ...options);
-        const image = await readFile(screenshotPath);
-        if (image.length === 0 || image.length > MAX_SCREENSHOT_BYTES) {
+        const imageInfo = await stat(screenshotPath);
+        if (imageInfo.size === 0 || imageInfo.size > MAX_SCREENSHOT_BYTES) {
           throw new Error("OpenCLI screenshot exceeded the 4 MiB PNG limit");
         }
+        const image = await readFile(screenshotPath);
         if (image.subarray(0, 8).toString("hex") !== PNG_SIGNATURE_HEX) {
           throw new Error("OpenCLI screenshot did not produce a PNG");
         }
