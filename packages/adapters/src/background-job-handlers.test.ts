@@ -99,10 +99,7 @@ describe("createBackgroundJobHandlers", () => {
 
     await handlers["paper.worker-preflight"](payload);
 
-    expect(handlePaperWorkerPreflightWithSuccessor).toHaveBeenCalledWith(
-      { prisma, jobs },
-      payload,
-    );
+    expect(handlePaperWorkerPreflightWithSuccessor).toHaveBeenCalledWith({ prisma, jobs }, payload);
     expect(jobs.enqueue).not.toHaveBeenCalled();
     expect(executor.continueRun).not.toHaveBeenCalled();
     expect(executor.wakeRoutine).not.toHaveBeenCalled();

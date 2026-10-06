@@ -3880,11 +3880,6 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
 
     const policyBefore = await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId);
     const workerBefore = await readVerifiedTradingPaperWorkerGate(first.prisma, owner, ledgerId);
-    const recurrenceBefore = await readVerifiedTradingPaperWorkerRecurrence(
-      first.prisma,
-      owner,
-      ledgerId,
-    );
     const routineCountBefore = await first.prisma.routine.count({
       where: { spaceId: owner.spaceId, userId: owner.userId },
     });
