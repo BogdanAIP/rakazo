@@ -135,7 +135,8 @@ export function probePlaywrightCli(
       break;
     case "auto":
       if (!entryAvailable) {
-        reason = "Pinned Playwright CLI entry is unavailable; auto routing will fall back to OpenCLI.";
+        reason =
+          "Pinned Playwright CLI entry is unavailable; auto routing will fall back to OpenCLI.";
       } else {
         ready = true;
       }
