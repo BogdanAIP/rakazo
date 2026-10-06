@@ -246,6 +246,24 @@
       "roles": ["skills", "visualization", "charts"],
       "discoveredSkillCount": 2,
       "note": "Official TradingView Lightweight Charts repository with two first-party SKILL.md files for chart and plugin authoring."
+    },
+    {
+      "repository": "Bitget-AI/agent-skill",
+      "commit": "55747b8a33236bbb4dcabffe22c42d302178268c",
+      "license": "MIT",
+      "trust": "curated",
+      "roles": ["skills", "resolver", "paper-trading", "market-data", "futures"],
+      "discoveredSkillCount": 1,
+      "note": "Official Bitget AI trading Skill. Public market data is credential-free; --read-only and --paper-trading modes are explicit. PAPER adaptation must keep a session entirely in paper mode and exclude live writes."
+    },
+    {
+      "repository": "crypto-com/crypto-agent-trading",
+      "commit": "92e80c5527312d0acdf769f16511ba3c6db1f2fe",
+      "license": "Apache-2.0",
+      "trust": "curated",
+      "roles": ["skills", "resolver", "paper-trading", "market-data", "derivatives"],
+      "discoveredSkillCount": 2,
+      "note": "Official Crypto.com agent Skills. Exchange Skill includes no-auth market data and local paper trading; live APP/Exchange actions remain outside Rakazo Trading PAPER authority."
     }
   ]
 }
