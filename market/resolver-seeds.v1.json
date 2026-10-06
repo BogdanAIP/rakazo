@@ -1,0 +1,561 @@
+{
+  "schemaVersion": "market-resolver-seeds-v1",
+  "entries": [
+    {
+      "key": "browser.semantic",
+      "name": "Browser semantic resolution",
+      "description": "Known implementations for structured browser interaction.",
+      "tags": ["browser", "semantic", "automation"],
+      "content": {
+        "semanticKey": "browser.semantic",
+        "implementations": [
+          {
+            "name": "Microsoft Playwright MCP",
+            "kind": "mcp",
+            "reference": "microsoft/playwright-mcp",
+            "priority": 1,
+            "readOnly": false,
+            "constraints": ["must be installed and authorized for the Project"]
+          },
+          {
+            "name": "Rakazo OpenCLI browser",
+            "kind": "browser",
+            "reference": "rakazo:opencli",
+            "priority": 2,
+            "readOnly": false,
+            "constraints": ["requires linked Windows Host and owned browser session"]
+          },
+          {
+            "name": "Chrome DevTools MCP",
+            "kind": "mcp",
+            "reference": "ChromeDevTools/chrome-devtools-mcp",
+            "priority": 3,
+            "readOnly": false,
+            "constraints": [
+              "best when DevTools semantics are sufficient and server is installed/authorized"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "browser.debug",
+      "name": "Browser debugging resolution",
+      "description": "Known implementations for console, network, DOM and performance diagnostics.",
+      "tags": ["browser", "debug", "network", "performance"],
+      "content": {
+        "semanticKey": "browser.debug",
+        "implementations": [
+          {
+            "name": "Chrome DevTools MCP",
+            "kind": "mcp",
+            "reference": "ChromeDevTools/chrome-devtools-mcp",
+            "priority": 1,
+            "readOnly": false,
+            "constraints": ["must be installed and authorized"]
+          },
+          {
+            "name": "Microsoft Playwright MCP",
+            "kind": "mcp",
+            "reference": "microsoft/playwright-mcp",
+            "priority": 2,
+            "readOnly": false,
+            "constraints": ["must be installed and authorized"]
+          },
+          {
+            "name": "Rakazo OpenCLI browser",
+            "kind": "browser",
+            "reference": "rakazo:opencli",
+            "priority": 3,
+            "readOnly": false,
+            "constraints": ["requires linked Windows Host"]
+          }
+        ]
+      }
+    },
+    {
+      "key": "browser.visual",
+      "name": "Visual browser/desktop resolution",
+      "description": "Known implementations for screenshots and visual fallback.",
+      "tags": ["browser", "desktop", "screenshot", "visual"],
+      "content": {
+        "semanticKey": "browser.visual",
+        "implementations": [
+          {
+            "name": "Rakazo Windows Host screenshot",
+            "kind": "computer",
+            "reference": "rakazo:windows-host:screen.observe",
+            "priority": 1,
+            "readOnly": true,
+            "constraints": ["requires linked running Windows Host"]
+          },
+          {
+            "name": "Rakazo OpenCLI screenshot",
+            "kind": "browser",
+            "reference": "rakazo:opencli:screenshot",
+            "priority": 2,
+            "readOnly": true,
+            "constraints": ["requires owned OpenCLI browser session"]
+          },
+          {
+            "name": "Chrome DevTools MCP screenshot",
+            "kind": "mcp",
+            "reference": "ChromeDevTools/chrome-devtools-mcp",
+            "priority": 3,
+            "readOnly": true,
+            "constraints": ["must be installed and authorized"]
+          }
+        ]
+      }
+    },
+    {
+      "key": "repo.read",
+      "name": "Repository read resolution",
+      "description": "Known implementations for reading Project repository state.",
+      "tags": ["git", "github", "repository", "read"],
+      "content": {
+        "semanticKey": "repo.read",
+        "implementations": [
+          {
+            "name": "Official GitHub MCP",
+            "kind": "mcp",
+            "reference": "github/github-mcp-server",
+            "priority": 1,
+            "readOnly": true,
+            "constraints": [
+              "exact repository must be available to the authenticated MCP assignment"
+            ]
+          },
+          {
+            "name": "Rakazo local git",
+            "kind": "cli",
+            "reference": "rakazo:windows-host:git",
+            "priority": 2,
+            "readOnly": true,
+            "constraints": ["requires linked Project worktree on an authorized Computer"]
+          }
+        ]
+      }
+    },
+    {
+      "key": "repo.write",
+      "name": "Repository write resolution",
+      "description": "Known implementations for Project-scoped repository mutations.",
+      "tags": ["git", "github", "repository", "write"],
+      "content": {
+        "semanticKey": "repo.write",
+        "implementations": [
+          {
+            "name": "Official GitHub MCP",
+            "kind": "mcp",
+            "reference": "github/github-mcp-server",
+            "priority": 1,
+            "readOnly": false,
+            "constraints": ["requires exact Project github.repo autonomous_write grant"]
+          },
+          {
+            "name": "Rakazo local git",
+            "kind": "cli",
+            "reference": "rakazo:windows-host:git",
+            "priority": 2,
+            "readOnly": false,
+            "constraints": ["requires linked verified worktree and normal Computer control policy"]
+          }
+        ]
+      }
+    },
+    {
+      "key": "computer.exec",
+      "name": "Computer command execution resolution",
+      "description": "Known implementation for bounded command execution on a linked Computer.",
+      "tags": ["computer", "terminal", "exec"],
+      "content": {
+        "semanticKey": "computer.exec",
+        "implementations": [
+          {
+            "name": "Rakazo Windows Host bounded exec",
+            "kind": "computer",
+            "reference": "rakazo:computer/exec",
+            "priority": 1,
+            "readOnly": false,
+            "constraints": ["requires linked running desktop Computer and active control lease"]
+          }
+        ]
+      }
+    },
+    {
+      "key": "computer.files",
+      "name": "Computer file resolution",
+      "description": "Known implementation for bounded file access on a linked Computer.",
+      "tags": ["computer", "files"],
+      "content": {
+        "semanticKey": "computer.files",
+        "implementations": [
+          {
+            "name": "Rakazo Windows Host files",
+            "kind": "computer",
+            "reference": "rakazo:computer/files",
+            "priority": 1,
+            "readOnly": false,
+            "constraints": [
+              "requires linked Computer; write operations remain separately authorized"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "research.web",
+      "name": "Web research resolution",
+      "description": "Known research/search implementations available to Rakazo projects.",
+      "tags": ["research", "web", "search"],
+      "content": {
+        "semanticKey": "research.web",
+        "implementations": [
+          {
+            "name": "OpenResearch MCP",
+            "kind": "mcp",
+            "reference": "rakazo:openresearch",
+            "priority": 1,
+            "readOnly": true,
+            "constraints": ["must be registered/available for the current workspace"]
+          },
+          {
+            "name": "General web search",
+            "kind": "api",
+            "reference": "chatgpt:web-search",
+            "priority": 2,
+            "readOnly": true,
+            "constraints": ["available only when the calling ChatGPT surface exposes web search"]
+          }
+        ]
+      }
+    },
+    {
+      "key": "media.capture",
+      "name": "Media capture resolution",
+      "description": "Known screenshot/screen-capture implementations for Project media workflows.",
+      "tags": ["media", "screenshot", "capture"],
+      "content": {
+        "semanticKey": "media.capture",
+        "implementations": [
+          {
+            "name": "Rakazo Windows Host screenshot",
+            "kind": "computer",
+            "reference": "rakazo:windows-host:screen.observe",
+            "priority": 1,
+            "readOnly": true,
+            "constraints": ["requires linked running Windows Host"]
+          },
+          {
+            "name": "Rakazo OpenCLI screenshot",
+            "kind": "browser",
+            "reference": "rakazo:opencli:screenshot",
+            "priority": 2,
+            "readOnly": true,
+            "constraints": ["requires owned browser session"]
+          },
+          {
+            "name": "Chrome DevTools MCP screenshot",
+            "kind": "mcp",
+            "reference": "ChromeDevTools/chrome-devtools-mcp",
+            "priority": 3,
+            "readOnly": true,
+            "constraints": ["must be installed and authorized"]
+          }
+        ]
+      }
+    },
+    {
+      "key": "market.data",
+      "name": "Trading market data resolution",
+      "description": "Known first-party read-only market-data implementations for trading research and signal generation.",
+      "tags": ["trading", "market-data", "research", "read-only"],
+      "content": {
+        "semanticKey": "market.data",
+        "implementations": [
+          {
+            "name": "CCXT MCP market tier",
+            "kind": "mcp",
+            "reference": "ccxt/ccxt",
+            "priority": 1,
+            "readOnly": true,
+            "constraints": [
+              "Use market tier only: tickers, order books, OHLCV, trades, funding/open-interest and public GETs; no private account required; trading/funds tiers remain disabled for Rakazo Trading"
+            ]
+          },
+          {
+            "name": "OKX OnchainOS DEX Market Skill",
+            "kind": "cli",
+            "reference": "market:okx/onchainos-skills:okx-dex-market",
+            "priority": 2,
+            "readOnly": true,
+            "constraints": [
+              "Read-only on-chain market/signal research; no wallet signing or transaction broadcasting"
+            ]
+          },
+          {
+            "name": "OKX CEX Market Skill",
+            "kind": "api",
+            "reference": "market:okx/agent-trade-kit:okx-cex-market",
+            "priority": 3,
+            "readOnly": true,
+            "constraints": [
+              "Market Skill must be imported/selected; no API credentials required for its read-only market commands"
+            ]
+          },
+          {
+            "name": "Binance Crypto Market Rank Skill",
+            "kind": "api",
+            "reference": "market:binance/binance-skills-hub:crypto-market-rank",
+            "priority": 4,
+            "readOnly": true,
+            "constraints": [
+              "Private/internal Market use; public Binance Web3 ranking endpoints only; no wallet credentials or trade execution"
+            ]
+          },
+          {
+            "name": "Coinbase Market Data Skill",
+            "kind": "mcp",
+            "reference": "market:coinbase/agents:coinbase-market-data",
+            "priority": 5,
+            "readOnly": true,
+            "constraints": [
+              "Use only supported market-data surfaces; market lookup authorizes no trade"
+            ]
+          },
+          {
+            "name": "Binance Trading Signal Skill — public signal mode",
+            "kind": "api",
+            "reference": "market:binance/binance-skills-hub:binance-trading-signal",
+            "priority": 6,
+            "readOnly": true,
+            "constraints": [
+              "Use Smart Money feed, reports and backtest analysis only; strategy mutation paths remain outside default PAPER research route"
+            ]
+          },
+          {
+            "name": "Kraken Market Intel Skill",
+            "kind": "cli",
+            "reference": "market:krakenfx/kraken-cli:kraken-market-intel",
+            "priority": 7,
+            "readOnly": true,
+            "constraints": [
+              "Requires Kraken CLI for direct execution; Skill itself may still be used as procedural knowledge"
+            ]
+          },
+          {
+            "name": "Alpaca Market Data Skill",
+            "kind": "api",
+            "reference": "market:alpacahq/alpaca-skills:alpaca-broker-market-data",
+            "priority": 8,
+            "readOnly": true,
+            "constraints": [
+              "Useful for US equities/news/streaming; exact feed availability depends on Alpaca account/data plan"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "defi.data",
+      "name": "DeFi research resolution",
+      "description": "Known first-party DeFi analysis/planning implementations for PAPER trading research.",
+      "tags": ["defi", "yield", "liquidity", "research"],
+      "content": {
+        "semanticKey": "defi.data",
+        "implementations": [
+          {
+            "name": "OKX OnchainOS DEX Market Skill",
+            "kind": "cli",
+            "reference": "market:okx/onchainos-skills:okx-dex-market",
+            "priority": 1,
+            "readOnly": true,
+            "constraints": [
+              "Use read-only token, liquidity, holder, cluster, trader and signal analytics only"
+            ]
+          },
+          {
+            "name": "Aave Yield Analysis Skill",
+            "kind": "mcp",
+            "reference": "market:aave/skills:yield-analysis",
+            "priority": 2,
+            "readOnly": true,
+            "constraints": [
+              "Use Aave market/yield queries only; do not submit transactions from the PAPER trading Project"
+            ]
+          },
+          {
+            "name": "Uniswap Liquidity Planner Skill",
+            "kind": "api",
+            "reference": "market:Uniswap/uniswap-ai:liquidity-planner",
+            "priority": 3,
+            "readOnly": true,
+            "constraints": [
+              "Use for planning/analysis; any swap or liquidity action remains outside PAPER execution authority"
+            ]
+          },
+          {
+            "name": "Uniswap Swap Planner Skill",
+            "kind": "api",
+            "reference": "market:Uniswap/uniswap-ai:swap-planner",
+            "priority": 4,
+            "readOnly": true,
+            "constraints": [
+              "Planning only in Rakazo Trading; do not pass through to live swap execution"
+            ]
+          },
+          {
+            "name": "OKX OnchainOS DeFi Skill",
+            "kind": "cli",
+            "reference": "market:okx/onchainos-skills:okx-defi",
+            "priority": 5,
+            "readOnly": true,
+            "constraints": [
+              "Use discovery/rates/portfolio analysis only in PAPER project; deposits, withdrawals, claims and other writes remain forbidden"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "trading.paper",
+      "name": "Paper trading resolution",
+      "description": "Known first-party paper-trading/backtest workflows. This semantic key is Market knowledge and does not grant trading.execute.",
+      "tags": ["paper", "trading", "backtest", "simulation"],
+      "content": {
+        "semanticKey": "trading.paper",
+        "implementations": [
+          {
+            "name": "CCXT MCP sandbox/testnet",
+            "kind": "mcp",
+            "reference": "market:ccxt/ccxt:ccxt-mcp",
+            "priority": 1,
+            "readOnly": false,
+            "constraints": [
+              "Sandbox/testnet accounts only; live trading/funds/implicitWrites disabled; testnet credentials only; Project trading.execute remains denied"
+            ]
+          },
+          {
+            "name": "Alpaca Paper Trading Skill",
+            "kind": "api",
+            "reference": "market:alpacahq/alpaca-skills:paper-trading",
+            "priority": 2,
+            "readOnly": false,
+            "constraints": [
+              "Paper environment only; never substitute live Trading API credentials or endpoints"
+            ]
+          },
+          {
+            "name": "Alpaca Paper Trading MCP Skill",
+            "kind": "mcp",
+            "reference": "market:alpacahq/alpaca-skills:paper-trading-mcp",
+            "priority": 3,
+            "readOnly": false,
+            "constraints": [
+              "Paper environment only; MCP assignment must not expose live execution for Rakazo Trading"
+            ]
+          },
+          {
+            "name": "Kraken Paper Strategy Skill",
+            "kind": "cli",
+            "reference": "market:krakenfx/kraken-cli:kraken-paper-strategy",
+            "priority": 4,
+            "readOnly": false,
+            "constraints": [
+              "Paper commands only; live execution Skills remain unavailable to the PAPER Project"
+            ]
+          },
+          {
+            "name": "Kraken Paper Strategy Backtest Recipe",
+            "kind": "cli",
+            "reference": "market:krakenfx/kraken-cli:recipe-paper-strategy-backtest",
+            "priority": 5,
+            "readOnly": false,
+            "constraints": ["Simulation/backtest only"]
+          },
+          {
+            "name": "Binance Copy Trader — dry-run adaptation",
+            "kind": "cli",
+            "reference": "market:binance/binance-skills-hub:binance-onchain-copy-trader",
+            "priority": 6,
+            "readOnly": false,
+            "constraints": [
+              "Rakazo adaptation must permanently disable live mode and order submission; retain dry-run, event logging, outcome sampling and post-mortem only"
+            ]
+          },
+          {
+            "name": "Binance Trading Signal — backtest mode",
+            "kind": "cli",
+            "reference": "market:binance/binance-skills-hub:binance-trading-signal",
+            "priority": 7,
+            "readOnly": false,
+            "constraints": [
+              "Backtest/report path only for PAPER evaluation; no live trade execution"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "market.risk",
+      "name": "Trading risk intelligence resolution",
+      "description": "Known read-only token/security risk implementations for pre-trade research and PAPER signal filtering.",
+      "tags": ["trading", "risk", "token", "security", "read-only"],
+      "content": {
+        "semanticKey": "market.risk",
+        "implementations": [
+          {
+            "name": "Binance Token Audit Skill",
+            "kind": "api",
+            "reference": "market:binance/binance-skills-hub:query-token-audit",
+            "priority": 1,
+            "readOnly": true,
+            "constraints": [
+              "Public token-audit endpoint only; treat risk output as one feature, not a safety guarantee or trade authorization"
+            ]
+          },
+          {
+            "name": "OKX OnchainOS token security scan",
+            "kind": "cli",
+            "reference": "market:okx/onchainos-skills:security-token-scan",
+            "priority": 2,
+            "readOnly": true,
+            "constraints": [
+              "Read-only security scan only; do not expose wallet signing, swap or broadcast capabilities to PAPER project"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "wallet.analytics",
+      "name": "Wallet and Smart Money analytics resolution",
+      "description": "Known read-only wallet/KOL/Smart Money analytics for discovery, replay and signal features.",
+      "tags": ["wallet", "smart-money", "kol", "signals", "analytics", "read-only"],
+      "content": {
+        "semanticKey": "wallet.analytics",
+        "implementations": [
+          {
+            "name": "Binance Wallet Tracker Skill — public analytics mode",
+            "kind": "cli",
+            "reference": "market:binance/binance-skills-hub:binance-wallet-tracker",
+            "priority": 1,
+            "readOnly": true,
+            "constraints": [
+              "Use public KOL/Smart Money query and replay modes; group/follow mutations are optional and excluded from default PAPER route"
+            ]
+          },
+          {
+            "name": "OKX OnchainOS DEX Market tracker/leaderboard",
+            "kind": "cli",
+            "reference": "market:okx/onchainos-skills:okx-dex-market",
+            "priority": 2,
+            "readOnly": true,
+            "constraints": ["Use tracker, signal and leaderboard read paths only"]
+          }
+        ]
+      }
+    }
+  ]
+}

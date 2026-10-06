@@ -186,6 +186,7 @@ model Space {
   projectResources            ProjectResource[]
   taughtSkills                TaughtSkill[]
   agentSkills                 AgentSkill[]
+  marketEntries               MarketEntry[]
   connections                 Connection[]
   capabilities                CapabilityInstall[]
   memoryDocuments             MemoryDocument[]
@@ -870,6 +871,37 @@ model AgentSkill {
   @@index([spaceId, userId])
   // Case-insensitive unique index agent_skills_spaceId_userId_name_lower_key is created in SQL.
   @@map("agent_skills")
+}
+
+model MarketEntry {
+  id               String   @id @default(cuid())
+  spaceId          String
+  space            Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  userId           String
+  kind             String
+  key              String
+  name             String
+  description      String
+  tags             String[] @default([])
+  originalContent  String
+  adaptedContent   String?
+  adaptationMode   String?
+  preferredVariant String   @default("original")
+  sourceUrl        String
+  repository       String
+  sourcePath       String?
+  sourceRef        String
+  license          String?
+  digest           String
+  trust            String
+  metrics          Json     @default("{}")
+  metadata         Json     @default("{}")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([spaceId, userId, kind, key])
+  @@index([spaceId, userId, kind, name])
+  @@map("market_entries")
 }
 
 model Connection {
