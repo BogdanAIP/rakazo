@@ -93,14 +93,14 @@ describe("Market Skills + Market Resolver service", () => {
     const { service, marketEntry } = setup();
     const input = {
       kind: "skill" as const,
-      key: "anthropics/skills:paper-analysis@" + sourceRef,
+      key: "anthropics/claude-plugins-official:paper-analysis@" + sourceRef,
       tags: ["Research", "papers"],
       content: originalSkill(),
       sourceUrl:
-        "https://github.com/anthropics/skills/blob/" +
+        "https://github.com/anthropics/claude-plugins-official/blob/" +
         sourceRef +
         "/skills/paper-analysis/SKILL.md",
-      repository: "anthropics/skills",
+      repository: "anthropics/claude-plugins-official",
       sourcePath: "skills/paper-analysis/SKILL.md",
       sourceRef,
       license: "Apache-2.0",
@@ -116,7 +116,7 @@ describe("Market Skills + Market Resolver service", () => {
       name: "Research Paper Analysis",
       preferredVariant: "original",
       trust: "curated",
-      repository: "anthropics/skills",
+      repository: "anthropics/claude-plugins-official",
     });
     expect(first.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(second.id).toBe(first.id);
@@ -179,8 +179,8 @@ describe("Market Skills + Market Resolver service", () => {
       tags: ["research"],
       content: originalSkill(),
       sourceUrl:
-        "https://github.com/anthropics/skills/blob/" + sourceRef + "/skills/paper/SKILL.md",
-      repository: "anthropics/skills",
+        "https://github.com/anthropics/claude-plugins-official/blob/" + sourceRef + "/skills/paper/SKILL.md",
+      repository: "anthropics/claude-plugins-official",
       sourcePath: "skills/paper/SKILL.md",
       sourceRef,
       trust: "curated",
@@ -229,8 +229,8 @@ describe("Market Skills + Market Resolver service", () => {
       tags: [],
       content: originalSkill(),
       sourceUrl:
-        "https://github.com/anthropics/skills/blob/" + sourceRef + "/skills/paper/SKILL.md",
-      repository: "anthropics/skills",
+        "https://github.com/anthropics/claude-plugins-official/blob/" + sourceRef + "/skills/paper/SKILL.md",
+      repository: "anthropics/claude-plugins-official",
       sourcePath: "skills/paper/SKILL.md",
       sourceRef,
       trust: "curated",
@@ -262,8 +262,8 @@ describe("Market Skills + Market Resolver service", () => {
       key: "browser-investigation@" + sourceRef,
       tags: ["browser", "debug"],
       content: originalSkill("Browser Investigation"),
-      sourceUrl: "https://github.com/anthropics/skills/blob/" + sourceRef + "/browser/SKILL.md",
-      repository: "anthropics/skills",
+      sourceUrl: "https://github.com/anthropics/claude-plugins-official/blob/" + sourceRef + "/browser/SKILL.md",
+      repository: "anthropics/claude-plugins-official",
       sourcePath: "browser/SKILL.md",
       ...shared,
     });
@@ -272,8 +272,8 @@ describe("Market Skills + Market Resolver service", () => {
       key: "paper-analysis@" + sourceRef,
       tags: ["research"],
       content: originalSkill(),
-      sourceUrl: "https://github.com/anthropics/skills/blob/" + sourceRef + "/paper/SKILL.md",
-      repository: "anthropics/skills",
+      sourceUrl: "https://github.com/anthropics/claude-plugins-official/blob/" + sourceRef + "/paper/SKILL.md",
+      repository: "anthropics/claude-plugins-official",
       sourcePath: "paper/SKILL.md",
       ...shared,
     });
