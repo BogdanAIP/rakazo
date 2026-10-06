@@ -8,13 +8,13 @@ import {
   type WindowsHostCommandResult,
   WindowsHostHeartbeatSchema,
 } from "@rakazo/contracts";
+import type { WindowsBrowserBackend } from "./browser-backend.js";
 import type { WindowsHostConfig } from "./config.js";
 import {
   ProtectedWindowsHostCredentialStore,
   type WindowsHostCredentialStore,
 } from "./credential-store.js";
 import { loadOrCreateWindowsHostIdentity } from "./identity.js";
-import type { WindowsBrowserBackend } from "./browser-backend.js";
 import { WindowsProcessBackend } from "./native-process.js";
 import { WindowsOpenCliBackend } from "./opencli.js";
 import { WindowsHostReadOnlyBackend } from "./readonly.js";
