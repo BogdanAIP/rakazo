@@ -26,9 +26,9 @@ interface RoutedSession {
  * Session-aware browser router.
  *
  * Mode is selected on browser/open, then bound to the server-minted session
- * token. Existing callers that omit mode keep OpenCLI behavior. "auto"
- * only considers non-interactive backends; Extension remains explicit-only
- * because its attach flow requires browser confirmation.
+ * token. "auto" prefers Rakazo's dedicated persistent Playwright profile,
+ * then falls back to OpenCLI. CDP and Extension attach to an existing browser
+ * are explicit-only because Chrome may require user confirmation.
  */
 export class WindowsBrowserBackendRouter implements WindowsBrowserBackend {
   private readonly sessions = new Map<string, RoutedSession>();
@@ -107,13 +107,10 @@ export class WindowsBrowserBackendRouter implements WindowsBrowserBackend {
   }
 
   private async openAuto(botId: string): Promise<WindowsHostBrowserResult> {
-    // Extension attach intentionally opens a browser confirmation flow. Never
-    // select it implicitly: automatic routing must remain non-interactive.
-    const candidates: readonly ResolvedBrowserMode[] = [
-      "playwright-cli-cdp",
-      "opencli",
-      "playwright-cli-persistent",
-    ];
+    // Existing-browser CDP and Extension attach can require Chrome approval.
+    // Never select them implicitly. Autonomous routing uses Rakazo's dedicated
+    // persistent profile first, then falls back to OpenCLI.
+    const candidates: readonly ResolvedBrowserMode[] = ["playwright-cli-persistent", "opencli"];
     const failures: string[] = [];
 
     for (const mode of candidates) {
@@ -159,7 +156,11 @@ export function createWindowsBrowserBackend(
         stateDir,
       ),
       "playwright-cli-persistent": new WindowsPlaywrightCliBackend(
-        { ...playwright, mode: "playwright-cli-persistent" },
+        {
+          ...playwright,
+          mode: "playwright-cli-persistent",
+          browserChannel: playwright.browserChannel ?? "chrome",
+        },
         stateDir,
       ),
     },

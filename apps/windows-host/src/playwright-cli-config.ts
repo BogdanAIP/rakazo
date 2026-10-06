@@ -86,6 +86,10 @@ function optionalCdpEndpoint(value: string | undefined): string | null {
 export function loadPlaywrightCliConfiguration(
   env: NodeJS.ProcessEnv = process.env,
 ): PlaywrightCliConfiguration {
+  const defaultUserDataDir = env.USERPROFILE?.trim()
+    ? path.win32.join(env.USERPROFILE.trim(), "RakazoData", "playwright-profile")
+    : undefined;
+
   return {
     mode: parseMode(env.RAKAZO_BROWSER_BACKEND),
     entry: optionalAbsolutePath(
@@ -95,7 +99,7 @@ export function loadPlaywrightCliConfiguration(
     browserChannel: optionalBrowserChannel(env.RAKAZO_PLAYWRIGHT_BROWSER_CHANNEL),
     cdpEndpoint: optionalCdpEndpoint(env.RAKAZO_PLAYWRIGHT_CDP_ENDPOINT),
     userDataDir: optionalAbsolutePath(
-      env.RAKAZO_PLAYWRIGHT_USER_DATA_DIR,
+      env.RAKAZO_PLAYWRIGHT_USER_DATA_DIR ?? defaultUserDataDir,
       "RAKAZO_PLAYWRIGHT_USER_DATA_DIR",
     ),
   };
@@ -134,11 +138,9 @@ export function probePlaywrightCli(
       else ready = true;
       break;
     case "auto":
+      ready = true;
       if (!entryAvailable) {
-        reason =
-          "Pinned Playwright CLI entry is unavailable; auto routing will fall back to OpenCLI.";
-      } else {
-        ready = true;
+        reason = "Playwright CLI is unavailable; auto routing will fall back to OpenCLI.";
       }
       break;
   }

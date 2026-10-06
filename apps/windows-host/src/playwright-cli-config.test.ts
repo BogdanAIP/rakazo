@@ -2,17 +2,19 @@ import { describe, expect, it } from "vitest";
 import { loadPlaywrightCliConfiguration, probePlaywrightCli } from "./playwright-cli-config.js";
 
 describe("Playwright CLI configuration", () => {
-  it("defaults to non-interactive auto routing", () => {
-    const config = loadPlaywrightCliConfiguration({});
+  it("defaults to non-interactive auto routing with a dedicated Playwright profile", () => {
+    const config = loadPlaywrightCliConfiguration({
+      USERPROFILE: "C:\\Users\\test",
+    });
     expect(config).toMatchObject({
       mode: "auto",
       browserChannel: null,
       cdpEndpoint: null,
-      userDataDir: null,
+      userDataDir: "C:\\Users\\test\\RakazoData\\playwright-profile",
     });
     expect(config.entry).toContain("@playwright");
     expect(config.entry).toMatch(/playwright-cli\.js$/u);
-    expect(probePlaywrightCli(config)).toMatchObject({
+    expect(probePlaywrightCli(config, () => true)).toMatchObject({
       mode: "auto",
       ready: true,
       reason: null,
@@ -138,6 +140,17 @@ describe("Playwright CLI configuration", () => {
       mode: "auto",
       ready: true,
       reason: null,
+    });
+  });
+});
+
+describe("Playwright auto fallback probe", () => {
+  it("remains ready when Playwright CLI is unavailable because OpenCLI is the fallback", () => {
+    const config = loadPlaywrightCliConfiguration({ USERPROFILE: "C:\\Users\\test" });
+    expect(probePlaywrightCli(config, () => false)).toMatchObject({
+      mode: "auto",
+      ready: true,
+      reason: expect.stringContaining("fall back to OpenCLI"),
     });
   });
 });
