@@ -24,12 +24,10 @@ describe("Playwright CLI discovery", () => {
     const config = loadPlaywrightCliConfiguration({
       APPDATA: "C:\\Users\\test\\AppData\\Roaming",
     });
-    expect(config.entry).toBe(
-      "C:\\Users\\test\\AppData\\Roaming\\npm\\node_modules\\@playwright\\cli\\playwright-cli.js",
-    );
-    expect(config.packageJson).toBe(
-      "C:\\Users\\test\\AppData\\Roaming\\npm\\node_modules\\@playwright\\cli\\package.json",
-    );
+    const appData = "C:\\Users\\test\\AppData\\Roaming";
+    const packageDir = path.join(appData, "npm", "node_modules", "@playwright", "cli");
+    expect(config.entry).toBe(path.join(packageDir, "playwright-cli.js"));
+    expect(config.packageJson).toBe(path.join(packageDir, "package.json"));
     expect(config.expectedVersion).toBe(PINNED_PLAYWRIGHT_CLI_VERSION);
   });
 
