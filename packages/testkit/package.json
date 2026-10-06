@@ -21,7 +21,7 @@
     "pngjs": "7.0.0"
   },
   "devDependencies": {
-    "@playwright/test": "1.63.0",
+    "@playwright/test": "1.64.0-alpha-2026-10-05",
     "@types/pngjs": "6.0.5",
     "typescript": "7.0.2",
     "vitest": "4.1.11"

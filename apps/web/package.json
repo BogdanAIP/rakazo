@@ -39,7 +39,7 @@
     "@lingui/conf": "6.6.0",
     "@lingui/format-po": "6.6.0",
     "@lingui/vite-plugin": "6.6.0",
-    "@playwright/test": "1.63.0",
+    "@playwright/test": "1.64.0-alpha-2026-10-05",
     "@rolldown/plugin-babel": "0.2.4",
     "@tailwindcss/vite": "4.3.3",
     "@types/babel__core": "7.20.5",
