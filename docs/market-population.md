@@ -201,8 +201,10 @@ Rakazo rather than a complete upstream file. They remain data-only and grant no 
 assignment or execution authority.
 
 Both batch RPCs are idempotent at the individual Market key/provenance boundary. Re-running a batch
-does not duplicate unchanged entries. A changed upstream revision must still use a new immutable
-Market key.
+does not duplicate unchanged entries. Batch responses contain compact catalog entries only; Original
+and adapted content remain retrievable only through an explicit `market/get`, so population does not
+dump dozens of Skill bodies into the caller context. A changed upstream revision must still use a new
+immutable Market key.
 
 For the Trading Project, indexing a live-capable original remains allowed as reference knowledge.
 It does not make the Skill active. Installation or execution still requires the normal Project
