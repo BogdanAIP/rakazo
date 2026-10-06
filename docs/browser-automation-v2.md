@@ -268,15 +268,26 @@ Measure and define routing across Extension, CDP, Persistent, OpenCLI and visual
 
 ### BV2-07 — physical Windows acceptance and benchmark
 
-Run the same harmless tasks through both backends:
+Run the same harmless tasks through both backends.
 
-- authenticated existing-profile page;
-- SSO/2FA-preserved page;
-- form interaction;
+The reproducible benchmark uses a deterministic HTTP server bound to `127.0.0.1`; it does not depend on `example.com` or another mutable external page. Run it on the physical Windows host with:
+
+```powershell
+pnpm --filter @rakazo/windows-host benchmark:browser-v2 -- --iterations=5
+```
+
+The default comparison is OpenCLI versus Playwright CDP. Extension acceptance remains a separate explicit test because its upstream attach flow requires browser confirmation and must not distort the normal non-interactive benchmark or automatic-routing UX.
+
+Benchmark tasks cover:
+
+- semantic link navigation;
+- form interaction and postcondition verification;
 - multi-tab isolation;
-- browser restart/recovery;
+- browser-session recovery from a fresh backend instance;
 - DOM-heavy app;
-- canvas/non-semantic fallback.
+- canvas/non-semantic screenshot fallback.
+
+Authenticated existing-profile and SSO/2FA preservation remain physical acceptance cases against the owner's browser rather than synthetic benchmark pages.
 
 Measure:
 
