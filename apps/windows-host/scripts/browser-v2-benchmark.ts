@@ -243,9 +243,7 @@ async function runIteration(mode: BenchMode, baseUrl: string, iteration: number)
     const form = await call("snapshot-form", { command: "snapshot", sessionToken: token });
     const textbox = form.elements?.find(
       (element) =>
-        element.role === "textbox" ||
-        element.role.includes("input") ||
-        /Name/iu.test(element.name),
+        element.role === "textbox" || element.role.includes("input") || /Name/iu.test(element.name),
     );
     const submit = form.elements?.find((element) => /Submit/iu.test(element.name));
     if (!textbox || !submit) throw new Error("snapshot-form did not expose form refs");
