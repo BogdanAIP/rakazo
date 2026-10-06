@@ -47,6 +47,28 @@
         "examples/agents_api/apps/document_review/skills/expense-review-policy/SKILL.md",
         "examples/evals/realtime_evals/skills/bootstrap-realtime-eval/SKILL.md"
       ]
+    },
+    {
+      "repository": "google-gemini/gemini-cli",
+      "commit": "fb972b2f87fe7d5b06d37eac711490162d98de2c",
+      "license": "Apache-2.0",
+      "skills": [
+        ".gemini/skills/behavioral-evals/SKILL.md",
+        ".gemini/skills/ci/SKILL.md",
+        ".gemini/skills/code-reviewer/SKILL.md",
+        ".gemini/skills/docs-writer/SKILL.md",
+        ".gemini/skills/github-issue-creator/SKILL.md",
+        ".gemini/skills/pr-address-comments/SKILL.md",
+        ".gemini/skills/pr-creator/SKILL.md",
+        ".gemini/skills/review-duplication/SKILL.md"
+      ]
+    },
+    {
+      "repository": "microsoft/skills",
+      "commit": "18eb319b121b92ea19ca911fc3bd4cc53769bb1c",
+      "license": "MIT",
+      "skills": [],
+      "selection": "Search/index all 205 first-party SKILL.md paths; import only task-matched Skills on demand rather than preloading the entire catalog."
     }
   ]
 }
