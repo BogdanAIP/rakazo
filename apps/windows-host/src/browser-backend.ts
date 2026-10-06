@@ -1,7 +1,4 @@
-import type {
-  WindowsHostBrowserRequest,
-  WindowsHostBrowserResult,
-} from "@rakazo/contracts";
+import type { WindowsHostBrowserRequest, WindowsHostBrowserResult } from "@rakazo/contracts";
 
 export interface WindowsBrowserBackend {
   available(): boolean;
