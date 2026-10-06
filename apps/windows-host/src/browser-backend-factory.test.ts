@@ -6,6 +6,10 @@ import type {
 import { describe, expect, it, vi } from "vitest";
 import type { WindowsBrowserBackend } from "./browser-backend.js";
 import { WindowsBrowserBackendRouter } from "./browser-backend-factory.js";
+import {
+  browserModeHasStableParity,
+  missingStableBrowserCapabilities,
+} from "./browser-capabilities.js";
 
 type ResolvedMode = Exclude<WindowsHostBrowserMode, "auto">;
 
@@ -49,6 +53,20 @@ function router(
     defaultMode,
   );
 }
+
+describe("browser capability parity", () => {
+  it("keeps OpenCLI fully enabled and Playwright parity gaps explicit", () => {
+    expect(browserModeHasStableParity("opencli")).toBe(true);
+    for (const mode of [
+      "playwright-cli-extension",
+      "playwright-cli-cdp",
+      "playwright-cli-persistent",
+    ] as const) {
+      expect(browserModeHasStableParity(mode)).toBe(false);
+      expect(missingStableBrowserCapabilities(mode)).toEqual(["screenshot.annotate"]);
+    }
+  });
+});
 
 describe("WindowsBrowserBackendRouter", () => {
   it("keeps OpenCLI as the default for existing callers", async () => {
