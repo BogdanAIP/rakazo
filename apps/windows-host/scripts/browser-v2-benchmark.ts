@@ -1,19 +1,19 @@
+import { rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { rm } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 import type { WindowsHostBrowserRequest, WindowsHostBrowserResult } from "@rakazo/contracts";
 import {
   loadOpenCliConfiguration,
+  type OpenCliRunner,
   runOpenCliProcess,
   WindowsOpenCliBackend,
-  type OpenCliRunner,
 } from "../src/opencli.js";
 import {
+  type PlaywrightCliRunner,
   runPlaywrightCliProcess,
   WindowsPlaywrightCliBackend,
-  type PlaywrightCliRunner,
 } from "../src/playwright-cli.js";
 import { loadPlaywrightCliConfiguration } from "../src/playwright-cli-config.js";
 
@@ -170,7 +170,10 @@ function measuredPlaywrightRunner(metrics: ProcessMetrics): PlaywrightCliRunner 
 
 function createBackend(mode: BenchMode, stateDir: string, processMetrics: ProcessMetrics) {
   if (mode === "opencli") {
-    return new WindowsOpenCliBackend(loadOpenCliConfiguration(), measuredOpenCliRunner(processMetrics));
+    return new WindowsOpenCliBackend(
+      loadOpenCliConfiguration(),
+      measuredOpenCliRunner(processMetrics),
+    );
   }
 
   const config = loadPlaywrightCliConfiguration({
@@ -179,7 +182,11 @@ function createBackend(mode: BenchMode, stateDir: string, processMetrics: Proces
     RAKAZO_PLAYWRIGHT_BROWSER_CHANNEL:
       process.env.RAKAZO_PLAYWRIGHT_BROWSER_CHANNEL?.trim() || "chrome",
   });
-  return new WindowsPlaywrightCliBackend(config, stateDir, measuredPlaywrightRunner(processMetrics));
+  return new WindowsPlaywrightCliBackend(
+    config,
+    stateDir,
+    measuredPlaywrightRunner(processMetrics),
+  );
 }
 
 async function runIteration(mode: BenchMode, baseUrl: string, iteration: number) {
