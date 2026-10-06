@@ -6,6 +6,7 @@ const cdpConfig: PlaywrightCliConfiguration = {
   mode: "playwright-cli-cdp",
   entry: process.execPath,
   browserChannel: "chrome",
+  cdpEndpoint: null,
   userDataDir: null,
 };
 
@@ -77,6 +78,31 @@ describe("WindowsPlaywrightCliBackend", () => {
     });
     expect(result.pageId).toMatch(/^pw-0-[0-9a-f]{12}$/u);
     expect(result.pageIds).toEqual([result.pageId]);
+  });
+
+  it("prefers an explicit CDP endpoint over channel discovery", async () => {
+    const calls: string[][] = [];
+    const runner = fakeRunner((argv) => {
+      calls.push(argv);
+      const command = argv[1];
+      if (command === "attach") return JSON.stringify({ result: {} });
+      if (command === "tab-list") return currentTab();
+      if (command === "snapshot") return exampleSnapshot();
+      throw new Error(`unexpected args: ${argv.join(" ")}`);
+    });
+    const backend = new WindowsPlaywrightCliBackend(
+      { ...cdpConfig, cdpEndpoint: "http://127.0.0.1:9222/" },
+      process.cwd(),
+      runner,
+    );
+    const opened = await backend.browser("bot-a", { command: "open" });
+    await backend.browser("bot-a", {
+      command: "snapshot",
+      sessionToken: opened.sessionToken!,
+    });
+
+    expect(calls.some((argv) => argv.includes("--cdp=http://127.0.0.1:9222/"))).toBe(true);
+    expect(calls.some((argv) => argv.includes("--cdp=chrome"))).toBe(false);
   });
 
   it("supports browser-confirmed Extension attach as a first-class mode", async () => {
