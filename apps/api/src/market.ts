@@ -25,6 +25,14 @@ export const CURATED_MARKET_REPOSITORIES = {
   "modelcontextprotocol/servers": {
     license: "Apache-2.0 transition; verify component notices",
   },
+  "coinbase/agents": { license: "MIT" },
+  "Uniswap/uniswap-ai": { license: "MIT" },
+  "aave/skills": { license: "MIT" },
+  "krakenfx/kraken-cli": { license: "MIT" },
+  "bybit-exchange/skills": { license: "MIT" },
+  "alpacahq/alpaca-skills": { license: "Apache-2.0" },
+  "okx/agent-trade-kit": { license: "MIT" },
+  "coinbase/agentic-wallet-skills": { license: "MIT" },
   "BogdanAIP/rakazo": { license: "repository license" },
 } as const;
 
