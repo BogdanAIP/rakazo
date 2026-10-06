@@ -43,6 +43,12 @@ import {
   GroupDetailSchema,
   GroupSchema,
   IntegrationCatalogResultSchema,
+  MarketAdaptationModeSchema,
+  MarketCatalogEntrySchema,
+  MarketEntryKindSchema,
+  MarketEntrySchema,
+  MarketPreferredVariantSchema,
+  MarketTrustSchema,
   McpServerConfigInput,
   McpServerSchema,
   MemoryDocumentSchema,
@@ -730,6 +736,87 @@ export const appContract = {
     create: oc.input(CreateAgentSkillInput).output(AgentSkillSchema),
     update: oc.input(UpdateAgentSkillInput).output(AgentSkillSchema),
     remove: oc.input(z.object({ skillId: Id })).output(z.object({ ok: z.literal(true) })),
+  },
+  market: {
+    search: oc
+      .input(
+        z.object({
+          query: z.string().trim().max(200).default(""),
+          kind: MarketEntryKindSchema.optional(),
+          limit: z.number().int().min(1).max(100).default(20),
+        }),
+      )
+      .output(z.array(MarketCatalogEntrySchema)),
+    get: oc
+      .input(
+        z
+          .object({
+            entryId: Id.optional(),
+            kind: MarketEntryKindSchema.optional(),
+            key: z.string().min(1).max(500).optional(),
+          })
+          .superRefine((input, ctx) => {
+            const byId = Boolean(input.entryId);
+            const byKey = Boolean(input.kind && input.key);
+            if (byId === byKey) {
+              ctx.addIssue({
+                code: "custom",
+                message: "Provide entryId or kind + key",
+                path: ["entryId"],
+              });
+            }
+          }),
+      )
+      .output(MarketEntrySchema),
+    import: oc
+      .input(
+        z.object({
+          kind: MarketEntryKindSchema,
+          key: z.string().trim().min(1).max(500),
+          name: z.string().trim().min(1).max(120).optional(),
+          description: z.string().trim().max(2_000).optional(),
+          tags: z.array(z.string().trim().min(1).max(80)).max(50).default([]),
+          content: z.string().min(1).max(200_000),
+          sourceUrl: z.string().url().max(2_048),
+          repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
+          sourcePath: z.string().max(2_048).optional(),
+          sourceRef: z.string().regex(/^[0-9a-f]{40}$/),
+          license: z.string().max(120).optional(),
+          trust: MarketTrustSchema.default("curated"),
+          metadata: z.record(z.string(), z.unknown()).default({}),
+        }),
+      )
+      .output(MarketEntrySchema),
+    adapt: oc
+      .input(
+        z.object({
+          entryId: Id,
+          expectedDigest: z.string().regex(/^[0-9a-f]{64}$/),
+          mode: MarketAdaptationModeSchema,
+          content: z.string().min(1).max(200_000),
+        }),
+      )
+      .output(MarketEntrySchema),
+    evaluate: oc
+      .input(
+        z.object({
+          entryId: Id,
+          expectedDigest: z.string().regex(/^[0-9a-f]{64}$/),
+          preferredVariant: MarketPreferredVariantSchema,
+          metrics: z.record(z.string(), z.unknown()).default({}),
+          note: z.string().max(2_000).optional(),
+        }),
+      )
+      .output(MarketEntrySchema),
+    install: oc
+      .input(
+        z.object({
+          entryId: Id,
+          variant: MarketPreferredVariantSchema.optional(),
+          nameOverride: z.string().trim().min(1).max(80).optional(),
+        }),
+      )
+      .output(AgentSkillSchema),
   },
   capabilities: {
     list: oc.output(z.array(CapabilityInstallSchema)),
