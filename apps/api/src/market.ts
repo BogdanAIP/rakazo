@@ -370,16 +370,34 @@ export function createMarketService(
       actor: Actor,
       input: { query: string; kind?: MarketEntryKind; limit: number },
     ): Promise<MarketCatalogEntry[]> {
-      const rows = await prisma.marketEntry.findMany({
-        where: {
-          spaceId: actor.spaceId,
-          userId: actor.userId,
-          ...(input.kind ? { kind: input.kind } : {}),
-        },
-        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-        take: 2_000,
-      });
       const query = input.query.trim();
+      const normalized = query.toLowerCase();
+      const terms = [...new Set([normalized, ...normalized.split(/\s+/).filter(Boolean)])].slice(
+        0,
+        12,
+      );
+      const where: Prisma.MarketEntryWhereInput = {
+        spaceId: actor.spaceId,
+        userId: actor.userId,
+        ...(input.kind ? { kind: input.kind } : {}),
+        ...(query
+          ? {
+              OR: [
+                ...terms.flatMap((term) => [
+                  { key: { contains: term, mode: "insensitive" as const } },
+                  { name: { contains: term, mode: "insensitive" as const } },
+                  { description: { contains: term, mode: "insensitive" as const } },
+                ]),
+                { tags: { hasSome: terms } },
+              ],
+            }
+          : {}),
+      };
+      const rows = await prisma.marketEntry.findMany({
+        where,
+        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+        take: query ? Math.min(Math.max(input.limit * 25, 250), 2_000) : input.limit,
+      });
       const ranked = query
         ? rows
             .map((row) => ({ row, score: scoreEntry(row, query) }))
