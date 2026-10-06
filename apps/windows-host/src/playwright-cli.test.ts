@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { type PlaywrightCliRunner, WindowsPlaywrightCliBackend } from "./playwright-cli.js";
+import {
+  type PlaywrightCliRunner,
+  resolveWindowsDevToolsActivePortEndpoint,
+  WindowsPlaywrightCliBackend,
+} from "./playwright-cli.js";
 import type { PlaywrightCliConfiguration } from "./playwright-cli-config.js";
 
 const cdpConfig: PlaywrightCliConfiguration = {
@@ -32,6 +36,38 @@ function exampleSnapshot(name = "Continue") {
     ],
   });
 }
+
+describe("resolveWindowsDevToolsActivePortEndpoint", () => {
+  it("builds the browser websocket endpoint from Chrome DevToolsActivePort", async () => {
+    const result = await resolveWindowsDevToolsActivePortEndpoint(
+      "chrome",
+      "C:\\Users\\test\\AppData\\Local",
+      async (filePath) => {
+        expect(filePath).toContain("Google");
+        expect(filePath).toContain("Chrome");
+        expect(filePath).toContain("DevToolsActivePort");
+        return "9222\n/devtools/browser/abc-123\n";
+      },
+    );
+    expect(result).toBe("ws://127.0.0.1:9222/devtools/browser/abc-123");
+  });
+
+  it("fails closed for malformed or unavailable discovery data", async () => {
+    await expect(
+      resolveWindowsDevToolsActivePortEndpoint(
+        "chrome",
+        "C:\\Users\\test\\AppData\\Local",
+        async () => "not-a-port\n/devtools/browser/abc",
+      ),
+    ).resolves.toBeNull();
+
+    await expect(
+      resolveWindowsDevToolsActivePortEndpoint("chrome", undefined, async () => {
+        throw new Error("must not run");
+      }),
+    ).resolves.toBeNull();
+  });
+});
 
 describe("WindowsPlaywrightCliBackend", () => {
   it("mints a Rakazo bearer token without touching the browser", async () => {
