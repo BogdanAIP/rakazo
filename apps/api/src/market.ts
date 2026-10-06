@@ -71,6 +71,18 @@ type MarketEntryRow = {
   updatedAt: Date;
 };
 
+type GithubImportInput = {
+  kind: MarketEntryKind;
+  key: string;
+  name?: string;
+  description?: string;
+  tags: string[];
+  repository: string;
+  sourcePath: string;
+  sourceRef: string;
+  metadata: Record<string, unknown>;
+};
+
 type ImportInput = {
   kind: MarketEntryKind;
   key: string;
@@ -440,17 +452,7 @@ export function createMarketService(
 
     async importGithub(
       actor: Actor,
-      input: {
-        kind: MarketEntryKind;
-        key: string;
-        name?: string;
-        description?: string;
-        tags: string[];
-        repository: string;
-        sourcePath: string;
-        sourceRef: string;
-        metadata: Record<string, unknown>;
-      },
+      input: GithubImportInput,
       signal?: AbortSignal,
     ): Promise<MarketEntry> {
       assertCuratedRepository(input.repository);
@@ -478,6 +480,18 @@ export function createMarketService(
         trust: "curated",
         metadata: input.metadata,
       });
+    },
+
+    async importGithubBatch(
+      actor: Actor,
+      items: GithubImportInput[],
+      signal?: AbortSignal,
+    ): Promise<MarketEntry[]> {
+      const imported: MarketEntry[] = [];
+      for (const item of items) {
+        imported.push(await this.importGithub(actor, item, signal));
+      }
+      return imported;
     },
 
     async importEntry(actor: Actor, input: ImportInput): Promise<MarketEntry> {
