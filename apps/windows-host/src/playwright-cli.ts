@@ -671,12 +671,9 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
       const discoveredEndpoint = this.config.browserChannel
         ? await resolveWindowsDevToolsActivePortEndpoint(this.config.browserChannel)
         : null;
-      const cdpTarget =
-        this.config.cdpEndpoint ?? discoveredEndpoint ?? this.config.browserChannel;
+      const cdpTarget = this.config.cdpEndpoint ?? discoveredEndpoint ?? this.config.browserChannel;
       if (!cdpTarget) throw new Error("Playwright CDP endpoint or browser channel is missing");
-      parseJson(
-        await this.invoke(session, ["attach", `--cdp=${cdpTarget}`], ATTACH_TIMEOUT_MS),
-      );
+      parseJson(await this.invoke(session, ["attach", `--cdp=${cdpTarget}`], ATTACH_TIMEOUT_MS));
     } else if (this.config.mode === "playwright-cli-extension") {
       if (!this.config.browserChannel) throw new Error("Playwright browser channel is missing");
       parseJson(
