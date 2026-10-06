@@ -4,12 +4,13 @@ import { loadPlaywrightCliConfiguration, probePlaywrightCli } from "./playwright
 describe("Playwright CLI configuration", () => {
   it("keeps OpenCLI as the default browser backend", () => {
     const config = loadPlaywrightCliConfiguration({});
-    expect(config).toEqual({
+    expect(config).toMatchObject({
       mode: "opencli",
-      entry: null,
       browserChannel: null,
       userDataDir: null,
     });
+    expect(config.entry).toContain("@playwright");
+    expect(config.entry).toMatch(/playwright-cli\.js$/u);
     expect(probePlaywrightCli(config)).toMatchObject({
       mode: "opencli",
       ready: false,
