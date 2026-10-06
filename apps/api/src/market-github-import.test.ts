@@ -25,9 +25,7 @@ function setup(fetch: typeof globalThis.fetch) {
   const rows: Array<Record<string, unknown>> = [];
   const marketEntry = {
     findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) =>
-      rows.find((row) =>
-        Object.entries(where).every(([key, value]) => row[key] === value),
-      ),
+      rows.find((row) => Object.entries(where).every(([key, value]) => row[key] === value)),
     ),
     create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
       const row = {
@@ -129,11 +127,12 @@ describe("Market curated GitHub import", () => {
   });
 
   it("rejects redirects from the fixed pinned-content host", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
-      new Response(null, {
-        status: 302,
-        headers: { location: "https://example.invalid/payload" },
-      }),
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      async () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://example.invalid/payload" },
+        }),
     );
     const { service } = setup(fetch);
 
@@ -151,11 +150,12 @@ describe("Market curated GitHub import", () => {
   });
 
   it("rejects an oversized source before reading its body", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
-      new Response("ignored", {
-        status: 200,
-        headers: { "content-length": "200001" },
-      }),
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      async () =>
+        new Response("ignored", {
+          status: 200,
+          headers: { "content-length": "200001" },
+        }),
     );
     const { service } = setup(fetch);
 
