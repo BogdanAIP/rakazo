@@ -1,11 +1,11 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  PINNED_PLAYWRIGHT_CLI_VERSION,
   inspectPlaywrightCli,
   loadPlaywrightCliConfiguration,
+  PINNED_PLAYWRIGHT_CLI_VERSION,
 } from "./playwright-cli.js";
 
 function fixture(version = PINNED_PLAYWRIGHT_CLI_VERSION, name = "@playwright/cli") {
