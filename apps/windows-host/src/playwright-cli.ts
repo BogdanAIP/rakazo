@@ -697,9 +697,7 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
       const cdpTarget = this.config.cdpEndpoint ?? discoveredEndpoint ?? this.config.browserChannel;
       if (!cdpTarget) throw new Error("Playwright CDP endpoint or browser channel is missing");
       try {
-        parseJson(
-          await this.invoke(session, ["attach", `--cdp=${cdpTarget}`], ATTACH_TIMEOUT_MS),
-        );
+        parseJson(await this.invoke(session, ["attach", `--cdp=${cdpTarget}`], ATTACH_TIMEOUT_MS));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (/timed out/iu.test(message)) {
