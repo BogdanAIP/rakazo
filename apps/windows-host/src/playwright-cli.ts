@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, stat, unlink } from "node:fs/promises";
 import path from "node:path";
@@ -11,14 +11,42 @@ const MAX_OUTPUT_BYTES = 64 * 1024;
 const MAX_SCREENSHOT_BYTES = 4 * 1024 * 1024;
 const PNG_SIGNATURE_HEX = "89504e470d0a1a0a";
 const COMMAND_TIMEOUT_MS = 12_000;
+const ATTACH_TIMEOUT_MS = 25_000;
+const MAX_ACTIONS = 4;
 const MAX_ACTIVE_SESSIONS = 32;
+const MAX_TABS = 8;
 const SESSION_TOKEN_TTL_MS = 30 * 60_000;
 const SAFE_BOT_ID = /^[a-zA-Z0-9_-]{1,100}$/u;
+
+interface BrowserElement {
+  ref: string;
+  role: string;
+  name: string;
+}
+
+interface BrowserTab {
+  index: number;
+  current: boolean;
+  title: string;
+  url: string;
+  pageId: string;
+}
+
+interface BrowserObservation {
+  url: string;
+  title: string;
+  tree: string;
+  elements: BrowserElement[];
+  pageId?: string;
+  pageIds: string[];
+}
 
 interface PlaywrightCliSessionState {
   botId: string;
   lastActivity: number;
   backendReady: boolean;
+  tabs: Map<string, BrowserTab>;
+  observation?: BrowserObservation;
 }
 
 interface PlaywrightCliJson {
@@ -33,12 +61,14 @@ export type PlaywrightCliRunner = (
   entry: string,
   argv: string[],
   cwd: string,
+  timeoutMs?: number,
 ) => Promise<string>;
 
 export async function runPlaywrightCliProcess(
   entry: string,
   argv: string[],
   cwd: string,
+  timeoutMs = COMMAND_TIMEOUT_MS,
 ): Promise<string> {
   await mkdir(path.join(cwd, ".playwright"), { recursive: true });
   return new Promise<string>((resolve, reject) => {
@@ -76,8 +106,8 @@ export async function runPlaywrightCliProcess(
     };
     const timeout = setTimeout(() => {
       child.kill();
-      finish(new Error("Playwright CLI command timed out"));
-    }, COMMAND_TIMEOUT_MS);
+      finish(new Error("Playwright CLI command timed out; action outcome is uncertain"));
+    }, timeoutMs);
     child.stdout.on("data", (buffer: Buffer) => append(buffer, false));
     child.stderr.on("data", (buffer: Buffer) => append(buffer, true));
     child.on("error", (error: Error) => finish(error));
@@ -94,8 +124,26 @@ export async function runPlaywrightCliProcess(
   });
 }
 
-function browserSessionName(botId: string, token: string): string {
-  return `rakazo-${botId}-${token.replace(/-/gu, "")}`;
+function modeSlug(mode: PlaywrightCliConfiguration["mode"]): string {
+  switch (mode) {
+    case "playwright-cli-extension":
+      return "ext";
+    case "playwright-cli-cdp":
+      return "cdp";
+    case "playwright-cli-persistent":
+      return "persist";
+    default:
+      return "unknown";
+  }
+}
+
+function browserSessionName(
+  mode: PlaywrightCliConfiguration["mode"],
+  botId: string,
+  token: string,
+): string {
+  const botHash = createHash("sha256").update(botId).digest("hex").slice(0, 12);
+  return `rakazo-pw-${modeSlug(mode)}-${botHash}-${token.replace(/-/gu, "")}`;
 }
 
 function parseJson(output: string): PlaywrightCliJson {
@@ -121,8 +169,8 @@ function snapshotTree(snapshot: unknown): string {
   return JSON.stringify(snapshot ?? [], null, 2).slice(0, MAX_OUTPUT_BYTES);
 }
 
-function snapshotElements(snapshot: unknown): Array<{ ref: string; role: string; name: string }> {
-  const result: Array<{ ref: string; role: string; name: string }> = [];
+function snapshotElements(snapshot: unknown): BrowserElement[] {
+  const result: BrowserElement[] = [];
   const seen = new Set<string>();
   const visit = (value: unknown) => {
     if (result.length >= 500) return;
@@ -147,18 +195,42 @@ function snapshotElements(snapshot: unknown): Array<{ ref: string; role: string;
   return result;
 }
 
-function currentTabMetadata(result: unknown): { url: string; title: string } {
-  if (typeof result !== "string") return { url: "", title: "" };
-  const line = result
-    .split(/\r?\n/u)
-    .find((candidate) => /^- \d+: \(current\) /u.test(candidate.trim()));
-  if (!line) return { url: "", title: "" };
-  const match = /^- \d+: \(current\) \[(.*)\]\((.*)\)$/u.exec(line.trim());
-  if (!match) return { url: "", title: "" };
-  return {
-    title: (match[1] ?? "").slice(0, 2_048),
-    url: (match[2] ?? "").slice(0, 4_096),
-  };
+function tabPageId(index: number, title: string, url: string): string {
+  const digest = createHash("sha256")
+    .update(String(index))
+    .update("\0")
+    .update(title)
+    .update("\0")
+    .update(url)
+    .digest("hex")
+    .slice(0, 12);
+  return `pw-${index}-${digest}`;
+}
+
+function parseTabs(result: unknown): BrowserTab[] {
+  if (typeof result !== "string") throw new Error("Playwright CLI returned an invalid tab list");
+  const tabs: BrowserTab[] = [];
+  for (const rawLine of result.split(/\r?\n/u)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const match = /^- (\d+): (?:(\(current\)) )?\[(.*)\]\((.*)\)$/u.exec(line);
+    if (!match) throw new Error("Playwright CLI returned an unrecognized tab list");
+    const index = Number(match[1]);
+    if (!Number.isSafeInteger(index) || index < 0 || index > 1_000) {
+      throw new Error("Playwright CLI returned an invalid tab index");
+    }
+    const title = (match[3] ?? "").slice(0, 2_048);
+    const url = (match[4] ?? "").slice(0, 4_096);
+    tabs.push({
+      index,
+      current: Boolean(match[2]),
+      title,
+      url,
+      pageId: tabPageId(index, title, url),
+    });
+  }
+  if (tabs.length > MAX_TABS) throw new Error("Playwright CLI returned too many tabs");
+  return tabs;
 }
 
 function listedBrowsers(value: unknown): Array<Record<string, unknown>> {
@@ -174,11 +246,11 @@ function sleep(ms: number) {
 }
 
 /**
- * Bounded Playwright CLI implementation of the existing Windows browser-session contract.
+ * Playwright CLI implementation of the existing Windows browser-session contract.
  *
- * BV2-03 deliberately exposes read-only semantic operations only. Navigation,
- * DOM mutation and tab mutation stay disabled until owned-tab semantics are
- * proven in BV2-04.
+ * The public surface remains Rakazo computer/browser. Raw Playwright eval,
+ * WebMCP, storage/network mutation and arbitrary uploads are not projected as
+ * implicit capabilities here.
  */
 export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
   private readonly sessions = new Map<string, PlaywrightCliSessionState>();
@@ -194,12 +266,16 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
       !this.config.entry ||
       (!path.isAbsolute(this.config.entry) && !path.win32.isAbsolute(this.config.entry)) ||
       !existsSync(this.config.entry)
-    )
+    ) {
       return false;
-    if (this.config.mode === "playwright-cli-cdp") return Boolean(this.config.browserChannel);
+    }
+    if (
+      this.config.mode === "playwright-cli-cdp" ||
+      this.config.mode === "playwright-cli-extension"
+    ) {
+      return Boolean(this.config.browserChannel);
+    }
     if (this.config.mode === "playwright-cli-persistent") return Boolean(this.config.userDataDir);
-    // Extension attach needs an explicit interactive approval flow, which is
-    // intentionally not activated by this read-only backend slice.
     return false;
   }
 
@@ -208,7 +284,7 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
     request: WindowsHostBrowserRequest,
   ): Promise<WindowsHostBrowserResult> {
     if (!SAFE_BOT_ID.test(botId)) throw new Error("Invalid browser bot identity");
-    if (!this.config.entry) throw new Error("Playwright CLI entry is not configured");
+    if (!this.available()) throw new Error("Configured Playwright CLI backend is unavailable");
 
     if (request.command === "open") {
       await this.cleanupExpired();
@@ -220,37 +296,13 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
         botId,
         lastActivity: Date.now(),
         backendReady: false,
+        tabs: new Map(),
       });
       return { ok: true, sessionToken };
     }
 
     if (request.command === "recover") {
-      const existing = this.sessions.get(request.sessionToken);
-      if (existing) {
-        if (existing.botId !== botId) throw new Error("Unknown browser session");
-        if (Date.now() - existing.lastActivity >= SESSION_TOKEN_TTL_MS) {
-          this.sessions.delete(request.sessionToken);
-          return { ok: false, error: "Browser session expired; open a new session first" };
-        }
-        existing.lastActivity = Date.now();
-        return { ok: true, sessionToken: request.sessionToken };
-      }
-
-      const session = browserSessionName(botId, request.sessionToken);
-      const listed = parseJson(await this.invokeGlobal("list"));
-      const match = listedBrowsers(listed.browsers).find(
-        (entry) => entry.name === session && entry.status === "open",
-      );
-      if (!match) return { ok: false, error: "No recoverable Playwright browser session found" };
-      if (this.sessions.size >= MAX_ACTIVE_SESSIONS) {
-        throw new Error("Too many live browser sessions; close your own session or wait for expiry");
-      }
-      this.sessions.set(request.sessionToken, {
-        botId,
-        lastActivity: Date.now(),
-        backendReady: true,
-      });
-      return { ok: true, sessionToken: request.sessionToken };
+      return this.recover(botId, request.sessionToken);
     }
 
     const state = this.sessions.get(request.sessionToken);
@@ -261,32 +313,21 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
     }
     state.lastActivity = Date.now();
 
-    if (
-      request.command === "navigate" ||
-      request.command === "scroll" ||
-      request.command === "tabNew" ||
-      request.command === "tabSelect" ||
-      request.command === "tabClose" ||
-      request.command === "act"
-    ) {
-      return {
-        ok: false,
-        error: "This Playwright backend slice is read-only; use OpenCLI or wait for BV2-04",
-      };
-    }
-
-    const session = browserSessionName(botId, request.sessionToken);
+    const session = browserSessionName(this.config.mode, botId, request.sessionToken);
 
     if (request.command === "close") {
-      if (state.backendReady) {
-        try {
-          if (this.config.mode === "playwright-cli-cdp")
-            await this.invoke(session, "detach");
-          else await this.invoke(session, "close");
-        } finally {
-          this.sessions.delete(request.sessionToken);
+      try {
+        if (state.backendReady) {
+          if (
+            this.config.mode === "playwright-cli-cdp" ||
+            this.config.mode === "playwright-cli-extension"
+          ) {
+            parseJson(await this.invoke(session, ["detach"]));
+          } else {
+            parseJson(await this.invoke(session, ["close"]));
+          }
         }
-      } else {
+      } finally {
         this.sessions.delete(request.sessionToken);
       }
       return { ok: true };
@@ -294,13 +335,23 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
 
     await this.ensureBackendSession(session, state);
 
+    if (request.command === "navigate") {
+      const url = new URL(request.url);
+      if (url.protocol !== "https:" && url.protocol !== "http:") {
+        throw new Error("Only HTTP(S) browser navigation is allowed");
+      }
+      state.observation = undefined;
+      parseJson(await this.invoke(session, ["goto", url.href]));
+      return { ok: true, ...(await this.observe(session, state)) };
+    }
+
     if (request.command === "snapshot") {
-      return { ok: true, ...(await this.observe(session)) };
+      return { ok: true, ...(await this.observe(session, state)) };
     }
 
     if (request.command === "find") {
       try {
-        const payload = parseJson(await this.invoke(session, "snapshot", request.css));
+        const payload = parseJson(await this.invoke(session, ["snapshot", request.css]));
         return { ok: true, content: snapshotTree(payload.snapshot) };
       } catch (error) {
         return {
@@ -311,116 +362,346 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
     }
 
     if (request.command === "wait") {
-      const deadline = Date.now() + (request.timeoutMs ?? 9_000);
-      let lastError = "Browser wait condition was not met";
-      while (Date.now() < deadline) {
-        try {
-          if (request.kind === "selector") {
-            const payload = parseJson(await this.invoke(session, "snapshot", request.value));
-            return { ok: true, content: snapshotTree(payload.snapshot) };
-          }
-          const payload = parseJson(
-            await this.invoke(session, "find", request.value, "--max-results=1"),
-          );
-          const content = typeof payload.result === "string" ? payload.result : "";
-          if (content && !/^No matches found/iu.test(content.trim()))
-            return { ok: true, content: content.slice(0, MAX_OUTPUT_BYTES) };
-          lastError = content || lastError;
-        } catch (error) {
-          lastError = error instanceof Error ? error.message : String(error);
-        }
-        await sleep(200);
-      }
-      return { ok: false, error: lastError.slice(0, 500) };
+      return this.waitFor(session, request.kind, request.value, request.timeoutMs ?? 9_000);
     }
 
     if (request.command === "extract") {
-      const payload = parseJson(
-        await this.invoke(session, "snapshot", ...(request.selector ? [request.selector] : [])),
-      );
-      const content = snapshotTree(payload.snapshot);
+      const args = request.selector
+        ? [
+            "eval",
+            '(element) => element.innerText || element.textContent || ""',
+            request.selector,
+          ]
+        : ["eval", '() => document.body.innerText || ""'];
+      const payload = parseJson(await this.invoke(session, args));
+      const content = typeof payload.result === "string" ? payload.result : "";
       const start = request.start ?? 0;
       return { ok: true, content: content.slice(start, start + MAX_OUTPUT_BYTES) };
     }
 
+    if (request.command === "scroll") {
+      state.observation = undefined;
+      const amount = request.amount ?? 500;
+      const deltaY = request.direction === "down" ? amount : -amount;
+      parseJson(await this.invoke(session, ["mousewheel", "0", String(deltaY)]));
+      return { ok: true };
+    }
+
     if (request.command === "screenshot") {
-      if (request.annotate || request.width !== undefined || request.height !== undefined) {
+      return this.screenshot(session, request);
+    }
+
+    if (request.command === "tabNew") {
+      state.observation = undefined;
+      const args = ["tab-new"];
+      if (request.url) {
+        const url = new URL(request.url);
+        if (url.protocol !== "https:" && url.protocol !== "http:") {
+          throw new Error("Only HTTP(S) browser navigation is allowed");
+        }
+        args.push(url.href);
+      }
+      const payload = parseJson(await this.invoke(session, args));
+      const tabs = this.rememberTabs(state, parseTabs(payload.result));
+      const current = tabs.find((tab) => tab.current);
+      if (!current) {
+        return { ok: false, uncertain: true, error: "Playwright created a tab but lost current-tab identity" };
+      }
+      return { ok: true, pageId: current.pageId, pageIds: tabs.map((tab) => tab.pageId) };
+    }
+
+    if (request.command === "tabSelect") {
+      const tab = await this.requireFreshTab(session, state, request.pageId);
+      state.observation = undefined;
+      parseJson(await this.invoke(session, ["tab-select", String(tab.index)]));
+      const tabs = await this.refreshTabs(session, state);
+      const selected = tabs.find((candidate) => candidate.current);
+      if (!selected || selected.url !== tab.url || selected.title !== tab.title) {
+        return { ok: false, uncertain: true, error: "Playwright selected a different tab than requested" };
+      }
+      return { ok: true, pageId: selected.pageId, pageIds: tabs.map((candidate) => candidate.pageId) };
+    }
+
+    if (request.command === "tabClose") {
+      const tab = await this.requireFreshTab(session, state, request.pageId);
+      state.observation = undefined;
+      try {
+        const payload = parseJson(await this.invoke(session, ["tab-close", String(tab.index)]));
+        const tabs = this.rememberTabs(state, parseTabs(payload.result));
+        return { ok: true, pageId: request.pageId, pageIds: tabs.map((candidate) => candidate.pageId) };
+      } catch (error) {
+        state.tabs.delete(request.pageId);
         return {
           ok: false,
-          error: "Annotated/resized Playwright screenshots are deferred until BV2-04",
+          uncertain: true,
+          error: error instanceof Error ? error.message.slice(0, 500) : "Browser tab close failed",
         };
-      }
-      const fileName = `rakazo-playwright-${randomUUID()}.png`;
-      const screenshotPath = path.join(this.workspaceDir(), fileName);
-      try {
-        parseJson(await this.invoke(session, "screenshot", `--filename=${fileName}`));
-        const imageInfo = await stat(screenshotPath);
-        if (imageInfo.size === 0 || imageInfo.size > MAX_SCREENSHOT_BYTES) {
-          throw new Error("Playwright screenshot exceeded the 4 MiB PNG limit");
-        }
-        const image = await readFile(screenshotPath);
-        if (image.subarray(0, 8).toString("hex") !== PNG_SIGNATURE_HEX) {
-          throw new Error("Playwright screenshot did not produce a PNG");
-        }
-        return { ok: true, imageBase64: image.toString("base64"), mimeType: "image/png" };
-      } finally {
-        await unlink(screenshotPath).catch(() => undefined);
       }
     }
 
-    throw new Error("Unsupported Playwright browser command");
+    if (request.actions.length > MAX_ACTIONS) {
+      throw new Error("At most four browser actions may be executed per command");
+    }
+    const previous = state.observation;
+    if (!previous) throw new Error("Observe this browser session before acting");
+
+    let completed = 0;
+    let mutationStarted = false;
+    try {
+      for (const action of request.actions) {
+        const current = await this.observe(session, state);
+        const expected = previous.elements.find((element) => element.ref === action.ref);
+        const actual = current.elements.find((element) => element.ref === action.ref);
+        if (
+          !expected ||
+          !actual ||
+          expected.role !== actual.role ||
+          expected.name !== actual.name ||
+          current.url !== previous.url ||
+          current.pageId !== previous.pageId
+        ) {
+          throw new Error("Stale browser reference; take a fresh snapshot");
+        }
+        if (
+          action.kind !== "click" &&
+          action.origin &&
+          new URL(current.url).origin !== action.origin
+        ) {
+          throw new Error("Browser origin changed; action rejected");
+        }
+
+        mutationStarted = true;
+        if (action.kind === "click") {
+          parseJson(await this.invoke(session, ["click", action.ref]));
+        } else if (action.kind === "fill") {
+          parseJson(await this.invoke(session, ["fill", action.ref, action.text]));
+        } else {
+          parseJson(await this.invoke(session, ["click", action.ref]));
+          parseJson(await this.invoke(session, ["type", action.text]));
+        }
+        completed += 1;
+        mutationStarted = false;
+      }
+      return { ok: true, completed, ...(await this.observe(session, state)) };
+    } catch (error) {
+      state.observation = undefined;
+      return {
+        ok: false,
+        completed,
+        uncertain:
+          completed > 0 ||
+          mutationStarted ||
+          (error instanceof Error && /outcome is uncertain/u.test(error.message)),
+        error: error instanceof Error ? error.message.slice(0, 500) : "Browser action failed",
+      };
+    }
   }
 
   private workspaceDir() {
     return path.join(this.stateDir, "playwright-cli");
   }
 
-  private invoke(session: string, ...args: string[]) {
+  private invoke(session: string, args: string[], timeoutMs = COMMAND_TIMEOUT_MS) {
     return this.runner(
       this.config.entry!,
       [`-s=${session}`, ...args],
       this.workspaceDir(),
+      timeoutMs,
     );
   }
 
-  private invokeGlobal(...args: string[]) {
-    return this.runner(this.config.entry!, args, this.workspaceDir());
+  private invokeGlobal(args: string[]) {
+    return this.runner(this.config.entry!, args, this.workspaceDir(), COMMAND_TIMEOUT_MS);
   }
 
   private async ensureBackendSession(session: string, state: PlaywrightCliSessionState) {
     if (state.backendReady) return;
+
     if (this.config.mode === "playwright-cli-cdp") {
       if (!this.config.browserChannel) throw new Error("Playwright browser channel is missing");
-      parseJson(await this.invoke(session, "attach", `--cdp=${this.config.browserChannel}`));
-    } else if (this.config.mode === "playwright-cli-persistent") {
-      if (!this.config.userDataDir) throw new Error("Playwright user-data directory is missing");
+      parseJson(await this.invoke(session, ["attach", `--cdp=${this.config.browserChannel}`]));
+    } else if (this.config.mode === "playwright-cli-extension") {
+      if (!this.config.browserChannel) throw new Error("Playwright browser channel is missing");
       parseJson(
         await this.invoke(
           session,
-          "open",
-          "about:blank",
-          `--profile=${this.config.userDataDir}`,
+          ["attach", `--extension=${this.config.browserChannel}`],
+          ATTACH_TIMEOUT_MS,
         ),
       );
-    } else if (this.config.mode === "playwright-cli-extension") {
-      throw new Error(
-        "Playwright extension attach requires interactive browser approval and is not active yet",
-      );
+    } else if (this.config.mode === "playwright-cli-persistent") {
+      if (!this.config.userDataDir) throw new Error("Playwright user-data directory is missing");
+      const args = ["open", "about:blank", `--profile=${this.config.userDataDir}`];
+      if (this.config.browserChannel) args.push(`--browser=${this.config.browserChannel}`);
+      parseJson(await this.invoke(session, args, ATTACH_TIMEOUT_MS));
     } else {
       throw new Error("Playwright CLI backend is not selected");
     }
+
     state.backendReady = true;
+    await this.refreshTabs(session, state);
   }
 
-  private async observe(session: string) {
-    const snapshot = parseJson(await this.invoke(session, "snapshot"));
-    const tabs = parseJson(await this.invoke(session, "tab-list"));
-    const metadata = currentTabMetadata(tabs.result);
-    return {
-      ...metadata,
+  private async recover(botId: string, sessionToken: string): Promise<WindowsHostBrowserResult> {
+    const existing = this.sessions.get(sessionToken);
+    if (existing) {
+      if (existing.botId !== botId) throw new Error("Unknown browser session");
+      if (Date.now() - existing.lastActivity >= SESSION_TOKEN_TTL_MS) {
+        this.sessions.delete(sessionToken);
+        return { ok: false, error: "Browser session expired; open a new session first" };
+      }
+      existing.lastActivity = Date.now();
+      return { ok: true, sessionToken, pageIds: [...existing.tabs.keys()] };
+    }
+
+    const session = browserSessionName(this.config.mode, botId, sessionToken);
+    const listed = parseJson(await this.invokeGlobal(["list"]));
+    const match = listedBrowsers(listed.browsers).find(
+      (entry) => entry.name === session && entry.status === "open",
+    );
+    if (!match) return { ok: false, error: "No recoverable Playwright browser session found" };
+    if (this.sessions.size >= MAX_ACTIVE_SESSIONS) {
+      throw new Error("Too many live browser sessions; close your own session or wait for expiry");
+    }
+
+    const state: PlaywrightCliSessionState = {
+      botId,
+      lastActivity: Date.now(),
+      backendReady: true,
+      tabs: new Map(),
+    };
+    this.sessions.set(sessionToken, state);
+    try {
+      const tabs = await this.refreshTabs(session, state);
+      return { ok: true, sessionToken, pageIds: tabs.map((tab) => tab.pageId) };
+    } catch {
+      this.sessions.delete(sessionToken);
+      return { ok: false, error: "Recoverable Playwright session could not be reconciled" };
+    }
+  }
+
+  private rememberTabs(state: PlaywrightCliSessionState, tabs: BrowserTab[]) {
+    state.tabs = new Map(tabs.map((tab) => [tab.pageId, tab]));
+    return tabs;
+  }
+
+  private async refreshTabs(session: string, state: PlaywrightCliSessionState) {
+    const payload = parseJson(await this.invoke(session, ["tab-list"]));
+    return this.rememberTabs(state, parseTabs(payload.result));
+  }
+
+  private async requireFreshTab(
+    session: string,
+    state: PlaywrightCliSessionState,
+    pageId: string,
+  ): Promise<BrowserTab> {
+    const authorized = state.tabs.get(pageId);
+    if (!authorized) throw new Error("Unknown or stale browser tab for this session");
+    const tabs = await this.refreshTabs(session, state);
+    const current = tabs.find((tab) => tab.pageId === pageId);
+    if (!current || current.url !== authorized.url || current.title !== authorized.title) {
+      throw new Error("Stale browser tab identity; take a fresh snapshot");
+    }
+    return current;
+  }
+
+  private async observe(
+    session: string,
+    state: PlaywrightCliSessionState,
+  ): Promise<BrowserObservation> {
+    const before = await this.refreshTabs(session, state);
+    const currentBefore = before.find((tab) => tab.current);
+    if (!currentBefore) throw new Error("Playwright did not identify a current browser tab");
+
+    const snapshot = parseJson(await this.invoke(session, ["snapshot"]));
+    const after = await this.refreshTabs(session, state);
+    const currentAfter = after.find((tab) => tab.current);
+    if (!currentAfter || currentAfter.pageId !== currentBefore.pageId) {
+      state.observation = undefined;
+      throw new Error("Browser tab changed during observation; take another snapshot");
+    }
+
+    const observation: BrowserObservation = {
+      url: currentAfter.url,
+      title: currentAfter.title,
       tree: snapshotTree(snapshot.snapshot),
       elements: snapshotElements(snapshot.snapshot),
+      pageId: currentAfter.pageId,
+      pageIds: after.map((tab) => tab.pageId),
     };
+    state.observation = observation;
+    return observation;
+  }
+
+  private async waitFor(
+    session: string,
+    kind: "selector" | "text",
+    value: string,
+    timeoutMs: number,
+  ): Promise<WindowsHostBrowserResult> {
+    const deadline = Date.now() + timeoutMs;
+    let lastError = "Browser wait condition was not met";
+    while (Date.now() < deadline) {
+      try {
+        if (kind === "selector") {
+          const payload = parseJson(await this.invoke(session, ["snapshot", value]));
+          return { ok: true, content: snapshotTree(payload.snapshot) };
+        }
+        const payload = parseJson(await this.invoke(session, ["find", value, "--max-results=1"]));
+        const content = typeof payload.result === "string" ? payload.result : "";
+        if (content && !/^No matches found/iu.test(content.trim())) {
+          return { ok: true, content: content.slice(0, MAX_OUTPUT_BYTES) };
+        }
+        lastError = content || lastError;
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+      }
+      await sleep(200);
+    }
+    return { ok: false, error: lastError.slice(0, 500) };
+  }
+
+  private async screenshot(
+    session: string,
+    request: Extract<WindowsHostBrowserRequest, { command: "screenshot" }>,
+  ): Promise<WindowsHostBrowserResult> {
+    if (request.annotate) {
+      return {
+        ok: false,
+        error:
+          "Playwright screenshot annotation is explicitly not implemented yet; production parity gate remains closed",
+      };
+    }
+    if ((request.width === undefined) !== (request.height === undefined)) {
+      return {
+        ok: false,
+        error: "Playwright screenshot resizing requires both width and height",
+      };
+    }
+    if (request.width !== undefined && request.height !== undefined) {
+      parseJson(
+        await this.invoke(session, ["resize", String(request.width), String(request.height)]),
+      );
+    }
+
+    const fileName = `rakazo-playwright-${randomUUID()}.png`;
+    const screenshotPath = path.join(this.workspaceDir(), fileName);
+    try {
+      parseJson(
+        await this.invoke(session, ["screenshot", `--filename=${fileName}`, "--type=png"]),
+      );
+      const imageInfo = await stat(screenshotPath);
+      if (imageInfo.size === 0 || imageInfo.size > MAX_SCREENSHOT_BYTES) {
+        throw new Error("Playwright screenshot exceeded the 4 MiB PNG limit");
+      }
+      const image = await readFile(screenshotPath);
+      if (image.subarray(0, 8).toString("hex") !== PNG_SIGNATURE_HEX) {
+        throw new Error("Playwright screenshot did not produce a PNG");
+      }
+      return { ok: true, imageBase64: image.toString("base64"), mimeType: "image/png" };
+    } finally {
+      await unlink(screenshotPath).catch(() => undefined);
+    }
   }
 
   private async cleanupExpired() {
@@ -429,12 +710,18 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
       if (now - state.lastActivity < SESSION_TOKEN_TTL_MS) continue;
       this.sessions.delete(token);
       if (!state.backendReady) continue;
-      const session = browserSessionName(state.botId, token);
+      const session = browserSessionName(this.config.mode, state.botId, token);
       try {
-        if (this.config.mode === "playwright-cli-cdp") await this.invoke(session, "detach");
-        else await this.invoke(session, "close");
+        if (
+          this.config.mode === "playwright-cli-cdp" ||
+          this.config.mode === "playwright-cli-extension"
+        ) {
+          await this.invoke(session, ["detach"]);
+        } else {
+          await this.invoke(session, ["close"]);
+        }
       } catch {
-        // Playwright's own daemon idle timeout remains the final cleanup bound.
+        // Playwright's daemon idle timeout remains the final cleanup bound.
       }
     }
   }
