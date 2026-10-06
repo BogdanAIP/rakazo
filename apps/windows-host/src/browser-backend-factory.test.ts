@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
 import type {
   WindowsHostBrowserMode,
   WindowsHostBrowserRequest,
   WindowsHostBrowserResult,
 } from "@rakazo/contracts";
+import { describe, expect, it, vi } from "vitest";
 import type { WindowsBrowserBackend } from "./browser-backend.js";
 import { WindowsBrowserBackendRouter } from "./browser-backend-factory.js";
 
@@ -41,8 +41,7 @@ function router(
   return new WindowsBrowserBackendRouter(
     {
       opencli: overrides.opencli ?? fakeBackend("opencli"),
-      "playwright-cli-extension":
-        overrides["playwright-cli-extension"] ?? fakeBackend("extension"),
+      "playwright-cli-extension": overrides["playwright-cli-extension"] ?? fakeBackend("extension"),
       "playwright-cli-cdp": overrides["playwright-cli-cdp"] ?? fakeBackend("cdp"),
       "playwright-cli-persistent":
         overrides["playwright-cli-persistent"] ?? fakeBackend("persistent"),

@@ -115,9 +115,7 @@ export async function runPlaywrightCliProcess(
       if (code !== 0) {
         const detail = output.trim() || errors.trim();
         finish(
-          new Error(
-            `Playwright CLI exited with code ${String(code)}: ${detail.slice(0, 500)}`,
-          ),
+          new Error(`Playwright CLI exited with code ${String(code)}: ${detail.slice(0, 500)}`),
         );
       } else finish();
     });
@@ -289,7 +287,9 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
     if (request.command === "open") {
       await this.cleanupExpired();
       if (this.sessions.size >= MAX_ACTIVE_SESSIONS) {
-        throw new Error("Too many live browser sessions; close your own session or wait for expiry");
+        throw new Error(
+          "Too many live browser sessions; close your own session or wait for expiry",
+        );
       }
       const sessionToken = randomUUID();
       this.sessions.set(sessionToken, {
@@ -367,11 +367,7 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
 
     if (request.command === "extract") {
       const args = request.selector
-        ? [
-            "eval",
-            '(element) => element.innerText || element.textContent || ""',
-            request.selector,
-          ]
+        ? ["eval", '(element) => element.innerText || element.textContent || ""', request.selector]
         : ["eval", '() => document.body.innerText || ""'];
       const payload = parseJson(await this.invoke(session, args));
       const content = typeof payload.result === "string" ? payload.result : "";
@@ -405,7 +401,11 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
       const tabs = this.rememberTabs(state, parseTabs(payload.result));
       const current = tabs.find((tab) => tab.current);
       if (!current) {
-        return { ok: false, uncertain: true, error: "Playwright created a tab but lost current-tab identity" };
+        return {
+          ok: false,
+          uncertain: true,
+          error: "Playwright created a tab but lost current-tab identity",
+        };
       }
       return { ok: true, pageId: current.pageId, pageIds: tabs.map((tab) => tab.pageId) };
     }
@@ -417,9 +417,17 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
       const tabs = await this.refreshTabs(session, state);
       const selected = tabs.find((candidate) => candidate.current);
       if (!selected || selected.url !== tab.url || selected.title !== tab.title) {
-        return { ok: false, uncertain: true, error: "Playwright selected a different tab than requested" };
+        return {
+          ok: false,
+          uncertain: true,
+          error: "Playwright selected a different tab than requested",
+        };
       }
-      return { ok: true, pageId: selected.pageId, pageIds: tabs.map((candidate) => candidate.pageId) };
+      return {
+        ok: true,
+        pageId: selected.pageId,
+        pageIds: tabs.map((candidate) => candidate.pageId),
+      };
     }
 
     if (request.command === "tabClose") {
@@ -428,7 +436,11 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
       try {
         const payload = parseJson(await this.invoke(session, ["tab-close", String(tab.index)]));
         const tabs = this.rememberTabs(state, parseTabs(payload.result));
-        return { ok: true, pageId: request.pageId, pageIds: tabs.map((candidate) => candidate.pageId) };
+        return {
+          ok: true,
+          pageId: request.pageId,
+          pageIds: tabs.map((candidate) => candidate.pageId),
+        };
       } catch (error) {
         state.tabs.delete(request.pageId);
         return {
@@ -687,9 +699,7 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
     const fileName = `rakazo-playwright-${randomUUID()}.png`;
     const screenshotPath = path.join(this.workspaceDir(), fileName);
     try {
-      parseJson(
-        await this.invoke(session, ["screenshot", `--filename=${fileName}`, "--type=png"]),
-      );
+      parseJson(await this.invoke(session, ["screenshot", `--filename=${fileName}`, "--type=png"]));
       const imageInfo = await stat(screenshotPath);
       if (imageInfo.size === 0 || imageInfo.size > MAX_SCREENSHOT_BYTES) {
         throw new Error("Playwright screenshot exceeded the 4 MiB PNG limit");

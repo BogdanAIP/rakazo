@@ -4,9 +4,9 @@ import type {
   WindowsHostBrowserResult,
 } from "@rakazo/contracts";
 import type { WindowsBrowserBackend } from "./browser-backend.js";
-import { WindowsOpenCliBackend, loadOpenCliConfiguration } from "./opencli.js";
-import { loadPlaywrightCliConfiguration } from "./playwright-cli-config.js";
+import { loadOpenCliConfiguration, WindowsOpenCliBackend } from "./opencli.js";
 import { WindowsPlaywrightCliBackend } from "./playwright-cli.js";
+import { loadPlaywrightCliConfiguration } from "./playwright-cli-config.js";
 
 type ResolvedBrowserMode = Exclude<WindowsHostBrowserMode, "auto">;
 

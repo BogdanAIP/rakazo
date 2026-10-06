@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { type PlaywrightCliRunner, WindowsPlaywrightCliBackend } from "./playwright-cli.js";
 import type { PlaywrightCliConfiguration } from "./playwright-cli-config.js";
-import { WindowsPlaywrightCliBackend, type PlaywrightCliRunner } from "./playwright-cli.js";
 
 const cdpConfig: PlaywrightCliConfiguration = {
   mode: "playwright-cli-cdp",
@@ -9,9 +9,7 @@ const cdpConfig: PlaywrightCliConfiguration = {
   userDataDir: null,
 };
 
-function fakeRunner(
-  handler: (argv: string[]) => string | Promise<string>,
-): PlaywrightCliRunner {
+function fakeRunner(handler: (argv: string[]) => string | Promise<string>): PlaywrightCliRunner {
   return vi.fn(async (_entry, argv) => await handler(argv));
 }
 
