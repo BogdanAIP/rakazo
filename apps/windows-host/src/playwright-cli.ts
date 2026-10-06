@@ -72,6 +72,41 @@ export type PlaywrightCliRunner = (
   timeoutMs?: number,
 ) => Promise<string>;
 
+export type PlaywrightTextFileReader = (filePath: string) => Promise<string>;
+
+export async function resolveWindowsDevToolsActivePortEndpoint(
+  channel: "chrome" | "msedge",
+  localAppData: string | undefined = process.env.LOCALAPPDATA,
+  readText: PlaywrightTextFileReader = async (filePath) => readFile(filePath, "utf8"),
+): Promise<string | null> {
+  if (!localAppData) return null;
+  const userDataDir =
+    channel === "chrome"
+      ? path.join(localAppData, "Google", "Chrome", "User Data")
+      : path.join(localAppData, "Microsoft", "Edge", "User Data");
+  const activePortFile = path.join(userDataDir, "DevToolsActivePort");
+
+  let raw: string;
+  try {
+    raw = await readText(activePortFile);
+  } catch {
+    return null;
+  }
+
+  const [portLine, browserPath] = raw.split(/\r?\n/u);
+  const port = Number(portLine);
+  if (
+    !Number.isSafeInteger(port) ||
+    port < 1 ||
+    port > 65_535 ||
+    !browserPath ||
+    !/^\/devtools\/browser\/[A-Za-z0-9-]+$/u.test(browserPath.trim())
+  ) {
+    return null;
+  }
+  return `ws://127.0.0.1:${port}${browserPath.trim()}`;
+}
+
 export async function runPlaywrightCliProcess(
   entry: string,
   argv: string[],
@@ -633,9 +668,15 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
     if (state.backendReady) return;
 
     if (this.config.mode === "playwright-cli-cdp") {
-      const cdpTarget = this.config.cdpEndpoint ?? this.config.browserChannel;
+      const discoveredEndpoint = this.config.browserChannel
+        ? await resolveWindowsDevToolsActivePortEndpoint(this.config.browserChannel)
+        : null;
+      const cdpTarget =
+        this.config.cdpEndpoint ?? discoveredEndpoint ?? this.config.browserChannel;
       if (!cdpTarget) throw new Error("Playwright CDP endpoint or browser channel is missing");
-      parseJson(await this.invoke(session, ["attach", `--cdp=${cdpTarget}`]));
+      parseJson(
+        await this.invoke(session, ["attach", `--cdp=${cdpTarget}`], ATTACH_TIMEOUT_MS),
+      );
     } else if (this.config.mode === "playwright-cli-extension") {
       if (!this.config.browserChannel) throw new Error("Playwright browser channel is missing");
       parseJson(
