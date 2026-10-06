@@ -132,18 +132,19 @@ Backend/mode selection must be policy/config driven and observable. It must neve
 
 | Mode | Use when | Strengths | Trade-offs |
 | --- | --- | --- | --- |
-| Extension | Work should happen in the user's ordinary signed-in Chrome/Edge and existing tabs/extensions matter | Reuses real browser state, SSO/2FA, cookies, installed extensions, explicit user handoff | Requires Playwright extension and browser confirmation/approval flow |
-| CDP | Work should happen in the currently running real browser and DevTools-level attachment is acceptable | Direct attach to the current browser instance, no separate automation profile, easy detach without closing Chrome | Requires browser-side Remote Debugging to be explicitly enabled; grants powerful browser control while enabled |
+| Extension | An explicit user-requested fallback needs the Playwright extension and browser-confirmed handoff | Reuses real browser state, SSO/2FA, cookies and installed extensions | Requires a browser confirmation/approval flow and is therefore never selected by automatic routing |
+| CDP | Work should happen in the currently running real browser and DevTools-level attachment is acceptable | Direct attach to the current browser instance, no separate automation profile, easy detach without closing Chrome, no per-session Extension confirmation | Requires browser-side Remote Debugging to be explicitly enabled; grants powerful browser control while enabled |
 | Persistent | Autonomous/repeatable work should not depend on the user's everyday browser session | Dedicated long-lived automation profile, deterministic state, suitable for bots/background workflows | Separate login/session state from the user's everyday Chrome; profile lifecycle/locking must be managed |
 
 Mode choice is per task/session, not a permanent global decision. A project or bot may express a preferred mode, but the effective mode must remain visible and overridable.
 
-Initial routing policy must be conservative:
+Current draft routing policy is conservative and non-interactive:
 - if the user explicitly selects a mode, use that mode if available;
-- if a task explicitly requires the user's existing browser state, choose between Extension and CDP according to the requested interaction model and current readiness;
-- if a task is autonomous/repeatable and does not require the user's daily browser state, prefer Persistent;
-- if Playwright cannot satisfy the stable Rakazo browser contract for the selected task, keep or fall back to OpenCLI rather than silently reducing capability;
-- automatic routing is accepted only after BV2-07 benchmark/acceptance data exists.
+- Extension is explicit-only because its attach flow intentionally asks for browser confirmation;
+- `auto` never invokes Extension and tries CDP first, then OpenCLI, then Persistent;
+- an unsuccessful CDP open falls through to the next non-interactive backend rather than surfacing an Extension approval prompt;
+- if a task is autonomous/repeatable and does not require the user's daily browser state, Persistent remains available explicitly;
+- BV2-07 benchmark data determines whether the `auto` order should be changed before production activation.
 
 ### No-regression capability policy
 
@@ -208,7 +209,7 @@ Add config-only discovery, no browser mutation:
 - detect a pinned, reviewed `@playwright/cli` entry without downloading `@latest` at execution time;
 - CDP and extension attach both require an explicit browser channel;
 - CDP attach requires the owner to enable the browser's own Remote Debugging control (for Chrome, `chrome://inspect/#remote-debugging`);
-- extension attach is an alternate path authorized through Playwright's browser confirmation page; Rakazo does not invent or persist a second extension token;
+- extension attach is an explicit-only alternate path authorized through Playwright's browser confirmation page; automatic routing never invokes it and Rakazo does not invent or persist a second extension token;
 - dedicated persistent profile path is explicit;
 - probe reports readiness without reading cookies/storage.
 
