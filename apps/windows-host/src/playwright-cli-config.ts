@@ -42,7 +42,7 @@ export interface PlaywrightCliProbe {
 }
 
 function parseMode(value: string | undefined): WindowsBrowserBackendMode {
-  const mode = value?.trim() || "opencli";
+  const mode = value?.trim() || "auto";
   if ((WINDOWS_BROWSER_BACKEND_MODES as readonly string[]).includes(mode)) {
     return mode as WindowsBrowserBackendMode;
   }
@@ -134,8 +134,11 @@ export function probePlaywrightCli(
       else ready = true;
       break;
     case "auto":
-      reason =
-        "Auto routing is intentionally not active yet; configure an explicit backend for Browser v2.";
+      if (!entryAvailable) {
+        reason = "Pinned Playwright CLI entry is unavailable; auto routing will fall back to OpenCLI.";
+      } else {
+        ready = true;
+      }
       break;
   }
 
