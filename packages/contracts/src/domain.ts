@@ -520,6 +520,70 @@ export const AgentSkillCatalogEntrySchema = AgentSkillSchema.pick({
 });
 export type AgentSkillCatalogEntry = z.infer<typeof AgentSkillCatalogEntrySchema>;
 
+export const MarketEntryKindSchema = z.enum(["skill", "resolver"]);
+export type MarketEntryKind = z.infer<typeof MarketEntryKindSchema>;
+
+export const MarketTrustSchema = z.enum(["curated"]);
+export type MarketTrust = z.infer<typeof MarketTrustSchema>;
+
+export const MarketPreferredVariantSchema = z.enum(["original", "rccl", "wrapped", "hybrid"]);
+export type MarketPreferredVariant = z.infer<typeof MarketPreferredVariantSchema>;
+
+export const MarketAdaptationModeSchema = z.enum(["rccl", "wrapped", "hybrid"]);
+export type MarketAdaptationMode = z.infer<typeof MarketAdaptationModeSchema>;
+
+export const MarketResolverContentSchema = z.object({
+  semanticKey: z.string().trim().min(1).max(120).regex(/^[a-z][a-z0-9._-]*$/),
+  implementations: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(120),
+        kind: z.enum(["mcp", "api", "cli", "native", "computer", "browser"]),
+        reference: z.string().trim().min(1).max(500),
+        priority: z.number().int().min(1).max(100),
+        readOnly: z.boolean().optional(),
+        constraints: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
+        notes: z.string().trim().max(2_000).optional(),
+      }),
+    )
+    .min(1)
+    .max(32),
+});
+export type MarketResolverContent = z.infer<typeof MarketResolverContentSchema>;
+
+export const MarketEntrySchema = z.object({
+  id: Id,
+  kind: MarketEntryKindSchema,
+  key: z.string().min(1).max(500),
+  name: z.string().min(1).max(120),
+  description: z.string().max(2_000),
+  tags: z.array(z.string().min(1).max(80)).max(50),
+  originalContent: z.string().max(200_000),
+  adaptedContent: z.string().max(200_000).nullable(),
+  adaptationMode: MarketAdaptationModeSchema.nullable(),
+  preferredVariant: MarketPreferredVariantSchema,
+  sourceUrl: z.string().url().max(2_048),
+  repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
+  sourcePath: z.string().max(2_048).nullable(),
+  sourceRef: z.string().regex(/^[0-9a-f]{40}$/),
+  license: z.string().max(120).nullable(),
+  digest: z.string().regex(/^[0-9a-f]{64}$/),
+  trust: MarketTrustSchema,
+  metrics: z.record(z.string(), z.unknown()),
+  metadata: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type MarketEntry = z.infer<typeof MarketEntrySchema>;
+
+export const MarketCatalogEntrySchema = MarketEntrySchema.omit({
+  originalContent: true,
+  adaptedContent: true,
+  metrics: true,
+  metadata: true,
+});
+export type MarketCatalogEntry = z.infer<typeof MarketCatalogEntrySchema>;
+
 export const CreateAgentSkillInput = z
   .object({
     content: z.string().min(1).max(100_000).optional(),
