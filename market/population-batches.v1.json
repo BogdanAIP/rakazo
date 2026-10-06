@@ -22,11 +22,7 @@
         {
           "kind": "skill",
           "key": "ChromeDevTools/chrome-devtools-mcp:skills/chrome-devtools/SKILL.md@cf2eab96d96cad3d47ce769b9638815d1775500f",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "chrome-devtools"
-          ],
+          "tags": ["first-party", "market-skill", "chrome-devtools"],
           "repository": "ChromeDevTools/chrome-devtools-mcp",
           "sourcePath": "skills/chrome-devtools/SKILL.md",
           "sourceRef": "cf2eab96d96cad3d47ce769b9638815d1775500f",
@@ -39,11 +35,7 @@
         {
           "kind": "skill",
           "key": "ChromeDevTools/chrome-devtools-mcp:skills/troubleshooting/SKILL.md@cf2eab96d96cad3d47ce769b9638815d1775500f",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "troubleshooting"
-          ],
+          "tags": ["first-party", "market-skill", "troubleshooting"],
           "repository": "ChromeDevTools/chrome-devtools-mcp",
           "sourcePath": "skills/troubleshooting/SKILL.md",
           "sourceRef": "cf2eab96d96cad3d47ce769b9638815d1775500f",
@@ -56,11 +48,7 @@
         {
           "kind": "skill",
           "key": "ChromeDevTools/chrome-devtools-mcp:skills/a11y-debugging/SKILL.md@cf2eab96d96cad3d47ce769b9638815d1775500f",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "a11y-debugging"
-          ],
+          "tags": ["first-party", "market-skill", "a11y-debugging"],
           "repository": "ChromeDevTools/chrome-devtools-mcp",
           "sourcePath": "skills/a11y-debugging/SKILL.md",
           "sourceRef": "cf2eab96d96cad3d47ce769b9638815d1775500f",
@@ -73,11 +61,7 @@
         {
           "kind": "skill",
           "key": "ChromeDevTools/chrome-devtools-mcp:skills/cookie-debugging/SKILL.md@cf2eab96d96cad3d47ce769b9638815d1775500f",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "cookie-debugging"
-          ],
+          "tags": ["first-party", "market-skill", "cookie-debugging"],
           "repository": "ChromeDevTools/chrome-devtools-mcp",
           "sourcePath": "skills/cookie-debugging/SKILL.md",
           "sourceRef": "cf2eab96d96cad3d47ce769b9638815d1775500f",
@@ -90,11 +74,7 @@
         {
           "kind": "skill",
           "key": "ChromeDevTools/chrome-devtools-mcp:skills/debug-optimize-lcp/SKILL.md@cf2eab96d96cad3d47ce769b9638815d1775500f",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "debug-optimize-lcp"
-          ],
+          "tags": ["first-party", "market-skill", "debug-optimize-lcp"],
           "repository": "ChromeDevTools/chrome-devtools-mcp",
           "sourcePath": "skills/debug-optimize-lcp/SKILL.md",
           "sourceRef": "cf2eab96d96cad3d47ce769b9638815d1775500f",
@@ -107,11 +87,7 @@
         {
           "kind": "skill",
           "key": "ChromeDevTools/chrome-devtools-mcp:skills/memory-leak-debugging/SKILL.md@cf2eab96d96cad3d47ce769b9638815d1775500f",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "memory-leak-debugging"
-          ],
+          "tags": ["first-party", "market-skill", "memory-leak-debugging"],
           "repository": "ChromeDevTools/chrome-devtools-mcp",
           "sourcePath": "skills/memory-leak-debugging/SKILL.md",
           "sourceRef": "cf2eab96d96cad3d47ce769b9638815d1775500f",
@@ -124,11 +100,7 @@
         {
           "kind": "skill",
           "key": "ChromeDevTools/chrome-devtools-mcp:skills/chrome-devtools-cli/SKILL.md@cf2eab96d96cad3d47ce769b9638815d1775500f",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "chrome-devtools-cli"
-          ],
+          "tags": ["first-party", "market-skill", "chrome-devtools-cli"],
           "repository": "ChromeDevTools/chrome-devtools-mcp",
           "sourcePath": "skills/chrome-devtools-cli/SKILL.md",
           "sourceRef": "cf2eab96d96cad3d47ce769b9638815d1775500f",
@@ -141,11 +113,7 @@
         {
           "kind": "skill",
           "key": "anthropics/claude-plugins-official:plugins/claude-code-setup/skills/claude-automation-recommender/SKILL.md@d4226d062928f8d9505dbdeadd10217d23361052",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "claude-automation-recommender"
-          ],
+          "tags": ["first-party", "market-skill", "claude-automation-recommender"],
           "repository": "anthropics/claude-plugins-official",
           "sourcePath": "plugins/claude-code-setup/skills/claude-automation-recommender/SKILL.md",
           "sourceRef": "d4226d062928f8d9505dbdeadd10217d23361052",
@@ -158,11 +126,7 @@
         {
           "kind": "skill",
           "key": "anthropics/claude-plugins-official:plugins/claude-md-management/skills/claude-md-improver/SKILL.md@d4226d062928f8d9505dbdeadd10217d23361052",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "claude-md-improver"
-          ],
+          "tags": ["first-party", "market-skill", "claude-md-improver"],
           "repository": "anthropics/claude-plugins-official",
           "sourcePath": "plugins/claude-md-management/skills/claude-md-improver/SKILL.md",
           "sourceRef": "d4226d062928f8d9505dbdeadd10217d23361052",
@@ -175,11 +139,7 @@
         {
           "kind": "skill",
           "key": "anthropics/claude-plugins-official:plugins/frontend-design/skills/frontend-design/SKILL.md@d4226d062928f8d9505dbdeadd10217d23361052",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "frontend-design"
-          ],
+          "tags": ["first-party", "market-skill", "frontend-design"],
           "repository": "anthropics/claude-plugins-official",
           "sourcePath": "plugins/frontend-design/skills/frontend-design/SKILL.md",
           "sourceRef": "d4226d062928f8d9505dbdeadd10217d23361052",
@@ -192,11 +152,7 @@
         {
           "kind": "skill",
           "key": "anthropics/claude-plugins-official:plugins/hookify/skills/writing-rules/SKILL.md@d4226d062928f8d9505dbdeadd10217d23361052",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "writing-rules"
-          ],
+          "tags": ["first-party", "market-skill", "writing-rules"],
           "repository": "anthropics/claude-plugins-official",
           "sourcePath": "plugins/hookify/skills/writing-rules/SKILL.md",
           "sourceRef": "d4226d062928f8d9505dbdeadd10217d23361052",
@@ -209,11 +165,7 @@
         {
           "kind": "skill",
           "key": "anthropics/claude-plugins-official:plugins/mcp-server-dev/skills/build-mcp-app/SKILL.md@d4226d062928f8d9505dbdeadd10217d23361052",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "build-mcp-app"
-          ],
+          "tags": ["first-party", "market-skill", "build-mcp-app"],
           "repository": "anthropics/claude-plugins-official",
           "sourcePath": "plugins/mcp-server-dev/skills/build-mcp-app/SKILL.md",
           "sourceRef": "d4226d062928f8d9505dbdeadd10217d23361052",
@@ -226,11 +178,7 @@
         {
           "kind": "skill",
           "key": "anthropics/claude-plugins-official:plugins/mcp-server-dev/skills/build-mcp-server/SKILL.md@d4226d062928f8d9505dbdeadd10217d23361052",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "build-mcp-server"
-          ],
+          "tags": ["first-party", "market-skill", "build-mcp-server"],
           "repository": "anthropics/claude-plugins-official",
           "sourcePath": "plugins/mcp-server-dev/skills/build-mcp-server/SKILL.md",
           "sourceRef": "d4226d062928f8d9505dbdeadd10217d23361052",
@@ -243,11 +191,7 @@
         {
           "kind": "skill",
           "key": "anthropics/claude-plugins-official:plugins/plugin-dev/skills/agent-development/SKILL.md@d4226d062928f8d9505dbdeadd10217d23361052",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "agent-development"
-          ],
+          "tags": ["first-party", "market-skill", "agent-development"],
           "repository": "anthropics/claude-plugins-official",
           "sourcePath": "plugins/plugin-dev/skills/agent-development/SKILL.md",
           "sourceRef": "d4226d062928f8d9505dbdeadd10217d23361052",
@@ -260,11 +204,7 @@
         {
           "kind": "skill",
           "key": "anthropics/claude-plugins-official:plugins/plugin-dev/skills/command-development/SKILL.md@d4226d062928f8d9505dbdeadd10217d23361052",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "command-development"
-          ],
+          "tags": ["first-party", "market-skill", "command-development"],
           "repository": "anthropics/claude-plugins-official",
           "sourcePath": "plugins/plugin-dev/skills/command-development/SKILL.md",
           "sourceRef": "d4226d062928f8d9505dbdeadd10217d23361052",
@@ -277,11 +217,7 @@
         {
           "kind": "skill",
           "key": "anthropics/claude-plugins-official:plugins/plugin-dev/skills/hook-development/SKILL.md@d4226d062928f8d9505dbdeadd10217d23361052",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "hook-development"
-          ],
+          "tags": ["first-party", "market-skill", "hook-development"],
           "repository": "anthropics/claude-plugins-official",
           "sourcePath": "plugins/plugin-dev/skills/hook-development/SKILL.md",
           "sourceRef": "d4226d062928f8d9505dbdeadd10217d23361052",
@@ -294,11 +230,7 @@
         {
           "kind": "skill",
           "key": "anthropics/claude-plugins-official:plugins/plugin-dev/skills/mcp-integration/SKILL.md@d4226d062928f8d9505dbdeadd10217d23361052",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "mcp-integration"
-          ],
+          "tags": ["first-party", "market-skill", "mcp-integration"],
           "repository": "anthropics/claude-plugins-official",
           "sourcePath": "plugins/plugin-dev/skills/mcp-integration/SKILL.md",
           "sourceRef": "d4226d062928f8d9505dbdeadd10217d23361052",
@@ -311,11 +243,7 @@
         {
           "kind": "skill",
           "key": "anthropics/claude-plugins-official:plugins/plugin-dev/skills/plugin-settings/SKILL.md@d4226d062928f8d9505dbdeadd10217d23361052",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "plugin-settings"
-          ],
+          "tags": ["first-party", "market-skill", "plugin-settings"],
           "repository": "anthropics/claude-plugins-official",
           "sourcePath": "plugins/plugin-dev/skills/plugin-settings/SKILL.md",
           "sourceRef": "d4226d062928f8d9505dbdeadd10217d23361052",
@@ -328,11 +256,7 @@
         {
           "kind": "skill",
           "key": "anthropics/claude-plugins-official:plugins/plugin-dev/skills/plugin-structure/SKILL.md@d4226d062928f8d9505dbdeadd10217d23361052",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "plugin-structure"
-          ],
+          "tags": ["first-party", "market-skill", "plugin-structure"],
           "repository": "anthropics/claude-plugins-official",
           "sourcePath": "plugins/plugin-dev/skills/plugin-structure/SKILL.md",
           "sourceRef": "d4226d062928f8d9505dbdeadd10217d23361052",
@@ -345,11 +269,7 @@
         {
           "kind": "skill",
           "key": "anthropics/claude-plugins-official:plugins/plugin-dev/skills/skill-development/SKILL.md@d4226d062928f8d9505dbdeadd10217d23361052",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "skill-development"
-          ],
+          "tags": ["first-party", "market-skill", "skill-development"],
           "repository": "anthropics/claude-plugins-official",
           "sourcePath": "plugins/plugin-dev/skills/skill-development/SKILL.md",
           "sourceRef": "d4226d062928f8d9505dbdeadd10217d23361052",
@@ -362,11 +282,7 @@
         {
           "kind": "skill",
           "key": "anthropics/claude-plugins-official:plugins/project-artifact/skills/project-artifact/SKILL.md@d4226d062928f8d9505dbdeadd10217d23361052",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "project-artifact"
-          ],
+          "tags": ["first-party", "market-skill", "project-artifact"],
           "repository": "anthropics/claude-plugins-official",
           "sourcePath": "plugins/project-artifact/skills/project-artifact/SKILL.md",
           "sourceRef": "d4226d062928f8d9505dbdeadd10217d23361052",
@@ -379,11 +295,7 @@
         {
           "kind": "skill",
           "key": "anthropics/claude-plugins-official:plugins/session-report/skills/session-report/SKILL.md@d4226d062928f8d9505dbdeadd10217d23361052",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "session-report"
-          ],
+          "tags": ["first-party", "market-skill", "session-report"],
           "repository": "anthropics/claude-plugins-official",
           "sourcePath": "plugins/session-report/skills/session-report/SKILL.md",
           "sourceRef": "d4226d062928f8d9505dbdeadd10217d23361052",
@@ -396,11 +308,7 @@
         {
           "kind": "skill",
           "key": "anthropics/claude-plugins-official:plugins/skill-creator/skills/skill-creator/SKILL.md@d4226d062928f8d9505dbdeadd10217d23361052",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "skill-creator"
-          ],
+          "tags": ["first-party", "market-skill", "skill-creator"],
           "repository": "anthropics/claude-plugins-official",
           "sourcePath": "plugins/skill-creator/skills/skill-creator/SKILL.md",
           "sourceRef": "d4226d062928f8d9505dbdeadd10217d23361052",
@@ -413,11 +321,7 @@
         {
           "kind": "skill",
           "key": "openai/openai-cookbook:.codex/skills/docs-editor/SKILL.md@0eac1447d4e24d06e47c459ca5e98f248b9413cf",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "docs-editor"
-          ],
+          "tags": ["first-party", "market-skill", "docs-editor"],
           "repository": "openai/openai-cookbook",
           "sourcePath": ".codex/skills/docs-editor/SKILL.md",
           "sourceRef": "0eac1447d4e24d06e47c459ca5e98f248b9413cf",
@@ -430,11 +334,7 @@
         {
           "kind": "skill",
           "key": "openai/openai-cookbook:examples/agents_api/apps/document_review/skills/expense-review-policy/SKILL.md@0eac1447d4e24d06e47c459ca5e98f248b9413cf",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "expense-review-policy"
-          ],
+          "tags": ["first-party", "market-skill", "expense-review-policy"],
           "repository": "openai/openai-cookbook",
           "sourcePath": "examples/agents_api/apps/document_review/skills/expense-review-policy/SKILL.md",
           "sourceRef": "0eac1447d4e24d06e47c459ca5e98f248b9413cf",
@@ -447,11 +347,7 @@
         {
           "kind": "skill",
           "key": "openai/openai-cookbook:examples/evals/realtime_evals/skills/bootstrap-realtime-eval/SKILL.md@0eac1447d4e24d06e47c459ca5e98f248b9413cf",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "bootstrap-realtime-eval"
-          ],
+          "tags": ["first-party", "market-skill", "bootstrap-realtime-eval"],
           "repository": "openai/openai-cookbook",
           "sourcePath": "examples/evals/realtime_evals/skills/bootstrap-realtime-eval/SKILL.md",
           "sourceRef": "0eac1447d4e24d06e47c459ca5e98f248b9413cf",
@@ -464,11 +360,7 @@
         {
           "kind": "skill",
           "key": "google-gemini/gemini-cli:.gemini/skills/behavioral-evals/SKILL.md@fb972b2f87fe7d5b06d37eac711490162d98de2c",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "behavioral-evals"
-          ],
+          "tags": ["first-party", "market-skill", "behavioral-evals"],
           "repository": "google-gemini/gemini-cli",
           "sourcePath": ".gemini/skills/behavioral-evals/SKILL.md",
           "sourceRef": "fb972b2f87fe7d5b06d37eac711490162d98de2c",
@@ -481,11 +373,7 @@
         {
           "kind": "skill",
           "key": "google-gemini/gemini-cli:.gemini/skills/ci/SKILL.md@fb972b2f87fe7d5b06d37eac711490162d98de2c",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "ci"
-          ],
+          "tags": ["first-party", "market-skill", "ci"],
           "repository": "google-gemini/gemini-cli",
           "sourcePath": ".gemini/skills/ci/SKILL.md",
           "sourceRef": "fb972b2f87fe7d5b06d37eac711490162d98de2c",
@@ -498,11 +386,7 @@
         {
           "kind": "skill",
           "key": "google-gemini/gemini-cli:.gemini/skills/code-reviewer/SKILL.md@fb972b2f87fe7d5b06d37eac711490162d98de2c",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "code-reviewer"
-          ],
+          "tags": ["first-party", "market-skill", "code-reviewer"],
           "repository": "google-gemini/gemini-cli",
           "sourcePath": ".gemini/skills/code-reviewer/SKILL.md",
           "sourceRef": "fb972b2f87fe7d5b06d37eac711490162d98de2c",
@@ -515,11 +399,7 @@
         {
           "kind": "skill",
           "key": "google-gemini/gemini-cli:.gemini/skills/docs-writer/SKILL.md@fb972b2f87fe7d5b06d37eac711490162d98de2c",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "docs-writer"
-          ],
+          "tags": ["first-party", "market-skill", "docs-writer"],
           "repository": "google-gemini/gemini-cli",
           "sourcePath": ".gemini/skills/docs-writer/SKILL.md",
           "sourceRef": "fb972b2f87fe7d5b06d37eac711490162d98de2c",
@@ -532,11 +412,7 @@
         {
           "kind": "skill",
           "key": "google-gemini/gemini-cli:.gemini/skills/github-issue-creator/SKILL.md@fb972b2f87fe7d5b06d37eac711490162d98de2c",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "github-issue-creator"
-          ],
+          "tags": ["first-party", "market-skill", "github-issue-creator"],
           "repository": "google-gemini/gemini-cli",
           "sourcePath": ".gemini/skills/github-issue-creator/SKILL.md",
           "sourceRef": "fb972b2f87fe7d5b06d37eac711490162d98de2c",
@@ -549,11 +425,7 @@
         {
           "kind": "skill",
           "key": "google-gemini/gemini-cli:.gemini/skills/pr-address-comments/SKILL.md@fb972b2f87fe7d5b06d37eac711490162d98de2c",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "pr-address-comments"
-          ],
+          "tags": ["first-party", "market-skill", "pr-address-comments"],
           "repository": "google-gemini/gemini-cli",
           "sourcePath": ".gemini/skills/pr-address-comments/SKILL.md",
           "sourceRef": "fb972b2f87fe7d5b06d37eac711490162d98de2c",
@@ -566,11 +438,7 @@
         {
           "kind": "skill",
           "key": "google-gemini/gemini-cli:.gemini/skills/pr-creator/SKILL.md@fb972b2f87fe7d5b06d37eac711490162d98de2c",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "pr-creator"
-          ],
+          "tags": ["first-party", "market-skill", "pr-creator"],
           "repository": "google-gemini/gemini-cli",
           "sourcePath": ".gemini/skills/pr-creator/SKILL.md",
           "sourceRef": "fb972b2f87fe7d5b06d37eac711490162d98de2c",
@@ -583,11 +451,7 @@
         {
           "kind": "skill",
           "key": "google-gemini/gemini-cli:.gemini/skills/review-duplication/SKILL.md@fb972b2f87fe7d5b06d37eac711490162d98de2c",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "review-duplication"
-          ],
+          "tags": ["first-party", "market-skill", "review-duplication"],
           "repository": "google-gemini/gemini-cli",
           "sourcePath": ".gemini/skills/review-duplication/SKILL.md",
           "sourceRef": "fb972b2f87fe7d5b06d37eac711490162d98de2c",
@@ -600,11 +464,7 @@
         {
           "kind": "skill",
           "key": "tradingview/lightweight-charts:.github/skills/lightweight-charts/SKILL.md@786591769fee8ec5672a6d9c9afe9e706fc60299",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "lightweight-charts"
-          ],
+          "tags": ["first-party", "market-skill", "lightweight-charts"],
           "repository": "tradingview/lightweight-charts",
           "sourcePath": ".github/skills/lightweight-charts/SKILL.md",
           "sourceRef": "786591769fee8ec5672a6d9c9afe9e706fc60299",
@@ -617,11 +477,7 @@
         {
           "kind": "skill",
           "key": "tradingview/lightweight-charts:.github/skills/lightweight-charts-plugin-authoring/SKILL.md@786591769fee8ec5672a6d9c9afe9e706fc60299",
-          "tags": [
-            "first-party",
-            "market-skill",
-            "lightweight-charts-plugin-authoring"
-          ],
+          "tags": ["first-party", "market-skill", "lightweight-charts-plugin-authoring"],
           "repository": "tradingview/lightweight-charts",
           "sourcePath": ".github/skills/lightweight-charts-plugin-authoring/SKILL.md",
           "sourceRef": "786591769fee8ec5672a6d9c9afe9e706fc60299",
@@ -641,14 +497,7 @@
         {
           "kind": "skill",
           "key": "krakenfx/kraken-cli:skills/kraken-paper-strategy/SKILL.md@aa56e5976be5afa6d8267eb6741f3a8844678fe9",
-          "tags": [
-            "trading",
-            "paper-ready",
-            "paper",
-            "strategy",
-            "spot",
-            "simulation"
-          ],
+          "tags": ["trading", "paper-ready", "paper", "strategy", "spot", "simulation"],
           "repository": "krakenfx/kraken-cli",
           "sourcePath": "skills/kraken-paper-strategy/SKILL.md",
           "sourceRef": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
@@ -661,13 +510,7 @@
         {
           "kind": "skill",
           "key": "krakenfx/kraken-cli:skills/recipe-paper-strategy-backtest/SKILL.md@aa56e5976be5afa6d8267eb6741f3a8844678fe9",
-          "tags": [
-            "trading",
-            "paper-ready",
-            "paper",
-            "backtest",
-            "strategy"
-          ],
+          "tags": ["trading", "paper-ready", "paper", "backtest", "strategy"],
           "repository": "krakenfx/kraken-cli",
           "sourcePath": "skills/recipe-paper-strategy-backtest/SKILL.md",
           "sourceRef": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
@@ -680,14 +523,7 @@
         {
           "kind": "skill",
           "key": "krakenfx/kraken-cli:skills/kraken-market-intel/SKILL.md@aa56e5976be5afa6d8267eb6741f3a8844678fe9",
-          "tags": [
-            "trading",
-            "research-ready",
-            "market-data",
-            "orderbook",
-            "ohlcv",
-            "streaming"
-          ],
+          "tags": ["trading", "research-ready", "market-data", "orderbook", "ohlcv", "streaming"],
           "repository": "krakenfx/kraken-cli",
           "sourcePath": "skills/kraken-market-intel/SKILL.md",
           "sourceRef": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
@@ -720,14 +556,7 @@
         {
           "kind": "skill",
           "key": "krakenfx/kraken-cli:skills/recipe-funding-rate-scan/SKILL.md@aa56e5976be5afa6d8267eb6741f3a8844678fe9",
-          "tags": [
-            "trading",
-            "adapt-to-paper",
-            "futures",
-            "funding",
-            "carry",
-            "scanner"
-          ],
+          "tags": ["trading", "adapt-to-paper", "futures", "funding", "carry", "scanner"],
           "repository": "krakenfx/kraken-cli",
           "sourcePath": "skills/recipe-funding-rate-scan/SKILL.md",
           "sourceRef": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
@@ -761,13 +590,7 @@
         {
           "kind": "skill",
           "key": "krakenfx/kraken-cli:skills/recipe-track-orderbook-depth/SKILL.md@aa56e5976be5afa6d8267eb6741f3a8844678fe9",
-          "tags": [
-            "trading",
-            "research-ready",
-            "orderbook",
-            "liquidity",
-            "depth"
-          ],
+          "tags": ["trading", "research-ready", "orderbook", "liquidity", "depth"],
           "repository": "krakenfx/kraken-cli",
           "sourcePath": "skills/recipe-track-orderbook-depth/SKILL.md",
           "sourceRef": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
@@ -780,14 +603,7 @@
         {
           "kind": "skill",
           "key": "krakenfx/kraken-cli:skills/recipe-session-post-mortem/SKILL.md@aa56e5976be5afa6d8267eb6741f3a8844678fe9",
-          "tags": [
-            "trading",
-            "paper-ready",
-            "post-trade",
-            "review",
-            "journal",
-            "metrics"
-          ],
+          "tags": ["trading", "paper-ready", "post-trade", "review", "journal", "metrics"],
           "repository": "krakenfx/kraken-cli",
           "sourcePath": "skills/recipe-session-post-mortem/SKILL.md",
           "sourceRef": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
@@ -800,13 +616,7 @@
         {
           "kind": "skill",
           "key": "krakenfx/kraken-cli:skills/recipe-daily-pnl-report/SKILL.md@aa56e5976be5afa6d8267eb6741f3a8844678fe9",
-          "tags": [
-            "trading",
-            "paper-ready",
-            "pnl",
-            "reporting",
-            "performance"
-          ],
+          "tags": ["trading", "paper-ready", "pnl", "reporting", "performance"],
           "repository": "krakenfx/kraken-cli",
           "sourcePath": "skills/recipe-daily-pnl-report/SKILL.md",
           "sourceRef": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
@@ -819,15 +629,7 @@
         {
           "kind": "skill",
           "key": "alpacahq/alpaca-skills:skills/trading-api/paper-trading/SKILL.md@39111abee6b60af7c11d40b5fc892dfc4fd791a4",
-          "tags": [
-            "trading",
-            "paper-ready",
-            "paper",
-            "equities",
-            "options",
-            "crypto",
-            "orders"
-          ],
+          "tags": ["trading", "paper-ready", "paper", "equities", "options", "crypto", "orders"],
           "repository": "alpacahq/alpaca-skills",
           "sourcePath": "skills/trading-api/paper-trading/SKILL.md",
           "sourceRef": "39111abee6b60af7c11d40b5fc892dfc4fd791a4",
@@ -840,13 +642,7 @@
         {
           "kind": "skill",
           "key": "alpacahq/alpaca-skills:skills/trading-api/paper-trading-mcp/SKILL.md@39111abee6b60af7c11d40b5fc892dfc4fd791a4",
-          "tags": [
-            "trading",
-            "paper-ready",
-            "paper",
-            "mcp",
-            "orders"
-          ],
+          "tags": ["trading", "paper-ready", "paper", "mcp", "orders"],
           "repository": "alpacahq/alpaca-skills",
           "sourcePath": "skills/trading-api/paper-trading-mcp/SKILL.md",
           "sourceRef": "39111abee6b60af7c11d40b5fc892dfc4fd791a4",
@@ -859,13 +655,7 @@
         {
           "kind": "skill",
           "key": "alpacahq/alpaca-skills:skills/trading-api/paper-trading-cli/SKILL.md@39111abee6b60af7c11d40b5fc892dfc4fd791a4",
-          "tags": [
-            "trading",
-            "paper-ready",
-            "paper",
-            "cli",
-            "orders"
-          ],
+          "tags": ["trading", "paper-ready", "paper", "cli", "orders"],
           "repository": "alpacahq/alpaca-skills",
           "sourcePath": "skills/trading-api/paper-trading-cli/SKILL.md",
           "sourceRef": "39111abee6b60af7c11d40b5fc892dfc4fd791a4",
@@ -878,13 +668,7 @@
         {
           "kind": "skill",
           "key": "alpacahq/alpaca-skills:skills/trading-api/backtest/SKILL.md@39111abee6b60af7c11d40b5fc892dfc4fd791a4",
-          "tags": [
-            "trading",
-            "paper-ready",
-            "backtest",
-            "historical",
-            "reproducibility"
-          ],
+          "tags": ["trading", "paper-ready", "backtest", "historical", "reproducibility"],
           "repository": "alpacahq/alpaca-skills",
           "sourcePath": "skills/trading-api/backtest/SKILL.md",
           "sourceRef": "39111abee6b60af7c11d40b5fc892dfc4fd791a4",
@@ -897,14 +681,7 @@
         {
           "kind": "skill",
           "key": "alpacahq/alpaca-skills:skills/broker-api/market-data/SKILL.md@39111abee6b60af7c11d40b5fc892dfc4fd791a4",
-          "tags": [
-            "trading",
-            "research-ready",
-            "market-data",
-            "equities",
-            "news",
-            "websocket"
-          ],
+          "tags": ["trading", "research-ready", "market-data", "equities", "news", "websocket"],
           "repository": "alpacahq/alpaca-skills",
           "sourcePath": "skills/broker-api/market-data/SKILL.md",
           "sourceRef": "39111abee6b60af7c11d40b5fc892dfc4fd791a4",
@@ -917,13 +694,7 @@
         {
           "kind": "skill",
           "key": "alpacahq/alpaca-skills:skills/broker-api/reconciliation-idempotency/SKILL.md@39111abee6b60af7c11d40b5fc892dfc4fd791a4",
-          "tags": [
-            "trading",
-            "paper-ready",
-            "reconciliation",
-            "idempotency",
-            "audit"
-          ],
+          "tags": ["trading", "paper-ready", "reconciliation", "idempotency", "audit"],
           "repository": "alpacahq/alpaca-skills",
           "sourcePath": "skills/broker-api/reconciliation-idempotency/SKILL.md",
           "sourceRef": "39111abee6b60af7c11d40b5fc892dfc4fd791a4",
@@ -957,13 +728,7 @@
         {
           "kind": "skill",
           "key": "coinbase/agents:skills/coinbase-watch/SKILL.md@938a4d5695019a745dbaab476bccbfb0304bf467",
-          "tags": [
-            "trading",
-            "research-ready",
-            "monitoring",
-            "alerts",
-            "streaming"
-          ],
+          "tags": ["trading", "research-ready", "monitoring", "alerts", "streaming"],
           "repository": "coinbase/agents",
           "sourcePath": "skills/coinbase-watch/SKILL.md",
           "sourceRef": "938a4d5695019a745dbaab476bccbfb0304bf467",
@@ -976,14 +741,7 @@
         {
           "kind": "skill",
           "key": "coinbase/agents:skills/coinbase-futures/SKILL.md@938a4d5695019a745dbaab476bccbfb0304bf467",
-          "tags": [
-            "trading",
-            "live-reference-only",
-            "futures",
-            "margin",
-            "liquidation",
-            "orders"
-          ],
+          "tags": ["trading", "live-reference-only", "futures", "margin", "liquidation", "orders"],
           "repository": "coinbase/agents",
           "sourcePath": "skills/coinbase-futures/SKILL.md",
           "sourceRef": "938a4d5695019a745dbaab476bccbfb0304bf467",
@@ -996,13 +754,7 @@
         {
           "kind": "skill",
           "key": "coinbase/agents:skills/coinbase-trading/SKILL.md@938a4d5695019a745dbaab476bccbfb0304bf467",
-          "tags": [
-            "trading",
-            "live-reference-only",
-            "orders",
-            "preview",
-            "execution"
-          ],
+          "tags": ["trading", "live-reference-only", "orders", "preview", "execution"],
           "repository": "coinbase/agents",
           "sourcePath": "skills/coinbase-trading/SKILL.md",
           "sourceRef": "938a4d5695019a745dbaab476bccbfb0304bf467",
@@ -1036,14 +788,7 @@
         {
           "kind": "skill",
           "key": "okx/agent-trade-kit:skills/okx-sentiment-tracker/SKILL.md@1278636c3c16d31be99c888e5051622f8cc87f8e",
-          "tags": [
-            "trading",
-            "research-ready",
-            "news",
-            "sentiment",
-            "macro",
-            "calendar"
-          ],
+          "tags": ["trading", "research-ready", "news", "sentiment", "macro", "calendar"],
           "repository": "okx/agent-trade-kit",
           "sourcePath": "skills/okx-sentiment-tracker/SKILL.md",
           "sourceRef": "1278636c3c16d31be99c888e5051622f8cc87f8e",
@@ -1056,14 +801,7 @@
         {
           "kind": "skill",
           "key": "okx/agent-trade-kit:skills/okx-cex-portfolio/SKILL.md@1278636c3c16d31be99c888e5051622f8cc87f8e",
-          "tags": [
-            "trading",
-            "adapt-to-paper",
-            "portfolio",
-            "positions",
-            "pnl",
-            "fees"
-          ],
+          "tags": ["trading", "adapt-to-paper", "portfolio", "positions", "pnl", "fees"],
           "repository": "okx/agent-trade-kit",
           "sourcePath": "skills/okx-cex-portfolio/SKILL.md",
           "sourceRef": "1278636c3c16d31be99c888e5051622f8cc87f8e",
@@ -1076,12 +814,7 @@
         {
           "kind": "skill",
           "key": "okx/agent-trade-kit:skills/okx-cex-trade/SKILL.md@1278636c3c16d31be99c888e5051622f8cc87f8e",
-          "tags": [
-            "trading",
-            "live-reference-only",
-            "orders",
-            "execution"
-          ],
+          "tags": ["trading", "live-reference-only", "orders", "execution"],
           "repository": "okx/agent-trade-kit",
           "sourcePath": "skills/okx-cex-trade/SKILL.md",
           "sourceRef": "1278636c3c16d31be99c888e5051622f8cc87f8e",
@@ -1094,14 +827,7 @@
         {
           "kind": "skill",
           "key": "okx/agent-trade-kit:skills/okx-cex-bot/SKILL.md@1278636c3c16d31be99c888e5051622f8cc87f8e",
-          "tags": [
-            "trading",
-            "live-reference-only",
-            "grid",
-            "dca",
-            "bot",
-            "execution"
-          ],
+          "tags": ["trading", "live-reference-only", "grid", "dca", "bot", "execution"],
           "repository": "okx/agent-trade-kit",
           "sourcePath": "skills/okx-cex-bot/SKILL.md",
           "sourceRef": "1278636c3c16d31be99c888e5051622f8cc87f8e",
@@ -1114,15 +840,7 @@
         {
           "kind": "skill",
           "key": "aave/skills:plugins/mcp/skills/yield-analysis/SKILL.md@24d1e2f96c83d30e9470d7492fe350284a36d517",
-          "tags": [
-            "trading",
-            "research-ready",
-            "defi",
-            "yield",
-            "apy",
-            "borrow",
-            "supply"
-          ],
+          "tags": ["trading", "research-ready", "defi", "yield", "apy", "borrow", "supply"],
           "repository": "aave/skills",
           "sourcePath": "plugins/mcp/skills/yield-analysis/SKILL.md",
           "sourceRef": "24d1e2f96c83d30e9470d7492fe350284a36d517",
@@ -1135,13 +853,7 @@
         {
           "kind": "skill",
           "key": "aave/skills:plugins/mcp/skills/account-activity/SKILL.md@24d1e2f96c83d30e9470d7492fe350284a36d517",
-          "tags": [
-            "trading",
-            "research-ready",
-            "defi",
-            "account",
-            "activity"
-          ],
+          "tags": ["trading", "research-ready", "defi", "account", "activity"],
           "repository": "aave/skills",
           "sourcePath": "plugins/mcp/skills/account-activity/SKILL.md",
           "sourceRef": "24d1e2f96c83d30e9470d7492fe350284a36d517",
@@ -1154,14 +866,7 @@
         {
           "kind": "skill",
           "key": "aave/skills:plugins/mcp/skills/deleverage/SKILL.md@24d1e2f96c83d30e9470d7492fe350284a36d517",
-          "tags": [
-            "trading",
-            "live-reference-only",
-            "defi",
-            "risk",
-            "deleverage",
-            "transactions"
-          ],
+          "tags": ["trading", "live-reference-only", "defi", "risk", "deleverage", "transactions"],
           "repository": "aave/skills",
           "sourcePath": "plugins/mcp/skills/deleverage/SKILL.md",
           "sourceRef": "24d1e2f96c83d30e9470d7492fe350284a36d517",
@@ -1174,13 +879,7 @@
         {
           "kind": "skill",
           "key": "Uniswap/uniswap-ai:packages/plugins/uniswap-driver/skills/swap-planner/SKILL.md@1a43e968a39537d5a73aeca20dd1ed9d96f502fa",
-          "tags": [
-            "trading",
-            "adapt-to-paper",
-            "defi",
-            "swap",
-            "planning"
-          ],
+          "tags": ["trading", "adapt-to-paper", "defi", "swap", "planning"],
           "repository": "Uniswap/uniswap-ai",
           "sourcePath": "packages/plugins/uniswap-driver/skills/swap-planner/SKILL.md",
           "sourceRef": "1a43e968a39537d5a73aeca20dd1ed9d96f502fa",
@@ -1193,14 +892,7 @@
         {
           "kind": "skill",
           "key": "Uniswap/uniswap-ai:packages/plugins/uniswap-driver/skills/liquidity-planner/SKILL.md@1a43e968a39537d5a73aeca20dd1ed9d96f502fa",
-          "tags": [
-            "trading",
-            "research-ready",
-            "defi",
-            "liquidity",
-            "lp",
-            "planning"
-          ],
+          "tags": ["trading", "research-ready", "defi", "liquidity", "lp", "planning"],
           "repository": "Uniswap/uniswap-ai",
           "sourcePath": "packages/plugins/uniswap-driver/skills/liquidity-planner/SKILL.md",
           "sourceRef": "1a43e968a39537d5a73aeca20dd1ed9d96f502fa",
@@ -1213,13 +905,7 @@
         {
           "kind": "skill",
           "key": "Uniswap/uniswap-ai:packages/plugins/uniswap-trading-tools/skills/dca-bot/SKILL.md@1a43e968a39537d5a73aeca20dd1ed9d96f502fa",
-          "tags": [
-            "trading",
-            "live-reference-only",
-            "defi",
-            "dca",
-            "automation"
-          ],
+          "tags": ["trading", "live-reference-only", "defi", "dca", "automation"],
           "repository": "Uniswap/uniswap-ai",
           "sourcePath": "packages/plugins/uniswap-trading-tools/skills/dca-bot/SKILL.md",
           "sourceRef": "1a43e968a39537d5a73aeca20dd1ed9d96f502fa",
@@ -1232,14 +918,7 @@
         {
           "kind": "skill",
           "key": "Uniswap/uniswap-ai:packages/plugins/uniswap-trading-tools/skills/index-bot/SKILL.md@1a43e968a39537d5a73aeca20dd1ed9d96f502fa",
-          "tags": [
-            "trading",
-            "live-reference-only",
-            "defi",
-            "index",
-            "rebalance",
-            "automation"
-          ],
+          "tags": ["trading", "live-reference-only", "defi", "index", "rebalance", "automation"],
           "repository": "Uniswap/uniswap-ai",
           "sourcePath": "packages/plugins/uniswap-trading-tools/skills/index-bot/SKILL.md",
           "sourceRef": "1a43e968a39537d5a73aeca20dd1ed9d96f502fa",
@@ -1252,13 +931,7 @@
         {
           "kind": "skill",
           "key": "Uniswap/uniswap-ai:packages/plugins/uniswap-trading-tools/skills/copy-trade/SKILL.md@1a43e968a39537d5a73aeca20dd1ed9d96f502fa",
-          "tags": [
-            "trading",
-            "live-reference-only",
-            "defi",
-            "copy-trading",
-            "automation"
-          ],
+          "tags": ["trading", "live-reference-only", "defi", "copy-trading", "automation"],
           "repository": "Uniswap/uniswap-ai",
           "sourcePath": "packages/plugins/uniswap-trading-tools/skills/copy-trade/SKILL.md",
           "sourceRef": "1a43e968a39537d5a73aeca20dd1ed9d96f502fa",
@@ -1271,14 +944,7 @@
         {
           "kind": "skill",
           "key": "bybit-exchange/skills:SKILL.md@a08a773db03685ddd7bc755f2ebc26d08853b0a4",
-          "tags": [
-            "trading",
-            "live-reference-only",
-            "cex",
-            "spot",
-            "derivatives",
-            "earn"
-          ],
+          "tags": ["trading", "live-reference-only", "cex", "spot", "derivatives", "earn"],
           "repository": "bybit-exchange/skills",
           "sourcePath": "SKILL.md",
           "sourceRef": "a08a773db03685ddd7bc755f2ebc26d08853b0a4",
@@ -1658,15 +1324,7 @@
         {
           "kind": "skill",
           "key": "crypto-com/crypto-agent-trading:crypto-com-app/SKILL.md@92e80c5527312d0acdf769f16511ba3c6db1f2fe",
-          "tags": [
-            "trading",
-            "live-reference-only",
-            "app",
-            "portfolio",
-            "fiat",
-            "swap",
-            "trade"
-          ],
+          "tags": ["trading", "live-reference-only", "app", "portfolio", "fiat", "swap", "trade"],
           "repository": "crypto-com/crypto-agent-trading",
           "sourcePath": "crypto-com-app/SKILL.md",
           "sourceRef": "92e80c5527312d0acdf769f16511ba3c6db1f2fe",
@@ -1725,14 +1383,7 @@
         {
           "kind": "skill",
           "key": "Bitget-AI/bitget-signal:skills/news-briefing/SKILL.md@55004749ede7fc72431cdb4be9558d01a1b80d03",
-          "tags": [
-            "trading",
-            "adapt-to-paper",
-            "news",
-            "briefing",
-            "social",
-            "catalysts"
-          ],
+          "tags": ["trading", "adapt-to-paper", "news", "briefing", "social", "catalysts"],
           "repository": "Bitget-AI/bitget-signal",
           "sourcePath": "skills/news-briefing/SKILL.md",
           "sourceRef": "55004749ede7fc72431cdb4be9558d01a1b80d03",
@@ -1799,12 +1450,7 @@
           "key": "rakazo-resolver:browser.semantic@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Browser semantic resolution",
           "description": "Known implementations for structured browser interaction.",
-          "tags": [
-            "resolver",
-            "browser",
-            "semantic",
-            "automation"
-          ],
+          "tags": ["resolver", "browser", "semantic", "automation"],
           "content": "{\n  \"semanticKey\": \"browser.semantic\",\n  \"implementations\": [\n    {\n      \"name\": \"Microsoft Playwright MCP\",\n      \"kind\": \"mcp\",\n      \"reference\": \"microsoft/playwright-mcp\",\n      \"priority\": 1,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"must be installed and authorized for the Project\"\n      ]\n    },\n    {\n      \"name\": \"Rakazo OpenCLI browser\",\n      \"kind\": \"browser\",\n      \"reference\": \"rakazo:opencli\",\n      \"priority\": 2,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"requires linked Windows Host and owned browser session\"\n      ]\n    },\n    {\n      \"name\": \"Chrome DevTools MCP\",\n      \"kind\": \"mcp\",\n      \"reference\": \"ChromeDevTools/chrome-devtools-mcp\",\n      \"priority\": 3,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"best when DevTools semantics are sufficient and server is installed/authorized\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -1823,13 +1469,7 @@
           "key": "rakazo-resolver:browser.debug@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Browser debugging resolution",
           "description": "Known implementations for console, network, DOM and performance diagnostics.",
-          "tags": [
-            "resolver",
-            "browser",
-            "debug",
-            "network",
-            "performance"
-          ],
+          "tags": ["resolver", "browser", "debug", "network", "performance"],
           "content": "{\n  \"semanticKey\": \"browser.debug\",\n  \"implementations\": [\n    {\n      \"name\": \"Chrome DevTools MCP\",\n      \"kind\": \"mcp\",\n      \"reference\": \"ChromeDevTools/chrome-devtools-mcp\",\n      \"priority\": 1,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"must be installed and authorized\"\n      ]\n    },\n    {\n      \"name\": \"Microsoft Playwright MCP\",\n      \"kind\": \"mcp\",\n      \"reference\": \"microsoft/playwright-mcp\",\n      \"priority\": 2,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"must be installed and authorized\"\n      ]\n    },\n    {\n      \"name\": \"Rakazo OpenCLI browser\",\n      \"kind\": \"browser\",\n      \"reference\": \"rakazo:opencli\",\n      \"priority\": 3,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"requires linked Windows Host\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -1848,13 +1488,7 @@
           "key": "rakazo-resolver:browser.visual@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Visual browser/desktop resolution",
           "description": "Known implementations for screenshots and visual fallback.",
-          "tags": [
-            "resolver",
-            "browser",
-            "desktop",
-            "screenshot",
-            "visual"
-          ],
+          "tags": ["resolver", "browser", "desktop", "screenshot", "visual"],
           "content": "{\n  \"semanticKey\": \"browser.visual\",\n  \"implementations\": [\n    {\n      \"name\": \"Rakazo Windows Host screenshot\",\n      \"kind\": \"computer\",\n      \"reference\": \"rakazo:windows-host:screen.observe\",\n      \"priority\": 1,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"requires linked running Windows Host\"\n      ]\n    },\n    {\n      \"name\": \"Rakazo OpenCLI screenshot\",\n      \"kind\": \"browser\",\n      \"reference\": \"rakazo:opencli:screenshot\",\n      \"priority\": 2,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"requires owned OpenCLI browser session\"\n      ]\n    },\n    {\n      \"name\": \"Chrome DevTools MCP screenshot\",\n      \"kind\": \"mcp\",\n      \"reference\": \"ChromeDevTools/chrome-devtools-mcp\",\n      \"priority\": 3,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"must be installed and authorized\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -1873,13 +1507,7 @@
           "key": "rakazo-resolver:repo.read@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Repository read resolution",
           "description": "Known implementations for reading Project repository state.",
-          "tags": [
-            "resolver",
-            "git",
-            "github",
-            "repository",
-            "read"
-          ],
+          "tags": ["resolver", "git", "github", "repository", "read"],
           "content": "{\n  \"semanticKey\": \"repo.read\",\n  \"implementations\": [\n    {\n      \"name\": \"Official GitHub MCP\",\n      \"kind\": \"mcp\",\n      \"reference\": \"github/github-mcp-server\",\n      \"priority\": 1,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"exact repository must be available to the authenticated MCP assignment\"\n      ]\n    },\n    {\n      \"name\": \"Rakazo local git\",\n      \"kind\": \"cli\",\n      \"reference\": \"rakazo:windows-host:git\",\n      \"priority\": 2,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"requires linked Project worktree on an authorized Computer\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -1898,13 +1526,7 @@
           "key": "rakazo-resolver:repo.write@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Repository write resolution",
           "description": "Known implementations for Project-scoped repository mutations.",
-          "tags": [
-            "resolver",
-            "git",
-            "github",
-            "repository",
-            "write"
-          ],
+          "tags": ["resolver", "git", "github", "repository", "write"],
           "content": "{\n  \"semanticKey\": \"repo.write\",\n  \"implementations\": [\n    {\n      \"name\": \"Official GitHub MCP\",\n      \"kind\": \"mcp\",\n      \"reference\": \"github/github-mcp-server\",\n      \"priority\": 1,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"requires exact Project github.repo autonomous_write grant\"\n      ]\n    },\n    {\n      \"name\": \"Rakazo local git\",\n      \"kind\": \"cli\",\n      \"reference\": \"rakazo:windows-host:git\",\n      \"priority\": 2,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"requires linked verified worktree and normal Computer control policy\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -1923,12 +1545,7 @@
           "key": "rakazo-resolver:computer.exec@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Computer command execution resolution",
           "description": "Known implementation for bounded command execution on a linked Computer.",
-          "tags": [
-            "resolver",
-            "computer",
-            "terminal",
-            "exec"
-          ],
+          "tags": ["resolver", "computer", "terminal", "exec"],
           "content": "{\n  \"semanticKey\": \"computer.exec\",\n  \"implementations\": [\n    {\n      \"name\": \"Rakazo Windows Host bounded exec\",\n      \"kind\": \"computer\",\n      \"reference\": \"rakazo:computer/exec\",\n      \"priority\": 1,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"requires linked running desktop Computer and active control lease\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -1947,11 +1564,7 @@
           "key": "rakazo-resolver:computer.files@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Computer file resolution",
           "description": "Known implementation for bounded file access on a linked Computer.",
-          "tags": [
-            "resolver",
-            "computer",
-            "files"
-          ],
+          "tags": ["resolver", "computer", "files"],
           "content": "{\n  \"semanticKey\": \"computer.files\",\n  \"implementations\": [\n    {\n      \"name\": \"Rakazo Windows Host files\",\n      \"kind\": \"computer\",\n      \"reference\": \"rakazo:computer/files\",\n      \"priority\": 1,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"requires linked Computer; write operations remain separately authorized\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -1970,12 +1583,7 @@
           "key": "rakazo-resolver:research.web@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Web research resolution",
           "description": "Known research/search implementations available to Rakazo projects.",
-          "tags": [
-            "resolver",
-            "research",
-            "web",
-            "search"
-          ],
+          "tags": ["resolver", "research", "web", "search"],
           "content": "{\n  \"semanticKey\": \"research.web\",\n  \"implementations\": [\n    {\n      \"name\": \"OpenResearch MCP\",\n      \"kind\": \"mcp\",\n      \"reference\": \"rakazo:openresearch\",\n      \"priority\": 1,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"must be registered/available for the current workspace\"\n      ]\n    },\n    {\n      \"name\": \"General web search\",\n      \"kind\": \"api\",\n      \"reference\": \"chatgpt:web-search\",\n      \"priority\": 2,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"available only when the calling ChatGPT surface exposes web search\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -1994,12 +1602,7 @@
           "key": "rakazo-resolver:media.capture@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Media capture resolution",
           "description": "Known screenshot/screen-capture implementations for Project media workflows.",
-          "tags": [
-            "resolver",
-            "media",
-            "screenshot",
-            "capture"
-          ],
+          "tags": ["resolver", "media", "screenshot", "capture"],
           "content": "{\n  \"semanticKey\": \"media.capture\",\n  \"implementations\": [\n    {\n      \"name\": \"Rakazo Windows Host screenshot\",\n      \"kind\": \"computer\",\n      \"reference\": \"rakazo:windows-host:screen.observe\",\n      \"priority\": 1,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"requires linked running Windows Host\"\n      ]\n    },\n    {\n      \"name\": \"Rakazo OpenCLI screenshot\",\n      \"kind\": \"browser\",\n      \"reference\": \"rakazo:opencli:screenshot\",\n      \"priority\": 2,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"requires owned browser session\"\n      ]\n    },\n    {\n      \"name\": \"Chrome DevTools MCP screenshot\",\n      \"kind\": \"mcp\",\n      \"reference\": \"ChromeDevTools/chrome-devtools-mcp\",\n      \"priority\": 3,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"must be installed and authorized\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -2018,13 +1621,7 @@
           "key": "rakazo-resolver:market.data@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Trading market data resolution",
           "description": "Known first-party read-only market-data implementations for trading research and signal generation.",
-          "tags": [
-            "resolver",
-            "trading",
-            "market-data",
-            "research",
-            "read-only"
-          ],
+          "tags": ["resolver", "trading", "market-data", "research", "read-only"],
           "content": "{\n  \"semanticKey\": \"market.data\",\n  \"implementations\": [\n    {\n      \"name\": \"CCXT MCP market tier\",\n      \"kind\": \"mcp\",\n      \"reference\": \"ccxt/ccxt\",\n      \"priority\": 1,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Use market tier only: tickers, order books, OHLCV, trades, funding/open-interest and public GETs; no private account required; trading/funds tiers remain disabled for Rakazo Trading\"\n      ]\n    },\n    {\n      \"name\": \"OKX OnchainOS DEX Market Skill\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:okx/onchainos-skills:okx-dex-market\",\n      \"priority\": 2,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Read-only on-chain market/signal research; no wallet signing or transaction broadcasting\"\n      ]\n    },\n    {\n      \"name\": \"OKX CEX Market Skill\",\n      \"kind\": \"api\",\n      \"reference\": \"market:okx/agent-trade-kit:okx-cex-market\",\n      \"priority\": 3,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Market Skill must be imported/selected; no API credentials required for its read-only market commands\"\n      ]\n    },\n    {\n      \"name\": \"Binance Crypto Market Rank Skill\",\n      \"kind\": \"api\",\n      \"reference\": \"market:binance/binance-skills-hub:crypto-market-rank\",\n      \"priority\": 4,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Private/internal Market use; public Binance Web3 ranking endpoints only; no wallet credentials or trade execution\"\n      ]\n    },\n    {\n      \"name\": \"Coinbase Market Data Skill\",\n      \"kind\": \"mcp\",\n      \"reference\": \"market:coinbase/agents:coinbase-market-data\",\n      \"priority\": 5,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Use only supported market-data surfaces; market lookup authorizes no trade\"\n      ]\n    },\n    {\n      \"name\": \"Binance Trading Signal Skill — public signal mode\",\n      \"kind\": \"api\",\n      \"reference\": \"market:binance/binance-skills-hub:binance-trading-signal\",\n      \"priority\": 6,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Use Smart Money feed, reports and backtest analysis only; strategy mutation paths remain outside default PAPER research route\"\n      ]\n    },\n    {\n      \"name\": \"Kraken Market Intel Skill\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:krakenfx/kraken-cli:kraken-market-intel\",\n      \"priority\": 7,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Requires Kraken CLI for direct execution; Skill itself may still be used as procedural knowledge\"\n      ]\n    },\n    {\n      \"name\": \"Alpaca Market Data Skill\",\n      \"kind\": \"api\",\n      \"reference\": \"market:alpacahq/alpaca-skills:alpaca-broker-market-data\",\n      \"priority\": 8,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Useful for US equities/news/streaming; exact feed availability depends on Alpaca account/data plan\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -2043,13 +1640,7 @@
           "key": "rakazo-resolver:defi.data@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "DeFi research resolution",
           "description": "Known first-party DeFi analysis/planning implementations for PAPER trading research.",
-          "tags": [
-            "resolver",
-            "defi",
-            "yield",
-            "liquidity",
-            "research"
-          ],
+          "tags": ["resolver", "defi", "yield", "liquidity", "research"],
           "content": "{\n  \"semanticKey\": \"defi.data\",\n  \"implementations\": [\n    {\n      \"name\": \"OKX OnchainOS DEX Market Skill\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:okx/onchainos-skills:okx-dex-market\",\n      \"priority\": 1,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Use read-only token, liquidity, holder, cluster, trader and signal analytics only\"\n      ]\n    },\n    {\n      \"name\": \"Aave Yield Analysis Skill\",\n      \"kind\": \"mcp\",\n      \"reference\": \"market:aave/skills:yield-analysis\",\n      \"priority\": 2,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Use Aave market/yield queries only; do not submit transactions from the PAPER trading Project\"\n      ]\n    },\n    {\n      \"name\": \"Uniswap Liquidity Planner Skill\",\n      \"kind\": \"api\",\n      \"reference\": \"market:Uniswap/uniswap-ai:liquidity-planner\",\n      \"priority\": 3,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Use for planning/analysis; any swap or liquidity action remains outside PAPER execution authority\"\n      ]\n    },\n    {\n      \"name\": \"Uniswap Swap Planner Skill\",\n      \"kind\": \"api\",\n      \"reference\": \"market:Uniswap/uniswap-ai:swap-planner\",\n      \"priority\": 4,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Planning only in Rakazo Trading; do not pass through to live swap execution\"\n      ]\n    },\n    {\n      \"name\": \"OKX OnchainOS DeFi Skill\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:okx/onchainos-skills:okx-defi\",\n      \"priority\": 5,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Use discovery/rates/portfolio analysis only in PAPER project; deposits, withdrawals, claims and other writes remain forbidden\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -2068,13 +1659,7 @@
           "key": "rakazo-resolver:trading.paper@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Paper trading resolution",
           "description": "Known first-party paper-trading/backtest workflows. This semantic key is Market knowledge and does not grant trading.execute.",
-          "tags": [
-            "resolver",
-            "paper",
-            "trading",
-            "backtest",
-            "simulation"
-          ],
+          "tags": ["resolver", "paper", "trading", "backtest", "simulation"],
           "content": "{\n  \"semanticKey\": \"trading.paper\",\n  \"implementations\": [\n    {\n      \"name\": \"CCXT MCP sandbox/testnet\",\n      \"kind\": \"mcp\",\n      \"reference\": \"market:ccxt/ccxt:ccxt-mcp\",\n      \"priority\": 1,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Sandbox/testnet accounts only; live trading/funds/implicitWrites disabled; testnet credentials only; Project trading.execute remains denied\"\n      ]\n    },\n    {\n      \"name\": \"Alpaca Paper Trading Skill\",\n      \"kind\": \"api\",\n      \"reference\": \"market:alpacahq/alpaca-skills:paper-trading\",\n      \"priority\": 2,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Paper environment only; never substitute live Trading API credentials or endpoints\"\n      ]\n    },\n    {\n      \"name\": \"Alpaca Paper Trading MCP Skill\",\n      \"kind\": \"mcp\",\n      \"reference\": \"market:alpacahq/alpaca-skills:paper-trading-mcp\",\n      \"priority\": 3,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Paper environment only; MCP assignment must not expose live execution for Rakazo Trading\"\n      ]\n    },\n    {\n      \"name\": \"Kraken Paper Strategy Skill\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:krakenfx/kraken-cli:kraken-paper-strategy\",\n      \"priority\": 4,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Paper commands only; live execution Skills remain unavailable to the PAPER Project\"\n      ]\n    },\n    {\n      \"name\": \"Kraken Paper Strategy Backtest Recipe\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:krakenfx/kraken-cli:recipe-paper-strategy-backtest\",\n      \"priority\": 5,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Simulation/backtest only\"\n      ]\n    },\n    {\n      \"name\": \"Binance Copy Trader — dry-run adaptation\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:binance/binance-skills-hub:binance-onchain-copy-trader\",\n      \"priority\": 6,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Rakazo adaptation must permanently disable live mode and order submission; retain dry-run, event logging, outcome sampling and post-mortem only\"\n      ]\n    },\n    {\n      \"name\": \"Binance Trading Signal — backtest mode\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:binance/binance-skills-hub:binance-trading-signal\",\n      \"priority\": 7,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Backtest/report path only for PAPER evaluation; no live trade execution\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -2093,14 +1678,7 @@
           "key": "rakazo-resolver:market.risk@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Trading risk intelligence resolution",
           "description": "Known read-only token/security risk implementations for pre-trade research and PAPER signal filtering.",
-          "tags": [
-            "resolver",
-            "trading",
-            "risk",
-            "token",
-            "security",
-            "read-only"
-          ],
+          "tags": ["resolver", "trading", "risk", "token", "security", "read-only"],
           "content": "{\n  \"semanticKey\": \"market.risk\",\n  \"implementations\": [\n    {\n      \"name\": \"Binance Token Audit Skill\",\n      \"kind\": \"api\",\n      \"reference\": \"market:binance/binance-skills-hub:query-token-audit\",\n      \"priority\": 1,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Public token-audit endpoint only; treat risk output as one feature, not a safety guarantee or trade authorization\"\n      ]\n    },\n    {\n      \"name\": \"OKX OnchainOS token security scan\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:okx/onchainos-skills:security-token-scan\",\n      \"priority\": 2,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Read-only security scan only; do not expose wallet signing, swap or broadcast capabilities to PAPER project\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -2119,15 +1697,7 @@
           "key": "rakazo-resolver:wallet.analytics@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Wallet and Smart Money analytics resolution",
           "description": "Known read-only wallet/KOL/Smart Money analytics for discovery, replay and signal features.",
-          "tags": [
-            "resolver",
-            "wallet",
-            "smart-money",
-            "kol",
-            "signals",
-            "analytics",
-            "read-only"
-          ],
+          "tags": ["resolver", "wallet", "smart-money", "kol", "signals", "analytics", "read-only"],
           "content": "{\n  \"semanticKey\": \"wallet.analytics\",\n  \"implementations\": [\n    {\n      \"name\": \"Binance Wallet Tracker Skill — public analytics mode\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:binance/binance-skills-hub:binance-wallet-tracker\",\n      \"priority\": 1,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Use public KOL/Smart Money query and replay modes; group/follow mutations are optional and excluded from default PAPER route\"\n      ]\n    },\n    {\n      \"name\": \"OKX OnchainOS DEX Market tracker/leaderboard\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:okx/onchainos-skills:okx-dex-market\",\n      \"priority\": 2,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Use tracker, signal and leaderboard read paths only\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -2146,14 +1716,7 @@
           "key": "rakazo-resolver:backtest.quant@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Quantitative backtest resolution",
           "description": "Known first-party backtest and research engines for validating trading ideas before PAPER use.",
-          "tags": [
-            "resolver",
-            "backtest",
-            "quant",
-            "research",
-            "strategy",
-            "paper"
-          ],
+          "tags": ["resolver", "backtest", "quant", "research", "strategy", "paper"],
           "content": "{\n  \"semanticKey\": \"backtest.quant\",\n  \"implementations\": [\n    {\n      \"name\": \"QuantConnect LEAN\",\n      \"kind\": \"cli\",\n      \"reference\": \"QuantConnect/Lean\",\n      \"priority\": 1,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Use backtest/research mode only for Rakazo Trading; brokerage/live deployment is outside PAPER authority\"\n      ]\n    },\n    {\n      \"name\": \"Microsoft Qlib\",\n      \"kind\": \"cli\",\n      \"reference\": \"microsoft/qlib\",\n      \"priority\": 2,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Research/backtest/portfolio analysis only; no live execution path implied\"\n      ]\n    },\n    {\n      \"name\": \"Freqtrade backtesting\",\n      \"kind\": \"cli\",\n      \"reference\": \"freqtrade/freqtrade\",\n      \"priority\": 3,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Backtesting/dry-run only in Rakazo Trading; live trade configuration forbidden by Project policy\"\n      ]\n    },\n    {\n      \"name\": \"Alpaca Backtest Skill\",\n      \"kind\": \"api\",\n      \"reference\": \"market:alpacahq/alpaca-skills:backtest\",\n      \"priority\": 4,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Historical/backtest workflow only\"\n      ]\n    },\n    {\n      \"name\": \"Kraken Paper Strategy Backtest\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:krakenfx/kraken-cli:recipe-paper-strategy-backtest\",\n      \"priority\": 5,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Simulation/backtest only\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -2172,14 +1735,7 @@
           "key": "rakazo-resolver:strategy.framework@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Trading strategy framework resolution",
           "description": "Known first-party strategy frameworks for research, simulation and PAPER strategy development.",
-          "tags": [
-            "resolver",
-            "strategy",
-            "quant",
-            "paper",
-            "market-making",
-            "research"
-          ],
+          "tags": ["resolver", "strategy", "quant", "paper", "market-making", "research"],
           "content": "{\n  \"semanticKey\": \"strategy.framework\",\n  \"implementations\": [\n    {\n      \"name\": \"Hummingbot\",\n      \"kind\": \"cli\",\n      \"reference\": \"hummingbot/hummingbot\",\n      \"priority\": 1,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Prefer paper exchange/strategy research; live exchange connectors remain outside Rakazo Trading authority\"\n      ]\n    },\n    {\n      \"name\": \"Freqtrade\",\n      \"kind\": \"cli\",\n      \"reference\": \"freqtrade/freqtrade\",\n      \"priority\": 2,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Use strategy analysis/backtest/dry-run modes only\"\n      ]\n    },\n    {\n      \"name\": \"QuantConnect LEAN\",\n      \"kind\": \"cli\",\n      \"reference\": \"QuantConnect/Lean\",\n      \"priority\": 3,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Backtest/research algorithms only for current PAPER project\"\n      ]\n    },\n    {\n      \"name\": \"Microsoft Qlib\",\n      \"kind\": \"cli\",\n      \"reference\": \"microsoft/qlib\",\n      \"priority\": 4,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Signal/portfolio/risk research only; no live execution\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -2225,13 +1781,7 @@
           "key": "rakazo-resolver:paper.simulation@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Paper and dry-run simulation resolution",
           "description": "Known first-party paper exchanges and dry-run engines for validating strategies without real orders.",
-          "tags": [
-            "resolver",
-            "paper",
-            "dry-run",
-            "simulation",
-            "strategy"
-          ],
+          "tags": ["resolver", "paper", "dry-run", "simulation", "strategy"],
           "content": "{\n  \"semanticKey\": \"paper.simulation\",\n  \"implementations\": [\n    {\n      \"name\": \"Hummingbot paper exchange\",\n      \"kind\": \"cli\",\n      \"reference\": \"hummingbot/hummingbot:paper_trade\",\n      \"priority\": 1,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Synthetic/paper exchange only\"\n      ]\n    },\n    {\n      \"name\": \"Freqtrade dry-run\",\n      \"kind\": \"cli\",\n      \"reference\": \"freqtrade/freqtrade:dry-run\",\n      \"priority\": 2,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Dry-run only; live mode forbidden\"\n      ]\n    },\n    {\n      \"name\": \"Alpaca Paper Trading Skill\",\n      \"kind\": \"api\",\n      \"reference\": \"market:alpacahq/alpaca-skills:paper-trading\",\n      \"priority\": 3,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Paper environment only\"\n      ]\n    },\n    {\n      \"name\": \"Kraken Paper Strategy Skill\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:krakenfx/kraken-cli:kraken-paper-strategy\",\n      \"priority\": 4,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Paper commands only\"\n      ]\n    },\n    {\n      \"name\": \"Binance Copy Trader dry-run adaptation\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:binance/binance-skills-hub:binance-onchain-copy-trader\",\n      \"priority\": 5,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Rakazo adaptation must permanently disable live mode/order submission\"\n      ]\n    },\n    {\n      \"name\": \"Bitget Agent Skill — paper mode\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:Bitget-AI/agent-skill:bitget\",\n      \"priority\": 6,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Use --paper-trading for every write-like operation; never mix live and demo credentials in the PAPER Project\"\n      ]\n    },\n    {\n      \"name\": \"Crypto.com Exchange — cdcx paper\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:crypto-com/crypto-agent-trading:crypto-com-exchange\",\n      \"priority\": 7,\n      \"readOnly\": false,\n      \"constraints\": [\n        \"Use cdcx paper simulator only; exclude live trade/account/funds mutations\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -2250,14 +1800,7 @@
           "key": "rakazo-resolver:defi.protocol.metrics@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "DeFi protocol metrics resolution",
           "description": "Known read-only sources for protocol TVL and ecosystem metrics.",
-          "tags": [
-            "resolver",
-            "defi",
-            "tvl",
-            "protocols",
-            "metrics",
-            "read-only"
-          ],
+          "tags": ["resolver", "defi", "tvl", "protocols", "metrics", "read-only"],
           "content": "{\n  \"semanticKey\": \"defi.protocol.metrics\",\n  \"implementations\": [\n    {\n      \"name\": \"DefiLlama protocol/TVL data\",\n      \"kind\": \"api\",\n      \"reference\": \"DefiLlama/DefiLlama-Adapters\",\n      \"priority\": 1,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Read-only protocol/TVL analytics; no transaction execution\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -2276,13 +1819,7 @@
           "key": "rakazo-resolver:market.data.provider@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Additional market-data provider resolution",
           "description": "Known read-only market-data SDKs that complement exchange-native feeds.",
-          "tags": [
-            "resolver",
-            "market-data",
-            "equities",
-            "futures",
-            "read-only"
-          ],
+          "tags": ["resolver", "market-data", "equities", "futures", "read-only"],
           "content": "{\n  \"semanticKey\": \"market.data.provider\",\n  \"implementations\": [\n    {\n      \"name\": \"Massive market-data Python client\",\n      \"kind\": \"api\",\n      \"reference\": \"massive-com/client-python\",\n      \"priority\": 1,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Market-data access only; subscription/data-plan limits may apply\"\n      ]\n    },\n    {\n      \"name\": \"Hyperliquid SDK info endpoints\",\n      \"kind\": \"api\",\n      \"reference\": \"hyperliquid-dex/hyperliquid-python-sdk\",\n      \"priority\": 2,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Info/read methods only; no exchange/order actions\"\n      ]\n    },\n    {\n      \"name\": \"Bitget public market data\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:Bitget-AI/agent-skill:bitget\",\n      \"priority\": 3,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Use public market, ticker, orderbook, candles, funding and open-interest reads only\"\n      ]\n    },\n    {\n      \"name\": \"Crypto.com Exchange market data\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:crypto-com/crypto-agent-trading:crypto-com-exchange\",\n      \"priority\": 4,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Use cdcx market/stream read paths only; no API credentials required for market data\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",
@@ -2301,14 +1838,7 @@
           "key": "rakazo-resolver:signal.discovery@0b60c5e3aa46627ba462e25530415f8fee9e386e",
           "name": "Trading signal discovery resolution",
           "description": "Known read-only signal and ranking workflows for generating PAPER trading candidates before strategy/risk filters.",
-          "tags": [
-            "resolver",
-            "signals",
-            "smart-money",
-            "rankings",
-            "onchain",
-            "read-only"
-          ],
+          "tags": ["resolver", "signals", "smart-money", "rankings", "onchain", "read-only"],
           "content": "{\n  \"semanticKey\": \"signal.discovery\",\n  \"implementations\": [\n    {\n      \"name\": \"CCXT trading-signal Agent Skill\",\n      \"kind\": \"api\",\n      \"reference\": \"market:ccxt/ccxt:trading-signal\",\n      \"priority\": 1,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Read-only per-trade smart-money signals; no strategy mutation or order execution\"\n      ]\n    },\n    {\n      \"name\": \"CCXT crypto-market-rank Agent Skill\",\n      \"kind\": \"api\",\n      \"reference\": \"market:ccxt/ccxt:crypto-market-rank\",\n      \"priority\": 2,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Read-only market rankings, smart-money inflows, social hype and top-trader PnL\"\n      ]\n    },\n    {\n      \"name\": \"OKX OnchainOS DEX Market Skill\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:okx/onchainos-skills:okx-dex-market\",\n      \"priority\": 3,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Use signal, tracker, leaderboard and market-data read paths only\"\n      ]\n    },\n    {\n      \"name\": \"Binance Wallet Tracker PAPER adaptation\",\n      \"kind\": \"cli\",\n      \"reference\": \"market:binance/binance-skills-hub:binance-wallet-tracker\",\n      \"priority\": 4,\n      \"readOnly\": true,\n      \"constraints\": [\n        \"Use public KOL/Smart Money query and replay analytics; exclude group/follow mutations from default route\"\n      ]\n    }\n  ]\n}",
           "sourceUrl": "https://github.com/BogdanAIP/rakazo/blob/0b60c5e3aa46627ba462e25530415f8fee9e386e/market/resolver-seeds.v1.json",
           "repository": "BogdanAIP/rakazo",

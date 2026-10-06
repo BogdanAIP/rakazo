@@ -52,7 +52,14 @@ describe("Market population manifest", () => {
 
     const items = data.batches.flatMap((batch) => batch.items);
     expect(items).toHaveLength(113);
-    expect(new Set(items.map((item) => `${item.kind}:${item.repository}:${item.sourceRef}:${item.sourcePath ?? item.sourceUrl}`)).size).toBe(113);
+    expect(
+      new Set(
+        items.map(
+          (item) =>
+            `${item.kind}:${item.repository}:${item.sourceRef}:${item.sourcePath ?? item.sourceUrl}`,
+        ),
+      ).size,
+    ).toBe(113);
 
     for (const item of items) {
       expect(item.sourceRef).toMatch(/^[0-9a-f]{40}$/);
@@ -68,9 +75,9 @@ describe("Market population manifest", () => {
           true,
         );
       } else {
-        expect(batch.items.every((item) => item.kind === "resolver" && Boolean(item.sourceUrl))).toBe(
-          true,
-        );
+        expect(
+          batch.items.every((item) => item.kind === "resolver" && Boolean(item.sourceUrl)),
+        ).toBe(true);
       }
     }
   });
