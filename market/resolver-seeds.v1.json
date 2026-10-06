@@ -790,6 +790,49 @@
           }
         ]
       }
+    },
+    {
+      "key": "signal.discovery",
+      "name": "Trading signal discovery resolution",
+      "description": "Known read-only signal and ranking workflows for generating PAPER trading candidates before strategy/risk filters.",
+      "tags": ["signals", "smart-money", "rankings", "onchain", "read-only"],
+      "content": {
+        "semanticKey": "signal.discovery",
+        "implementations": [
+          {
+            "name": "CCXT trading-signal Agent Skill",
+            "kind": "api",
+            "reference": "market:ccxt/ccxt:trading-signal",
+            "priority": 1,
+            "readOnly": true,
+            "constraints": ["Read-only per-trade smart-money signals; no strategy mutation or order execution"]
+          },
+          {
+            "name": "CCXT crypto-market-rank Agent Skill",
+            "kind": "api",
+            "reference": "market:ccxt/ccxt:crypto-market-rank",
+            "priority": 2,
+            "readOnly": true,
+            "constraints": ["Read-only market rankings, smart-money inflows, social hype and top-trader PnL"]
+          },
+          {
+            "name": "OKX OnchainOS DEX Market Skill",
+            "kind": "cli",
+            "reference": "market:okx/onchainos-skills:okx-dex-market",
+            "priority": 3,
+            "readOnly": true,
+            "constraints": ["Use signal, tracker, leaderboard and market-data read paths only"]
+          },
+          {
+            "name": "Binance Wallet Tracker PAPER adaptation",
+            "kind": "cli",
+            "reference": "market:binance/binance-skills-hub:binance-wallet-tracker",
+            "priority": 4,
+            "readOnly": true,
+            "constraints": ["Use public KOL/Smart Money query and replay analytics; exclude group/follow mutations from default route"]
+          }
+        ]
+      }
     }
   ]
 }
