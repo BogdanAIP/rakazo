@@ -1,13 +1,19 @@
-import type { BackgroundJobPayloads, JobPublisher } from "@rakazo/adapter-kit";
-import type { PrismaClient } from "@rakazo/db";
-import { readTradingPaperWorkerRecurrencePreflight } from "@rakazo/db";
 import {
-  type AuthorizedPaperWorkerSuccessorPlan,
-  planAuthorizedPaperWorkerPreflightSuccessor,
-} from "./paper-worker-authorized-recurrence.js";
+  type BackgroundJobPayloads,
+  type JobPublisher,
+  paperWorkerPreflightJob,
+} from "@rakazo/adapter-kit";
+import type {
+  PrismaClient,
+  TradingPaperWorkerSuccessorIntentResult,
+} from "@rakazo/db";
+import { prepareTradingPaperWorkerSuccessorIntent } from "@rakazo/db";
 
-type ReadRecurrence = typeof readTradingPaperWorkerRecurrencePreflight;
-type PlanSuccessor = typeof planAuthorizedPaperWorkerPreflightSuccessor;
+type PrepareSuccessorIntent = typeof prepareTradingPaperWorkerSuccessorIntent;
+type SuccessorIntentStop = Extract<
+  TradingPaperWorkerSuccessorIntentResult,
+  { status: "stop" }
+>;
 
 export type AuthorizedPaperWorkerSuccessorScheduleResult =
   | {
@@ -16,33 +22,67 @@ export type AuthorizedPaperWorkerSuccessorScheduleResult =
       gateRevision: number;
       scheduledFor: string;
     }
-  | Extract<AuthorizedPaperWorkerSuccessorPlan, { status: "stop" }>;
+  | {
+      status: "stop";
+      ledgerId: string;
+      reason: SuccessorIntentStop["reason"];
+      recurrenceReason?: string;
+      currentGateRevision?: number;
+    };
 
-/** Internal D7 -> D8 -> queue primitive. No production caller exists in D9. */
+/** Internal durable-intent -> queue primitive. D11 persists and verifies the
+ * exact successor schedule before any queue side effect. No production caller
+ * is registered in P11D-12. */
 export async function enqueueAuthorizedPaperWorkerSuccessor(
   deps: { prisma: PrismaClient; jobs: Pick<JobPublisher, "enqueue"> },
   payload: BackgroundJobPayloads["paper.worker-preflight"],
   now: Date = new Date(),
-  readRecurrence: ReadRecurrence = readTradingPaperWorkerRecurrencePreflight,
-  planSuccessor: PlanSuccessor = planAuthorizedPaperWorkerPreflightSuccessor,
+  prepareIntent: PrepareSuccessorIntent = prepareTradingPaperWorkerSuccessorIntent,
 ): Promise<AuthorizedPaperWorkerSuccessorScheduleResult> {
   if (!Number.isFinite(now.getTime())) {
     throw new Error("Invalid authorized paper worker successor clock");
   }
-  const recurrence = await readRecurrence(
+
+  const intent = await prepareIntent(
     deps.prisma,
     { spaceId: payload.spaceId, userId: payload.userId },
-    payload.ledgerId,
-    now,
+    {
+      ledgerId: payload.ledgerId,
+      sourceScheduledFor: payload.scheduledFor,
+      gateRevision: payload.gateRevision,
+      now,
+    },
   );
-  const plan = planSuccessor(payload, recurrence, now);
-  if (plan.status !== "planned") return plan;
+  if (intent.status === "stop") {
+    return {
+      status: "stop",
+      ledgerId: intent.ledgerId,
+      reason: intent.reason,
+      ...(intent.recurrenceReason ? { recurrenceReason: intent.recurrenceReason } : {}),
+      ...(intent.currentGateRevision !== undefined
+        ? { currentGateRevision: intent.currentGateRevision }
+        : {}),
+    };
+  }
 
-  await deps.jobs.enqueue(plan.job);
+  const scheduledFor = new Date(intent.successorScheduledFor);
+  if (!Number.isFinite(scheduledFor.getTime())) {
+    throw new Error("Invalid persisted paper worker successor schedule");
+  }
+
+  await deps.jobs.enqueue(
+    paperWorkerPreflightJob({
+      ledgerId: intent.ledgerId,
+      spaceId: payload.spaceId,
+      userId: payload.userId,
+      gateRevision: intent.gateRevision,
+      scheduledFor,
+    }),
+  );
   return {
     status: "enqueued",
-    ledgerId: plan.ledgerId,
-    gateRevision: plan.gateRevision,
-    scheduledFor: plan.scheduledFor,
+    ledgerId: intent.ledgerId,
+    gateRevision: intent.gateRevision,
+    scheduledFor: intent.successorScheduledFor,
   };
 }
