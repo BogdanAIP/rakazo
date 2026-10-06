@@ -494,6 +494,14 @@ export function createMarketService(
       return imported;
     },
 
+    async importBatch(actor: Actor, items: ImportInput[]): Promise<MarketEntry[]> {
+      const imported: MarketEntry[] = [];
+      for (const item of items) {
+        imported.push(await this.importEntry(actor, item));
+      }
+      return imported;
+    },
+
     async importEntry(actor: Actor, input: ImportInput): Promise<MarketEntry> {
       const validated = validatedImport(input);
       const existing = await prisma.marketEntry.findFirst({
