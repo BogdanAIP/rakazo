@@ -230,6 +230,14 @@ D12 removes the remaining timing split between recurrence planning and the queue
 
 An idempotent retry after queue uncertainty reuses the same D11 intent and therefore the same successor timestamp and ledger-scoped replace key instead of drifting the schedule forward. Recurrence denial or changed gate scope creates no queue side effect. D10 remains deliberately unregistered in the production background-handler map, so D12 still does **not** activate recurring PAPER work, poll market data, wake a model or execute a synthetic/live trade. Registering the recurring handler remains a separate reviewed gate.
 
+## P11D-13 — guarded recurring handler registration
+
+D13 registers the already reviewed D10 composition for the existing `paper.worker-preflight` background-job type. Registration alone creates no job and no recurrence: an initial wake still has to come from the separately owner-approved D4 one-shot start. On every wake, D2 first revalidates the enabled paper policy, worker gate, approval provenance and strict lifecycle state. A deny or stale gate stops before any queue side effect.
+
+Only after D2 is ready does the handler enter D12, which persists/reuses the D11 successor intent after the full D7 recurrence authorization check and then enqueues the exact durable successor timestamp. With no D6 recurrence permission, a valid one-shot wake simply finishes without a successor. Revoking or changing the paper/worker/recurrence revisions therefore stops the chain fail-closed.
+
+The registered handler still has no market-data adapter, model runtime, trading writer, exchange credential, private endpoint or order dispatcher. It does not create a Rakazo Routine and cannot reserve/fill/close virtual positions. This branch change is not deployed or merged by D13, so it does not alter the currently running Rakazo instance.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.

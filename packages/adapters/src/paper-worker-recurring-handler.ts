@@ -23,8 +23,9 @@ export type PaperWorkerRecurringHandlerResult =
       successor: AuthorizedPaperWorkerSuccessorScheduleResult;
     };
 
-/** D2 -> D9 composition only. This function is deliberately not registered
- * in the production background handler map in P11D-10. */
+/** D2 -> durable D11/D12 successor composition. P11D-13 registers this
+ * handler, but every wake remains fail-closed behind the worker and recurrence
+ * approval chains. */
 export async function handlePaperWorkerPreflightWithSuccessor(
   deps: { prisma: PrismaClient; jobs: Pick<JobPublisher, "enqueue"> },
   payload: BackgroundJobPayloads["paper.worker-preflight"],

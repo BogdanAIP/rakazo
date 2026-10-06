@@ -18,7 +18,7 @@ import type { createRunExecutor } from "./executor.js";
 import { compactHistory } from "./history-compaction.js";
 import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import { deliverMessagingOutbound, mirrorMessagingOutbound } from "./messaging-delivery.js";
-import { handlePaperWorkerPreflight } from "./paper-worker-background.js";
+import { handlePaperWorkerPreflightWithSuccessor } from "./paper-worker-recurring-handler.js";
 import type { EncryptedSecretStore } from "./secrets.js";
 import { expireTaughtSkillTeaching } from "./teaching-session.js";
 
@@ -75,7 +75,10 @@ export function createBackgroundJobHandlers(deps: {
       await deps.executor.wakeRoutine(payload.routineId, payload.scheduledFor);
     },
     "paper.worker-preflight": async (payload) => {
-      await handlePaperWorkerPreflight(deps.prisma, payload);
+      await handlePaperWorkerPreflightWithSuccessor(
+        { prisma: deps.prisma, jobs: deps.jobs },
+        payload,
+      );
     },
     "computer.update": async ({ updateId }) => {
       await performComputerUpdate(deps, updateId);
