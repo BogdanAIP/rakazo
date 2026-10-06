@@ -803,7 +803,7 @@ export const appContract = {
           items: z.array(marketGithubImportInput).min(1).max(100),
         }),
       )
-      .output(z.array(MarketEntrySchema)),
+      .output(z.array(MarketCatalogEntrySchema)),
     import: oc.input(marketImportInput).output(MarketEntrySchema),
     importBatch: oc
       .input(
@@ -811,7 +811,7 @@ export const appContract = {
           items: z.array(marketImportInput).min(1).max(100),
         }),
       )
-      .output(z.array(MarketEntrySchema)),
+      .output(z.array(MarketCatalogEntrySchema)),
     adapt: oc
       .input(
         z.object({
