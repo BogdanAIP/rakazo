@@ -81,6 +81,7 @@ const WRITE_ACTIONS = new Set([
   "input",
   "install",
   "import",
+  "importBatch",
   "importGithub",
   "importGithubBatch",
   "markRead",
