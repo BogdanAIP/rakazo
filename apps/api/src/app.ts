@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+﻿import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { ORPCError, onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
@@ -309,7 +309,7 @@ export async function createApp(
     pipedreamOverride ??
     (isPipedreamEnabled(pipedreamConfig) ? new PipedreamConnector(pipedreamConfig) : undefined);
   // This process registers the inbound sink (messaging.onInbound below),
-  // so it's the one that must hold Telegram's live getUpdates connection —
+  // so it's the one that must hold Telegram's live getUpdates connection вЂ”
   // see messagingPlatformsFromEnv's docstring for why a second poller
   // elsewhere (e.g. the worker) would actively break this.
   const messagingPlatforms = messagingPlatformsFromEnv(env, { pollInboundMessages: true });
@@ -569,49 +569,51 @@ export async function createApp(
     return auth.handler(c.req.raw);
   });
   mountLocalSettings(app, { token: env.desktopStackToken, prisma, rpc });
+  const sessionActor = async (request: Request) => {
+    const session = await auth.api.getSession({ headers: sessionHeaders(request) });
+    if (!session?.user) return null;
+    return requireMembership(
+      prisma,
+      session.user.id,
+      request.headers.get("x-rakazo-space-id") ?? undefined,
+    ).catch(() => null);
+  };
   mountWindowsHostRoutes(app, {
     prisma,
     commandHub: windowsHostCommandHub,
     internalToken: windowsHostEnabled ? windowsHostInternalToken : undefined,
     resolveOwner: async (request) => {
-      const session = await auth.api.getSession({ headers: sessionHeaders(request) });
-      if (!session?.user) return null;
-      const actor = await requireMembership(
-        prisma,
-        session.user.id,
-        request.headers.get("x-rakazo-space-id") ?? undefined,
-      ).catch(() => null);
+      const actor = await sessionActor(request);
       if (!actor) return null;
       return {
         userId: actor.userId,
         isDeploymentOwner: actor.isDeploymentOwner,
       };
     },
-  });
-  app.use("/rpc/*", async (c, next) => {
-    const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
-    const requestedSpaceId = c.req.header("x-rakazo-space-id");
-    const actor = session?.user
-      ? await requireMembership(prisma, session.user.id, requestedSpaceId).catch(() => null)
-      : null;
+  });  app.use("/rpc/*", async (c, next) => {
+    const actor = await sessionActor(c.req.raw);
     if (actor) {
       enrichLogContext({ "user.id": actor.userId, "space.id": actor.spaceId });
     }
     const { matched, response } = await rpc.handle(c.req.raw, {
       prefix: "/rpc",
-      context: { actor, signal: c.req.raw.signal },
+      context: {
+        actor,
+        signal: c.req.raw.signal,
+        // Same user in the same space, so leaving the space also ends a stream.
+        stillAuthorized: async () => {
+          const current = await sessionActor(c.req.raw);
+          return Boolean(
+            actor && current?.userId === actor.userId && current.spaceId === actor.spaceId,
+          );
+        },
+      },
     });
     if (matched) return c.newResponse(response.body, response);
     await next();
   });
   mountVoiceHttpRoutes(app, { prisma, secrets }, async (c) => {
-    const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
-    if (!session?.user) return null;
-    const actor = await requireMembership(
-      prisma,
-      session.user.id,
-      c.req.header("x-rakazo-space-id"),
-    ).catch(() => null);
+    const actor = await sessionActor(c.req.raw);
     if (actor) enrichLogContext({ "user.id": actor.userId, "space.id": actor.spaceId });
     return actor;
   });
@@ -639,7 +641,7 @@ export async function createApp(
         signupAllowlist: env.signupAllowlist,
       },
       typing: (threadId) => {
-        // Keep conversation addresses out of trace ids — those reach logs
+        // Keep conversation addresses out of trace ids вЂ” those reach logs
         // and telemetry, a different trust boundary than the database.
         const operationId = `messaging.typing:${randomUUID()}`;
         return messaging.sendTyping(threadId, {
@@ -829,7 +831,7 @@ export async function createApp(
           return;
         }
         // Bridge is still starting (or retrying). Do not fall through to the
-        // personal-line inbound path — that bypasses externalMessage ownership
+        // personal-line inbound path вЂ” that bypasses externalMessage ownership
         // and can wake routines for unlinked TeamChat senders.
         if (teamChatInitTask) {
           const pending = pendingTeamChatInbound.enqueue(event);
@@ -848,7 +850,7 @@ export async function createApp(
     // registered) immediately rather than waiting for the first webhook
     // POST or outbound send to lazily trigger it. This is the process that
     // owns the inbound sink registered just above, so it must be the one
-    // holding the live connection — a second poller elsewhere (e.g. the
+    // holding the live connection вЂ” a second poller elsewhere (e.g. the
     // worker) would only fight this one for Telegram's single getUpdates
     // slot without ever seeing the messages itself.
     // Bounded retries cover transient Telegram startup failures; polling-only
