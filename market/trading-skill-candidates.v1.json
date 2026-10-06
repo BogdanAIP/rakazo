@@ -11,231 +11,386 @@
       "commit": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
       "path": "skills/kraken-paper-strategy/SKILL.md",
       "class": "paper-ready",
-      "tags": ["paper", "strategy", "spot", "simulation"]
+      "tags": [
+        "paper",
+        "strategy",
+        "spot",
+        "simulation"
+      ]
     },
     {
       "repository": "krakenfx/kraken-cli",
       "commit": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
       "path": "skills/recipe-paper-strategy-backtest/SKILL.md",
       "class": "paper-ready",
-      "tags": ["paper", "backtest", "strategy"]
+      "tags": [
+        "paper",
+        "backtest",
+        "strategy"
+      ]
     },
     {
       "repository": "krakenfx/kraken-cli",
       "commit": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
       "path": "skills/kraken-market-intel/SKILL.md",
       "class": "research-ready",
-      "tags": ["market-data", "orderbook", "ohlcv", "streaming"]
+      "tags": [
+        "market-data",
+        "orderbook",
+        "ohlcv",
+        "streaming"
+      ]
     },
     {
       "repository": "krakenfx/kraken-cli",
       "commit": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
       "path": "skills/recipe-morning-market-brief/SKILL.md",
       "class": "research-ready",
-      "tags": ["briefing", "watchlist", "portfolio", "market-data"]
+      "tags": [
+        "briefing",
+        "watchlist",
+        "portfolio",
+        "market-data"
+      ]
     },
     {
       "repository": "krakenfx/kraken-cli",
       "commit": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
       "path": "skills/recipe-funding-rate-scan/SKILL.md",
       "class": "adapt-to-paper",
-      "tags": ["futures", "funding", "carry", "scanner"]
+      "tags": [
+        "futures",
+        "funding",
+        "carry",
+        "scanner"
+      ]
     },
     {
       "repository": "krakenfx/kraken-cli",
       "commit": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
       "path": "skills/kraken-futures-risk/SKILL.md",
       "class": "adapt-to-paper",
-      "tags": ["futures", "risk", "leverage", "margin", "liquidation"]
+      "tags": [
+        "futures",
+        "risk",
+        "leverage",
+        "margin",
+        "liquidation"
+      ]
     },
     {
       "repository": "krakenfx/kraken-cli",
       "commit": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
       "path": "skills/recipe-track-orderbook-depth/SKILL.md",
       "class": "research-ready",
-      "tags": ["orderbook", "liquidity", "depth"]
+      "tags": [
+        "orderbook",
+        "liquidity",
+        "depth"
+      ]
     },
     {
       "repository": "krakenfx/kraken-cli",
       "commit": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
       "path": "skills/recipe-session-post-mortem/SKILL.md",
       "class": "paper-ready",
-      "tags": ["post-trade", "review", "journal", "metrics"]
+      "tags": [
+        "post-trade",
+        "review",
+        "journal",
+        "metrics"
+      ]
     },
     {
       "repository": "krakenfx/kraken-cli",
       "commit": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
       "path": "skills/recipe-daily-pnl-report/SKILL.md",
       "class": "paper-ready",
-      "tags": ["pnl", "reporting", "performance"]
+      "tags": [
+        "pnl",
+        "reporting",
+        "performance"
+      ]
     },
     {
       "repository": "alpacahq/alpaca-skills",
       "commit": "39111abee6b60af7c11d40b5fc892dfc4fd791a4",
       "path": "skills/trading-api/paper-trading/SKILL.md",
       "class": "paper-ready",
-      "tags": ["paper", "equities", "options", "crypto", "orders"]
+      "tags": [
+        "paper",
+        "equities",
+        "options",
+        "crypto",
+        "orders"
+      ]
     },
     {
       "repository": "alpacahq/alpaca-skills",
       "commit": "39111abee6b60af7c11d40b5fc892dfc4fd791a4",
       "path": "skills/trading-api/paper-trading-mcp/SKILL.md",
       "class": "paper-ready",
-      "tags": ["paper", "mcp", "orders"]
+      "tags": [
+        "paper",
+        "mcp",
+        "orders"
+      ]
     },
     {
       "repository": "alpacahq/alpaca-skills",
       "commit": "39111abee6b60af7c11d40b5fc892dfc4fd791a4",
       "path": "skills/trading-api/paper-trading-cli/SKILL.md",
       "class": "paper-ready",
-      "tags": ["paper", "cli", "orders"]
+      "tags": [
+        "paper",
+        "cli",
+        "orders"
+      ]
     },
     {
       "repository": "alpacahq/alpaca-skills",
       "commit": "39111abee6b60af7c11d40b5fc892dfc4fd791a4",
       "path": "skills/trading-api/backtest/SKILL.md",
       "class": "paper-ready",
-      "tags": ["backtest", "historical", "reproducibility"]
+      "tags": [
+        "backtest",
+        "historical",
+        "reproducibility"
+      ]
     },
     {
       "repository": "alpacahq/alpaca-skills",
       "commit": "39111abee6b60af7c11d40b5fc892dfc4fd791a4",
       "path": "skills/broker-api/market-data/SKILL.md",
       "class": "research-ready",
-      "tags": ["market-data", "equities", "news", "websocket"]
+      "tags": [
+        "market-data",
+        "equities",
+        "news",
+        "websocket"
+      ]
     },
     {
       "repository": "alpacahq/alpaca-skills",
       "commit": "39111abee6b60af7c11d40b5fc892dfc4fd791a4",
       "path": "skills/broker-api/reconciliation-idempotency/SKILL.md",
       "class": "paper-ready",
-      "tags": ["reconciliation", "idempotency", "audit"]
+      "tags": [
+        "reconciliation",
+        "idempotency",
+        "audit"
+      ]
     },
     {
       "repository": "coinbase/agents",
       "commit": "938a4d5695019a745dbaab476bccbfb0304bf467",
       "path": "skills/coinbase-market-data/SKILL.md",
       "class": "research-ready",
-      "tags": ["crypto", "market-data", "orderbook", "candles", "fees"]
+      "tags": [
+        "crypto",
+        "market-data",
+        "orderbook",
+        "candles",
+        "fees"
+      ]
     },
     {
       "repository": "coinbase/agents",
       "commit": "938a4d5695019a745dbaab476bccbfb0304bf467",
       "path": "skills/coinbase-watch/SKILL.md",
       "class": "research-ready",
-      "tags": ["monitoring", "alerts", "streaming"]
+      "tags": [
+        "monitoring",
+        "alerts",
+        "streaming"
+      ]
     },
     {
       "repository": "coinbase/agents",
       "commit": "938a4d5695019a745dbaab476bccbfb0304bf467",
       "path": "skills/coinbase-futures/SKILL.md",
       "class": "live-reference-only",
-      "tags": ["futures", "margin", "liquidation", "orders"]
+      "tags": [
+        "futures",
+        "margin",
+        "liquidation",
+        "orders"
+      ]
     },
     {
       "repository": "coinbase/agents",
       "commit": "938a4d5695019a745dbaab476bccbfb0304bf467",
       "path": "skills/coinbase-trading/SKILL.md",
       "class": "live-reference-only",
-      "tags": ["orders", "preview", "execution"]
+      "tags": [
+        "orders",
+        "preview",
+        "execution"
+      ]
     },
     {
       "repository": "okx/agent-trade-kit",
       "commit": "1278636c3c16d31be99c888e5051622f8cc87f8e",
       "path": "skills/okx-cex-market/SKILL.md",
       "class": "research-ready",
-      "tags": ["market-data", "technical-indicators", "funding", "open-interest", "screener"]
+      "tags": [
+        "market-data",
+        "technical-indicators",
+        "funding",
+        "open-interest",
+        "screener"
+      ]
     },
     {
       "repository": "okx/agent-trade-kit",
       "commit": "1278636c3c16d31be99c888e5051622f8cc87f8e",
       "path": "skills/okx-sentiment-tracker/SKILL.md",
       "class": "research-ready",
-      "tags": ["news", "sentiment", "macro", "calendar"]
+      "tags": [
+        "news",
+        "sentiment",
+        "macro",
+        "calendar"
+      ]
     },
     {
       "repository": "okx/agent-trade-kit",
       "commit": "1278636c3c16d31be99c888e5051622f8cc87f8e",
       "path": "skills/okx-cex-portfolio/SKILL.md",
       "class": "adapt-to-paper",
-      "tags": ["portfolio", "positions", "pnl", "fees"]
+      "tags": [
+        "portfolio",
+        "positions",
+        "pnl",
+        "fees"
+      ]
     },
     {
       "repository": "okx/agent-trade-kit",
       "commit": "1278636c3c16d31be99c888e5051622f8cc87f8e",
       "path": "skills/okx-cex-trade/SKILL.md",
       "class": "live-reference-only",
-      "tags": ["orders", "execution"]
+      "tags": [
+        "orders",
+        "execution"
+      ]
     },
     {
       "repository": "okx/agent-trade-kit",
       "commit": "1278636c3c16d31be99c888e5051622f8cc87f8e",
       "path": "skills/okx-cex-bot/SKILL.md",
       "class": "live-reference-only",
-      "tags": ["grid", "dca", "bot", "execution"]
+      "tags": [
+        "grid",
+        "dca",
+        "bot",
+        "execution"
+      ]
     },
     {
       "repository": "aave/skills",
       "commit": "24d1e2f96c83d30e9470d7492fe350284a36d517",
       "path": "plugins/mcp/skills/yield-analysis/SKILL.md",
       "class": "research-ready",
-      "tags": ["defi", "yield", "apy", "borrow", "supply"]
+      "tags": [
+        "defi",
+        "yield",
+        "apy",
+        "borrow",
+        "supply"
+      ]
     },
     {
       "repository": "aave/skills",
       "commit": "24d1e2f96c83d30e9470d7492fe350284a36d517",
       "path": "plugins/mcp/skills/account-activity/SKILL.md",
       "class": "research-ready",
-      "tags": ["defi", "account", "activity"]
+      "tags": [
+        "defi",
+        "account",
+        "activity"
+      ]
     },
     {
       "repository": "aave/skills",
       "commit": "24d1e2f96c83d30e9470d7492fe350284a36d517",
       "path": "plugins/mcp/skills/deleverage/SKILL.md",
       "class": "live-reference-only",
-      "tags": ["defi", "risk", "deleverage", "transactions"]
+      "tags": [
+        "defi",
+        "risk",
+        "deleverage",
+        "transactions"
+      ]
     },
     {
       "repository": "Uniswap/uniswap-ai",
       "commit": "1a43e968a39537d5a73aeca20dd1ed9d96f502fa",
       "path": "packages/plugins/uniswap-driver/skills/swap-planner/SKILL.md",
       "class": "adapt-to-paper",
-      "tags": ["defi", "swap", "planning"]
+      "tags": [
+        "defi",
+        "swap",
+        "planning"
+      ]
     },
     {
       "repository": "Uniswap/uniswap-ai",
       "commit": "1a43e968a39537d5a73aeca20dd1ed9d96f502fa",
       "path": "packages/plugins/uniswap-driver/skills/liquidity-planner/SKILL.md",
       "class": "research-ready",
-      "tags": ["defi", "liquidity", "lp", "planning"]
+      "tags": [
+        "defi",
+        "liquidity",
+        "lp",
+        "planning"
+      ]
     },
     {
       "repository": "Uniswap/uniswap-ai",
       "commit": "1a43e968a39537d5a73aeca20dd1ed9d96f502fa",
       "path": "packages/plugins/uniswap-trading-tools/skills/dca-bot/SKILL.md",
       "class": "live-reference-only",
-      "tags": ["defi", "dca", "automation"]
+      "tags": [
+        "defi",
+        "dca",
+        "automation"
+      ]
     },
     {
       "repository": "Uniswap/uniswap-ai",
       "commit": "1a43e968a39537d5a73aeca20dd1ed9d96f502fa",
       "path": "packages/plugins/uniswap-trading-tools/skills/index-bot/SKILL.md",
       "class": "live-reference-only",
-      "tags": ["defi", "index", "rebalance", "automation"]
+      "tags": [
+        "defi",
+        "index",
+        "rebalance",
+        "automation"
+      ]
     },
     {
       "repository": "Uniswap/uniswap-ai",
       "commit": "1a43e968a39537d5a73aeca20dd1ed9d96f502fa",
       "path": "packages/plugins/uniswap-trading-tools/skills/copy-trade/SKILL.md",
       "class": "live-reference-only",
-      "tags": ["defi", "copy-trading", "automation"]
+      "tags": [
+        "defi",
+        "copy-trading",
+        "automation"
+      ]
     },
     {
       "repository": "bybit-exchange/skills",
       "commit": "a08a773db03685ddd7bc755f2ebc26d08853b0a4",
       "path": "SKILL.md",
       "class": "live-reference-only",
-      "tags": ["cex", "spot", "derivatives", "earn"]
+      "tags": [
+        "cex",
+        "spot",
+        "derivatives",
+        "earn"
+      ]
     },
     {
       "repository": "okx/onchainos-skills",
@@ -259,7 +414,15 @@
       "commit": "9de8161d870fea8fad05c324f6c00a50cd88962d",
       "path": "skills/okx-dapp-discovery/SKILL.md",
       "class": "research-ready",
-      "tags": ["defi", "dapp", "discovery", "routing", "hyperliquid", "aave", "polymarket"],
+      "tags": [
+        "defi",
+        "dapp",
+        "discovery",
+        "routing",
+        "hyperliquid",
+        "aave",
+        "polymarket"
+      ],
       "notes": "Discovery/router itself states it does not sign or broadcast, but downstream protocol plugins may expose actions. Use discovery/analysis only in PAPER project."
     },
     {
@@ -267,7 +430,14 @@
       "commit": "9de8161d870fea8fad05c324f6c00a50cd88962d",
       "path": "skills/okx-defi/SKILL.md",
       "class": "adapt-to-paper",
-      "tags": ["defi", "yield", "apy", "portfolio", "positions", "liquidity"],
+      "tags": [
+        "defi",
+        "yield",
+        "apy",
+        "portfolio",
+        "positions",
+        "liquidity"
+      ],
       "notes": "Mixed read/write Skill: retain discovery, APY/TVL, positions and holdings analysis; exclude deposit/withdraw/claim/borrow/repay writes in PAPER adaptation."
     },
     {
@@ -275,14 +445,27 @@
       "commit": "9de8161d870fea8fad05c324f6c00a50cd88962d",
       "path": "skills/okx-agentic-wallet/SKILL.md",
       "class": "live-reference-only",
-      "tags": ["wallet", "swap", "bridge", "signing", "broadcast"]
+      "tags": [
+        "wallet",
+        "swap",
+        "bridge",
+        "signing",
+        "broadcast"
+      ]
     },
     {
       "repository": "binance/binance-skills-hub",
       "commit": "9960c675387bd27f8866645b83693c1fa87242f6",
       "path": "skills/binance-web3/crypto-market-rank/SKILL.md",
       "class": "research-ready",
-      "tags": ["market-data", "rankings", "social-hype", "smart-money", "inflow", "top-traders"],
+      "tags": [
+        "market-data",
+        "rankings",
+        "social-hype",
+        "smart-money",
+        "inflow",
+        "top-traders"
+      ],
       "notes": "Read-only public market ranking endpoints. Strong candidate for signal discovery and market-wide screening."
     },
     {
@@ -290,7 +473,14 @@
       "commit": "9960c675387bd27f8866645b83693c1fa87242f6",
       "path": "skills/binance-web3/query-token-audit/SKILL.md",
       "class": "research-ready",
-      "tags": ["token-risk", "honeypot", "scam", "contract-risk", "tax", "pre-trade"],
+      "tags": [
+        "token-risk",
+        "honeypot",
+        "scam",
+        "contract-risk",
+        "tax",
+        "pre-trade"
+      ],
       "notes": "Read-only public token security audit. Suitable as one risk feature; LOW result is not a safety guarantee."
     },
     {
@@ -298,7 +488,14 @@
       "commit": "9960c675387bd27f8866645b83693c1fa87242f6",
       "path": "skills/binance-web3/binance-trading-signal/SKILL.md",
       "class": "adapt-to-paper",
-      "tags": ["signals", "smart-money", "backtest", "strategy", "fomo", "meme"],
+      "tags": [
+        "signals",
+        "smart-money",
+        "backtest",
+        "strategy",
+        "fomo",
+        "meme"
+      ],
       "notes": "Keep public Smart Money feed, reports and backtest analysis. Strategy create/update/delete/follow operations must remain outside the default PAPER research path unless explicitly isolated as non-live control-plane work."
     },
     {
@@ -306,7 +503,15 @@
       "commit": "9960c675387bd27f8866645b83693c1fa87242f6",
       "path": "skills/binance-web3/binance-wallet-tracker/SKILL.md",
       "class": "adapt-to-paper",
-      "tags": ["wallet", "smart-money", "kol", "consensus", "replay", "anomaly", "websocket"],
+      "tags": [
+        "wallet",
+        "smart-money",
+        "kol",
+        "consensus",
+        "replay",
+        "anomaly",
+        "websocket"
+      ],
       "notes": "Keep public KOL/Smart Money tracking, replay and pattern analytics. Group/follow management is optional control-plane state and not required for read-only analysis."
     },
     {
@@ -314,8 +519,87 @@
       "commit": "9960c675387bd27f8866645b83693c1fa87242f6",
       "path": "skills/binance-web3/binance-onchain-copy-trader/SKILL.md",
       "class": "adapt-to-paper",
-      "tags": ["copy-trading", "dry-run", "outcomes", "signals", "paper", "post-mortem"],
+      "tags": [
+        "copy-trading",
+        "dry-run",
+        "outcomes",
+        "signals",
+        "paper",
+        "post-mortem"
+      ],
       "notes": "Very useful PAPER architecture reference. Adapt to permanently disable live mode and order submission while retaining dry-run event logging, outcome sampling and post-mortem methodology."
+    },
+    {
+      "repository": "ccxt/ccxt",
+      "commit": "12c334e1f4e445db1a7a01adb81c608622813382",
+      "path": ".claude/skills/ccxt-mcp/SKILL.md",
+      "class": "adapt-to-paper",
+      "tags": [
+        "mcp",
+        "multi-exchange",
+        "market-data",
+        "sandbox",
+        "testnet",
+        "orderbook",
+        "ohlcv",
+        "funding",
+        "open-interest"
+      ],
+      "notes": "Strong universal execution route. PAPER adaptation exposes market tier and optionally sandbox/testnet only; live trading/funds/implicitWrites remain unavailable."
+    },
+    {
+      "repository": "ccxt/ccxt",
+      "commit": "12c334e1f4e445db1a7a01adb81c608622813382",
+      "path": ".agents/skills/crypto-market-rank/SKILL.md",
+      "class": "research-ready",
+      "tags": [
+        "market-data",
+        "rankings",
+        "smart-money",
+        "social-hype",
+        "top-traders"
+      ]
+    },
+    {
+      "repository": "ccxt/ccxt",
+      "commit": "12c334e1f4e445db1a7a01adb81c608622813382",
+      "path": ".agents/skills/query-token-audit/SKILL.md",
+      "class": "research-ready",
+      "tags": [
+        "token-risk",
+        "honeypot",
+        "scam",
+        "contract-risk",
+        "pre-trade"
+      ]
+    },
+    {
+      "repository": "ccxt/ccxt",
+      "commit": "12c334e1f4e445db1a7a01adb81c608622813382",
+      "path": ".agents/skills/trading-signal/SKILL.md",
+      "class": "research-ready",
+      "tags": [
+        "signals",
+        "smart-money",
+        "bsc",
+        "solana",
+        "gain",
+        "exit-rate"
+      ]
+    },
+    {
+      "repository": "ccxt/ccxt",
+      "commit": "12c334e1f4e445db1a7a01adb81c608622813382",
+      "path": ".claude/skills/ccxt-python/SKILL.md",
+      "class": "reference-ready",
+      "tags": [
+        "python",
+        "multi-exchange",
+        "rest",
+        "websocket",
+        "market-data",
+        "trading-bot"
+      ]
     }
   ],
   "discoveredButNotImported": []
