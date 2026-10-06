@@ -214,6 +214,8 @@ describe("Market Skills + Market Resolver service", () => {
 
     expect(first).toHaveLength(2);
     expect(second.map((entry) => entry.key)).toEqual(first.map((entry) => entry.key));
+    expect(first[0]).not.toHaveProperty("originalContent");
+    expect(first[0]).not.toHaveProperty("adaptedContent");
     expect(marketEntry.create).toHaveBeenCalledTimes(2);
   });
 
