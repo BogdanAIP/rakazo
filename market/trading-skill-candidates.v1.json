@@ -386,6 +386,46 @@
       "class": "live-reference-only",
       "tags": ["app", "portfolio", "fiat", "swap", "trade"],
       "notes": "Live Crypto.com APP trading/funds workflow requiring API keys. Retain only as architecture/reference; do not install into PAPER Project."
+    },
+    {
+      "repository": "Bitget-AI/bitget-signal",
+      "commit": "55004749ede7fc72431cdb4be9558d01a1b80d03",
+      "path": "skills/macro-analyst/SKILL.md",
+      "class": "adapt-to-paper",
+      "tags": ["macro", "risk-on", "risk-off", "rates", "dxy", "yield-curve"],
+      "notes": "Use the official analytical workflow, but replace its external data MCP dependency with Rakazo semantic market/research capabilities; do not auto-install or authorize third-party MCP."
+    },
+    {
+      "repository": "Bitget-AI/bitget-signal",
+      "commit": "55004749ede7fc72431cdb4be9558d01a1b80d03",
+      "path": "skills/market-intel/SKILL.md",
+      "class": "adapt-to-paper",
+      "tags": ["market-intel", "flows", "oi", "smart-money", "onchain"],
+      "notes": "Use the official analytical workflow, but replace its external data MCP dependency with Rakazo semantic market/research capabilities; do not auto-install or authorize third-party MCP."
+    },
+    {
+      "repository": "Bitget-AI/bitget-signal",
+      "commit": "55004749ede7fc72431cdb4be9558d01a1b80d03",
+      "path": "skills/news-briefing/SKILL.md",
+      "class": "adapt-to-paper",
+      "tags": ["news", "briefing", "social", "catalysts"],
+      "notes": "Use the official analytical workflow, but replace its external data MCP dependency with Rakazo semantic market/research capabilities; do not auto-install or authorize third-party MCP."
+    },
+    {
+      "repository": "Bitget-AI/bitget-signal",
+      "commit": "55004749ede7fc72431cdb4be9558d01a1b80d03",
+      "path": "skills/sentiment-analyst/SKILL.md",
+      "class": "adapt-to-paper",
+      "tags": ["sentiment", "funding", "open-interest", "long-short", "squeeze"],
+      "notes": "Use the official analytical workflow, but replace its external data MCP dependency with Rakazo semantic market/research capabilities; do not auto-install or authorize third-party MCP."
+    },
+    {
+      "repository": "Bitget-AI/bitget-signal",
+      "commit": "55004749ede7fc72431cdb4be9558d01a1b80d03",
+      "path": "skills/technical-analysis/SKILL.md",
+      "class": "adapt-to-paper",
+      "tags": ["technical-analysis", "rsi", "macd", "indicators", "trend"],
+      "notes": "Use the official analytical workflow, but replace its external data MCP dependency with Rakazo semantic market/research capabilities; do not auto-install or authorize third-party MCP."
     }
   ],
   "discoveredButNotImported": []
