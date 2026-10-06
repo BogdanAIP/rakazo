@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type PlaywrightCliRunner,
   resolveWindowsDevToolsActivePortEndpoint,
@@ -13,6 +13,10 @@ const cdpConfig: PlaywrightCliConfiguration = {
   cdpEndpoint: null,
   userDataDir: null,
 };
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function fakeRunner(
   handler: (argv: string[], timeoutMs?: number) => string | Promise<string>,
@@ -84,7 +88,8 @@ describe("WindowsPlaywrightCliBackend", () => {
     expect(runner).not.toHaveBeenCalled();
   });
 
-  it("attaches through CDP and returns structured snapshot plus tab identity", async () => {
+  it("attaches through CDP channel fallback and returns structured snapshot plus tab identity", async () => {
+    vi.stubEnv("LOCALAPPDATA", "");
     const calls: string[][] = [];
     const runner = fakeRunner((argv) => {
       calls.push(argv);
