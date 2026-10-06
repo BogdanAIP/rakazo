@@ -90,6 +90,45 @@ describe("Market curated GitHub import", () => {
     expect(marketEntry.create).toHaveBeenCalledOnce();
   });
 
+  it("imports a pinned batch through the same trust path and is idempotent on retry", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      async () =>
+        new Response(skillContent(), {
+          status: 200,
+          headers: { "content-type": "text/markdown" },
+        }),
+    );
+    const { service, marketEntry } = setup(fetch);
+    const items = [
+      {
+        kind: "skill" as const,
+        key: `ChromeDevTools/chrome-devtools-mcp:chrome-devtools@${sourceRef}`,
+        tags: ["browser", "debug"],
+        repository: "ChromeDevTools/chrome-devtools-mcp",
+        sourcePath: "skills/chrome-devtools/SKILL.md",
+        sourceRef,
+        metadata: { batch: "core-browser" },
+      },
+      {
+        kind: "skill" as const,
+        key: `ChromeDevTools/chrome-devtools-mcp:troubleshooting@${sourceRef}`,
+        tags: ["browser", "troubleshooting"],
+        repository: "ChromeDevTools/chrome-devtools-mcp",
+        sourcePath: "skills/troubleshooting/SKILL.md",
+        sourceRef,
+        metadata: { batch: "core-browser" },
+      },
+    ];
+
+    const first = await service.importGithubBatch(actor, items);
+    const second = await service.importGithubBatch(actor, items);
+
+    expect(first).toHaveLength(2);
+    expect(second.map((entry) => entry.key)).toEqual(first.map((entry) => entry.key));
+    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(marketEntry.create).toHaveBeenCalledTimes(2);
+  });
+
   it("rejects an uncurated repository before making a network request", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>();
     const { service } = setup(fetch);
