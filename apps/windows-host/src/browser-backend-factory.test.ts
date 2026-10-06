@@ -55,15 +55,15 @@ function router(
 }
 
 describe("browser capability parity", () => {
-  it("keeps OpenCLI fully enabled and Playwright parity gaps explicit", () => {
-    expect(browserModeHasStableParity("opencli")).toBe(true);
+  it("keeps the stable browser contract fully enabled across selectable backends", () => {
     for (const mode of [
+      "opencli",
       "playwright-cli-extension",
       "playwright-cli-cdp",
       "playwright-cli-persistent",
     ] as const) {
-      expect(browserModeHasStableParity(mode)).toBe(false);
-      expect(missingStableBrowserCapabilities(mode)).toEqual(["screenshot.annotate"]);
+      expect(browserModeHasStableParity(mode)).toBe(true);
+      expect(missingStableBrowserCapabilities(mode)).toEqual([]);
     }
   });
 });
