@@ -32,6 +32,7 @@ export const CURATED_MARKET_REPOSITORIES = {
   "bybit-exchange/skills": { license: "MIT" },
   "alpacahq/alpaca-skills": { license: "Apache-2.0" },
   "okx/agent-trade-kit": { license: "MIT" },
+  "okx/onchainos-skills": { license: "MIT" },
   "coinbase/agentic-wallet-skills": { license: "MIT" },
   "BogdanAIP/rakazo": { license: "repository license" },
 } as const;
