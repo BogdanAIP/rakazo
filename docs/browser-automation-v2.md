@@ -121,8 +121,8 @@ Backend selection must be policy/config driven and observable. It must never sil
 
 ## Security invariants
 
-- Never copy Chrome cookies, storage-state or extension tokens into Git.
-- Treat Playwright storage state and extension tokens as credentials.
+- Never copy Chrome cookies or storage-state into Git.
+- Treat Playwright storage state as a credential.
 - Never derive browser authority from a guessed tab/profile name.
 - Preserve server-minted Rakazo `sessionToken`.
 - Preserve per-task owned-tab tracking.
@@ -168,10 +168,10 @@ Add config-only discovery, no browser mutation:
 
 - backend mode: `opencli | playwright-cli-extension | playwright-cli-persistent | auto`;
 - detect a pinned, reviewed `@playwright/cli` entry without downloading `@latest` at execution time;
-- extension attach is explicit;
-- extension token comes only from protected local secret/env storage;
+- extension attach is explicit and requires an explicit browser channel;
+- authorization of an existing user browser happens through Playwright's own browser confirmation page; Rakazo does not invent or persist a second extension token;
 - dedicated persistent profile path is explicit;
-- probe reports readiness without logging credentials.
+- probe reports readiness without reading cookies/storage.
 
 Acceptance: OpenCLI remains default; Playwright CLI cannot become active accidentally.
 
