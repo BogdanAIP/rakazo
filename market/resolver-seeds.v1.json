@@ -5,11 +5,7 @@
       "key": "browser.semantic",
       "name": "Browser semantic resolution",
       "description": "Known implementations for structured browser interaction.",
-      "tags": [
-        "browser",
-        "semantic",
-        "automation"
-      ],
+      "tags": ["browser", "semantic", "automation"],
       "content": {
         "semanticKey": "browser.semantic",
         "implementations": [
@@ -19,9 +15,7 @@
             "reference": "microsoft/playwright-mcp",
             "priority": 1,
             "readOnly": false,
-            "constraints": [
-              "must be installed and authorized for the Project"
-            ]
+            "constraints": ["must be installed and authorized for the Project"]
           },
           {
             "name": "Rakazo OpenCLI browser",
@@ -29,9 +23,7 @@
             "reference": "rakazo:opencli",
             "priority": 2,
             "readOnly": false,
-            "constraints": [
-              "requires linked Windows Host and owned browser session"
-            ]
+            "constraints": ["requires linked Windows Host and owned browser session"]
           },
           {
             "name": "Chrome DevTools MCP",
@@ -50,12 +42,7 @@
       "key": "browser.debug",
       "name": "Browser debugging resolution",
       "description": "Known implementations for console, network, DOM and performance diagnostics.",
-      "tags": [
-        "browser",
-        "debug",
-        "network",
-        "performance"
-      ],
+      "tags": ["browser", "debug", "network", "performance"],
       "content": {
         "semanticKey": "browser.debug",
         "implementations": [
@@ -65,9 +52,7 @@
             "reference": "ChromeDevTools/chrome-devtools-mcp",
             "priority": 1,
             "readOnly": false,
-            "constraints": [
-              "must be installed and authorized"
-            ]
+            "constraints": ["must be installed and authorized"]
           },
           {
             "name": "Microsoft Playwright MCP",
@@ -75,9 +60,7 @@
             "reference": "microsoft/playwright-mcp",
             "priority": 2,
             "readOnly": false,
-            "constraints": [
-              "must be installed and authorized"
-            ]
+            "constraints": ["must be installed and authorized"]
           },
           {
             "name": "Rakazo OpenCLI browser",
@@ -85,9 +68,7 @@
             "reference": "rakazo:opencli",
             "priority": 3,
             "readOnly": false,
-            "constraints": [
-              "requires linked Windows Host"
-            ]
+            "constraints": ["requires linked Windows Host"]
           }
         ]
       }
@@ -96,12 +77,7 @@
       "key": "browser.visual",
       "name": "Visual browser/desktop resolution",
       "description": "Known implementations for screenshots and visual fallback.",
-      "tags": [
-        "browser",
-        "desktop",
-        "screenshot",
-        "visual"
-      ],
+      "tags": ["browser", "desktop", "screenshot", "visual"],
       "content": {
         "semanticKey": "browser.visual",
         "implementations": [
@@ -111,9 +87,7 @@
             "reference": "rakazo:windows-host:screen.observe",
             "priority": 1,
             "readOnly": true,
-            "constraints": [
-              "requires linked running Windows Host"
-            ]
+            "constraints": ["requires linked running Windows Host"]
           },
           {
             "name": "Rakazo OpenCLI screenshot",
@@ -121,9 +95,7 @@
             "reference": "rakazo:opencli:screenshot",
             "priority": 2,
             "readOnly": true,
-            "constraints": [
-              "requires owned OpenCLI browser session"
-            ]
+            "constraints": ["requires owned OpenCLI browser session"]
           },
           {
             "name": "Chrome DevTools MCP screenshot",
@@ -131,9 +103,7 @@
             "reference": "ChromeDevTools/chrome-devtools-mcp",
             "priority": 3,
             "readOnly": true,
-            "constraints": [
-              "must be installed and authorized"
-            ]
+            "constraints": ["must be installed and authorized"]
           }
         ]
       }
@@ -142,12 +112,7 @@
       "key": "repo.read",
       "name": "Repository read resolution",
       "description": "Known implementations for reading Project repository state.",
-      "tags": [
-        "git",
-        "github",
-        "repository",
-        "read"
-      ],
+      "tags": ["git", "github", "repository", "read"],
       "content": {
         "semanticKey": "repo.read",
         "implementations": [
@@ -167,9 +132,7 @@
             "reference": "rakazo:windows-host:git",
             "priority": 2,
             "readOnly": true,
-            "constraints": [
-              "requires linked Project worktree on an authorized Computer"
-            ]
+            "constraints": ["requires linked Project worktree on an authorized Computer"]
           }
         ]
       }
@@ -178,12 +141,7 @@
       "key": "repo.write",
       "name": "Repository write resolution",
       "description": "Known implementations for Project-scoped repository mutations.",
-      "tags": [
-        "git",
-        "github",
-        "repository",
-        "write"
-      ],
+      "tags": ["git", "github", "repository", "write"],
       "content": {
         "semanticKey": "repo.write",
         "implementations": [
@@ -193,9 +151,7 @@
             "reference": "github/github-mcp-server",
             "priority": 1,
             "readOnly": false,
-            "constraints": [
-              "requires exact Project github.repo autonomous_write grant"
-            ]
+            "constraints": ["requires exact Project github.repo autonomous_write grant"]
           },
           {
             "name": "Rakazo local git",
@@ -203,9 +159,7 @@
             "reference": "rakazo:windows-host:git",
             "priority": 2,
             "readOnly": false,
-            "constraints": [
-              "requires linked verified worktree and normal Computer control policy"
-            ]
+            "constraints": ["requires linked verified worktree and normal Computer control policy"]
           }
         ]
       }
@@ -214,11 +168,7 @@
       "key": "computer.exec",
       "name": "Computer command execution resolution",
       "description": "Known implementation for bounded command execution on a linked Computer.",
-      "tags": [
-        "computer",
-        "terminal",
-        "exec"
-      ],
+      "tags": ["computer", "terminal", "exec"],
       "content": {
         "semanticKey": "computer.exec",
         "implementations": [
@@ -228,9 +178,7 @@
             "reference": "rakazo:computer/exec",
             "priority": 1,
             "readOnly": false,
-            "constraints": [
-              "requires linked running desktop Computer and active control lease"
-            ]
+            "constraints": ["requires linked running desktop Computer and active control lease"]
           }
         ]
       }
@@ -239,10 +187,7 @@
       "key": "computer.files",
       "name": "Computer file resolution",
       "description": "Known implementation for bounded file access on a linked Computer.",
-      "tags": [
-        "computer",
-        "files"
-      ],
+      "tags": ["computer", "files"],
       "content": {
         "semanticKey": "computer.files",
         "implementations": [
@@ -263,11 +208,7 @@
       "key": "research.web",
       "name": "Web research resolution",
       "description": "Known research/search implementations available to Rakazo projects.",
-      "tags": [
-        "research",
-        "web",
-        "search"
-      ],
+      "tags": ["research", "web", "search"],
       "content": {
         "semanticKey": "research.web",
         "implementations": [
@@ -277,9 +218,7 @@
             "reference": "rakazo:openresearch",
             "priority": 1,
             "readOnly": true,
-            "constraints": [
-              "must be registered/available for the current workspace"
-            ]
+            "constraints": ["must be registered/available for the current workspace"]
           },
           {
             "name": "General web search",
@@ -287,9 +226,7 @@
             "reference": "chatgpt:web-search",
             "priority": 2,
             "readOnly": true,
-            "constraints": [
-              "available only when the calling ChatGPT surface exposes web search"
-            ]
+            "constraints": ["available only when the calling ChatGPT surface exposes web search"]
           }
         ]
       }
@@ -298,11 +235,7 @@
       "key": "media.capture",
       "name": "Media capture resolution",
       "description": "Known screenshot/screen-capture implementations for Project media workflows.",
-      "tags": [
-        "media",
-        "screenshot",
-        "capture"
-      ],
+      "tags": ["media", "screenshot", "capture"],
       "content": {
         "semanticKey": "media.capture",
         "implementations": [
@@ -312,9 +245,7 @@
             "reference": "rakazo:windows-host:screen.observe",
             "priority": 1,
             "readOnly": true,
-            "constraints": [
-              "requires linked running Windows Host"
-            ]
+            "constraints": ["requires linked running Windows Host"]
           },
           {
             "name": "Rakazo OpenCLI screenshot",
@@ -322,9 +253,7 @@
             "reference": "rakazo:opencli:screenshot",
             "priority": 2,
             "readOnly": true,
-            "constraints": [
-              "requires owned browser session"
-            ]
+            "constraints": ["requires owned browser session"]
           },
           {
             "name": "Chrome DevTools MCP screenshot",
@@ -332,9 +261,7 @@
             "reference": "ChromeDevTools/chrome-devtools-mcp",
             "priority": 3,
             "readOnly": true,
-            "constraints": [
-              "must be installed and authorized"
-            ]
+            "constraints": ["must be installed and authorized"]
           }
         ]
       }
@@ -343,12 +270,7 @@
       "key": "market.data",
       "name": "Trading market data resolution",
       "description": "Known first-party read-only market-data implementations for trading research and signal generation.",
-      "tags": [
-        "trading",
-        "market-data",
-        "research",
-        "read-only"
-      ],
+      "tags": ["trading", "market-data", "research", "read-only"],
       "content": {
         "semanticKey": "market.data",
         "implementations": [
@@ -431,26 +353,6 @@
             "constraints": [
               "Useful for US equities/news/streaming; exact feed availability depends on Alpaca account/data plan"
             ]
-          },
-          {
-            "name": "Hyperliquid SDK public/info data",
-            "kind": "api",
-            "reference": "hyperliquid-dex/hyperliquid-python-sdk",
-            "priority": 9,
-            "readOnly": true,
-            "constraints": [
-              "Info/read methods only; no exchange/order actions"
-            ]
-          },
-          {
-            "name": "Massive market-data client",
-            "kind": "api",
-            "reference": "massive-com/client-python",
-            "priority": 10,
-            "readOnly": true,
-            "constraints": [
-              "Market-data access only; subscription/data-plan limits may apply"
-            ]
           }
         ]
       }
@@ -459,12 +361,7 @@
       "key": "defi.data",
       "name": "DeFi research resolution",
       "description": "Known first-party DeFi analysis/planning implementations for PAPER trading research.",
-      "tags": [
-        "defi",
-        "yield",
-        "liquidity",
-        "research"
-      ],
+      "tags": ["defi", "yield", "liquidity", "research"],
       "content": {
         "semanticKey": "defi.data",
         "implementations": [
@@ -517,16 +414,6 @@
             "constraints": [
               "Use discovery/rates/portfolio analysis only in PAPER project; deposits, withdrawals, claims and other writes remain forbidden"
             ]
-          },
-          {
-            "name": "DefiLlama protocol/TVL knowledge source",
-            "kind": "api",
-            "reference": "DefiLlama/DefiLlama-Adapters",
-            "priority": 6,
-            "readOnly": true,
-            "constraints": [
-              "Read-only protocol/TVL analytics; no transaction execution"
-            ]
           }
         ]
       }
@@ -535,12 +422,7 @@
       "key": "trading.paper",
       "name": "Paper trading resolution",
       "description": "Known first-party paper-trading/backtest workflows. This semantic key is Market knowledge and does not grant trading.execute.",
-      "tags": [
-        "paper",
-        "trading",
-        "backtest",
-        "simulation"
-      ],
+      "tags": ["paper", "trading", "backtest", "simulation"],
       "content": {
         "semanticKey": "trading.paper",
         "implementations": [
@@ -590,9 +472,7 @@
             "reference": "market:krakenfx/kraken-cli:recipe-paper-strategy-backtest",
             "priority": 5,
             "readOnly": false,
-            "constraints": [
-              "Simulation/backtest only"
-            ]
+            "constraints": ["Simulation/backtest only"]
           },
           {
             "name": "Binance Copy Trader — dry-run adaptation",
@@ -621,13 +501,7 @@
       "key": "market.risk",
       "name": "Trading risk intelligence resolution",
       "description": "Known read-only token/security risk implementations for pre-trade research and PAPER signal filtering.",
-      "tags": [
-        "trading",
-        "risk",
-        "token",
-        "security",
-        "read-only"
-      ],
+      "tags": ["trading", "risk", "token", "security", "read-only"],
       "content": {
         "semanticKey": "market.risk",
         "implementations": [
@@ -658,14 +532,7 @@
       "key": "wallet.analytics",
       "name": "Wallet and Smart Money analytics resolution",
       "description": "Known read-only wallet/KOL/Smart Money analytics for discovery, replay and signal features.",
-      "tags": [
-        "wallet",
-        "smart-money",
-        "kol",
-        "signals",
-        "analytics",
-        "read-only"
-      ],
+      "tags": ["wallet", "smart-money", "kol", "signals", "analytics", "read-only"],
       "content": {
         "semanticKey": "wallet.analytics",
         "implementations": [
@@ -685,9 +552,7 @@
             "reference": "market:okx/onchainos-skills:okx-dex-market",
             "priority": 2,
             "readOnly": true,
-            "constraints": [
-              "Use tracker, signal and leaderboard read paths only"
-            ]
+            "constraints": ["Use tracker, signal and leaderboard read paths only"]
           }
         ]
       }
@@ -696,13 +561,7 @@
       "key": "backtest.quant",
       "name": "Quantitative backtest resolution",
       "description": "Known first-party backtest and research engines for validating trading ideas before PAPER use.",
-      "tags": [
-        "backtest",
-        "quant",
-        "research",
-        "strategy",
-        "paper"
-      ],
+      "tags": ["backtest", "quant", "research", "strategy", "paper"],
       "content": {
         "semanticKey": "backtest.quant",
         "implementations": [
@@ -712,9 +571,7 @@
             "reference": "QuantConnect/Lean",
             "priority": 1,
             "readOnly": false,
-            "constraints": [
-              "Use backtest/research mode only for Rakazo Trading; brokerage/live deployment is outside PAPER authority"
-            ]
+            "constraints": ["Use backtest/research mode only for Rakazo Trading; brokerage/live deployment is outside PAPER authority"]
           },
           {
             "name": "Microsoft Qlib",
@@ -722,9 +579,7 @@
             "reference": "microsoft/qlib",
             "priority": 2,
             "readOnly": false,
-            "constraints": [
-              "Research/backtest/portfolio analysis only; no live execution path implied"
-            ]
+            "constraints": ["Research/backtest/portfolio analysis only; no live execution path implied"]
           },
           {
             "name": "Freqtrade backtesting",
@@ -732,9 +587,7 @@
             "reference": "freqtrade/freqtrade",
             "priority": 3,
             "readOnly": false,
-            "constraints": [
-              "Backtesting/dry-run only in Rakazo Trading; live trade configuration forbidden by Project policy"
-            ]
+            "constraints": ["Backtesting/dry-run only in Rakazo Trading; live trade configuration forbidden by Project policy"]
           },
           {
             "name": "Alpaca Backtest Skill",
@@ -742,9 +595,7 @@
             "reference": "market:alpacahq/alpaca-skills:backtest",
             "priority": 4,
             "readOnly": false,
-            "constraints": [
-              "Historical/backtest workflow only"
-            ]
+            "constraints": ["Historical/backtest workflow only"]
           },
           {
             "name": "Kraken Paper Strategy Backtest",
@@ -752,9 +603,7 @@
             "reference": "market:krakenfx/kraken-cli:recipe-paper-strategy-backtest",
             "priority": 5,
             "readOnly": false,
-            "constraints": [
-              "Simulation/backtest only"
-            ]
+            "constraints": ["Simulation/backtest only"]
           }
         ]
       }
@@ -763,13 +612,7 @@
       "key": "strategy.framework",
       "name": "Trading strategy framework resolution",
       "description": "Known first-party strategy frameworks for research, simulation and PAPER strategy development.",
-      "tags": [
-        "strategy",
-        "quant",
-        "paper",
-        "market-making",
-        "research"
-      ],
+      "tags": ["strategy", "quant", "paper", "market-making", "research"],
       "content": {
         "semanticKey": "strategy.framework",
         "implementations": [
@@ -779,9 +622,7 @@
             "reference": "hummingbot/hummingbot",
             "priority": 1,
             "readOnly": false,
-            "constraints": [
-              "Prefer paper exchange/strategy research; live exchange connectors remain outside Rakazo Trading authority"
-            ]
+            "constraints": ["Prefer paper exchange/strategy research; live exchange connectors remain outside Rakazo Trading authority"]
           },
           {
             "name": "Freqtrade",
@@ -789,9 +630,7 @@
             "reference": "freqtrade/freqtrade",
             "priority": 2,
             "readOnly": false,
-            "constraints": [
-              "Use strategy analysis/backtest/dry-run modes only"
-            ]
+            "constraints": ["Use strategy analysis/backtest/dry-run modes only"]
           },
           {
             "name": "QuantConnect LEAN",
@@ -799,9 +638,7 @@
             "reference": "QuantConnect/Lean",
             "priority": 3,
             "readOnly": false,
-            "constraints": [
-              "Backtest/research algorithms only for current PAPER project"
-            ]
+            "constraints": ["Backtest/research algorithms only for current PAPER project"]
           },
           {
             "name": "Microsoft Qlib",
@@ -809,9 +646,7 @@
             "reference": "microsoft/qlib",
             "priority": 4,
             "readOnly": false,
-            "constraints": [
-              "Signal/portfolio/risk research only; no live execution"
-            ]
+            "constraints": ["Signal/portfolio/risk research only; no live execution"]
           }
         ]
       }
@@ -820,14 +655,7 @@
       "key": "futures.data",
       "name": "Futures and perpetual market data resolution",
       "description": "Known read-only sources for futures/perpetual prices, orderbooks, funding and open-interest research.",
-      "tags": [
-        "futures",
-        "perpetuals",
-        "funding",
-        "open-interest",
-        "market-data",
-        "read-only"
-      ],
+      "tags": ["futures", "perpetuals", "funding", "open-interest", "market-data", "read-only"],
       "content": {
         "semanticKey": "futures.data",
         "implementations": [
@@ -837,9 +665,7 @@
             "reference": "market:okx/agent-trade-kit:okx-cex-market",
             "priority": 1,
             "readOnly": true,
-            "constraints": [
-              "Read-only market, funding and open-interest paths only"
-            ]
+            "constraints": ["Read-only market, funding and open-interest paths only"]
           },
           {
             "name": "Kraken Futures Risk / Funding Skills",
@@ -847,9 +673,7 @@
             "reference": "market:krakenfx/kraken-cli:kraken-futures-risk",
             "priority": 2,
             "readOnly": true,
-            "constraints": [
-              "Use analytics/risk paths only; no live futures orders"
-            ]
+            "constraints": ["Use analytics/risk paths only; no live futures orders"]
           },
           {
             "name": "Hyperliquid Python SDK info endpoints",
@@ -857,9 +681,7 @@
             "reference": "hyperliquid-dex/hyperliquid-python-sdk",
             "priority": 3,
             "readOnly": true,
-            "constraints": [
-              "Info/read endpoints only; exchange/order methods remain unavailable to PAPER resolver"
-            ]
+            "constraints": ["Info/read endpoints only; exchange/order methods remain unavailable to PAPER resolver"]
           },
           {
             "name": "CCXT public derivatives market data",
@@ -867,9 +689,7 @@
             "reference": "ccxt/ccxt",
             "priority": 4,
             "readOnly": true,
-            "constraints": [
-              "Public endpoints only; exchange support and fields vary"
-            ]
+            "constraints": ["Public endpoints only; exchange support and fields vary"]
           }
         ]
       }
@@ -878,12 +698,7 @@
       "key": "paper.simulation",
       "name": "Paper and dry-run simulation resolution",
       "description": "Known first-party paper exchanges and dry-run engines for validating strategies without real orders.",
-      "tags": [
-        "paper",
-        "dry-run",
-        "simulation",
-        "strategy"
-      ],
+      "tags": ["paper", "dry-run", "simulation", "strategy"],
       "content": {
         "semanticKey": "paper.simulation",
         "implementations": [
@@ -893,9 +708,7 @@
             "reference": "hummingbot/hummingbot:paper_trade",
             "priority": 1,
             "readOnly": false,
-            "constraints": [
-              "Synthetic/paper exchange only"
-            ]
+            "constraints": ["Synthetic/paper exchange only"]
           },
           {
             "name": "Freqtrade dry-run",
@@ -903,9 +716,7 @@
             "reference": "freqtrade/freqtrade:dry-run",
             "priority": 2,
             "readOnly": false,
-            "constraints": [
-              "Dry-run only; live mode forbidden"
-            ]
+            "constraints": ["Dry-run only; live mode forbidden"]
           },
           {
             "name": "Alpaca Paper Trading Skill",
@@ -913,9 +724,7 @@
             "reference": "market:alpacahq/alpaca-skills:paper-trading",
             "priority": 3,
             "readOnly": false,
-            "constraints": [
-              "Paper environment only"
-            ]
+            "constraints": ["Paper environment only"]
           },
           {
             "name": "Kraken Paper Strategy Skill",
@@ -923,9 +732,7 @@
             "reference": "market:krakenfx/kraken-cli:kraken-paper-strategy",
             "priority": 4,
             "readOnly": false,
-            "constraints": [
-              "Paper commands only"
-            ]
+            "constraints": ["Paper commands only"]
           },
           {
             "name": "Binance Copy Trader dry-run adaptation",
@@ -933,9 +740,53 @@
             "reference": "market:binance/binance-skills-hub:binance-onchain-copy-trader",
             "priority": 5,
             "readOnly": false,
-            "constraints": [
-              "Rakazo adaptation must permanently disable live mode/order submission"
-            ]
+            "constraints": ["Rakazo adaptation must permanently disable live mode/order submission"]
+          }
+        ]
+      }
+    },
+    {
+      "key": "defi.protocol.metrics",
+      "name": "DeFi protocol metrics resolution",
+      "description": "Known read-only sources for protocol TVL and ecosystem metrics.",
+      "tags": ["defi", "tvl", "protocols", "metrics", "read-only"],
+      "content": {
+        "semanticKey": "defi.protocol.metrics",
+        "implementations": [
+          {
+            "name": "DefiLlama protocol/TVL data",
+            "kind": "api",
+            "reference": "DefiLlama/DefiLlama-Adapters",
+            "priority": 1,
+            "readOnly": true,
+            "constraints": ["Read-only protocol/TVL analytics; no transaction execution"]
+          }
+        ]
+      }
+    },
+    {
+      "key": "market.data.provider",
+      "name": "Additional market-data provider resolution",
+      "description": "Known read-only market-data SDKs that complement exchange-native feeds.",
+      "tags": ["market-data", "equities", "futures", "read-only"],
+      "content": {
+        "semanticKey": "market.data.provider",
+        "implementations": [
+          {
+            "name": "Massive market-data Python client",
+            "kind": "api",
+            "reference": "massive-com/client-python",
+            "priority": 1,
+            "readOnly": true,
+            "constraints": ["Market-data access only; subscription/data-plan limits may apply"]
+          },
+          {
+            "name": "Hyperliquid SDK info endpoints",
+            "kind": "api",
+            "reference": "hyperliquid-dex/hyperliquid-python-sdk",
+            "priority": 2,
+            "readOnly": true,
+            "constraints": ["Info/read methods only; no exchange/order actions"]
           }
         ]
       }
