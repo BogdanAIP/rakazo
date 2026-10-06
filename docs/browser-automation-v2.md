@@ -103,9 +103,9 @@ Target steady state:
 ```text
 browser.semantic
     |
-    +-- Playwright CLI extension backend
-    |     existing user's Chrome/Edge
-    |     explicit attach / named Rakazo-owned session
+    +-- Playwright CLI existing-browser backend
+    |     CDP attach when browser-side Remote Debugging is explicitly enabled
+    |     extension attach + browser confirmation as alternate path
     |     authenticated sessions / SSO / 2FA
     |
     +-- Playwright CLI persistent backend
@@ -121,8 +121,8 @@ Backend selection must be policy/config driven and observable. It must never sil
 
 ## Security invariants
 
-- Never copy Chrome cookies, storage-state or extension tokens into Git.
-- Treat Playwright storage state and extension tokens as credentials.
+- Never copy Chrome cookies or storage-state into Git.
+- Treat Playwright storage state as a credential.
 - Never derive browser authority from a guessed tab/profile name.
 - Preserve server-minted Rakazo `sessionToken`.
 - Preserve per-task owned-tab tracking.
@@ -166,21 +166,23 @@ Acceptance: all existing Windows Host/OpenCLI tests and CI remain green.
 
 Add config-only discovery, no browser mutation:
 
-- backend mode: `opencli | playwright-cli-extension | playwright-cli-persistent | auto`;
+- backend mode: `opencli | playwright-cli-cdp | playwright-cli-extension | playwright-cli-persistent | auto`;
 - detect a pinned, reviewed `@playwright/cli` entry without downloading `@latest` at execution time;
-- extension attach is explicit;
-- extension token comes only from protected local secret/env storage;
+- CDP and extension attach both require an explicit browser channel;
+- CDP attach requires the owner to enable the browser's own Remote Debugging control (for Chrome, `chrome://inspect/#remote-debugging`);
+- extension attach is an alternate path authorized through Playwright's browser confirmation page; Rakazo does not invent or persist a second extension token;
 - dedicated persistent profile path is explicit;
-- probe reports readiness without logging credentials.
+- probe reports readiness without reading cookies/storage.
 
 Acceptance: OpenCLI remains default; Playwright CLI cannot become active accidentally.
 
-### BV2-03 — Playwright CLI extension backend, read-only semantic path
+### BV2-03 — Playwright CLI existing-browser backend, read-only semantic path
 
 Implement a bounded CLI runner:
 
 - server-minted Rakazo token maps to a generated Playwright CLI named session;
-- `attach --extension=chrome` only after explicit configuration;
+- prefer `attach --cdp=chrome` when the owner explicitly enabled browser Remote Debugging;
+- allow `attach --extension=chrome` as an alternate browser-confirmed handoff;
 - `snapshot`, `find`, bounded text extraction, screenshot and `detach`;
 - map Playwright semantic references to Rakazo observation-local refs;
 - preserve Rakazo session/token ownership and do not expose raw session enumeration.
