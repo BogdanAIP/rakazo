@@ -1,7 +1,4 @@
-import type {
-  WindowsHostBrowserRequest,
-  WindowsHostBrowserResult,
-} from "@rakazo/contracts";
+import type { WindowsHostBrowserRequest, WindowsHostBrowserResult } from "@rakazo/contracts";
 
 /**
  * Internal Windows browser backend contract.
