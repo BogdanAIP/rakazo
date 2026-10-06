@@ -205,6 +205,7 @@ import {
   toComputerStatus,
 } from "./computer-status.js";
 import { searchIntegrationCatalog } from "./integration-catalog.js";
+import { createMarketService } from "./market.js";
 import {
   dismissMcpServerApprovals,
   resolveMcpApprovalCards,
@@ -831,6 +832,7 @@ export function createRouter(deps: RouterDeps) {
     dataDir: deps.dataDir,
   });
   const agentSkills = createAgentSkillsService(deps.prisma);
+  const market = createMarketService(deps.prisma);
 
   const authed = os.use(async ({ context, next }) => {
     if (!context.actor) throw new ORPCError("UNAUTHORIZED");
@@ -3751,6 +3753,25 @@ export function createRouter(deps: RouterDeps) {
       remove: authed.agentSkills.remove.handler(async ({ context, input }) =>
         agentSkills.remove(context.actor, input.skillId),
       ),
+    },
+    market: {
+      search: authed.market.search.handler(({ context, input }) =>
+        market.search(context.actor, input),
+      ),
+      get: authed.market.get.handler(({ context, input }) => market.get(context.actor, input)),
+      import: authed.market.import.handler(({ context, input }) =>
+        market.importEntry(context.actor, input),
+      ),
+      adapt: authed.market.adapt.handler(({ context, input }) =>
+        market.adapt(context.actor, input),
+      ),
+      evaluate: authed.market.evaluate.handler(({ context, input }) =>
+        market.evaluate(context.actor, input),
+      ),
+      install: authed.market.install.handler(async ({ context, input }) => {
+        const selected = await market.materializeForInstall(context.actor, input);
+        return agentSkills.create(context.actor, { content: selected.content });
+      }),
     },
     capabilities: {
       list: authed.capabilities.list.handler(async ({ context }) => {
