@@ -914,7 +914,9 @@
             "reference": "market:Bitget-AI/bitget-signal:macro-analyst",
             "priority": 1,
             "readOnly": true,
-            "constraints": ["Reuse analytical workflow with Rakazo research/market-data capabilities; do not auto-connect the original external MCP"]
+            "constraints": [
+              "Reuse analytical workflow with Rakazo research/market-data capabilities; do not auto-connect the original external MCP"
+            ]
           },
           {
             "name": "Bitget Market Intel Skill",
@@ -922,7 +924,9 @@
             "reference": "market:Bitget-AI/bitget-signal:market-intel",
             "priority": 2,
             "readOnly": true,
-            "constraints": ["Reuse flows/OI/on-chain reasoning with Resolver-selected data sources; no external MCP auto-install"]
+            "constraints": [
+              "Reuse flows/OI/on-chain reasoning with Resolver-selected data sources; no external MCP auto-install"
+            ]
           },
           {
             "name": "Bitget Sentiment Analyst Skill",
@@ -930,7 +934,9 @@
             "reference": "market:Bitget-AI/bitget-signal:sentiment-analyst",
             "priority": 3,
             "readOnly": true,
-            "constraints": ["Use positioning/funding/OI framework with Rakazo data sources; no trading execution"]
+            "constraints": [
+              "Use positioning/funding/OI framework with Rakazo data sources; no trading execution"
+            ]
           },
           {
             "name": "Bitget Technical Analysis Skill",
@@ -938,7 +944,9 @@
             "reference": "market:Bitget-AI/bitget-signal:technical-analysis",
             "priority": 4,
             "readOnly": true,
-            "constraints": ["Use indicator workflow on Resolver-provided OHLCV; dependency installation is separate from Skill execution"]
+            "constraints": [
+              "Use indicator workflow on Resolver-provided OHLCV; dependency installation is separate from Skill execution"
+            ]
           },
           {
             "name": "Bitget News Briefing Skill",
@@ -946,7 +954,9 @@
             "reference": "market:Bitget-AI/bitget-signal:news-briefing",
             "priority": 5,
             "readOnly": true,
-            "constraints": ["Use news synthesis workflow with Rakazo research sources; no external MCP auto-install"]
+            "constraints": [
+              "Use news synthesis workflow with Rakazo research sources; no external MCP auto-install"
+            ]
           }
         ]
       }
