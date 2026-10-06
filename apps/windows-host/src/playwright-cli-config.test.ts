@@ -7,7 +7,7 @@ describe("Playwright CLI configuration", () => {
     expect(config).toEqual({
       mode: "opencli",
       entry: null,
-      extensionBrowser: null,
+      browserChannel: null,
       userDataDir: null,
     });
     expect(probePlaywrightCli(config)).toMatchObject({
@@ -17,18 +17,35 @@ describe("Playwright CLI configuration", () => {
     });
   });
 
+  it("requires explicit entry and browser for CDP attach", () => {
+    const config = loadPlaywrightCliConfiguration({
+      RAKAZO_BROWSER_BACKEND: "playwright-cli-cdp",
+      RAKAZO_PLAYWRIGHT_CLI_ENTRY: "C:\\Rakazo\\node_modules\\@playwright\\cli\\playwright-cli.js",
+      RAKAZO_PLAYWRIGHT_BROWSER_CHANNEL: "chrome",
+    });
+
+    expect(probePlaywrightCli(config, () => true)).toEqual({
+      mode: "playwright-cli-cdp",
+      ready: true,
+      entryAvailable: true,
+      browserChannel: "chrome",
+      userDataDirConfigured: false,
+      reason: null,
+    });
+  });
+
   it("requires explicit entry and browser for extension attach", () => {
     const config = loadPlaywrightCliConfiguration({
       RAKAZO_BROWSER_BACKEND: "playwright-cli-extension",
       RAKAZO_PLAYWRIGHT_CLI_ENTRY: "C:\\Rakazo\\node_modules\\@playwright\\cli\\playwright-cli.js",
-      RAKAZO_PLAYWRIGHT_EXTENSION_BROWSER: "chrome",
+      RAKAZO_PLAYWRIGHT_BROWSER_CHANNEL: "chrome",
     });
 
     expect(probePlaywrightCli(config, () => true)).toEqual({
       mode: "playwright-cli-extension",
       ready: true,
       entryAvailable: true,
-      extensionBrowser: "chrome",
+      browserChannel: "chrome",
       userDataDirConfigured: false,
       reason: null,
     });
@@ -38,12 +55,12 @@ describe("Playwright CLI configuration", () => {
     const config = loadPlaywrightCliConfiguration({
       RAKAZO_BROWSER_BACKEND: "playwright-cli-extension",
       RAKAZO_PLAYWRIGHT_CLI_ENTRY: "C:\\Rakazo\\playwright-cli\\playwright-cli.js",
-      RAKAZO_PLAYWRIGHT_EXTENSION_BROWSER: "msedge",
+      RAKAZO_PLAYWRIGHT_BROWSER_CHANNEL: "msedge",
     });
 
     expect(probePlaywrightCli(config, () => true)).toMatchObject({
       ready: true,
-      extensionBrowser: "msedge",
+      browserChannel: "msedge",
       reason: null,
     });
   });
@@ -65,7 +82,7 @@ describe("Playwright CLI configuration", () => {
     expect(() =>
       loadPlaywrightCliConfiguration({
         RAKAZO_BROWSER_BACKEND: "playwright-cli-extension",
-        RAKAZO_PLAYWRIGHT_EXTENSION_BROWSER: "chromium",
+        RAKAZO_PLAYWRIGHT_BROWSER_CHANNEL: "chromium",
       }),
     ).toThrow("chrome or msedge");
 
@@ -87,7 +104,7 @@ describe("Playwright CLI configuration", () => {
     const config = loadPlaywrightCliConfiguration({
       RAKAZO_BROWSER_BACKEND: "auto",
       RAKAZO_PLAYWRIGHT_CLI_ENTRY: "C:\\Rakazo\\playwright-cli\\playwright-cli.js",
-      RAKAZO_PLAYWRIGHT_EXTENSION_BROWSER: "chrome",
+      RAKAZO_PLAYWRIGHT_BROWSER_CHANNEL: "chrome",
     });
 
     expect(probePlaywrightCli(config, () => true)).toMatchObject({
