@@ -20,7 +20,7 @@
     "electron-updater": "6.8.9"
   },
   "devDependencies": {
-    "@playwright/test": "1.63.0",
+    "@playwright/test": "1.64.0-alpha-2026-10-05",
     "@rakazo/ui-tokens": "workspace:*",
     "electron": "44.3.0",
     "electron-builder": "26.15.3",

@@ -47,8 +47,8 @@
     "overrides": {
       "react": "19.2.3",
       "react-dom": "19.2.3",
-      "@playwright/cli@0.1.22>playwright": "1.64.0-alpha-2026-10-05",
-      "@playwright/cli@0.1.22>playwright-core": "1.64.0-alpha-2026-10-05"
+      "playwright": "1.64.0-alpha-2026-10-05",
+      "playwright-core": "1.64.0-alpha-2026-10-05"
     },
     "patchedDependencies": {
       "app-builder-lib@26.15.3": "patches/app-builder-lib@26.15.3.patch"
