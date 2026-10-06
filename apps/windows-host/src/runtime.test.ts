@@ -4,12 +4,12 @@ import {
   type WindowsHostPairingResult,
 } from "@rakazo/contracts";
 import { describe, expect, it, vi } from "vitest";
+import type { WindowsBrowserBackend } from "./browser-backend.js";
 import type { WindowsHostConfig } from "./config.js";
 import type {
   StoredWindowsHostCredential,
   WindowsHostCredentialStore,
 } from "./credential-store.js";
-import type { WindowsBrowserBackend } from "./browser-backend.js";
 import { executeWindowsHostCommand, resolveWindowsHostCredential } from "./runtime.js";
 import type { WindowsHostTransport } from "./transport.js";
 
