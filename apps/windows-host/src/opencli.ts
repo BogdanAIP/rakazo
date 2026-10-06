@@ -5,6 +5,7 @@ import { readFile, stat, unlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { WindowsHostBrowserRequest, WindowsHostBrowserResult } from "@rakazo/contracts";
+import type { WindowsBrowserBackend } from "./browser-backend.js";
 
 const MAX_OUTPUT_BYTES = 64 * 1024;
 const MAX_SCREENSHOT_BYTES = 4 * 1024 * 1024;
@@ -199,7 +200,7 @@ function parseElements(tree: string): BrowserObservation["elements"] {
  * A backend of the Rakazo Windows host. It reuses the user's explicit Chrome
  * profile via the installed OpenCLI extension; it is NOT a second public MCP.
  */
-export class WindowsOpenCliBackend {
+export class WindowsOpenCliBackend implements WindowsBrowserBackend {
   private readonly observations = new Map<string, BrowserObservation>();
   private readonly sessions = new Map<string, BrowserSessionState>();
 

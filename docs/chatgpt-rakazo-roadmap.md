@@ -1366,6 +1366,31 @@ At the same time, all new Windows APIs should be designed so the later UI and MC
 
 ---
 
+## 2026-10-06 — Browser Automation v2 is the next priority
+
+Before broad Market Original vs WRAPPED/RCCL/HYBRID evaluation, finish the browser
+capability upgrade described in [Browser Automation v2](./browser-automation-v2.md).
+
+Decision:
+
+- keep OpenCLI as the already-proven bounded fallback/alternate backend;
+- integrate official `@playwright/cli` behind the existing Rakazo
+  `computer/browser` semantics rather than expose a second public MCP control plane;
+- prefer Playwright Extension attach for explicitly approved work in the user's
+  existing signed-in Chrome/Edge;
+- prefer a Rakazo-owned persistent Playwright profile for autonomous browser work;
+- preserve the existing server-minted task session-token and tab-ownership model;
+- gate cookies/storage/eval/network mutation/tracing separately from the minimal
+  default browser capability;
+- benchmark Playwright and OpenCLI on the same real physical tasks before resolver
+  preference or any OpenCLI deprecation.
+
+The Market population baseline remains complete. The Market adaptation/evaluation
+phase is intentionally open/deferred until Browser Automation v2 passes its
+physical acceptance gate.
+
+---
+
 ## 2026-10-03 — Concurrent ChatGPT / OpenCLI browser session cutover
 
 **Code committed in the native integration branch, NOT yet activated in the running
