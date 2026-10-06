@@ -3762,6 +3762,9 @@ export function createRouter(deps: RouterDeps) {
       importGithub: authed.market.importGithub.handler(({ context, input }) =>
         market.importGithub(context.actor, input, context.signal),
       ),
+      importGithubBatch: authed.market.importGithubBatch.handler(({ context, input }) =>
+        market.importGithubBatch(context.actor, input.items, context.signal),
+      ),
       import: authed.market.import.handler(({ context, input }) =>
         market.importEntry(context.actor, input),
       ),
