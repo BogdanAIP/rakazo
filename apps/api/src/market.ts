@@ -18,6 +18,8 @@ export const CURATED_MARKET_REPOSITORIES = {
   "anthropics/claude-plugins-official": { license: "Apache-2.0" },
   "ChromeDevTools/chrome-devtools-mcp": { license: "Apache-2.0" },
   "openai/openai-cookbook": { license: "MIT" },
+  "google-gemini/gemini-cli": { license: "Apache-2.0" },
+  "microsoft/skills": { license: "MIT" },
   "github/github-mcp-server": { license: "MIT" },
   "microsoft/playwright-mcp": { license: "Apache-2.0" },
   "modelcontextprotocol/servers": {
