@@ -46,6 +46,7 @@ const READ_ACTIONS = new Set([
   "providerConfig",
   "query",
   "readFile",
+  "search",
   "screenUrl",
   "snapshot",
   "status",
