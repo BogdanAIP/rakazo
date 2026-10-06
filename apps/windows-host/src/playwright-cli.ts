@@ -370,10 +370,10 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
     ) {
       return false;
     }
-    if (
-      this.config.mode === "playwright-cli-cdp" ||
-      this.config.mode === "playwright-cli-extension"
-    ) {
+    if (this.config.mode === "playwright-cli-cdp") {
+      return Boolean(this.config.cdpEndpoint || this.config.browserChannel);
+    }
+    if (this.config.mode === "playwright-cli-extension") {
       return Boolean(this.config.browserChannel);
     }
     if (this.config.mode === "playwright-cli-persistent") return Boolean(this.config.userDataDir);
@@ -633,8 +633,9 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
     if (state.backendReady) return;
 
     if (this.config.mode === "playwright-cli-cdp") {
-      if (!this.config.browserChannel) throw new Error("Playwright browser channel is missing");
-      parseJson(await this.invoke(session, ["attach", `--cdp=${this.config.browserChannel}`]));
+      const cdpTarget = this.config.cdpEndpoint ?? this.config.browserChannel;
+      if (!cdpTarget) throw new Error("Playwright CDP endpoint or browser channel is missing");
+      parseJson(await this.invoke(session, ["attach", `--cdp=${cdpTarget}`]));
     } else if (this.config.mode === "playwright-cli-extension") {
       if (!this.config.browserChannel) throw new Error("Playwright browser channel is missing");
       parseJson(
