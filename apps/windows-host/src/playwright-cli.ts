@@ -397,8 +397,8 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
         }
         args.push(url.href);
       }
-      const payload = parseJson(await this.invoke(session, args));
-      const tabs = this.rememberTabs(state, parseTabs(payload.result));
+      parseJson(await this.invoke(session, args));
+      const tabs = await this.refreshTabs(session, state);
       const current = tabs.find((tab) => tab.current);
       if (!current) {
         return {
@@ -434,8 +434,8 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
       const tab = await this.requireFreshTab(session, state, request.pageId);
       state.observation = undefined;
       try {
-        const payload = parseJson(await this.invoke(session, ["tab-close", String(tab.index)]));
-        const tabs = this.rememberTabs(state, parseTabs(payload.result));
+        parseJson(await this.invoke(session, ["tab-close", String(tab.index)]));
+        const tabs = await this.refreshTabs(session, state);
         return {
           ok: true,
           pageId: request.pageId,
