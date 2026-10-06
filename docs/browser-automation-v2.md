@@ -167,9 +167,10 @@ Browser v2 is additive. Existing Rakazo browser capabilities must not disappear 
 - Preserve server-minted Rakazo `sessionToken`.
 - Preserve per-task owned-tab tracking.
 - Existing user tabs may only be attached through an explicit Playwright extension/CDP handoff.
-- Never expose `eval`, `run-code`, raw WebMCP calls, cookie/storage mutation or unrestricted file upload merely because upstream CLI supports them. Rakazo must translate only a reviewed allowlist into its stable browser contract.
-- Disable WebMCP collection by default (`webmcp: false` / `PLAYWRIGHT_MCP_WEBMCP=false`). Page-registered tools are untrusted dynamic input and must not silently become Rakazo capabilities.
-- Network interception, cookies/storage mutation, downloads/uploads, tracing and devtools-style capabilities must be separately gated.
+- Playwright sessions expose the full installed CLI through `computer/browser { command: "playwright", argv: [...] }`; Rakazo does not maintain a second allowlist for Playwright commands.
+- WebMCP collection/calls are enabled for Playwright sessions. Page-registered tools, descriptions, schemas and results remain untrusted page data.
+- Unrestricted Playwright file access is enabled for the dedicated browser profile, so upload/download/run-code workflows may use absolute local paths.
+- Console/network inspection and routing, cookies/storage mutation, downloads/uploads, tracing, video/PDF, `eval`, `run-code`, WebMCP and future CLI commands are available through the raw Playwright command surface.
 - An unavailable Playwright backend must fail closed or use an explicitly configured fallback; it must not attach to an arbitrary browser profile.
 
 ## Why Playwright is useful in addition to OpenCLI
@@ -189,6 +190,16 @@ Playwright provides a richer semantic browser model:
 OpenCLI remains useful because it is already integrated, small, bounded, and proven with Rakazo's ownership model.
 
 The decision is therefore **Playwright + OpenCLI**, not Playwright replacing OpenCLI on day one.
+
+### Full Playwright CLI surface
+
+The Playwright backend additionally exposes a session-bound raw CLI escape hatch:
+
+```json
+{ "command": "playwright", "sessionToken": "...", "argv": ["console"] }
+```
+
+The same command can invoke any command supported by the pinned `@playwright/cli`, including network routing, state/cookies/storage, uploads, `eval`, `run-code`, tracing, video/PDF, WebMCP and future CLI additions. The raw call remains bound to the Rakazo-minted browser session token; it does not make OpenCLI support those commands.
 
 ## Implementation slices
 

@@ -305,6 +305,41 @@ describe("WindowsPlaywrightCliBackend", () => {
     expect(closed.pageIds).toHaveLength(1);
   });
 
+  it("exposes the full Playwright CLI surface through the bound Rakazo session", async () => {
+    const calls: Array<{ argv: string[]; timeoutMs?: number }> = [];
+    const runner = fakeRunner((argv, timeoutMs) => {
+      calls.push({ argv, timeoutMs });
+      const command = argv[1];
+      if (command === "attach") return JSON.stringify({ result: {} });
+      if (command === "tab-list") return currentTab();
+      if (command === "run-code") {
+        return JSON.stringify({ result: { title: "Example", unrestricted: true } });
+      }
+      throw new Error(`unexpected args: ${argv.join(" ")}`);
+    });
+    const backend = new WindowsPlaywrightCliBackend(cdpConfig, process.cwd(), runner);
+    const opened = await backend.browser("bot-a", { command: "open" });
+    const result = await backend.browser("bot-a", {
+      command: "playwright",
+      sessionToken: opened.sessionToken!,
+      argv: ["run-code", "async page => ({ title: await page.title(), unrestricted: true })"],
+      timeoutMs: 45_000,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      content: JSON.stringify({ title: "Example", unrestricted: true }),
+    });
+    expect(
+      calls.some(
+        ({ argv, timeoutMs }) =>
+          argv[1] === "run-code" &&
+          argv[2]?.includes("page.title") &&
+          timeoutMs === 45_000,
+      ),
+    ).toBe(true);
+  });
+
   it("uses detach instead of closing an externally owned CDP browser", async () => {
     const calls: string[][] = [];
     const runner = fakeRunner((argv) => {

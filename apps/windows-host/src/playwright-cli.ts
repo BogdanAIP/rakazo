@@ -156,8 +156,10 @@ export async function runPlaywrightCliProcess(
         // Force IPv4 resolution for the CLI and its detached daemon while preserving
         // any unrelated NODE_OPTIONS inherited from the host.
         NODE_OPTIONS: playwrightCliNodeOptions(),
-        PLAYWRIGHT_MCP_WEBMCP: "false",
-        PLAYWRIGHT_MCP_CODEGEN: "none",
+        PLAYWRIGHT_MCP_WEBMCP: "true",
+        PLAYWRIGHT_MCP_CODEGEN: "typescript",
+        PLAYWRIGHT_MCP_ALLOW_UNRESTRICTED_FILE_ACCESS: "true",
+        PLAYWRIGHT_MCP_FILE_PATHS: "absolute",
       },
     });
     let output = "";
@@ -508,6 +510,26 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
     }
 
     await this.ensureBackendSession(session, state);
+
+    if (request.command === "playwright") {
+      state.observation = undefined;
+      const payload = parseJson(
+        await this.invoke(session, request.argv, request.timeoutMs ?? COMMAND_TIMEOUT_MS),
+      );
+      const value = payload.result ?? payload.snapshot ?? payload.browsers ?? payload;
+      const content =
+        typeof value === "string" ? value : JSON.stringify(value ?? null);
+
+      const rawCommand = request.argv[0]?.toLowerCase();
+      if (rawCommand === "close" || rawCommand === "detach" || rawCommand === "delete-data") {
+        state.backendReady = false;
+        state.tabs.clear();
+      } else if (rawCommand === "close-all" || rawCommand === "kill-all") {
+        this.sessions.clear();
+      }
+
+      return { ok: true, content: content.slice(0, MAX_OUTPUT_BYTES) };
+    }
 
     if (request.command === "navigate") {
       const url = new URL(request.url);

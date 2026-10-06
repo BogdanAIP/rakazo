@@ -167,6 +167,12 @@ export const WindowsHostBrowserRequestSchema = z.discriminatedUnion("command", [
   }),
   z.object({ command: z.literal("close"), sessionToken: WindowsHostBrowserSessionTokenSchema }),
   z.object({
+    command: z.literal("playwright"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    argv: z.array(z.string().min(1).max(100_000)).min(1).max(64),
+    timeoutMs: z.number().int().min(100).max(600_000).optional(),
+  }),
+  z.object({
     command: z.literal("act"),
     sessionToken: WindowsHostBrowserSessionTokenSchema,
     actions: z.array(WindowsHostBrowserActionSchema).min(1).max(4),
