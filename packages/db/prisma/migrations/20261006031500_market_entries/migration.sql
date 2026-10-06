@@ -6,7 +6,7 @@ CREATE TABLE "market_entries" (
     "key" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "description" TEXT NOT NULL,
-    "tags" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "tags" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     "originalContent" TEXT NOT NULL,
     "adaptedContent" TEXT,
     "adaptationMode" TEXT,
