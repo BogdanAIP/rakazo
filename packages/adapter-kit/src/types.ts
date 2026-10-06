@@ -398,6 +398,10 @@ export interface AgentRunModel {
   provider: string;
   id: string;
   apiKey?: string;
+  /** Cloudflare account id stored with a gateway BYOK credential. */
+  accountId?: string;
+  /** Cloudflare AI Gateway id stored with a gateway BYOK credential. */
+  gatewayId?: string;
   baseUrl?: string;
   /** Whether this custom connection accepts standard reasoning_effort. */
   reasoning?: boolean;

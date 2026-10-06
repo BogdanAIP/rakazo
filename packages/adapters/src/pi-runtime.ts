@@ -35,6 +35,7 @@ import { getLogger } from "@rakazo/logging";
 import { isToolPauseResult } from "./approval-effect.js";
 import { connectionIdArgument, credentialArgument } from "./bot-secrets.js";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
+import { withCloudflareGatewayAuth } from "./cloudflare-ai-gateway.js";
 import { DEFAULT_OPENROUTER_MODEL_ID } from "./deployment-model.js";
 import {
   normalizeOpenAiToolParameters,
@@ -282,7 +283,7 @@ export class PiAgentRuntime implements AgentRuntime {
               models,
               m,
               ctx,
-              options,
+              withCloudflareGatewayAuth(request.model, options),
               request.model.maxTokens,
               () => selectedModel.credentials?.accessToken ?? apiKey,
             ),
@@ -1197,7 +1198,7 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
         selectedModel.models,
         m,
         ctx,
-        options,
+        withCloudflareGatewayAuth(requestModel, options),
         requestModel.maxTokens,
         () => selectedModel.credentials?.accessToken ?? selectedModel.apiKey,
       ),

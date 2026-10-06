@@ -64,6 +64,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   "{style} avatars": "{style} 头像",
   "@{name}": "@{name}",
   "API key": "API 密钥",
+  "Account ID": "账户 ID",
+  "Gateway ID": "网关 ID",
   Account: "账户",
   Activity: "动态",
   "Active model": "当前模型",

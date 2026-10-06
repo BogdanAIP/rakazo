@@ -40,6 +40,7 @@ import {
   BOT_TITLE_MAX_LENGTH,
   BotSecretName,
   botSecretSubmissionSchema,
+  CLOUDFLARE_AI_GATEWAY_CONFIG_MESSAGE,
   COMPUTER_COMMAND_OUTPUT_MAX_CHARS,
   isAttachmentImageMimeType,
   OPENAI_COMPATIBLE_PROVIDER_ID,
@@ -180,6 +181,7 @@ import { type CloudAgentConnection, cloudAgentsEnabled } from "./cloud-agent-fac
 import { executeCloudAgentTool } from "./cloud-agent-service.js";
 import { validCloudAgentArgs } from "./cloud-agent-tools.js";
 import { selectCloudAgentTools } from "./cloud-agent-tools-select.js";
+import { cloudflareGatewayProviderEnv } from "./cloudflare-ai-gateway.js";
 import {
   collectLogIds,
   mergeConnectedPlugins,
@@ -2894,6 +2896,14 @@ export function buildApprovalContinuation(
   ].join("\n");
 }
 
+export function isTerminalModelSetupError(error: unknown): boolean {
+  return (
+    error instanceof UnavailableModelForAuthError ||
+    isRetiredModelCredentialError(error) ||
+    (error instanceof Error && error.message === CLOUDFLARE_AI_GATEWAY_CONFIG_MESSAGE)
+  );
+}
+
 export function createRunExecutor(deps: ExecutorDeps) {
   const web = deps.web ?? createWebProvider();
   const browser = deps.browser ?? createBrowserProvider(undefined, { sandbox: deps.sandbox });
@@ -2932,6 +2942,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
       provider,
       id: modelId,
       apiKey: resolved.oauth ? undefined : resolved.apiKey,
+      ...cloudflareRunFields(resolved),
       baseUrl: resolved.baseUrl,
       reasoning: resolved.reasoning,
       maxTokens: resolved.maxTokens,
@@ -3006,6 +3017,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         provider,
         id,
         apiKey: resolved.oauth ? undefined : resolved.apiKey,
+        ...cloudflareRunFields(resolved),
         baseUrl: resolved.baseUrl,
         reasoning: resolved.reasoning,
         maxTokens: resolved.maxTokens,
@@ -3572,12 +3584,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         } catch (error) {
           // A dead or account-switched credential is already deleted. Retrying
           // setup would requeue the run and might fall back to another model.
-          if (
-            !(error instanceof UnavailableModelForAuthError) &&
-            !isRetiredModelCredentialError(error)
-          ) {
-            throw error;
-          }
+          if (!isTerminalModelSetupError(error)) throw error;
           await failRunBeforeModel(
             error instanceof Error ? error.message : "Connect the provider again.",
           );
@@ -4222,6 +4229,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                       runtime: deps.runtime,
                       checker: checker!,
                       apiKey: judgeKey.oauth ? undefined : judgeKey.apiKey,
+                      accountId: judgeKey.accountId,
+                      gatewayId: judgeKey.gatewayId,
                       baseUrl: judgeKey.baseUrl,
                       reasoning: judgeKey.reasoning,
                       oauth: judgeKey.oauth
@@ -6181,6 +6190,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 provider: runModelProvider,
                 id: runModelId,
                 apiKey: resolved.oauth ? undefined : resolved.apiKey,
+                ...cloudflareRunFields(resolved),
                 baseUrl: resolved.baseUrl,
                 reasoning: resolved.reasoning,
                 maxTokens: resolved.maxTokens,
@@ -7629,6 +7639,8 @@ async function resolveModelKey(
   registerSecrets?: (values: string[]) => void,
 ): Promise<{
   apiKey?: string;
+  accountId?: string;
+  gatewayId?: string;
   baseUrl?: string;
   reasoning?: boolean;
   maxTokens?: number;
@@ -7650,7 +7662,10 @@ async function resolveModelKey(
       const row = await deps.prisma.secret.findFirst({
         where: { id: credential.secretId, userId, spaceId: null },
       });
-      if (!row) return { apiKey: deploymentKeyFor(deps, provider), redact: [] };
+      if (!row) {
+        cloudflareGatewayProviderEnv({ provider });
+        return { apiKey: deploymentKeyFor(deps, provider), redact: [] };
+      }
       const plaintext = deps.secretStore.load(row.ciphertext, row.id);
       registerSecrets?.(secretValuesToRedact(parseModelSecret(plaintext)));
       const persist = persistStoredModelSecret(
@@ -7714,8 +7729,13 @@ async function resolveModelKey(
           (resolved.secret.visionModelIds === undefined &&
             credential.supportsImages === true &&
             credential.defaultModel?.trim() === modelId.trim()));
+      const accountId = resolved.secret.kind === "api_key" ? resolved.secret.accountId : undefined;
+      const gatewayId = resolved.secret.kind === "api_key" ? resolved.secret.gatewayId : undefined;
+      cloudflareGatewayProviderEnv({ provider, accountId, gatewayId });
       return {
         apiKey: resolved.apiKey,
+        accountId,
+        gatewayId,
         baseUrl,
         reasoning:
           resolved.secret.kind === "openai_compatible" ? resolved.secret.reasoning : undefined,
@@ -7768,7 +7788,18 @@ async function resolveModelKey(
       };
     });
   }
+  cloudflareGatewayProviderEnv({ provider });
   return { apiKey: deploymentKeyFor(deps, provider), redact: [] };
+}
+
+function cloudflareRunFields(resolved: { accountId?: string; gatewayId?: string }): {
+  accountId?: string;
+  gatewayId?: string;
+} {
+  return {
+    ...(resolved.accountId ? { accountId: resolved.accountId } : {}),
+    ...(resolved.gatewayId ? { gatewayId: resolved.gatewayId } : {}),
+  };
 }
 
 export function selectRunConnections<

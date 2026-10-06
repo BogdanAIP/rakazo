@@ -77,6 +77,8 @@ export const RU_MESSAGES: Record<string, string> = {
   "{style} avatars": "Аватары: {style}",
   "@{name}": "@{name}",
   "API key": "API-ключ",
+  "Account ID": "ID аккаунта",
+  "Gateway ID": "ID шлюза",
   Account: "Аккаунт",
   Activity: "Активность",
   "Active model": "Активная модель",
