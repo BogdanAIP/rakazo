@@ -183,6 +183,33 @@ The first population/evaluation wave covers:
 Not every domain must come from an external Skill. Reuse trusted external material when it exists;
 otherwise derive a Rakazo-owned Skill only after search fails.
 
+## Deterministic population batches
+
+`market/population-batches.v1.json` is the first concrete population manifest. It currently
+contains 113 curated entries:
+
+- 36 general first-party Skills;
+- 55 trading/research Skills;
+- 22 Rakazo-owned Resolver entries.
+
+The two Skill batches use `market/importGithubBatch`. Each item still goes through the exact same
+curated-repository, pinned-commit, safe-path, redirect and content-size checks as
+`market/importGithub`; the batch RPC is only an orchestration convenience.
+
+Resolver seeds use `market/importBatch` because each Resolver entry is a JSON fragment owned by
+Rakazo rather than a complete upstream file. They remain data-only and grant no installation,
+assignment or execution authority.
+
+Both batch RPCs are idempotent at the individual Market key/provenance boundary. Re-running a batch
+does not duplicate unchanged entries. Batch responses contain compact catalog entries only; Original
+and adapted content remain retrievable only through an explicit `market/get`, so population does not
+dump dozens of Skill bodies into the caller context. A changed upstream revision must still use a new
+immutable Market key.
+
+For the Trading Project, indexing a live-capable original remains allowed as reference knowledge.
+It does not make the Skill active. Installation or execution still requires the normal Project
+capability/permission boundary and, where applicable, a PAPER-only adaptation.
+
 ## Population strategy
 
 Do not preload every source file.

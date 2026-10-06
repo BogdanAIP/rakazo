@@ -71,6 +71,18 @@ type MarketEntryRow = {
   updatedAt: Date;
 };
 
+type GithubImportInput = {
+  kind: MarketEntryKind;
+  key: string;
+  name?: string;
+  description?: string;
+  tags: string[];
+  repository: string;
+  sourcePath: string;
+  sourceRef: string;
+  metadata: Record<string, unknown>;
+};
+
 type ImportInput = {
   kind: MarketEntryKind;
   key: string;
@@ -138,6 +150,17 @@ function catalogEntry(row: MarketEntryRow): MarketCatalogEntry {
     metadata: _metadata,
     ...catalog
   } = full;
+  return catalog;
+}
+
+function catalogFromEntry(entry: MarketEntry): MarketCatalogEntry {
+  const {
+    originalContent: _originalContent,
+    adaptedContent: _adaptedContent,
+    metrics: _metrics,
+    metadata: _metadata,
+    ...catalog
+  } = entry;
   return catalog;
 }
 
@@ -440,17 +463,7 @@ export function createMarketService(
 
     async importGithub(
       actor: Actor,
-      input: {
-        kind: MarketEntryKind;
-        key: string;
-        name?: string;
-        description?: string;
-        tags: string[];
-        repository: string;
-        sourcePath: string;
-        sourceRef: string;
-        metadata: Record<string, unknown>;
-      },
+      input: GithubImportInput,
       signal?: AbortSignal,
     ): Promise<MarketEntry> {
       assertCuratedRepository(input.repository);
@@ -478,6 +491,26 @@ export function createMarketService(
         trust: "curated",
         metadata: input.metadata,
       });
+    },
+
+    async importGithubBatch(
+      actor: Actor,
+      items: GithubImportInput[],
+      signal?: AbortSignal,
+    ): Promise<MarketCatalogEntry[]> {
+      const imported: MarketCatalogEntry[] = [];
+      for (const item of items) {
+        imported.push(catalogFromEntry(await this.importGithub(actor, item, signal)));
+      }
+      return imported;
+    },
+
+    async importBatch(actor: Actor, items: ImportInput[]): Promise<MarketCatalogEntry[]> {
+      const imported: MarketCatalogEntry[] = [];
+      for (const item of items) {
+        imported.push(catalogFromEntry(await this.importEntry(actor, item)));
+      }
+      return imported;
     },
 
     async importEntry(actor: Actor, input: ImportInput): Promise<MarketEntry> {
