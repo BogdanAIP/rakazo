@@ -9,6 +9,7 @@ import type {
   StoredWindowsHostCredential,
   WindowsHostCredentialStore,
 } from "./credential-store.js";
+import type { WindowsBrowserBackend } from "./browser-backend.js";
 import { executeWindowsHostCommand, resolveWindowsHostCredential } from "./runtime.js";
 import type { WindowsHostTransport } from "./transport.js";
 
@@ -174,6 +175,44 @@ describe("resolveWindowsHostCredential", () => {
 });
 
 describe("executeWindowsHostCommand", () => {
+  it("dispatches browser.call through the internal browser backend contract", async () => {
+    const browserBackend: WindowsBrowserBackend = {
+      available: () => true,
+      browser: vi.fn(async (_botId, request) => ({
+        ok: true,
+        ...(request.command === "open"
+          ? { sessionToken: "22222222-2222-4222-8222-222222222222" }
+          : {}),
+      })),
+    };
+
+    const result = await executeWindowsHostCommand(
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        request: {
+          kind: "browser.call",
+          botId: "bot-a",
+          request: { command: "open" },
+        },
+      },
+      advertisement,
+      undefined,
+      browserBackend,
+    );
+
+    expect(browserBackend.browser).toHaveBeenCalledWith("bot-a", { command: "open" });
+    expect(result).toMatchObject({
+      ok: true,
+      result: {
+        kind: "browser",
+        response: {
+          ok: true,
+          sessionToken: "22222222-2222-4222-8222-222222222222",
+        },
+      },
+    });
+  });
+
   it("returns the physical host identity without invoking another agent runtime", async () => {
     const result = await executeWindowsHostCommand(
       {
