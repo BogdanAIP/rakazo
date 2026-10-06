@@ -1,3 +1,4 @@
+import { CAPABILITY_PROFILE_SCHEMA_VERSION } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import { compileProjectContext } from "./chatgpt-context-compiler.js";
 
@@ -30,7 +31,7 @@ function baseProjection() {
         label: "PR #12",
         metadata: { status: "draft", head: "bbbbbbbb", number: 12 },
       },
-    ],
+    ] as Array<Record<string, unknown>>,
     openTasks: [
       {
         id: "task-1",
@@ -107,6 +108,50 @@ describe("RCCL project context compiler", () => {
           text: expect.stringContaining("Free-form task prose"),
         }),
       ]),
+    );
+  });
+
+  it("exposes the active capability profile in compiled RCCL", () => {
+    const projection = baseProjection();
+    Object.assign(projection, {
+      resources: [
+        ...projection.resources,
+        {
+          id: "profile-1",
+          kind: "capability.profile",
+          ref: "active",
+          label: "Capability profile: trading-research",
+          metadata: {
+            schemaVersion: CAPABILITY_PROFILE_SCHEMA_VERSION,
+            catalogVersion: 1,
+            profile: "trading-research",
+            required: ["repo.read", "market.data"],
+            optional: ["research.web"],
+            denied: ["messaging.telegram"],
+          },
+        },
+      ] satisfies Array<Record<string, unknown>>,
+    });
+
+    const compiled = compileProjectContext(projection);
+
+    expect(compiled.statements).toContainEqual(
+      expect.objectContaining({
+        tag: "CAPABILITY",
+        text: expect.stringContaining('profile="trading-research"'),
+      }),
+    );
+    expect(compiled.statements).toContainEqual(
+      expect.objectContaining({
+        tag: "CAPABILITY",
+        text: 'requirement="market.data"; level="required"',
+      }),
+    );
+    expect(compiled.statements).toContainEqual(
+      expect.objectContaining({
+        tag: "CAPABILITY",
+        text: 'requirement="messaging.telegram"; level="denied"',
+      }),
     );
   });
 

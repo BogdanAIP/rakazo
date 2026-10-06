@@ -1,3 +1,5 @@
+import { parseCapabilityProfileResource } from "@rakazo/core";
+
 export const RCCL_VERSION = "1" as const;
 
 export const RCCL_TAGS = [
@@ -385,6 +387,51 @@ export function compileProjectContext(
       if (key in metadata) stateFields.push([key, metadata[key]]);
     }
     if (stateFields.length > 2) addStatement("STATE", fields(stateFields), resourceSource);
+
+    const capabilityProfile = parseCapabilityProfileResource(resource);
+    if (capabilityProfile && !("error" in capabilityProfile)) {
+      addStatement(
+        "CAPABILITY",
+        fields([
+          ["profile", capabilityProfile.snapshot.profile],
+          ["schemaVersion", capabilityProfile.snapshot.schemaVersion],
+          ["catalogVersion", capabilityProfile.snapshot.catalogVersion],
+        ]),
+        resourceSource,
+      );
+      for (const requirement of capabilityProfile.snapshot.required) {
+        addStatement(
+          "CAPABILITY",
+          fields([
+            ["requirement", requirement],
+            ["level", "required"],
+          ]),
+          resourceSource,
+        );
+      }
+      for (const requirement of capabilityProfile.snapshot.optional) {
+        addStatement(
+          "CAPABILITY",
+          fields([
+            ["requirement", requirement],
+            ["level", "optional"],
+          ]),
+          resourceSource,
+        );
+      }
+      for (const requirement of capabilityProfile.snapshot.denied) {
+        addStatement(
+          "CAPABILITY",
+          fields([
+            ["requirement", requirement],
+            ["level", "denied"],
+          ]),
+          resourceSource,
+        );
+      }
+    } else if (capabilityProfile && "error" in capabilityProfile) {
+      addStatement("BLOCKER", capabilityProfile.error, resourceSource);
+    }
   }
 
   const tasks = sortRecords(records(projection.openTasks), [

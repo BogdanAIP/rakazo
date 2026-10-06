@@ -1,8 +1,19 @@
 import process from "node:process";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { analyzeRcclSkillMd, buildRcclSkillTemplate } from "@rakazo/core";
+import {
+  analyzeRcclSkillMd,
+  BUILTIN_CAPABILITY_PROFILES,
+  buildRcclSkillTemplate,
+  materializeCapabilityProfile,
+  SEMANTIC_CAPABILITY_REQUIREMENT_NAMES,
+  SEMANTIC_CAPABILITY_REQUIREMENTS,
+} from "@rakazo/core";
 import { z } from "zod";
+import {
+  assignProjectCapabilityBinding,
+  resolveProjectCapabilityProfile,
+} from "./chatgpt-capability-profile.js";
 import {
   loadChatGptContext,
   loadChatGptProjectContext,
@@ -38,6 +49,8 @@ const capabilityRouteSchema = z.object({
   resourceRevision: z.union([z.string(), z.number()]).optional(),
   catalogGroup: z.string().max(200).optional(),
 });
+
+const semanticCapabilitySchema = z.enum(SEMANTIC_CAPABILITY_REQUIREMENT_NAMES);
 
 const capabilityCallSchema = z.object({
   botId: z.string().min(1),
@@ -316,6 +329,110 @@ server.registerTool(
       }),
     });
   },
+);
+
+server.registerTool(
+  "rakazo_capability_profile",
+  {
+    title: "Inspect Project capability profiles",
+    description:
+      "Read-only Capability Profiles v1 helper. List the built-in semantic profiles/requirements or resolve the active profile for one Project against current Project resources, linked running Computers and exact explicit capability.bindings. It never installs, authorizes or executes a capability.",
+    inputSchema: z.discriminatedUnion("action", [
+      z.object({
+        action: z.literal("catalog"),
+      }),
+      z.object({
+        action: z.literal("resolve"),
+        projectId: z.string().min(1),
+      }),
+    ]),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (input) => {
+    if (input.action === "catalog") {
+      return textResult({
+        schemaVersion: "capability-profile-v1",
+        profiles: BUILTIN_CAPABILITY_PROFILES,
+        requirements: SEMANTIC_CAPABILITY_REQUIREMENT_NAMES.map((name) => ({
+          name,
+          ...SEMANTIC_CAPABILITY_REQUIREMENTS[name],
+        })),
+        note: "Catalog entries are templates only. A Project gets a versioned snapshot only after explicit assignment.",
+      });
+    }
+    return textResult(await resolveProjectCapabilityProfile(callRakazoRpc, input.projectId));
+  },
+);
+
+server.registerTool(
+  "rakazo_capability_profile_assign",
+  {
+    title: "Assign a Project capability profile",
+    description:
+      "Assign one built-in Capability Profile v1 to a Project by writing only the Project's capability.profile/active resource. The profile is materialized as a versioned snapshot. This does not install, authenticate, bind or execute any capability.",
+    inputSchema: z.object({
+      projectId: z.string().min(1),
+      profile: z.enum(["web-development", "research", "aihot", "trading-research"]),
+      addRequired: z.array(semanticCapabilitySchema).max(50).default([]),
+      addOptional: z.array(semanticCapabilitySchema).max(50).default([]),
+      deny: z.array(semanticCapabilitySchema).max(50).default([]),
+    }),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ projectId, profile, addRequired, addOptional, deny }) => {
+    const snapshot = materializeCapabilityProfile({
+      profile,
+      addRequired,
+      addOptional,
+      deny,
+    });
+    const resource = await callRakazoRpc("projects/resources/upsert", {
+      projectId,
+      kind: "capability.profile",
+      ref: "active",
+      label: `Capability profile: ${profile}`,
+      metadata: snapshot,
+    });
+    return textResult({
+      projectId,
+      snapshot,
+      resource,
+      note: "Profile assignment does not install or authorize tools. Resolve the profile to see ready/available/missing requirements.",
+    });
+  },
+);
+
+server.registerTool(
+  "rakazo_capability_binding_assign",
+  {
+    title: "Bind a Project semantic capability",
+    description:
+      "Record one exact already-authorized Rakazo capability tool route for a semantic requirement in the active Project profile. The requirement must be declared and not denied, the Bot must already be linked to the Project, and the exact tool/route must be present in that Bot's current authorized catalog. This does not install, authorize, approve or execute the tool.",
+    inputSchema: z.object({
+      projectId: z.string().min(1),
+      requirement: semanticCapabilitySchema,
+      botId: z.string().min(1),
+      tool: z.string().min(1).max(300),
+      route: capabilityRouteSchema,
+    }),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (input) => textResult(await assignProjectCapabilityBinding(callRakazoRpc, input)),
 );
 
 server.registerTool(
