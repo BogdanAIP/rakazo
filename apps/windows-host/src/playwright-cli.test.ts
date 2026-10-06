@@ -112,7 +112,8 @@ describe("WindowsPlaywrightCliBackend", () => {
       calls.push(argv);
       const command = argv[1];
       if (command === "open") return JSON.stringify({ result: {} });
-      if (command === "tab-list") return JSON.stringify({ result: "- 0: (current) [](about:blank)" });
+      if (command === "tab-list")
+        return JSON.stringify({ result: "- 0: (current) [](about:blank)" });
       if (command === "snapshot") return JSON.stringify({ snapshot: [] });
       if (command === "close") return JSON.stringify({ status: "closed" });
       throw new Error(`unexpected args: ${argv.join(" ")}`);
@@ -183,13 +184,11 @@ describe("WindowsPlaywrightCliBackend", () => {
       if (command === "attach") return JSON.stringify({ result: {} });
       if (command === "tab-list") return JSON.stringify({ result: tabs });
       if (command === "tab-new") {
-        tabs =
-          "- 0: [One](https://one.example/)\n- 1: (current) [Two](https://two.example/)";
+        tabs = "- 0: [One](https://one.example/)\n- 1: (current) [Two](https://two.example/)";
         return JSON.stringify({ result: tabs });
       }
       if (command === "tab-select") {
-        tabs =
-          "- 0: (current) [One](https://one.example/)\n- 1: [Two](https://two.example/)";
+        tabs = "- 0: (current) [One](https://one.example/)\n- 1: [Two](https://two.example/)";
         return JSON.stringify({ result: tabs });
       }
       if (command === "tab-close") {

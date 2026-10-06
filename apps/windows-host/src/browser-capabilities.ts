@@ -147,7 +147,9 @@ export const BROWSER_CAPABILITY_MATRIX = {
 
 export type BrowserCapabilityMode = keyof typeof BROWSER_CAPABILITY_MATRIX;
 
-export function missingStableBrowserCapabilities(mode: BrowserCapabilityMode): StableBrowserOperation[] {
+export function missingStableBrowserCapabilities(
+  mode: BrowserCapabilityMode,
+): StableBrowserOperation[] {
   return STABLE_BROWSER_OPERATIONS.filter(
     (operation) => BROWSER_CAPABILITY_MATRIX[mode].stable[operation] !== "enabled",
   );
