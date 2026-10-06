@@ -140,6 +140,7 @@ Mode choice is per task/session, not a permanent global decision. A project or b
 
 Current draft routing policy is conservative and non-interactive:
 - if the user explicitly selects a mode, use that mode if available;
+- when no mode is supplied, Rakazo uses `auto`;
 - Extension is explicit-only because its attach flow intentionally asks for browser confirmation;
 - `auto` never invokes Extension and tries CDP first, then OpenCLI, then Persistent;
 - an unsuccessful CDP open falls through to the next non-interactive backend rather than surfacing an Extension approval prompt;
@@ -150,7 +151,7 @@ Current draft routing policy is conservative and non-interactive:
 
 Browser v2 is additive. Existing Rakazo browser capabilities must not disappear merely because a new backend exists.
 
-- OpenCLI remains the production/default backend until Playwright reaches the required operational parity.
+- Browser v2 defaults to non-interactive `auto` routing after physical parity acceptance; `auto` prefers CDP, falls back to OpenCLI, then Persistent, and never invokes Extension.
 - A partially implemented Playwright backend may exist in a draft branch or tests, but it must not become the active production backend.
 - Playwright activation requires, at minimum, working `navigate`, `snapshot`, `find`, `wait`, `extract`, `scroll`, `screenshot`, `tabNew`, `tabSelect`, `tabClose`, `act`, `recover` and `close/detach` semantics compatible with the stable `computer/browser` contract.
 - If an upstream Playwright feature is intentionally not exposed (for example raw `eval`), the omission must be recorded in the capability matrix with the reason. It must never be silently omitted.
@@ -213,7 +214,7 @@ Add config-only discovery, no browser mutation:
 - dedicated persistent profile path is explicit;
 - probe reports readiness without reading cookies/storage.
 
-Acceptance: OpenCLI remains default; Playwright CLI cannot become active accidentally.
+Acceptance: default routing is non-interactive `auto`; Playwright Extension cannot become active accidentally or trigger a browser approval prompt.
 
 ### BV2-03 — Playwright CLI backend implementation (draft-only until parity)
 
