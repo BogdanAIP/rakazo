@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 export const WINDOWS_BROWSER_BACKEND_MODES = [
@@ -17,6 +18,16 @@ export interface PlaywrightCliConfiguration {
   entry: string | null;
   browserChannel: PlaywrightCliBrowserChannel | null;
   userDataDir: string | null;
+}
+
+const require = createRequire(import.meta.url);
+
+function bundledPlaywrightCliEntry(): string | null {
+  try {
+    return require.resolve("@playwright/cli/playwright-cli.js");
+  } catch {
+    return null;
+  }
 }
 
 export interface PlaywrightCliProbe {
@@ -60,7 +71,10 @@ export function loadPlaywrightCliConfiguration(
 ): PlaywrightCliConfiguration {
   return {
     mode: parseMode(env.RAKAZO_BROWSER_BACKEND),
-    entry: optionalAbsolutePath(env.RAKAZO_PLAYWRIGHT_CLI_ENTRY, "RAKAZO_PLAYWRIGHT_CLI_ENTRY"),
+    entry: optionalAbsolutePath(
+      env.RAKAZO_PLAYWRIGHT_CLI_ENTRY ?? bundledPlaywrightCliEntry() ?? undefined,
+      "RAKAZO_PLAYWRIGHT_CLI_ENTRY",
+    ),
     browserChannel: optionalBrowserChannel(env.RAKAZO_PLAYWRIGHT_BROWSER_CHANNEL),
     userDataDir: optionalAbsolutePath(
       env.RAKAZO_PLAYWRIGHT_USER_DATA_DIR,
