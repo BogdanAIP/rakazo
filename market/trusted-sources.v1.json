@@ -7,9 +7,7 @@
       "commit": "d4226d062928f8d9505dbdeadd10217d23361052",
       "license": "Apache-2.0",
       "trust": "curated",
-      "roles": [
-        "skills"
-      ],
+      "roles": ["skills"],
       "discoveredSkillCount": 33,
       "note": "Official Anthropic plugin repository; import only individual reviewed SKILL.md files by pinned commit."
     },
@@ -18,11 +16,7 @@
       "commit": "cf2eab96d96cad3d47ce769b9638815d1775500f",
       "license": "Apache-2.0",
       "trust": "curated",
-      "roles": [
-        "skills",
-        "resolver",
-        "mcp"
-      ],
+      "roles": ["skills", "resolver", "mcp"],
       "discoveredSkillCount": 7,
       "note": "Official Chrome DevTools MCP repository with first-party debugging skills."
     },
@@ -31,9 +25,7 @@
       "commit": "0eac1447d4e24d06e47c459ca5e98f248b9413cf",
       "license": "MIT",
       "trust": "curated",
-      "roles": [
-        "skills"
-      ],
+      "roles": ["skills"],
       "discoveredSkillCount": 3,
       "note": "Official OpenAI Cookbook; only directly relevant SKILL.md entries should be indexed."
     },
@@ -42,10 +34,7 @@
       "commit": "71ef8266e48110974b13aef50b4df6ff9914ff68",
       "license": "MIT",
       "trust": "curated",
-      "roles": [
-        "resolver",
-        "mcp"
-      ],
+      "roles": ["resolver", "mcp"],
       "discoveredSkillCount": 0,
       "note": "Official GitHub MCP server; source for repository capability/resolver knowledge."
     },
@@ -54,10 +43,7 @@
       "commit": "f183dad4a52965583e3cc1d59b88cdc279e2e57d",
       "license": "Apache-2.0",
       "trust": "curated",
-      "roles": [
-        "resolver",
-        "mcp"
-      ],
+      "roles": ["resolver", "mcp"],
       "discoveredSkillCount": 0,
       "note": "Official Microsoft Playwright MCP; known browser implementation candidate, not automatically installed."
     },
@@ -66,10 +52,7 @@
       "commit": "5abed86c5317b833dd59907492d56c65981642aa",
       "license": "Apache-2.0 transition / repository-specific notices apply",
       "trust": "curated",
-      "roles": [
-        "resolver",
-        "mcp"
-      ],
+      "roles": ["resolver", "mcp"],
       "discoveredSkillCount": 0,
       "note": "Official MCP reference servers; verify individual component licensing before copying content."
     },
@@ -78,10 +61,7 @@
       "commit": "c9d01b89e4997e63638a411e7d09cd3581f69f80",
       "license": "repository license",
       "trust": "curated",
-      "roles": [
-        "resolver",
-        "internal"
-      ],
+      "roles": ["resolver", "internal"],
       "discoveredSkillCount": 0,
       "note": "Owner-controlled Rakazo source for current native/OpenCLI/GitHub capability routes."
     }

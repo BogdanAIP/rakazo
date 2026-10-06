@@ -133,7 +133,9 @@ function normalizeTags(values: string[]): string[] {
   );
 }
 
-function assertCuratedRepository(repository: string): asserts repository is CuratedMarketRepository {
+function assertCuratedRepository(
+  repository: string,
+): asserts repository is CuratedMarketRepository {
   if (!Object.hasOwn(CURATED_MARKET_REPOSITORIES, repository)) {
     throw new ORPCError("BAD_REQUEST", {
       message: "GitHub repository is not in the curated Market source set.",
@@ -211,10 +213,7 @@ async function fetchPinnedGithubSource(
   const response = await fetchImpl(raw, {
     headers: { accept: "text/plain, text/markdown;q=0.9, application/json;q=0.8" },
     redirect: "manual",
-    signal: AbortSignal.any([
-      signal ?? new AbortController().signal,
-      AbortSignal.timeout(8_000),
-    ]),
+    signal: AbortSignal.any([signal ?? new AbortController().signal, AbortSignal.timeout(8_000)]),
   });
   if (response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400)) {
     throw new ORPCError("BAD_GATEWAY", {
