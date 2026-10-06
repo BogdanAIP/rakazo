@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type PlaywrightCliRunner,
+  playwrightCliNodeOptions,
   resolveWindowsDevToolsActivePortEndpoint,
   WindowsPlaywrightCliBackend,
 } from "./playwright-cli.js";
@@ -40,6 +41,18 @@ function exampleSnapshot(name = "Continue") {
     ],
   });
 }
+
+describe("playwrightCliNodeOptions", () => {
+  it("forces IPv4 localhost resolution without dropping unrelated Node options", () => {
+    expect(playwrightCliNodeOptions(undefined)).toBe("--dns-result-order=ipv4first");
+    expect(playwrightCliNodeOptions("--max-old-space-size=2048")).toBe(
+      "--max-old-space-size=2048 --dns-result-order=ipv4first",
+    );
+    expect(playwrightCliNodeOptions("--dns-result-order=verbatim --trace-warnings")).toBe(
+      "--trace-warnings --dns-result-order=ipv4first",
+    );
+  });
+});
 
 describe("resolveWindowsDevToolsActivePortEndpoint", () => {
   it("builds the browser websocket endpoint from Chrome DevToolsActivePort", async () => {

@@ -128,6 +128,14 @@ async function terminateChildTree(pid: number | undefined) {
   }
 }
 
+export function playwrightCliNodeOptions(
+  existing: string | undefined = process.env.NODE_OPTIONS,
+): string {
+  const ipv4First = "--dns-result-order=ipv4first";
+  const preserved = existing?.replace(/(?:^|\s)--dns-result-order=\S+/gu, " ").trim();
+  return preserved ? `${preserved} ${ipv4First}` : ipv4First;
+}
+
 export async function runPlaywrightCliProcess(
   entry: string,
   argv: string[],
@@ -143,6 +151,11 @@ export async function runPlaywrightCliProcess(
       stdio: ["ignore", "pipe", "pipe"],
       env: {
         ...process.env,
+        // Playwright's Extension relay binds to "localhost". On Windows hosts where
+        // localhost resolves to an unusable ::1 first, Chrome cannot reach the relay.
+        // Force IPv4 resolution for the CLI and its detached daemon while preserving
+        // any unrelated NODE_OPTIONS inherited from the host.
+        NODE_OPTIONS: playwrightCliNodeOptions(),
         PLAYWRIGHT_MCP_WEBMCP: "false",
         PLAYWRIGHT_MCP_CODEGEN: "none",
       },
