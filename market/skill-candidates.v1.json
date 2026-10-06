@@ -69,6 +69,15 @@
       "license": "MIT",
       "skills": [],
       "selection": "Search/index all 205 first-party SKILL.md paths; import only task-matched Skills on demand rather than preloading the entire catalog."
+    },
+    {
+      "repository": "tradingview/lightweight-charts",
+      "commit": "786591769fee8ec5672a6d9c9afe9e706fc60299",
+      "license": "Apache-2.0",
+      "skills": [
+        ".github/skills/lightweight-charts/SKILL.md",
+        ".github/skills/lightweight-charts-plugin-authoring/SKILL.md"
+      ]
     }
   ]
 }

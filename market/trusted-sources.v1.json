@@ -183,6 +183,104 @@
       "roles": ["skills", "resolver", "mcp", "trading", "market-data", "multi-exchange"],
       "discoveredSkillCount": 25,
       "note": "Official CCXT repository. Includes CCXT language/MCP Skills plus Agent Skills such as trading-signal, crypto-market-rank and query-token-audit. CCXT MCP market tier is keyless/read-only by default; trading/funds tiers are opt-in and remain unavailable to the Rakazo PAPER Project."
+    },
+    {
+      "repository": "QuantConnect/Lean",
+      "commit": "82810ea63d5542f05dc58f9d1db0557cf174d0ea",
+      "license": "Apache-2.0",
+      "trust": "curated",
+      "roles": ["resolver", "backtest", "strategy", "futures"],
+      "discoveredSkillCount": 0,
+      "note": "Official QuantConnect LEAN engine. Resolver/knowledge source for backtesting, portfolio/risk models and futures/options research; no SKILL.md discovered."
+    },
+    {
+      "repository": "microsoft/qlib",
+      "commit": "be725493eb1a6bbb42bf11b37aa7669f59610ff1",
+      "license": "MIT",
+      "trust": "curated",
+      "roles": ["resolver", "quant", "backtest", "portfolio", "risk"],
+      "discoveredSkillCount": 0,
+      "note": "Official Microsoft Qlib. Resolver/knowledge source for quantitative research, signal strategies, portfolio optimization, risk models and backtesting; no SKILL.md discovered."
+    },
+    {
+      "repository": "hummingbot/hummingbot",
+      "commit": "9af100d6822da7d2d0291a906c730ef172284ee2",
+      "license": "Apache-2.0",
+      "trust": "curated",
+      "roles": ["resolver", "paper-trading", "market-making", "strategy"],
+      "discoveredSkillCount": 0,
+      "note": "Official Hummingbot codebase. Resolver/knowledge source for paper exchange, market making, AMM arbitrage, hedge and cross-exchange strategies; no SKILL.md discovered."
+    },
+    {
+      "repository": "freqtrade/freqtrade",
+      "commit": "01dc3d2ab794c23503f8e4e49561e0309144d160",
+      "license": "GPL-3.0",
+      "trust": "curated",
+      "roles": ["resolver", "backtest", "strategy", "dry-run"],
+      "discoveredSkillCount": 0,
+      "note": "Official Freqtrade codebase. Resolver/knowledge source for backtesting, strategy analysis, dry-run/paper workflows and FreqAI; no SKILL.md discovered."
+    },
+    {
+      "repository": "hyperliquid-dex/hyperliquid-python-sdk",
+      "commit": "2fdb18f9517675ea03695a0962bd19eece9c83f0",
+      "license": "MIT",
+      "trust": "curated",
+      "roles": ["resolver", "market-data", "futures", "funding"],
+      "discoveredSkillCount": 0,
+      "note": "Official Hyperliquid Python SDK. Resolver/knowledge source for read-only market/funding/orderbook/user information; execution remains outside PAPER project authority."
+    },
+    {
+      "repository": "massive-com/client-python",
+      "commit": "481e5c270ea85e8eae5e96f8b9fda34e5e2a674a",
+      "license": "MIT",
+      "trust": "curated",
+      "roles": ["resolver", "market-data", "equities", "futures"],
+      "discoveredSkillCount": 0,
+      "note": "Official Massive/Polygon market-data Python client. Resolver source for market data; account/data-plan constraints still apply."
+    },
+    {
+      "repository": "tradingview/lightweight-charts",
+      "commit": "786591769fee8ec5672a6d9c9afe9e706fc60299",
+      "license": "Apache-2.0",
+      "trust": "curated",
+      "roles": ["skills", "visualization", "charts"],
+      "discoveredSkillCount": 2,
+      "note": "Official TradingView Lightweight Charts repository with two first-party SKILL.md files for chart and plugin authoring."
+    },
+    {
+      "repository": "Bitget-AI/agent-skill",
+      "commit": "55747b8a33236bbb4dcabffe22c42d302178268c",
+      "license": "MIT",
+      "trust": "curated",
+      "roles": ["skills", "resolver", "paper-trading", "market-data", "futures"],
+      "discoveredSkillCount": 1,
+      "note": "Official Bitget AI trading Skill. Public market data is credential-free; --read-only and --paper-trading modes are explicit. PAPER adaptation must keep a session entirely in paper mode and exclude live writes."
+    },
+    {
+      "repository": "crypto-com/crypto-agent-trading",
+      "commit": "92e80c5527312d0acdf769f16511ba3c6db1f2fe",
+      "license": "Apache-2.0",
+      "trust": "curated",
+      "roles": ["skills", "resolver", "paper-trading", "market-data", "derivatives"],
+      "discoveredSkillCount": 2,
+      "note": "Official Crypto.com agent Skills. Exchange Skill includes no-auth market data and local paper trading; live APP/Exchange actions remain outside Rakazo Trading PAPER authority."
+    },
+    {
+      "repository": "Bitget-AI/bitget-signal",
+      "commit": "55004749ede7fc72431cdb4be9558d01a1b80d03",
+      "license": "MIT",
+      "trust": "curated",
+      "roles": [
+        "skills",
+        "resolver",
+        "signals",
+        "macro",
+        "sentiment",
+        "technical-analysis",
+        "news"
+      ],
+      "discoveredSkillCount": 5,
+      "note": "Official Bitget market-analysis Skill pack. Skills reference an external data MCP; Rakazo should adapt instructions to semantic market/research capabilities rather than auto-installing or authorizing that external MCP."
     }
   ]
 }

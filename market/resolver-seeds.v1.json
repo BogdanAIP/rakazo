@@ -556,6 +556,410 @@
           }
         ]
       }
+    },
+    {
+      "key": "backtest.quant",
+      "name": "Quantitative backtest resolution",
+      "description": "Known first-party backtest and research engines for validating trading ideas before PAPER use.",
+      "tags": ["backtest", "quant", "research", "strategy", "paper"],
+      "content": {
+        "semanticKey": "backtest.quant",
+        "implementations": [
+          {
+            "name": "QuantConnect LEAN",
+            "kind": "cli",
+            "reference": "QuantConnect/Lean",
+            "priority": 1,
+            "readOnly": false,
+            "constraints": [
+              "Use backtest/research mode only for Rakazo Trading; brokerage/live deployment is outside PAPER authority"
+            ]
+          },
+          {
+            "name": "Microsoft Qlib",
+            "kind": "cli",
+            "reference": "microsoft/qlib",
+            "priority": 2,
+            "readOnly": false,
+            "constraints": [
+              "Research/backtest/portfolio analysis only; no live execution path implied"
+            ]
+          },
+          {
+            "name": "Freqtrade backtesting",
+            "kind": "cli",
+            "reference": "freqtrade/freqtrade",
+            "priority": 3,
+            "readOnly": false,
+            "constraints": [
+              "Backtesting/dry-run only in Rakazo Trading; live trade configuration forbidden by Project policy"
+            ]
+          },
+          {
+            "name": "Alpaca Backtest Skill",
+            "kind": "api",
+            "reference": "market:alpacahq/alpaca-skills:backtest",
+            "priority": 4,
+            "readOnly": false,
+            "constraints": ["Historical/backtest workflow only"]
+          },
+          {
+            "name": "Kraken Paper Strategy Backtest",
+            "kind": "cli",
+            "reference": "market:krakenfx/kraken-cli:recipe-paper-strategy-backtest",
+            "priority": 5,
+            "readOnly": false,
+            "constraints": ["Simulation/backtest only"]
+          }
+        ]
+      }
+    },
+    {
+      "key": "strategy.framework",
+      "name": "Trading strategy framework resolution",
+      "description": "Known first-party strategy frameworks for research, simulation and PAPER strategy development.",
+      "tags": ["strategy", "quant", "paper", "market-making", "research"],
+      "content": {
+        "semanticKey": "strategy.framework",
+        "implementations": [
+          {
+            "name": "Hummingbot",
+            "kind": "cli",
+            "reference": "hummingbot/hummingbot",
+            "priority": 1,
+            "readOnly": false,
+            "constraints": [
+              "Prefer paper exchange/strategy research; live exchange connectors remain outside Rakazo Trading authority"
+            ]
+          },
+          {
+            "name": "Freqtrade",
+            "kind": "cli",
+            "reference": "freqtrade/freqtrade",
+            "priority": 2,
+            "readOnly": false,
+            "constraints": ["Use strategy analysis/backtest/dry-run modes only"]
+          },
+          {
+            "name": "QuantConnect LEAN",
+            "kind": "cli",
+            "reference": "QuantConnect/Lean",
+            "priority": 3,
+            "readOnly": false,
+            "constraints": ["Backtest/research algorithms only for current PAPER project"]
+          },
+          {
+            "name": "Microsoft Qlib",
+            "kind": "cli",
+            "reference": "microsoft/qlib",
+            "priority": 4,
+            "readOnly": false,
+            "constraints": ["Signal/portfolio/risk research only; no live execution"]
+          }
+        ]
+      }
+    },
+    {
+      "key": "futures.data",
+      "name": "Futures and perpetual market data resolution",
+      "description": "Known read-only sources for futures/perpetual prices, orderbooks, funding and open-interest research.",
+      "tags": ["futures", "perpetuals", "funding", "open-interest", "market-data", "read-only"],
+      "content": {
+        "semanticKey": "futures.data",
+        "implementations": [
+          {
+            "name": "OKX CEX Market Skill",
+            "kind": "api",
+            "reference": "market:okx/agent-trade-kit:okx-cex-market",
+            "priority": 1,
+            "readOnly": true,
+            "constraints": ["Read-only market, funding and open-interest paths only"]
+          },
+          {
+            "name": "Kraken Futures Risk / Funding Skills",
+            "kind": "cli",
+            "reference": "market:krakenfx/kraken-cli:kraken-futures-risk",
+            "priority": 2,
+            "readOnly": true,
+            "constraints": ["Use analytics/risk paths only; no live futures orders"]
+          },
+          {
+            "name": "Hyperliquid Python SDK info endpoints",
+            "kind": "api",
+            "reference": "hyperliquid-dex/hyperliquid-python-sdk",
+            "priority": 3,
+            "readOnly": true,
+            "constraints": [
+              "Info/read endpoints only; exchange/order methods remain unavailable to PAPER resolver"
+            ]
+          },
+          {
+            "name": "CCXT public derivatives market data",
+            "kind": "api",
+            "reference": "ccxt/ccxt",
+            "priority": 4,
+            "readOnly": true,
+            "constraints": ["Public endpoints only; exchange support and fields vary"]
+          },
+          {
+            "name": "BingX public futures market API",
+            "kind": "api",
+            "reference": "BingX-API/BingX-swap-api-doc",
+            "priority": 5,
+            "readOnly": true,
+            "constraints": [
+              "Use public quote endpoints for price, depth, trades, funding, klines, open interest and ticker only; no authenticated order actions"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "paper.simulation",
+      "name": "Paper and dry-run simulation resolution",
+      "description": "Known first-party paper exchanges and dry-run engines for validating strategies without real orders.",
+      "tags": ["paper", "dry-run", "simulation", "strategy"],
+      "content": {
+        "semanticKey": "paper.simulation",
+        "implementations": [
+          {
+            "name": "Hummingbot paper exchange",
+            "kind": "cli",
+            "reference": "hummingbot/hummingbot:paper_trade",
+            "priority": 1,
+            "readOnly": false,
+            "constraints": ["Synthetic/paper exchange only"]
+          },
+          {
+            "name": "Freqtrade dry-run",
+            "kind": "cli",
+            "reference": "freqtrade/freqtrade:dry-run",
+            "priority": 2,
+            "readOnly": false,
+            "constraints": ["Dry-run only; live mode forbidden"]
+          },
+          {
+            "name": "Alpaca Paper Trading Skill",
+            "kind": "api",
+            "reference": "market:alpacahq/alpaca-skills:paper-trading",
+            "priority": 3,
+            "readOnly": false,
+            "constraints": ["Paper environment only"]
+          },
+          {
+            "name": "Kraken Paper Strategy Skill",
+            "kind": "cli",
+            "reference": "market:krakenfx/kraken-cli:kraken-paper-strategy",
+            "priority": 4,
+            "readOnly": false,
+            "constraints": ["Paper commands only"]
+          },
+          {
+            "name": "Binance Copy Trader dry-run adaptation",
+            "kind": "cli",
+            "reference": "market:binance/binance-skills-hub:binance-onchain-copy-trader",
+            "priority": 5,
+            "readOnly": false,
+            "constraints": ["Rakazo adaptation must permanently disable live mode/order submission"]
+          },
+          {
+            "name": "Bitget Agent Skill — paper mode",
+            "kind": "cli",
+            "reference": "market:Bitget-AI/agent-skill:bitget",
+            "priority": 6,
+            "readOnly": false,
+            "constraints": [
+              "Use --paper-trading for every write-like operation; never mix live and demo credentials in the PAPER Project"
+            ]
+          },
+          {
+            "name": "Crypto.com Exchange — cdcx paper",
+            "kind": "cli",
+            "reference": "market:crypto-com/crypto-agent-trading:crypto-com-exchange",
+            "priority": 7,
+            "readOnly": false,
+            "constraints": [
+              "Use cdcx paper simulator only; exclude live trade/account/funds mutations"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "defi.protocol.metrics",
+      "name": "DeFi protocol metrics resolution",
+      "description": "Known read-only sources for protocol TVL and ecosystem metrics.",
+      "tags": ["defi", "tvl", "protocols", "metrics", "read-only"],
+      "content": {
+        "semanticKey": "defi.protocol.metrics",
+        "implementations": [
+          {
+            "name": "DefiLlama protocol/TVL data",
+            "kind": "api",
+            "reference": "DefiLlama/DefiLlama-Adapters",
+            "priority": 1,
+            "readOnly": true,
+            "constraints": ["Read-only protocol/TVL analytics; no transaction execution"]
+          }
+        ]
+      }
+    },
+    {
+      "key": "market.data.provider",
+      "name": "Additional market-data provider resolution",
+      "description": "Known read-only market-data SDKs that complement exchange-native feeds.",
+      "tags": ["market-data", "equities", "futures", "read-only"],
+      "content": {
+        "semanticKey": "market.data.provider",
+        "implementations": [
+          {
+            "name": "Massive market-data Python client",
+            "kind": "api",
+            "reference": "massive-com/client-python",
+            "priority": 1,
+            "readOnly": true,
+            "constraints": ["Market-data access only; subscription/data-plan limits may apply"]
+          },
+          {
+            "name": "Hyperliquid SDK info endpoints",
+            "kind": "api",
+            "reference": "hyperliquid-dex/hyperliquid-python-sdk",
+            "priority": 2,
+            "readOnly": true,
+            "constraints": ["Info/read methods only; no exchange/order actions"]
+          },
+          {
+            "name": "Bitget public market data",
+            "kind": "cli",
+            "reference": "market:Bitget-AI/agent-skill:bitget",
+            "priority": 3,
+            "readOnly": true,
+            "constraints": [
+              "Use public market, ticker, orderbook, candles, funding and open-interest reads only"
+            ]
+          },
+          {
+            "name": "Crypto.com Exchange market data",
+            "kind": "cli",
+            "reference": "market:crypto-com/crypto-agent-trading:crypto-com-exchange",
+            "priority": 4,
+            "readOnly": true,
+            "constraints": [
+              "Use cdcx market/stream read paths only; no API credentials required for market data"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "signal.discovery",
+      "name": "Trading signal discovery resolution",
+      "description": "Known read-only signal and ranking workflows for generating PAPER trading candidates before strategy/risk filters.",
+      "tags": ["signals", "smart-money", "rankings", "onchain", "read-only"],
+      "content": {
+        "semanticKey": "signal.discovery",
+        "implementations": [
+          {
+            "name": "CCXT trading-signal Agent Skill",
+            "kind": "api",
+            "reference": "market:ccxt/ccxt:trading-signal",
+            "priority": 1,
+            "readOnly": true,
+            "constraints": [
+              "Read-only per-trade smart-money signals; no strategy mutation or order execution"
+            ]
+          },
+          {
+            "name": "CCXT crypto-market-rank Agent Skill",
+            "kind": "api",
+            "reference": "market:ccxt/ccxt:crypto-market-rank",
+            "priority": 2,
+            "readOnly": true,
+            "constraints": [
+              "Read-only market rankings, smart-money inflows, social hype and top-trader PnL"
+            ]
+          },
+          {
+            "name": "OKX OnchainOS DEX Market Skill",
+            "kind": "cli",
+            "reference": "market:okx/onchainos-skills:okx-dex-market",
+            "priority": 3,
+            "readOnly": true,
+            "constraints": ["Use signal, tracker, leaderboard and market-data read paths only"]
+          },
+          {
+            "name": "Binance Wallet Tracker PAPER adaptation",
+            "kind": "cli",
+            "reference": "market:binance/binance-skills-hub:binance-wallet-tracker",
+            "priority": 4,
+            "readOnly": true,
+            "constraints": [
+              "Use public KOL/Smart Money query and replay analytics; exclude group/follow mutations from default route"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "market.analysis",
+      "name": "Market analysis workflow resolution",
+      "description": "First-party analytical workflows for macro, market intelligence, news, sentiment and technical analysis before PAPER signal selection.",
+      "tags": ["analysis", "macro", "sentiment", "technical", "news", "market-intel"],
+      "content": {
+        "semanticKey": "market.analysis",
+        "implementations": [
+          {
+            "name": "Bitget Macro Analyst Skill",
+            "kind": "api",
+            "reference": "market:Bitget-AI/bitget-signal:macro-analyst",
+            "priority": 1,
+            "readOnly": true,
+            "constraints": [
+              "Reuse analytical workflow with Rakazo research/market-data capabilities; do not auto-connect the original external MCP"
+            ]
+          },
+          {
+            "name": "Bitget Market Intel Skill",
+            "kind": "api",
+            "reference": "market:Bitget-AI/bitget-signal:market-intel",
+            "priority": 2,
+            "readOnly": true,
+            "constraints": [
+              "Reuse flows/OI/on-chain reasoning with Resolver-selected data sources; no external MCP auto-install"
+            ]
+          },
+          {
+            "name": "Bitget Sentiment Analyst Skill",
+            "kind": "api",
+            "reference": "market:Bitget-AI/bitget-signal:sentiment-analyst",
+            "priority": 3,
+            "readOnly": true,
+            "constraints": [
+              "Use positioning/funding/OI framework with Rakazo data sources; no trading execution"
+            ]
+          },
+          {
+            "name": "Bitget Technical Analysis Skill",
+            "kind": "api",
+            "reference": "market:Bitget-AI/bitget-signal:technical-analysis",
+            "priority": 4,
+            "readOnly": true,
+            "constraints": [
+              "Use indicator workflow on Resolver-provided OHLCV; dependency installation is separate from Skill execution"
+            ]
+          },
+          {
+            "name": "Bitget News Briefing Skill",
+            "kind": "api",
+            "reference": "market:Bitget-AI/bitget-signal:news-briefing",
+            "priority": 5,
+            "readOnly": true,
+            "constraints": [
+              "Use news synthesis workflow with Rakazo research sources; no external MCP auto-install"
+            ]
+          }
+        ]
+      }
     }
   ]
 }
