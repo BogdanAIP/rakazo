@@ -3768,6 +3768,9 @@ export function createRouter(deps: RouterDeps) {
       import: authed.market.import.handler(({ context, input }) =>
         market.importEntry(context.actor, input),
       ),
+      importBatch: authed.market.importBatch.handler(({ context, input }) =>
+        market.importBatch(context.actor, input.items),
+      ),
       adapt: authed.market.adapt.handler(({ context, input }) =>
         market.adapt(context.actor, input),
       ),
