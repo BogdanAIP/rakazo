@@ -33,6 +33,9 @@ export const CURATED_MARKET_REPOSITORIES = {
   "alpacahq/alpaca-skills": { license: "Apache-2.0" },
   "okx/agent-trade-kit": { license: "MIT" },
   "okx/onchainos-skills": { license: "MIT" },
+  "binance/binance-skills-hub": {
+    license: "per-skill unspecified; private/internal use from official Skills Hub",
+  },
   "coinbase/agentic-wallet-skills": { license: "MIT" },
   "BogdanAIP/rakazo": { license: "repository license" },
 } as const;
