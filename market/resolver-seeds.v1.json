@@ -5,11 +5,7 @@
       "key": "browser.semantic",
       "name": "Browser semantic resolution",
       "description": "Known implementations for structured browser interaction.",
-      "tags": [
-        "browser",
-        "semantic",
-        "automation"
-      ],
+      "tags": ["browser", "semantic", "automation"],
       "content": {
         "semanticKey": "browser.semantic",
         "implementations": [
@@ -19,9 +15,7 @@
             "reference": "microsoft/playwright-mcp",
             "priority": 1,
             "readOnly": false,
-            "constraints": [
-              "must be installed and authorized for the Project"
-            ]
+            "constraints": ["must be installed and authorized for the Project"]
           },
           {
             "name": "Rakazo OpenCLI browser",
@@ -29,9 +23,7 @@
             "reference": "rakazo:opencli",
             "priority": 2,
             "readOnly": false,
-            "constraints": [
-              "requires linked Windows Host and owned browser session"
-            ]
+            "constraints": ["requires linked Windows Host and owned browser session"]
           },
           {
             "name": "Chrome DevTools MCP",
@@ -50,12 +42,7 @@
       "key": "browser.debug",
       "name": "Browser debugging resolution",
       "description": "Known implementations for console, network, DOM and performance diagnostics.",
-      "tags": [
-        "browser",
-        "debug",
-        "network",
-        "performance"
-      ],
+      "tags": ["browser", "debug", "network", "performance"],
       "content": {
         "semanticKey": "browser.debug",
         "implementations": [
@@ -65,9 +52,7 @@
             "reference": "ChromeDevTools/chrome-devtools-mcp",
             "priority": 1,
             "readOnly": false,
-            "constraints": [
-              "must be installed and authorized"
-            ]
+            "constraints": ["must be installed and authorized"]
           },
           {
             "name": "Microsoft Playwright MCP",
@@ -75,9 +60,7 @@
             "reference": "microsoft/playwright-mcp",
             "priority": 2,
             "readOnly": false,
-            "constraints": [
-              "must be installed and authorized"
-            ]
+            "constraints": ["must be installed and authorized"]
           },
           {
             "name": "Rakazo OpenCLI browser",
@@ -85,9 +68,7 @@
             "reference": "rakazo:opencli",
             "priority": 3,
             "readOnly": false,
-            "constraints": [
-              "requires linked Windows Host"
-            ]
+            "constraints": ["requires linked Windows Host"]
           }
         ]
       }
@@ -96,12 +77,7 @@
       "key": "browser.visual",
       "name": "Visual browser/desktop resolution",
       "description": "Known implementations for screenshots and visual fallback.",
-      "tags": [
-        "browser",
-        "desktop",
-        "screenshot",
-        "visual"
-      ],
+      "tags": ["browser", "desktop", "screenshot", "visual"],
       "content": {
         "semanticKey": "browser.visual",
         "implementations": [
@@ -111,9 +87,7 @@
             "reference": "rakazo:windows-host:screen.observe",
             "priority": 1,
             "readOnly": true,
-            "constraints": [
-              "requires linked running Windows Host"
-            ]
+            "constraints": ["requires linked running Windows Host"]
           },
           {
             "name": "Rakazo OpenCLI screenshot",
@@ -121,9 +95,7 @@
             "reference": "rakazo:opencli:screenshot",
             "priority": 2,
             "readOnly": true,
-            "constraints": [
-              "requires owned OpenCLI browser session"
-            ]
+            "constraints": ["requires owned OpenCLI browser session"]
           },
           {
             "name": "Chrome DevTools MCP screenshot",
@@ -131,9 +103,7 @@
             "reference": "ChromeDevTools/chrome-devtools-mcp",
             "priority": 3,
             "readOnly": true,
-            "constraints": [
-              "must be installed and authorized"
-            ]
+            "constraints": ["must be installed and authorized"]
           }
         ]
       }
@@ -142,12 +112,7 @@
       "key": "repo.read",
       "name": "Repository read resolution",
       "description": "Known implementations for reading Project repository state.",
-      "tags": [
-        "git",
-        "github",
-        "repository",
-        "read"
-      ],
+      "tags": ["git", "github", "repository", "read"],
       "content": {
         "semanticKey": "repo.read",
         "implementations": [
@@ -167,9 +132,7 @@
             "reference": "rakazo:windows-host:git",
             "priority": 2,
             "readOnly": true,
-            "constraints": [
-              "requires linked Project worktree on an authorized Computer"
-            ]
+            "constraints": ["requires linked Project worktree on an authorized Computer"]
           }
         ]
       }
@@ -178,12 +141,7 @@
       "key": "repo.write",
       "name": "Repository write resolution",
       "description": "Known implementations for Project-scoped repository mutations.",
-      "tags": [
-        "git",
-        "github",
-        "repository",
-        "write"
-      ],
+      "tags": ["git", "github", "repository", "write"],
       "content": {
         "semanticKey": "repo.write",
         "implementations": [
@@ -193,9 +151,7 @@
             "reference": "github/github-mcp-server",
             "priority": 1,
             "readOnly": false,
-            "constraints": [
-              "requires exact Project github.repo autonomous_write grant"
-            ]
+            "constraints": ["requires exact Project github.repo autonomous_write grant"]
           },
           {
             "name": "Rakazo local git",
@@ -203,9 +159,7 @@
             "reference": "rakazo:windows-host:git",
             "priority": 2,
             "readOnly": false,
-            "constraints": [
-              "requires linked verified worktree and normal Computer control policy"
-            ]
+            "constraints": ["requires linked verified worktree and normal Computer control policy"]
           }
         ]
       }
@@ -214,11 +168,7 @@
       "key": "computer.exec",
       "name": "Computer command execution resolution",
       "description": "Known implementation for bounded command execution on a linked Computer.",
-      "tags": [
-        "computer",
-        "terminal",
-        "exec"
-      ],
+      "tags": ["computer", "terminal", "exec"],
       "content": {
         "semanticKey": "computer.exec",
         "implementations": [
@@ -228,9 +178,7 @@
             "reference": "rakazo:computer/exec",
             "priority": 1,
             "readOnly": false,
-            "constraints": [
-              "requires linked running desktop Computer and active control lease"
-            ]
+            "constraints": ["requires linked running desktop Computer and active control lease"]
           }
         ]
       }
@@ -239,10 +187,7 @@
       "key": "computer.files",
       "name": "Computer file resolution",
       "description": "Known implementation for bounded file access on a linked Computer.",
-      "tags": [
-        "computer",
-        "files"
-      ],
+      "tags": ["computer", "files"],
       "content": {
         "semanticKey": "computer.files",
         "implementations": [
@@ -263,11 +208,7 @@
       "key": "research.web",
       "name": "Web research resolution",
       "description": "Known research/search implementations available to Rakazo projects.",
-      "tags": [
-        "research",
-        "web",
-        "search"
-      ],
+      "tags": ["research", "web", "search"],
       "content": {
         "semanticKey": "research.web",
         "implementations": [
@@ -277,9 +218,7 @@
             "reference": "rakazo:openresearch",
             "priority": 1,
             "readOnly": true,
-            "constraints": [
-              "must be registered/available for the current workspace"
-            ]
+            "constraints": ["must be registered/available for the current workspace"]
           },
           {
             "name": "General web search",
@@ -287,9 +226,7 @@
             "reference": "chatgpt:web-search",
             "priority": 2,
             "readOnly": true,
-            "constraints": [
-              "available only when the calling ChatGPT surface exposes web search"
-            ]
+            "constraints": ["available only when the calling ChatGPT surface exposes web search"]
           }
         ]
       }
@@ -298,11 +235,7 @@
       "key": "media.capture",
       "name": "Media capture resolution",
       "description": "Known screenshot/screen-capture implementations for Project media workflows.",
-      "tags": [
-        "media",
-        "screenshot",
-        "capture"
-      ],
+      "tags": ["media", "screenshot", "capture"],
       "content": {
         "semanticKey": "media.capture",
         "implementations": [
@@ -312,9 +245,7 @@
             "reference": "rakazo:windows-host:screen.observe",
             "priority": 1,
             "readOnly": true,
-            "constraints": [
-              "requires linked running Windows Host"
-            ]
+            "constraints": ["requires linked running Windows Host"]
           },
           {
             "name": "Rakazo OpenCLI screenshot",
@@ -322,9 +253,7 @@
             "reference": "rakazo:opencli:screenshot",
             "priority": 2,
             "readOnly": true,
-            "constraints": [
-              "requires owned browser session"
-            ]
+            "constraints": ["requires owned browser session"]
           },
           {
             "name": "Chrome DevTools MCP screenshot",
@@ -332,9 +261,7 @@
             "reference": "ChromeDevTools/chrome-devtools-mcp",
             "priority": 3,
             "readOnly": true,
-            "constraints": [
-              "must be installed and authorized"
-            ]
+            "constraints": ["must be installed and authorized"]
           }
         ]
       }
@@ -343,12 +270,7 @@
       "key": "market.data",
       "name": "Trading market data resolution",
       "description": "Known first-party read-only market-data implementations for trading research and signal generation.",
-      "tags": [
-        "trading",
-        "market-data",
-        "research",
-        "read-only"
-      ],
+      "tags": ["trading", "market-data", "research", "read-only"],
       "content": {
         "semanticKey": "market.data",
         "implementations": [
@@ -419,12 +341,7 @@
       "key": "defi.data",
       "name": "DeFi research resolution",
       "description": "Known first-party DeFi analysis/planning implementations for PAPER trading research.",
-      "tags": [
-        "defi",
-        "yield",
-        "liquidity",
-        "research"
-      ],
+      "tags": ["defi", "yield", "liquidity", "research"],
       "content": {
         "semanticKey": "defi.data",
         "implementations": [
@@ -485,12 +402,7 @@
       "key": "trading.paper",
       "name": "Paper trading resolution",
       "description": "Known first-party paper-trading/backtest workflows. This semantic key is Market knowledge and does not grant trading.execute.",
-      "tags": [
-        "paper",
-        "trading",
-        "backtest",
-        "simulation"
-      ],
+      "tags": ["paper", "trading", "backtest", "simulation"],
       "content": {
         "semanticKey": "trading.paper",
         "implementations": [
@@ -530,9 +442,7 @@
             "reference": "market:krakenfx/kraken-cli:recipe-paper-strategy-backtest",
             "priority": 4,
             "readOnly": false,
-            "constraints": [
-              "Simulation/backtest only"
-            ]
+            "constraints": ["Simulation/backtest only"]
           }
         ]
       }
