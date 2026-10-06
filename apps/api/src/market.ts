@@ -38,6 +38,7 @@ export const CURATED_MARKET_REPOSITORIES = {
   },
   "tradingview/lightweight-charts": { license: "Apache-2.0" },
   "Bitget-AI/agent-skill": { license: "MIT" },
+  "Bitget-AI/bitget-signal": { license: "MIT" },
   "crypto-com/crypto-agent-trading": { license: "Apache-2.0" },
   "ccxt/ccxt": { license: "MIT" },
   "coinbase/agentic-wallet-skills": { license: "MIT" },
