@@ -179,7 +179,9 @@ describe("Market Skills + Market Resolver service", () => {
       tags: ["research"],
       content: originalSkill(),
       sourceUrl:
-        "https://github.com/anthropics/claude-plugins-official/blob/" + sourceRef + "/skills/paper/SKILL.md",
+        "https://github.com/anthropics/claude-plugins-official/blob/" +
+        sourceRef +
+        "/skills/paper/SKILL.md",
       repository: "anthropics/claude-plugins-official",
       sourcePath: "skills/paper/SKILL.md",
       sourceRef,
@@ -229,7 +231,9 @@ describe("Market Skills + Market Resolver service", () => {
       tags: [],
       content: originalSkill(),
       sourceUrl:
-        "https://github.com/anthropics/claude-plugins-official/blob/" + sourceRef + "/skills/paper/SKILL.md",
+        "https://github.com/anthropics/claude-plugins-official/blob/" +
+        sourceRef +
+        "/skills/paper/SKILL.md",
       repository: "anthropics/claude-plugins-official",
       sourcePath: "skills/paper/SKILL.md",
       sourceRef,
@@ -262,7 +266,10 @@ describe("Market Skills + Market Resolver service", () => {
       key: "browser-investigation@" + sourceRef,
       tags: ["browser", "debug"],
       content: originalSkill("Browser Investigation"),
-      sourceUrl: "https://github.com/anthropics/claude-plugins-official/blob/" + sourceRef + "/browser/SKILL.md",
+      sourceUrl:
+        "https://github.com/anthropics/claude-plugins-official/blob/" +
+        sourceRef +
+        "/browser/SKILL.md",
       repository: "anthropics/claude-plugins-official",
       sourcePath: "browser/SKILL.md",
       ...shared,
@@ -272,7 +279,10 @@ describe("Market Skills + Market Resolver service", () => {
       key: "paper-analysis@" + sourceRef,
       tags: ["research"],
       content: originalSkill(),
-      sourceUrl: "https://github.com/anthropics/claude-plugins-official/blob/" + sourceRef + "/paper/SKILL.md",
+      sourceUrl:
+        "https://github.com/anthropics/claude-plugins-official/blob/" +
+        sourceRef +
+        "/paper/SKILL.md",
       repository: "anthropics/claude-plugins-official",
       sourcePath: "paper/SKILL.md",
       ...shared,
