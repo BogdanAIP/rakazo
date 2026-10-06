@@ -57,6 +57,14 @@ interface PlaywrightCliJson {
   browsers?: unknown;
 }
 
+interface SnapshotAnnotation {
+  ref: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export type PlaywrightCliRunner = (
   entry: string,
   argv: string[],
@@ -231,6 +239,101 @@ function parseTabs(result: unknown): BrowserTab[] {
   return tabs;
 }
 
+function snapshotAnnotations(snapshot: unknown): SnapshotAnnotation[] {
+  const annotations: SnapshotAnnotation[] = [];
+  const seen = new Set<string>();
+  const visit = (value: unknown) => {
+    if (annotations.length >= 80) return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    const record = value as Record<string, unknown>;
+    const ref = typeof record.ref === "string" ? record.ref : undefined;
+    const box =
+      record.box && typeof record.box === "object" && !Array.isArray(record.box)
+        ? (record.box as Record<string, unknown>)
+        : undefined;
+    if (
+      ref &&
+      /^e\d{1,6}$/u.test(ref) &&
+      box &&
+      !seen.has(ref) &&
+      [box.x, box.y, box.width, box.height].every(
+        (part) => typeof part === "number" && Number.isFinite(part),
+      )
+    ) {
+      const x = Number(box.x);
+      const y = Number(box.y);
+      const width = Number(box.width);
+      const height = Number(box.height);
+      if (
+        width > 0 &&
+        height > 0 &&
+        Math.abs(x) <= 100_000 &&
+        Math.abs(y) <= 100_000 &&
+        width <= 100_000 &&
+        height <= 100_000
+      ) {
+        seen.add(ref);
+        annotations.push({ ref, x, y, width, height });
+      }
+    }
+    for (const child of Object.values(record)) visit(child);
+  };
+  visit(snapshot);
+  return annotations;
+}
+
+function annotationOverlayScript(annotations: SnapshotAnnotation[]): string {
+  const data = JSON.stringify(annotations);
+  return `() => {
+    document.querySelectorAll('[data-rakazo-annotation-root]').forEach((node) => node.remove());
+    const data = ${data};
+    const root = document.createElement('div');
+    root.setAttribute('data-rakazo-annotation-root', '1');
+    Object.assign(root.style, {
+      position: 'fixed',
+      inset: '0',
+      zIndex: '2147483647',
+      pointerEvents: 'none',
+    });
+    for (const item of data) {
+      const box = document.createElement('div');
+      Object.assign(box.style, {
+        position: 'fixed',
+        left: item.x + 'px',
+        top: item.y + 'px',
+        width: item.width + 'px',
+        height: item.height + 'px',
+        border: '2px solid #ff2d55',
+        boxSizing: 'border-box',
+        pointerEvents: 'none',
+      });
+      const label = document.createElement('span');
+      label.textContent = item.ref;
+      Object.assign(label.style, {
+        position: 'absolute',
+        left: '-2px',
+        top: '-18px',
+        padding: '1px 4px',
+        background: '#ff2d55',
+        color: '#fff',
+        font: '12px/16px monospace',
+        whiteSpace: 'nowrap',
+      });
+      box.appendChild(label);
+      root.appendChild(box);
+    }
+    document.documentElement.appendChild(root);
+    return data.length;
+  }`;
+}
+
+const REMOVE_ANNOTATION_OVERLAY_SCRIPT =
+  "() => document.querySelectorAll('[data-rakazo-annotation-root]').forEach((node) => node.remove())";
+
 function listedBrowsers(value: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(value)) return [];
   return value.filter(
@@ -384,7 +487,7 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
     }
 
     if (request.command === "screenshot") {
-      return this.screenshot(session, request);
+      return this.screenshot(session, state, request);
     }
 
     if (request.command === "tabNew") {
@@ -675,15 +778,9 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
 
   private async screenshot(
     session: string,
+    state: PlaywrightCliSessionState,
     request: Extract<WindowsHostBrowserRequest, { command: "screenshot" }>,
   ): Promise<WindowsHostBrowserResult> {
-    if (request.annotate) {
-      return {
-        ok: false,
-        error:
-          "Playwright screenshot annotation is explicitly not implemented yet; production parity gate remains closed",
-      };
-    }
     if ((request.width === undefined) !== (request.height === undefined)) {
       return {
         ok: false,
@@ -691,9 +788,21 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
       };
     }
     if (request.width !== undefined && request.height !== undefined) {
+      state.observation = undefined;
       parseJson(
         await this.invoke(session, ["resize", String(request.width), String(request.height)]),
       );
+    }
+
+    let overlayInstalled = false;
+    if (request.annotate) {
+      state.observation = undefined;
+      const snapshot = parseJson(await this.invoke(session, ["snapshot", "--boxes"]));
+      const annotations = snapshotAnnotations(snapshot.snapshot);
+      if (annotations.length > 0) {
+        parseJson(await this.invoke(session, ["eval", annotationOverlayScript(annotations)]));
+        overlayInstalled = true;
+      }
     }
 
     const fileName = `rakazo-playwright-${randomUUID()}.png`;
@@ -711,6 +820,15 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
       return { ok: true, imageBase64: image.toString("base64"), mimeType: "image/png" };
     } finally {
       await unlink(screenshotPath).catch(() => undefined);
+      if (overlayInstalled) {
+        try {
+          parseJson(await this.invoke(session, ["eval", REMOVE_ANNOTATION_OVERLAY_SCRIPT]));
+        } catch {
+          // The screenshot itself is already bounded and complete. Drop all
+          // observation refs if cleanup could not be confirmed.
+          state.observation = undefined;
+        }
+      }
     }
   }
 
