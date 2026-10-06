@@ -49,8 +49,28 @@ type Row = {
 
 function setup() {
   const rows: Row[] = [];
-  const matches = (row: Row, where: Record<string, unknown>) =>
-    Object.entries(where).every(([key, value]) => row[key as keyof Row] === value);
+  const matches = (row: Row, where: Record<string, unknown>): boolean =>
+    Object.entries(where).every(([key, value]) => {
+      if (key === "OR" && Array.isArray(value)) {
+        return value.some(
+          (candidate) =>
+            candidate &&
+            typeof candidate === "object" &&
+            matches(row, candidate as Record<string, unknown>),
+        );
+      }
+      const rowValue = row[key as keyof Row];
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        const filter = value as Record<string, unknown>;
+        if (typeof rowValue === "string" && typeof filter.contains === "string") {
+          return rowValue.toLowerCase().includes(filter.contains.toLowerCase());
+        }
+        if (Array.isArray(rowValue) && Array.isArray(filter.hasSome)) {
+          return filter.hasSome.some((item) => rowValue.includes(String(item)));
+        }
+      }
+      return rowValue === value;
+    });
 
   const marketEntry = {
     findMany: vi.fn(async ({ where, take }: { where: Record<string, unknown>; take: number }) =>
