@@ -3,18 +3,19 @@ import path from "node:path";
 
 export const WINDOWS_BROWSER_BACKEND_MODES = [
   "opencli",
+  "playwright-cli-cdp",
   "playwright-cli-extension",
   "playwright-cli-persistent",
   "auto",
 ] as const;
 
 export type WindowsBrowserBackendMode = (typeof WINDOWS_BROWSER_BACKEND_MODES)[number];
-export type PlaywrightExtensionBrowser = "chrome" | "msedge";
+export type PlaywrightCliBrowserChannel = "chrome" | "msedge";
 
 export interface PlaywrightCliConfiguration {
   mode: WindowsBrowserBackendMode;
   entry: string | null;
-  extensionBrowser: PlaywrightExtensionBrowser | null;
+  browserChannel: PlaywrightCliBrowserChannel | null;
   userDataDir: string | null;
 }
 
@@ -22,7 +23,7 @@ export interface PlaywrightCliProbe {
   mode: WindowsBrowserBackendMode;
   ready: boolean;
   entryAvailable: boolean;
-  extensionBrowser: PlaywrightExtensionBrowser | null;
+  browserChannel: PlaywrightCliBrowserChannel | null;
   userDataDirConfigured: boolean;
   reason: string | null;
 }
@@ -47,11 +48,11 @@ function optionalAbsolutePath(value: string | undefined, label: string): string 
   return windowsAbsolute ? path.win32.normalize(trimmed) : path.normalize(trimmed);
 }
 
-function optionalExtensionBrowser(value: string | undefined): PlaywrightExtensionBrowser | null {
+function optionalBrowserChannel(value: string | undefined): PlaywrightCliBrowserChannel | null {
   const browser = value?.trim();
   if (!browser) return null;
   if (browser === "chrome" || browser === "msedge") return browser;
-  throw new Error("RAKAZO_PLAYWRIGHT_EXTENSION_BROWSER must be chrome or msedge");
+  throw new Error("RAKAZO_PLAYWRIGHT_BROWSER_CHANNEL must be chrome or msedge");
 }
 
 export function loadPlaywrightCliConfiguration(
@@ -60,7 +61,7 @@ export function loadPlaywrightCliConfiguration(
   return {
     mode: parseMode(env.RAKAZO_BROWSER_BACKEND),
     entry: optionalAbsolutePath(env.RAKAZO_PLAYWRIGHT_CLI_ENTRY, "RAKAZO_PLAYWRIGHT_CLI_ENTRY"),
-    extensionBrowser: optionalExtensionBrowser(env.RAKAZO_PLAYWRIGHT_EXTENSION_BROWSER),
+    browserChannel: optionalBrowserChannel(env.RAKAZO_PLAYWRIGHT_BROWSER_CHANNEL),
     userDataDir: optionalAbsolutePath(
       env.RAKAZO_PLAYWRIGHT_USER_DATA_DIR,
       "RAKAZO_PLAYWRIGHT_USER_DATA_DIR",
@@ -82,9 +83,14 @@ export function probePlaywrightCli(
     case "opencli":
       reason = "Playwright CLI is not selected.";
       break;
+    case "playwright-cli-cdp":
+      if (!entryAvailable) reason = "Pinned Playwright CLI entry is unavailable.";
+      else if (!config.browserChannel) reason = "Explicit browser channel is required.";
+      else ready = true;
+      break;
     case "playwright-cli-extension":
       if (!entryAvailable) reason = "Pinned Playwright CLI entry is unavailable.";
-      else if (!config.extensionBrowser) reason = "Explicit extension browser is required.";
+      else if (!config.browserChannel) reason = "Explicit browser channel is required.";
       else ready = true;
       break;
     case "playwright-cli-persistent":
@@ -103,7 +109,7 @@ export function probePlaywrightCli(
     mode: config.mode,
     ready,
     entryAvailable,
-    extensionBrowser: config.extensionBrowser,
+    browserChannel: config.browserChannel,
     userDataDirConfigured,
     reason,
   };
