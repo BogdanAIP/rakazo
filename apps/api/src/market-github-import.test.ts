@@ -125,6 +125,8 @@ describe("Market curated GitHub import", () => {
 
     expect(first).toHaveLength(2);
     expect(second.map((entry) => entry.key)).toEqual(first.map((entry) => entry.key));
+    expect(first[0]).not.toHaveProperty("originalContent");
+    expect(first[0]).not.toHaveProperty("adaptedContent");
     expect(fetch).toHaveBeenCalledTimes(4);
     expect(marketEntry.create).toHaveBeenCalledTimes(2);
   });
