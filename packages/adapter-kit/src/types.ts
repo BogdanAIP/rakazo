@@ -249,7 +249,7 @@ export interface ConnectorCall {
 export type ConnectorEvent =
   | { type: "log"; message: string }
   | { type: "result"; data: unknown }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string; logIds?: string[] };
 
 export interface ConnectorCapabilities {
   discover: boolean;

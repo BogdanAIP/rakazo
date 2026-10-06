@@ -5978,7 +5978,19 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   });
                 }
               }
-              if (event.type === "error") result = { error: event.message };
+              if (event.type === "error") {
+                result = { error: event.message };
+                for (const logId of event.logIds ?? []) {
+                  await deps.events.append({
+                    spaceId: run.spaceId,
+                    threadId: thread.id,
+                    botId: bot.id,
+                    runId: run.id,
+                    type: "effect.recorded",
+                    payload: { tool: name, logId },
+                  });
+                }
+              }
             }
             return finish(result);
           }
