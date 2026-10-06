@@ -153,6 +153,17 @@ function catalogEntry(row: MarketEntryRow): MarketCatalogEntry {
   return catalog;
 }
 
+function catalogFromEntry(entry: MarketEntry): MarketCatalogEntry {
+  const {
+    originalContent: _originalContent,
+    adaptedContent: _adaptedContent,
+    metrics: _metrics,
+    metadata: _metadata,
+    ...catalog
+  } = entry;
+  return catalog;
+}
+
 function sha256(content: string): string {
   return createHash("sha256").update(content, "utf8").digest("hex");
 }
@@ -486,18 +497,18 @@ export function createMarketService(
       actor: Actor,
       items: GithubImportInput[],
       signal?: AbortSignal,
-    ): Promise<MarketEntry[]> {
-      const imported: MarketEntry[] = [];
+    ): Promise<MarketCatalogEntry[]> {
+      const imported: MarketCatalogEntry[] = [];
       for (const item of items) {
-        imported.push(await this.importGithub(actor, item, signal));
+        imported.push(catalogFromEntry(await this.importGithub(actor, item, signal)));
       }
       return imported;
     },
 
-    async importBatch(actor: Actor, items: ImportInput[]): Promise<MarketEntry[]> {
-      const imported: MarketEntry[] = [];
+    async importBatch(actor: Actor, items: ImportInput[]): Promise<MarketCatalogEntry[]> {
+      const imported: MarketCatalogEntry[] = [];
       for (const item of items) {
-        imported.push(await this.importEntry(actor, item));
+        imported.push(catalogFromEntry(await this.importEntry(actor, item)));
       }
       return imported;
     },
