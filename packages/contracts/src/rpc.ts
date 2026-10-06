@@ -768,6 +768,21 @@ export const appContract = {
           }),
       )
       .output(MarketEntrySchema),
+    importGithub: oc
+      .input(
+        z.object({
+          kind: MarketEntryKindSchema,
+          key: z.string().trim().min(1).max(500),
+          name: z.string().trim().min(1).max(120).optional(),
+          description: z.string().trim().max(2_000).optional(),
+          tags: z.array(z.string().trim().min(1).max(80)).max(50).default([]),
+          repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
+          sourcePath: z.string().trim().min(1).max(2_048),
+          sourceRef: z.string().regex(/^[0-9a-f]{40}$/),
+          metadata: z.record(z.string(), z.unknown()).default({}),
+        }),
+      )
+      .output(MarketEntrySchema),
     import: oc
       .input(
         z.object({
