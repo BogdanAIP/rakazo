@@ -147,6 +147,76 @@ describe("Market Skills + Market Resolver service", () => {
     ).rejects.toThrow("different source/provenance");
   });
 
+  it("imports resolver/data batches idempotently without bypassing per-entry validation", async () => {
+    const { service, marketEntry } = setup();
+    const shared = {
+      tags: ["resolver"],
+      repository: "BogdanAIP/rakazo",
+      sourcePath: "market/resolver-seeds.v1.json",
+      sourceRef,
+      license: "repository license",
+      trust: "curated" as const,
+      metadata: { batch: "resolver-v1" },
+    };
+    const items = [
+      {
+        kind: "resolver" as const,
+        key: "market.data@" + sourceRef,
+        name: "Market data resolver",
+        description: "Read-only market data routes.",
+        content: JSON.stringify({
+          semanticKey: "market.data",
+          implementations: [
+            {
+              name: "Public market data",
+              kind: "api",
+              reference: "market:test",
+              priority: 1,
+              readOnly: true,
+              constraints: ["read-only"],
+            },
+          ],
+        }),
+        sourceUrl:
+          "https://github.com/BogdanAIP/rakazo/blob/" +
+          sourceRef +
+          "/market/resolver-seeds.v1.json",
+        ...shared,
+      },
+      {
+        kind: "resolver" as const,
+        key: "market.risk@" + sourceRef,
+        name: "Market risk resolver",
+        description: "Read-only market risk routes.",
+        content: JSON.stringify({
+          semanticKey: "market.risk",
+          implementations: [
+            {
+              name: "Public risk data",
+              kind: "api",
+              reference: "market:risk-test",
+              priority: 1,
+              readOnly: true,
+              constraints: ["read-only"],
+            },
+          ],
+        }),
+        sourceUrl:
+          "https://github.com/BogdanAIP/rakazo/blob/" +
+          sourceRef +
+          "/market/resolver-seeds.v1.json",
+        ...shared,
+      },
+    ];
+
+    const first = await service.importBatch(actor, items);
+    const second = await service.importBatch(actor, items);
+
+    expect(first).toHaveLength(2);
+    expect(second.map((entry) => entry.key)).toEqual(first.map((entry) => entry.key));
+    expect(marketEntry.create).toHaveBeenCalledTimes(2);
+  });
+
   it("indexes Resolver knowledge as data rather than executable authority", async () => {
     const { service } = setup();
     const resolver = JSON.stringify({
