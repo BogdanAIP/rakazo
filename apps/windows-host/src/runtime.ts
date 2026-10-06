@@ -9,6 +9,7 @@ import {
   WindowsHostHeartbeatSchema,
 } from "@rakazo/contracts";
 import type { WindowsBrowserBackend } from "./browser-backend.js";
+import { createWindowsBrowserBackend } from "./browser-backend-factory.js";
 import type { WindowsHostConfig } from "./config.js";
 import {
   ProtectedWindowsHostCredentialStore,
@@ -131,7 +132,9 @@ export class WindowsHostRuntime {
     private readonly readOnlyBackend: WindowsHostReadOnlyBackend = new WindowsHostReadOnlyBackend(
       config.stateDir,
     ),
-    private readonly browserBackend: WindowsBrowserBackend = new WindowsOpenCliBackend(),
+    private readonly browserBackend: WindowsBrowserBackend = createWindowsBrowserBackend(
+      config.stateDir,
+    ),
     private readonly guiBackend: WindowsGuiBackend = new WindowsGuiBackend(),
     private readonly processBackend: WindowsProcessBackend = new WindowsProcessBackend(
       config.stateDir,
