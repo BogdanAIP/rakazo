@@ -7,7 +7,9 @@
       "commit": "d4226d062928f8d9505dbdeadd10217d23361052",
       "license": "Apache-2.0",
       "trust": "curated",
-      "roles": ["skills"],
+      "roles": [
+        "skills"
+      ],
       "discoveredSkillCount": 33,
       "note": "Official Anthropic plugin repository; import only individual reviewed SKILL.md files by pinned commit."
     },
@@ -16,7 +18,11 @@
       "commit": "cf2eab96d96cad3d47ce769b9638815d1775500f",
       "license": "Apache-2.0",
       "trust": "curated",
-      "roles": ["skills", "resolver", "mcp"],
+      "roles": [
+        "skills",
+        "resolver",
+        "mcp"
+      ],
       "discoveredSkillCount": 7,
       "note": "Official Chrome DevTools MCP repository with first-party debugging skills."
     },
@@ -25,7 +31,9 @@
       "commit": "0eac1447d4e24d06e47c459ca5e98f248b9413cf",
       "license": "MIT",
       "trust": "curated",
-      "roles": ["skills"],
+      "roles": [
+        "skills"
+      ],
       "discoveredSkillCount": 3,
       "note": "Official OpenAI Cookbook; only directly relevant SKILL.md entries should be indexed."
     },
@@ -34,7 +42,10 @@
       "commit": "71ef8266e48110974b13aef50b4df6ff9914ff68",
       "license": "MIT",
       "trust": "curated",
-      "roles": ["resolver", "mcp"],
+      "roles": [
+        "resolver",
+        "mcp"
+      ],
       "discoveredSkillCount": 0,
       "note": "Official GitHub MCP server; source for repository capability/resolver knowledge."
     },
@@ -43,7 +54,10 @@
       "commit": "f183dad4a52965583e3cc1d59b88cdc279e2e57d",
       "license": "Apache-2.0",
       "trust": "curated",
-      "roles": ["resolver", "mcp"],
+      "roles": [
+        "resolver",
+        "mcp"
+      ],
       "discoveredSkillCount": 0,
       "note": "Official Microsoft Playwright MCP; known browser implementation candidate, not automatically installed."
     },
@@ -52,7 +66,10 @@
       "commit": "5abed86c5317b833dd59907492d56c65981642aa",
       "license": "Apache-2.0 transition / repository-specific notices apply",
       "trust": "curated",
-      "roles": ["resolver", "mcp"],
+      "roles": [
+        "resolver",
+        "mcp"
+      ],
       "discoveredSkillCount": 0,
       "note": "Official MCP reference servers; verify individual component licensing before copying content."
     },
@@ -61,7 +78,10 @@
       "commit": "c9d01b89e4997e63638a411e7d09cd3581f69f80",
       "license": "repository license",
       "trust": "curated",
-      "roles": ["resolver", "internal"],
+      "roles": [
+        "resolver",
+        "internal"
+      ],
       "discoveredSkillCount": 0,
       "note": "Owner-controlled Rakazo source for current native/OpenCLI/GitHub capability routes."
     },
@@ -70,7 +90,9 @@
       "commit": "fb972b2f87fe7d5b06d37eac711490162d98de2c",
       "license": "Apache-2.0",
       "trust": "curated",
-      "roles": ["skills"],
+      "roles": [
+        "skills"
+      ],
       "discoveredSkillCount": 26,
       "note": "Official Google Gemini CLI repository; use repository-owned agent Skills such as code review, CI, PR and documentation workflows."
     },
@@ -79,7 +101,9 @@
       "commit": "18eb319b121b92ea19ca911fc3bd4cc53769bb1c",
       "license": "MIT",
       "trust": "curated",
-      "roles": ["skills"],
+      "roles": [
+        "skills"
+      ],
       "discoveredSkillCount": 205,
       "note": "Official Microsoft Skills repository; large first-party catalog for Microsoft/Azure/SDK/data workflows. Import only task-relevant candidates."
     },
@@ -88,7 +112,11 @@
       "commit": "938a4d5695019a745dbaab476bccbfb0304bf467",
       "license": "MIT",
       "trust": "curated",
-      "roles": ["skills", "resolver", "trading"],
+      "roles": [
+        "skills",
+        "resolver",
+        "trading"
+      ],
       "discoveredSkillCount": 9,
       "note": "Official Coinbase agent Skills for market data, trading, futures, portfolios and monitoring. Live-capable execution Skills remain reference-only for PAPER projects unless adapted."
     },
@@ -97,7 +125,12 @@
       "commit": "1a43e968a39537d5a73aeca20dd1ed9d96f502fa",
       "license": "MIT",
       "trust": "curated",
-      "roles": ["skills", "resolver", "defi", "trading"],
+      "roles": [
+        "skills",
+        "resolver",
+        "defi",
+        "trading"
+      ],
       "discoveredSkillCount": 18,
       "note": "Official Uniswap AI Skills including swap/liquidity planning and DCA/index/copy-trade workflows. Live-capable trading workflows require PAPER adaptation before use in Rakazo Trading."
     },
@@ -106,7 +139,12 @@
       "commit": "24d1e2f96c83d30e9470d7492fe350284a36d517",
       "license": "MIT",
       "trust": "curated",
-      "roles": ["skills", "resolver", "defi", "research"],
+      "roles": [
+        "skills",
+        "resolver",
+        "defi",
+        "research"
+      ],
       "discoveredSkillCount": 5,
       "note": "Official Aave Agent Skills including yield analysis and account activity. Prefer read-only analysis Skills for PAPER trading research."
     },
@@ -115,7 +153,11 @@
       "commit": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
       "license": "MIT",
       "trust": "curated",
-      "roles": ["skills", "resolver", "trading"],
+      "roles": [
+        "skills",
+        "resolver",
+        "trading"
+      ],
       "discoveredSkillCount": 59,
       "note": "Official Kraken AI-native CLI Skills; especially strong PAPER, backtest, market-intel, futures-risk and research recipes."
     },
@@ -124,7 +166,11 @@
       "commit": "a08a773db03685ddd7bc755f2ebc26d08853b0a4",
       "license": "MIT",
       "trust": "curated",
-      "roles": ["skills", "resolver", "trading"],
+      "roles": [
+        "skills",
+        "resolver",
+        "trading"
+      ],
       "discoveredSkillCount": 1,
       "note": "Official Bybit natural-language trading Skill. Treat original as live-capable reference until a PAPER-only adaptation is validated."
     },
@@ -133,7 +179,13 @@
       "commit": "39111abee6b60af7c11d40b5fc892dfc4fd791a4",
       "license": "Apache-2.0",
       "trust": "curated",
-      "roles": ["skills", "resolver", "paper-trading", "backtest", "market-data"],
+      "roles": [
+        "skills",
+        "resolver",
+        "paper-trading",
+        "backtest",
+        "market-data"
+      ],
       "discoveredSkillCount": 15,
       "note": "Official Alpaca Skills with dedicated paper-trading, MCP paper-trading, backtest and market-data workflows."
     },
@@ -142,7 +194,12 @@
       "commit": "1278636c3c16d31be99c888e5051622f8cc87f8e",
       "license": "MIT",
       "trust": "curated",
-      "roles": ["skills", "resolver", "trading", "market-data"],
+      "roles": [
+        "skills",
+        "resolver",
+        "trading",
+        "market-data"
+      ],
       "discoveredSkillCount": 10,
       "note": "Official OKX Agent Trade Kit Skills. Read-only market and sentiment Skills are suitable for research; live trade/bot Skills require PAPER adaptation."
     },
@@ -151,7 +208,12 @@
       "commit": "70cb79c85f397fab3636ef07c8c99dc52a7c555f",
       "license": "MIT",
       "trust": "curated",
-      "roles": ["skills", "resolver", "wallet", "defi"],
+      "roles": [
+        "skills",
+        "resolver",
+        "wallet",
+        "defi"
+      ],
       "discoveredSkillCount": 1,
       "note": "Official Coinbase agentic wallet Skill; keep wallet/action capabilities separate from PAPER-only trading execution."
     },
@@ -160,9 +222,34 @@
       "commit": "9de8161d870fea8fad05c324f6c00a50cd88962d",
       "license": "MIT",
       "trust": "curated",
-      "roles": ["skills", "resolver", "defi", "market-data", "onchain"],
+      "roles": [
+        "skills",
+        "resolver",
+        "defi",
+        "market-data",
+        "onchain"
+      ],
       "discoveredSkillCount": 7,
       "note": "Official OKX OnchainOS Skills. README and package.json declare MIT; relevant SKILL.md files also carry license: MIT. Prefer okx-dex-market for read-only on-chain research; adapt mixed action Skills before PAPER use."
+    },
+    {
+      "repository": "binance/binance-skills-hub",
+      "commit": "9960c675387bd27f8866645b83693c1fa87242f6",
+      "license": "per-skill unspecified for binance-web3",
+      "trust": "curated",
+      "usageScope": "private-internal",
+      "redistribution": "not-reviewed",
+      "roles": [
+        "skills",
+        "resolver",
+        "trading",
+        "market-data",
+        "signals",
+        "risk",
+        "onchain"
+      ],
+      "discoveredSkillCount": 20,
+      "note": "Official Binance Skills Hub explicitly built for agent installation/use. For this private Rakazo Market, admit pinned binance-web3 Skills for internal use. Do not treat this metadata as permission for public redistribution; revisit only if Market is later published externally."
     }
   ]
 }
