@@ -735,6 +735,16 @@
             "constraints": [
               "Public endpoints only; exchange support and fields vary"
             ]
+          },
+          {
+            "name": "BingX public futures market API",
+            "kind": "api",
+            "reference": "BingX-API/BingX-swap-api-doc",
+            "priority": 5,
+            "readOnly": true,
+            "constraints": [
+              "Use public quote endpoints for price, depth, trades, funding, klines, open interest and ticker only; no authenticated order actions"
+            ]
           }
         ]
       }
