@@ -106,6 +106,116 @@
       ],
       "discoveredSkillCount": 205,
       "note": "Official Microsoft Skills repository; large first-party catalog for Microsoft/Azure/SDK/data workflows. Import only task-relevant candidates."
+    },
+    {
+      "repository": "coinbase/agents",
+      "commit": "938a4d5695019a745dbaab476bccbfb0304bf467",
+      "license": "MIT",
+      "trust": "curated",
+      "roles": [
+        "skills",
+        "resolver",
+        "trading"
+      ],
+      "discoveredSkillCount": 9,
+      "note": "Official Coinbase agent Skills for market data, trading, futures, portfolios and monitoring. Live-capable execution Skills remain reference-only for PAPER projects unless adapted."
+    },
+    {
+      "repository": "Uniswap/uniswap-ai",
+      "commit": "1a43e968a39537d5a73aeca20dd1ed9d96f502fa",
+      "license": "MIT",
+      "trust": "curated",
+      "roles": [
+        "skills",
+        "resolver",
+        "defi",
+        "trading"
+      ],
+      "discoveredSkillCount": 18,
+      "note": "Official Uniswap AI Skills including swap/liquidity planning and DCA/index/copy-trade workflows. Live-capable trading workflows require PAPER adaptation before use in Rakazo Trading."
+    },
+    {
+      "repository": "aave/skills",
+      "commit": "24d1e2f96c83d30e9470d7492fe350284a36d517",
+      "license": "MIT",
+      "trust": "curated",
+      "roles": [
+        "skills",
+        "resolver",
+        "defi",
+        "research"
+      ],
+      "discoveredSkillCount": 5,
+      "note": "Official Aave Agent Skills including yield analysis and account activity. Prefer read-only analysis Skills for PAPER trading research."
+    },
+    {
+      "repository": "krakenfx/kraken-cli",
+      "commit": "aa56e5976be5afa6d8267eb6741f3a8844678fe9",
+      "license": "MIT",
+      "trust": "curated",
+      "roles": [
+        "skills",
+        "resolver",
+        "trading"
+      ],
+      "discoveredSkillCount": 59,
+      "note": "Official Kraken AI-native CLI Skills; especially strong PAPER, backtest, market-intel, futures-risk and research recipes."
+    },
+    {
+      "repository": "bybit-exchange/skills",
+      "commit": "a08a773db03685ddd7bc755f2ebc26d08853b0a4",
+      "license": "MIT",
+      "trust": "curated",
+      "roles": [
+        "skills",
+        "resolver",
+        "trading"
+      ],
+      "discoveredSkillCount": 1,
+      "note": "Official Bybit natural-language trading Skill. Treat original as live-capable reference until a PAPER-only adaptation is validated."
+    },
+    {
+      "repository": "alpacahq/alpaca-skills",
+      "commit": "39111abee6b60af7c11d40b5fc892dfc4fd791a4",
+      "license": "Apache-2.0",
+      "trust": "curated",
+      "roles": [
+        "skills",
+        "resolver",
+        "paper-trading",
+        "backtest",
+        "market-data"
+      ],
+      "discoveredSkillCount": 15,
+      "note": "Official Alpaca Skills with dedicated paper-trading, MCP paper-trading, backtest and market-data workflows."
+    },
+    {
+      "repository": "okx/agent-trade-kit",
+      "commit": "1278636c3c16d31be99c888e5051622f8cc87f8e",
+      "license": "MIT",
+      "trust": "curated",
+      "roles": [
+        "skills",
+        "resolver",
+        "trading",
+        "market-data"
+      ],
+      "discoveredSkillCount": 10,
+      "note": "Official OKX Agent Trade Kit Skills. Read-only market and sentiment Skills are suitable for research; live trade/bot Skills require PAPER adaptation."
+    },
+    {
+      "repository": "coinbase/agentic-wallet-skills",
+      "commit": "70cb79c85f397fab3636ef07c8c99dc52a7c555f",
+      "license": "MIT",
+      "trust": "curated",
+      "roles": [
+        "skills",
+        "resolver",
+        "wallet",
+        "defi"
+      ],
+      "discoveredSkillCount": 1,
+      "note": "Official Coinbase agentic wallet Skill; keep wallet/action capabilities separate from PAPER-only trading execution."
     }
   ]
 }
