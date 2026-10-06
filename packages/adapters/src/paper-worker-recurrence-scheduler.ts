@@ -3,17 +3,11 @@ import {
   type JobPublisher,
   paperWorkerPreflightJob,
 } from "@rakazo/adapter-kit";
-import type {
-  PrismaClient,
-  TradingPaperWorkerSuccessorIntentResult,
-} from "@rakazo/db";
+import type { PrismaClient, TradingPaperWorkerSuccessorIntentResult } from "@rakazo/db";
 import { prepareTradingPaperWorkerSuccessorIntent } from "@rakazo/db";
 
 type PrepareSuccessorIntent = typeof prepareTradingPaperWorkerSuccessorIntent;
-type SuccessorIntentStop = Extract<
-  TradingPaperWorkerSuccessorIntentResult,
-  { status: "stop" }
->;
+type SuccessorIntentStop = Extract<TradingPaperWorkerSuccessorIntentResult, { status: "stop" }>;
 
 export type AuthorizedPaperWorkerSuccessorScheduleResult =
   | {

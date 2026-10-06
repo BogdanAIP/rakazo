@@ -1,8 +1,5 @@
 import type { BackgroundJobPayloads, JobPublisher } from "@rakazo/adapter-kit";
-import type {
-  PrismaClient,
-  TradingPaperWorkerSuccessorIntentResult,
-} from "@rakazo/db";
+import type { PrismaClient, TradingPaperWorkerSuccessorIntentResult } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import { enqueueAuthorizedPaperWorkerSuccessor } from "./paper-worker-recurrence-scheduler.js";
 
@@ -29,7 +26,7 @@ const prepared: TradingPaperWorkerSuccessorIntentResult = {
 
 describe("enqueueAuthorizedPaperWorkerSuccessor", () => {
   it("persists D11 intent before enqueueing the exact stored successor", async () => {
-    const enqueue = vi.fn(async () => undefined);
+    const enqueue = vi.fn(async (_job: unknown) => undefined);
     const prepareIntent = vi.fn(async () => prepared);
     const deps = {
       prisma: {} as PrismaClient,
@@ -71,7 +68,7 @@ describe("enqueueAuthorizedPaperWorkerSuccessor", () => {
   });
 
   it("re-enqueues the same stored schedule on an idempotent D11 replay", async () => {
-    const enqueue = vi.fn(async () => undefined);
+    const enqueue = vi.fn(async (_job: unknown) => undefined);
     const prepareIntent = vi.fn(async () => ({ ...prepared, status: "duplicate" as const }));
     const deps = {
       prisma: {} as PrismaClient,

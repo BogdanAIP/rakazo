@@ -4024,7 +4024,7 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       mode: "paper_only",
       ledgerId,
       enabled: false,
-      gateRevision: recurrenceBefore.gateRevision,
+      gateRevision: 1,
       recurrenceRevision: 2,
       approvalEffectId: disableRecurrence.id,
     });
