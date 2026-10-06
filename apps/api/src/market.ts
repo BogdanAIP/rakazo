@@ -12,6 +12,22 @@ import {
 import { analyzeRcclSkillMd, buildSkillMd, parseSkillMd } from "@rakazo/core";
 import { IsolationError, type Prisma, type PrismaClient } from "@rakazo/db";
 
+const MARKET_CONTENT_LIMIT = 200_000;
+
+export const CURATED_MARKET_REPOSITORIES = {
+  "anthropics/claude-plugins-official": { license: "Apache-2.0" },
+  "ChromeDevTools/chrome-devtools-mcp": { license: "Apache-2.0" },
+  "openai/openai-cookbook": { license: "MIT" },
+  "github/github-mcp-server": { license: "MIT" },
+  "microsoft/playwright-mcp": { license: "Apache-2.0" },
+  "modelcontextprotocol/servers": {
+    license: "Apache-2.0 transition; verify component notices",
+  },
+  "BogdanAIP/rakazo": { license: "repository license" },
+} as const;
+
+type CuratedMarketRepository = keyof typeof CURATED_MARKET_REPOSITORIES;
+
 type MarketEntryRow = {
   id: string;
   kind: string;
@@ -117,6 +133,25 @@ function normalizeTags(values: string[]): string[] {
   );
 }
 
+function assertCuratedRepository(repository: string): asserts repository is CuratedMarketRepository {
+  if (!Object.hasOwn(CURATED_MARKET_REPOSITORIES, repository)) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: "GitHub repository is not in the curated Market source set.",
+    });
+  }
+}
+
+function assertSafeSourcePath(sourcePath: string): void {
+  const normalized = sourcePath.trim().replace(/\\/g, "/");
+  if (
+    !normalized ||
+    normalized.startsWith("/") ||
+    normalized.split("/").some((segment) => segment === ".." || segment === ".")
+  ) {
+    throw new ORPCError("BAD_REQUEST", { message: "Invalid Market GitHub source path." });
+  }
+}
+
 function assertGithubSource(sourceUrl: string, repository: string): void {
   let url: URL;
   try {
@@ -138,12 +173,77 @@ function assertGithubSource(sourceUrl: string, repository: string): void {
   }
 }
 
+async function readBoundedGithubText(response: Response): Promise<string> {
+  const declared = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MARKET_CONTENT_LIMIT) {
+    throw new ORPCError("BAD_REQUEST", { message: "Market GitHub source is too large." });
+  }
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let text = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > MARKET_CONTENT_LIMIT) {
+        await reader.cancel();
+        throw new ORPCError("BAD_REQUEST", { message: "Market GitHub source is too large." });
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return text + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+async function fetchPinnedGithubSource(
+  fetchImpl: typeof globalThis.fetch,
+  input: { repository: CuratedMarketRepository; sourceRef: string; sourcePath: string },
+  signal?: AbortSignal,
+): Promise<{ content: string; sourceUrl: string; license: string }> {
+  assertSafeSourcePath(input.sourcePath);
+  const raw = new URL("https://raw.githubusercontent.com/");
+  raw.pathname = `/${input.repository}/${input.sourceRef}/${input.sourcePath}`;
+  const response = await fetchImpl(raw, {
+    headers: { accept: "text/plain, text/markdown;q=0.9, application/json;q=0.8" },
+    redirect: "manual",
+    signal: AbortSignal.any([
+      signal ?? new AbortController().signal,
+      AbortSignal.timeout(8_000),
+    ]),
+  });
+  if (response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400)) {
+    throw new ORPCError("BAD_GATEWAY", {
+      message: "Pinned GitHub Market source redirected unexpectedly.",
+    });
+  }
+  if (!response.ok) {
+    throw new ORPCError("BAD_GATEWAY", {
+      message: `Pinned GitHub Market source returned HTTP ${response.status}.`,
+    });
+  }
+  const content = await readBoundedGithubText(response);
+  if (!content.trim()) {
+    throw new ORPCError("BAD_GATEWAY", { message: "Pinned GitHub Market source is empty." });
+  }
+  return {
+    content,
+    sourceUrl: `https://github.com/${input.repository}/blob/${input.sourceRef}/${input.sourcePath}`,
+    license: CURATED_MARKET_REPOSITORIES[input.repository].license,
+  };
+}
+
 function validatedImport(input: ImportInput): {
   name: string;
   description: string;
   tags: string[];
   digest: string;
 } {
+  assertCuratedRepository(input.repository);
   assertGithubSource(input.sourceUrl, input.repository);
   if (JSON.stringify(input.metadata).length > 20_000) {
     throw new ORPCError("BAD_REQUEST", { message: "Market metadata is too large." });
@@ -247,7 +347,11 @@ async function owned(prisma: PrismaClient, actor: Actor, entryId: string): Promi
   return row;
 }
 
-export function createMarketService(prisma: PrismaClient) {
+export function createMarketService(
+  prisma: PrismaClient,
+  options: { fetch?: typeof globalThis.fetch } = {},
+) {
+  const fetchImpl = options.fetch ?? globalThis.fetch;
   return {
     async search(
       actor: Actor,
@@ -296,6 +400,48 @@ export function createMarketService(prisma: PrismaClient) {
           });
       if (!row) throw new IsolationError();
       return mapMarketEntry(row);
+    },
+
+    async importGithub(
+      actor: Actor,
+      input: {
+        kind: MarketEntryKind;
+        key: string;
+        name?: string;
+        description?: string;
+        tags: string[];
+        repository: string;
+        sourcePath: string;
+        sourceRef: string;
+        metadata: Record<string, unknown>;
+      },
+      signal?: AbortSignal,
+    ): Promise<MarketEntry> {
+      assertCuratedRepository(input.repository);
+      const fetched = await fetchPinnedGithubSource(
+        fetchImpl,
+        {
+          repository: input.repository,
+          sourcePath: input.sourcePath,
+          sourceRef: input.sourceRef,
+        },
+        signal,
+      );
+      return this.importEntry(actor, {
+        kind: input.kind,
+        key: input.key,
+        name: input.name,
+        description: input.description,
+        tags: input.tags,
+        content: fetched.content,
+        sourceUrl: fetched.sourceUrl,
+        repository: input.repository,
+        sourcePath: input.sourcePath,
+        sourceRef: input.sourceRef,
+        license: fetched.license,
+        trust: "curated",
+        metadata: input.metadata,
+      });
     },
 
     async importEntry(actor: Actor, input: ImportInput): Promise<MarketEntry> {
