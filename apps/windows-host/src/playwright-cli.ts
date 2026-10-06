@@ -20,24 +20,13 @@ export interface PlaywrightCliDiscovery {
 export function loadPlaywrightCliConfiguration(
   env: NodeJS.ProcessEnv = process.env,
 ): PlaywrightCliConfiguration {
-  const appData =
-    env.APPDATA?.trim() ||
-    path.join(os.homedir(), "AppData", "Roaming");
-  const packageDir = path.join(
-    appData,
-    "npm",
-    "node_modules",
-    "@playwright",
-    "cli",
-  );
+  const appData = env.APPDATA?.trim() || path.join(os.homedir(), "AppData", "Roaming");
+  const packageDir = path.join(appData, "npm", "node_modules", "@playwright", "cli");
 
   return {
-    entry:
-      env.RAKAZO_PLAYWRIGHT_CLI_ENTRY?.trim() ||
-      path.join(packageDir, "playwright-cli.js"),
+    entry: env.RAKAZO_PLAYWRIGHT_CLI_ENTRY?.trim() || path.join(packageDir, "playwright-cli.js"),
     packageJson:
-      env.RAKAZO_PLAYWRIGHT_CLI_PACKAGE_JSON?.trim() ||
-      path.join(packageDir, "package.json"),
+      env.RAKAZO_PLAYWRIGHT_CLI_PACKAGE_JSON?.trim() || path.join(packageDir, "package.json"),
     expectedVersion: PINNED_PLAYWRIGHT_CLI_VERSION,
   };
 }
