@@ -166,20 +166,29 @@ credentials.
 
 ## P6a — backend abstraction and safe Playwright discovery
 
-Implement first:
+Implement first, without changing the live browser behavior:
 
 1. introduce an internal Windows browser-backend interface;
 2. preserve the current `WindowsOpenCliBackend` behind it without behavior change;
 3. add Playwright CLI availability/config discovery;
 4. pin an audited `@playwright/cli` version rather than runtime `npx @latest`;
-5. allow `auto | playwright | opencli` preference, with OpenCLI fallback;
-6. advertise browser capability only when at least one backend is usable;
-7. add status diagnostics that report backend availability but never secrets;
-8. unit-test backend selection and fail-closed behavior.
+5. reject wrong package identity/version and unsafe discovery paths;
+6. unit-test the discovery and fail-closed behavior.
 
-P6a must not yet attach to the user's real Chrome automatically.
+P6a must not select Playwright, auto-install it, or attach to the user's real
+Chrome. OpenCLI remains the runtime backend throughout this slice.
 
 ## P6b — Playwright owned session parity
+
+P6b introduces actual backend selection and observability:
+
+- allow an explicit `auto | playwright | opencli` preference;
+- prefer Playwright only after its owned-session implementation is usable;
+- keep OpenCLI as fallback in `auto`;
+- advertise browser capability when at least one backend is usable;
+- expose bounded backend status diagnostics without secrets.
+
+Then translate the existing Rakazo browser contract to Playwright:
 
 Translate the existing Rakazo browser contract to Playwright:
 
