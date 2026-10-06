@@ -26,8 +26,9 @@ interface RoutedSession {
  * Session-aware browser router.
  *
  * Mode is selected on browser/open, then bound to the server-minted session
- * token. Existing callers that omit mode keep OpenCLI behavior. "auto" is
- * deliberately conservative until BV2 physical benchmarks exist.
+ * token. Existing callers that omit mode keep OpenCLI behavior. "auto"
+ * only considers non-interactive backends; Extension remains explicit-only
+ * because its attach flow requires browser confirmation.
  */
 export class WindowsBrowserBackendRouter implements WindowsBrowserBackend {
   private readonly sessions = new Map<string, RoutedSession>();
@@ -46,7 +47,10 @@ export class WindowsBrowserBackendRouter implements WindowsBrowserBackend {
     request: WindowsHostBrowserRequest,
   ): Promise<WindowsHostBrowserResult> {
     if (request.command === "open") {
-      const mode = this.resolveOpenMode(request.mode);
+      const requestedMode = request.mode ?? this.defaultMode;
+      if (requestedMode === "auto") return this.openAuto(botId);
+
+      const mode = requestedMode;
       const backend = this.backends[mode];
       if (!backend.available()) {
         return { ok: false, backendMode: mode, error: `${mode} browser backend is unavailable` };
@@ -102,17 +106,38 @@ export class WindowsBrowserBackendRouter implements WindowsBrowserBackend {
     return { ...match.result, backendMode: match.mode };
   }
 
-  private resolveOpenMode(requested?: WindowsHostBrowserMode): ResolvedBrowserMode {
-    const mode = requested ?? this.defaultMode;
-    if (mode !== "auto") return mode;
+  private async openAuto(botId: string): Promise<WindowsHostBrowserResult> {
+    // Extension attach intentionally opens a browser confirmation flow. Never
+    // select it implicitly: automatic routing must remain non-interactive.
+    const candidates: readonly ResolvedBrowserMode[] = [
+      "playwright-cli-cdp",
+      "opencli",
+      "playwright-cli-persistent",
+    ];
+    const failures: string[] = [];
 
-    // Keep automatic routing inert until Extension/CDP/Persistent have completed
-    // the same physical capability benchmark. Never silently trade capability
-    // for backend novelty.
-    if (this.backends.opencli.available()) return "opencli";
-    throw new Error(
-      "Automatic browser routing is not enabled yet and OpenCLI is unavailable; select a mode explicitly",
-    );
+    for (const mode of candidates) {
+      const backend = this.backends[mode];
+      if (!backend.available()) continue;
+      try {
+        const result = await backend.browser(botId, { command: "open" });
+        if (result.ok && result.sessionToken) {
+          this.sessions.set(result.sessionToken, { botId, mode });
+          return { ...result, backendMode: mode };
+        }
+        failures.push(`${mode}: ${result.error ?? "open failed"}`);
+      } catch (error) {
+        failures.push(`${mode}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    return {
+      ok: false,
+      error:
+        failures.length > 0
+          ? `No non-interactive browser backend opened successfully (${failures.join("; ")})`
+          : "No non-interactive browser backend is available; select Extension explicitly if browser confirmation is acceptable",
+    };
   }
 }
 
