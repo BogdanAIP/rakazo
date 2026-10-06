@@ -264,6 +264,15 @@
       "roles": ["skills", "resolver", "paper-trading", "market-data", "derivatives"],
       "discoveredSkillCount": 2,
       "note": "Official Crypto.com agent Skills. Exchange Skill includes no-auth market data and local paper trading; live APP/Exchange actions remain outside Rakazo Trading PAPER authority."
+    },
+    {
+      "repository": "Bitget-AI/bitget-signal",
+      "commit": "55004749ede7fc72431cdb4be9558d01a1b80d03",
+      "license": "MIT",
+      "trust": "curated",
+      "roles": ["skills", "resolver", "signals", "macro", "sentiment", "technical-analysis", "news"],
+      "discoveredSkillCount": 5,
+      "note": "Official Bitget market-analysis Skill pack. Skills reference an external data MCP; Rakazo should adapt instructions to semantic market/research capabilities rather than auto-installing or authorizing that external MCP."
     }
   ]
 }
