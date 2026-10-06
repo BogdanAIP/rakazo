@@ -107,6 +107,27 @@ export async function resolveWindowsDevToolsActivePortEndpoint(
   return `ws://127.0.0.1:${port}${browserPath.trim()}`;
 }
 
+async function terminateChildTree(pid: number | undefined) {
+  if (!pid) return;
+  if (process.platform === "win32") {
+    await new Promise<void>((resolve) => {
+      const killer = spawn("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
+        windowsHide: true,
+        shell: false,
+        stdio: "ignore",
+      });
+      killer.on("error", () => resolve());
+      killer.on("close", () => resolve());
+    });
+    return;
+  }
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    // Process already exited.
+  }
+}
+
 export async function runPlaywrightCliProcess(
   entry: string,
   argv: string[],
@@ -140,16 +161,18 @@ export async function runPlaywrightCliProcess(
     const append = (buffer: Buffer, stderr: boolean) => {
       bytes += buffer.byteLength;
       if (bytes > MAX_OUTPUT_BYTES) {
-        child.kill();
-        finish(new Error("Playwright CLI output exceeded the 64 KiB limit"));
+        void terminateChildTree(child.pid).finally(() =>
+          finish(new Error("Playwright CLI output exceeded the 64 KiB limit")),
+        );
         return;
       }
       if (stderr) errors += buffer.toString("utf8");
       else output += buffer.toString("utf8");
     };
     const timeout = setTimeout(() => {
-      child.kill();
-      finish(new Error("Playwright CLI command timed out; action outcome is uncertain"));
+      void terminateChildTree(child.pid).finally(() =>
+        finish(new Error("Playwright CLI command timed out; action outcome is uncertain")),
+      );
     }, timeoutMs);
     child.stdout.on("data", (buffer: Buffer) => append(buffer, false));
     child.stderr.on("data", (buffer: Buffer) => append(buffer, true));
@@ -673,7 +696,19 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
         : null;
       const cdpTarget = this.config.cdpEndpoint ?? discoveredEndpoint ?? this.config.browserChannel;
       if (!cdpTarget) throw new Error("Playwright CDP endpoint or browser channel is missing");
-      parseJson(await this.invoke(session, ["attach", `--cdp=${cdpTarget}`], ATTACH_TIMEOUT_MS));
+      try {
+        parseJson(
+          await this.invoke(session, ["attach", `--cdp=${cdpTarget}`], ATTACH_TIMEOUT_MS),
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/timed out/iu.test(message)) {
+          throw new Error(
+            "Playwright CDP attach timed out. Existing-profile Chrome remote debugging can stall on discarded background tabs; retry after reactivating those tabs, or use Extension/Persistent mode.",
+          );
+        }
+        throw error;
+      }
     } else if (this.config.mode === "playwright-cli-extension") {
       if (!this.config.browserChannel) throw new Error("Playwright browser channel is missing");
       parseJson(
