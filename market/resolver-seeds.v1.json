@@ -796,6 +796,26 @@
             "constraints": [
               "Rakazo adaptation must permanently disable live mode/order submission"
             ]
+          },
+          {
+            "name": "Bitget Agent Skill — paper mode",
+            "kind": "cli",
+            "reference": "market:Bitget-AI/agent-skill:bitget",
+            "priority": 6,
+            "readOnly": false,
+            "constraints": [
+              "Use --paper-trading for every write-like operation; never mix live and demo credentials in the PAPER Project"
+            ]
+          },
+          {
+            "name": "Crypto.com Exchange — cdcx paper",
+            "kind": "cli",
+            "reference": "market:crypto-com/crypto-agent-trading:crypto-com-exchange",
+            "priority": 7,
+            "readOnly": false,
+            "constraints": [
+              "Use cdcx paper simulator only; exclude live trade/account/funds mutations"
+            ]
           }
         ]
       }
@@ -853,6 +873,26 @@
             "readOnly": true,
             "constraints": [
               "Info/read methods only; no exchange/order actions"
+            ]
+          },
+          {
+            "name": "Bitget public market data",
+            "kind": "cli",
+            "reference": "market:Bitget-AI/agent-skill:bitget",
+            "priority": 3,
+            "readOnly": true,
+            "constraints": [
+              "Use public market, ticker, orderbook, candles, funding and open-interest reads only"
+            ]
+          },
+          {
+            "name": "Crypto.com Exchange market data",
+            "kind": "cli",
+            "reference": "market:crypto-com/crypto-agent-trading:crypto-com-exchange",
+            "priority": 4,
+            "readOnly": true,
+            "constraints": [
+              "Use cdcx market/stream read paths only; no API credentials required for market data"
             ]
           }
         ]
