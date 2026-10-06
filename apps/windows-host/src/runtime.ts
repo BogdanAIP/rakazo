@@ -8,8 +8,8 @@ import {
   type WindowsHostCommandResult,
   WindowsHostHeartbeatSchema,
 } from "@rakazo/contracts";
-import type { WindowsHostConfig } from "./config.js";
 import type { WindowsBrowserBackend } from "./browser-backend.js";
+import type { WindowsHostConfig } from "./config.js";
 import {
   ProtectedWindowsHostCredentialStore,
   type WindowsHostCredentialStore,
