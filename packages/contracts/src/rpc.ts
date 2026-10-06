@@ -148,6 +148,22 @@ const marketGithubImportInput = z.object({
   metadata: z.record(z.string(), z.unknown()).default({}),
 });
 
+const marketImportInput = z.object({
+  kind: MarketEntryKindSchema,
+  key: z.string().trim().min(1).max(500),
+  name: z.string().trim().min(1).max(120).optional(),
+  description: z.string().trim().max(2_000).optional(),
+  tags: z.array(z.string().trim().min(1).max(80)).max(50).default([]),
+  content: z.string().min(1).max(200_000),
+  sourceUrl: z.string().url().max(2_048),
+  repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
+  sourcePath: z.string().max(2_048).optional(),
+  sourceRef: z.string().regex(/^[0-9a-f]{40}$/),
+  license: z.string().max(120).optional(),
+  trust: MarketTrustSchema.default("curated"),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+});
+
 const threadSendInput = threadTarget
   .safeExtend({
     text: z.string().optional(),
@@ -788,25 +804,14 @@ export const appContract = {
         }),
       )
       .output(z.array(MarketEntrySchema)),
-    import: oc
+    import: oc.input(marketImportInput).output(MarketEntrySchema),
+    importBatch: oc
       .input(
         z.object({
-          kind: MarketEntryKindSchema,
-          key: z.string().trim().min(1).max(500),
-          name: z.string().trim().min(1).max(120).optional(),
-          description: z.string().trim().max(2_000).optional(),
-          tags: z.array(z.string().trim().min(1).max(80)).max(50).default([]),
-          content: z.string().min(1).max(200_000),
-          sourceUrl: z.string().url().max(2_048),
-          repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
-          sourcePath: z.string().max(2_048).optional(),
-          sourceRef: z.string().regex(/^[0-9a-f]{40}$/),
-          license: z.string().max(120).optional(),
-          trust: MarketTrustSchema.default("curated"),
-          metadata: z.record(z.string(), z.unknown()).default({}),
+          items: z.array(marketImportInput).min(1).max(100),
         }),
       )
-      .output(MarketEntrySchema),
+      .output(z.array(MarketEntrySchema)),
     adapt: oc
       .input(
         z.object({
