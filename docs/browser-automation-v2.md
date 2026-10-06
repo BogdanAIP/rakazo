@@ -40,10 +40,15 @@ Official Playwright MCP supports three useful state models:
 
 Extension mode can pin a Chrome profile with `--profile-dir-name`. The Playwright extension uses a profile-specific `PLAYWRIGHT_MCP_EXTENSION_TOKEN` to authenticate the MCP server to the extension.
 
+As of the audit date, the latest official `microsoft/playwright-mcp` release is `v0.0.83`.
+Runtime integration should pin a reviewed version rather than executing `npx @latest`.
+
 Official references:
 
 - https://playwright.dev/mcp/configuration/browser-extension
 - https://playwright.dev/mcp/configuration/user-profile
+- https://playwright.dev/mcp/capabilities
+- https://playwright.dev/mcp/snapshots
 - https://github.com/microsoft/playwright-mcp
 - https://github.com/microsoft/playwright/tree/main/packages/extension
 
@@ -106,7 +111,8 @@ Backend selection must be policy/config driven and observable. It must never sil
 - Preserve server-minted Rakazo `sessionToken`.
 - Preserve per-task owned-tab tracking.
 - Existing user tabs may only be attached through an explicit Playwright extension/profile handoff.
-- Do not expose raw arbitrary JavaScript evaluation by default.
+- Do not expose raw arbitrary JavaScript evaluation. The current official Playwright MCP core includes `browser_evaluate` and `browser_run_code_unsafe`; Rakazo must call a reviewed allowlist rather than projecting the upstream tool catalog.
+- Disable upstream WebMCP discovery by default (`--no-webmcp`). Page-registered tools are untrusted dynamic input and must not silently become Rakazo capabilities.
 - Network interception, cookies/storage mutation, downloads/uploads, tracing and devtools-style capabilities must be separately gated.
 - An unavailable Playwright backend must fail closed or use an explicitly configured fallback; it must not attach to an arbitrary browser profile.
 
@@ -114,7 +120,7 @@ Backend selection must be policy/config driven and observable. It must never sil
 
 Playwright provides a richer semantic browser model:
 
-- accessibility-based snapshots / locators;
+- accessibility-based snapshots / refs with stale-ref detection;
 - existing-browser extension mode;
 - persistent and isolated profile models;
 - authenticated state reuse;
@@ -145,7 +151,7 @@ Acceptance: all existing Windows Host/OpenCLI tests and CI remain green.
 Add config-only discovery, no browser mutation:
 
 - backend mode: `opencli | playwright-extension | playwright-persistent | auto`;
-- detect official Playwright runtime/package without `npx @latest` at execution time;
+- detect a pinned, reviewed official Playwright runtime/package without `npx @latest` at execution time;
 - profile directory name is explicit;
 - extension token comes only from protected local secret/env storage;
 - probe reports readiness without logging credentials.
