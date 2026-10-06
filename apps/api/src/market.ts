@@ -36,6 +36,7 @@ export const CURATED_MARKET_REPOSITORIES = {
   "binance/binance-skills-hub": {
     license: "per-skill unspecified; private/internal use from official Skills Hub",
   },
+  "tradingview/lightweight-charts": { license: "Apache-2.0" },
   "ccxt/ccxt": { license: "MIT" },
   "coinbase/agentic-wallet-skills": { license: "MIT" },
   "BogdanAIP/rakazo": { license: "repository license" },
