@@ -333,9 +333,7 @@ describe("WindowsPlaywrightCliBackend", () => {
     expect(
       calls.some(
         ({ argv, timeoutMs }) =>
-          argv[1] === "run-code" &&
-          argv[2]?.includes("page.title") &&
-          timeoutMs === 45_000,
+          argv[1] === "run-code" && argv[2]?.includes("page.title") && timeoutMs === 45_000,
       ),
     ).toBe(true);
   });

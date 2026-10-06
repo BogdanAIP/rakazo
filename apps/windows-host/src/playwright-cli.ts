@@ -517,8 +517,7 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
         await this.invoke(session, request.argv, request.timeoutMs ?? COMMAND_TIMEOUT_MS),
       );
       const value = payload.result ?? payload.snapshot ?? payload.browsers ?? payload;
-      const content =
-        typeof value === "string" ? value : JSON.stringify(value ?? null);
+      const content = typeof value === "string" ? value : JSON.stringify(value ?? null);
 
       const rawCommand = request.argv[0]?.toLowerCase();
       if (rawCommand === "close" || rawCommand === "detach" || rawCommand === "delete-data") {
