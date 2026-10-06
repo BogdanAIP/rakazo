@@ -1,20 +1,16 @@
 import { createHash } from "node:crypto";
 import { ORPCError } from "@orpc/server";
 import {
-  MarketResolverContentSchema,
   type Actor,
   type MarketAdaptationMode,
   type MarketCatalogEntry,
   type MarketEntry,
   type MarketEntryKind,
   type MarketPreferredVariant,
+  MarketResolverContentSchema,
 } from "@rakazo/contracts";
-import {
-  analyzeRcclSkillMd,
-  buildSkillMd,
-  parseSkillMd,
-} from "@rakazo/core";
-import { IsolationError, Prisma, type PrismaClient } from "@rakazo/db";
+import { analyzeRcclSkillMd, buildSkillMd, parseSkillMd } from "@rakazo/core";
+import { IsolationError, type Prisma, type PrismaClient } from "@rakazo/db";
 
 type MarketEntryRow = {
   id: string;
@@ -115,7 +111,10 @@ function sha256(content: string): string {
 }
 
 function normalizeTags(values: string[]): string[] {
-  return [...new Set(values.map((value) => value.trim().toLowerCase()).filter(Boolean))].slice(0, 50);
+  return [...new Set(values.map((value) => value.trim().toLowerCase()).filter(Boolean))].slice(
+    0,
+    50,
+  );
 }
 
 function assertGithubSource(sourceUrl: string, repository: string): void {
@@ -240,11 +239,7 @@ function validateAdaptedSkill(content: string, mode: MarketAdaptationMode): void
   }
 }
 
-async function owned(
-  prisma: PrismaClient,
-  actor: Actor,
-  entryId: string,
-): Promise<MarketEntryRow> {
+async function owned(prisma: PrismaClient, actor: Actor, entryId: string): Promise<MarketEntryRow> {
   const row = await prisma.marketEntry.findFirst({
     where: { id: entryId, spaceId: actor.spaceId, userId: actor.userId },
   });

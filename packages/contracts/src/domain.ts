@@ -533,7 +533,12 @@ export const MarketAdaptationModeSchema = z.enum(["rccl", "wrapped", "hybrid"]);
 export type MarketAdaptationMode = z.infer<typeof MarketAdaptationModeSchema>;
 
 export const MarketResolverContentSchema = z.object({
-  semanticKey: z.string().trim().min(1).max(120).regex(/^[a-z][a-z0-9._-]*$/),
+  semanticKey: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .regex(/^[a-z][a-z0-9._-]*$/),
   implementations: z
     .array(
       z.object({

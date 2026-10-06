@@ -97,7 +97,9 @@ describe("Market Skills + Market Resolver service", () => {
       tags: ["Research", "papers"],
       content: originalSkill(),
       sourceUrl:
-        "https://github.com/anthropics/skills/blob/" + sourceRef + "/skills/paper-analysis/SKILL.md",
+        "https://github.com/anthropics/skills/blob/" +
+        sourceRef +
+        "/skills/paper-analysis/SKILL.md",
       repository: "anthropics/skills",
       sourcePath: "skills/paper-analysis/SKILL.md",
       sourceRef,
@@ -155,7 +157,8 @@ describe("Market Skills + Market Resolver service", () => {
       description: "Preferred implementations for semantic browser work.",
       tags: ["browser"],
       content: resolver,
-      sourceUrl: "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/docs/hybrid-computer-use.md",
+      sourceUrl:
+        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/docs/hybrid-computer-use.md",
       repository: "BogdanAIP/rakazo",
       sourcePath: "docs/hybrid-computer-use.md",
       sourceRef,
@@ -175,7 +178,8 @@ describe("Market Skills + Market Resolver service", () => {
       key: "trusted:paper@" + sourceRef,
       tags: ["research"],
       content: originalSkill(),
-      sourceUrl: "https://github.com/anthropics/skills/blob/" + sourceRef + "/skills/paper/SKILL.md",
+      sourceUrl:
+        "https://github.com/anthropics/skills/blob/" + sourceRef + "/skills/paper/SKILL.md",
       repository: "anthropics/skills",
       sourcePath: "skills/paper/SKILL.md",
       sourceRef,
@@ -224,7 +228,8 @@ describe("Market Skills + Market Resolver service", () => {
       key: "trusted:paper@" + sourceRef,
       tags: [],
       content: originalSkill(),
-      sourceUrl: "https://github.com/anthropics/skills/blob/" + sourceRef + "/skills/paper/SKILL.md",
+      sourceUrl:
+        "https://github.com/anthropics/skills/blob/" + sourceRef + "/skills/paper/SKILL.md",
       repository: "anthropics/skills",
       sourcePath: "skills/paper/SKILL.md",
       sourceRef,
@@ -273,7 +278,11 @@ describe("Market Skills + Market Resolver service", () => {
       ...shared,
     });
 
-    const results = await service.search(actor, { query: "browser debug", kind: "skill", limit: 10 });
+    const results = await service.search(actor, {
+      query: "browser debug",
+      kind: "skill",
+      limit: 10,
+    });
     expect(results[0]?.name).toBe("Browser Investigation");
     expect(results[0]).not.toHaveProperty("originalContent");
     expect(results[0]).not.toHaveProperty("adaptedContent");
