@@ -7,6 +7,7 @@ describe("Playwright CLI configuration", () => {
     expect(config).toMatchObject({
       mode: "opencli",
       browserChannel: null,
+      cdpEndpoint: null,
       userDataDir: null,
     });
     expect(config.entry).toContain("@playwright");
@@ -30,9 +31,26 @@ describe("Playwright CLI configuration", () => {
       ready: true,
       entryAvailable: true,
       browserChannel: "chrome",
+      cdpEndpointConfigured: false,
       userDataDirConfigured: false,
       reason: null,
     });
+  });
+
+  it("accepts an explicit CDP endpoint without channel discovery", () => {
+    const config = loadPlaywrightCliConfiguration({
+      RAKAZO_BROWSER_BACKEND: "playwright-cli-cdp",
+      RAKAZO_PLAYWRIGHT_CLI_ENTRY: "C:\\Rakazo\\playwright-cli\\playwright-cli.js",
+      RAKAZO_PLAYWRIGHT_CDP_ENDPOINT: "http://127.0.0.1:9222",
+    });
+
+    expect(probePlaywrightCli(config, () => true)).toMatchObject({
+      ready: true,
+      browserChannel: null,
+      cdpEndpointConfigured: true,
+      reason: null,
+    });
+    expect(config.cdpEndpoint).toBe("http://127.0.0.1:9222/");
   });
 
   it("requires explicit entry and browser for extension attach", () => {
@@ -47,6 +65,7 @@ describe("Playwright CLI configuration", () => {
       ready: true,
       entryAvailable: true,
       browserChannel: "chrome",
+      cdpEndpointConfigured: false,
       userDataDirConfigured: false,
       reason: null,
     });
@@ -79,7 +98,7 @@ describe("Playwright CLI configuration", () => {
     });
   });
 
-  it("rejects ambiguous browser and unsafe path configuration", () => {
+  it("rejects ambiguous browser, unsafe path and invalid CDP endpoint configuration", () => {
     expect(() =>
       loadPlaywrightCliConfiguration({
         RAKAZO_BROWSER_BACKEND: "playwright-cli-extension",
@@ -93,6 +112,13 @@ describe("Playwright CLI configuration", () => {
         RAKAZO_PLAYWRIGHT_CLI_ENTRY: "relative\\playwright-cli.js",
       }),
     ).toThrow("absolute path");
+
+    expect(() =>
+      loadPlaywrightCliConfiguration({
+        RAKAZO_BROWSER_BACKEND: "playwright-cli-cdp",
+        RAKAZO_PLAYWRIGHT_CDP_ENDPOINT: "file:///C:/Chrome",
+      }),
+    ).toThrow("http(s) or ws(s)");
 
     expect(() =>
       loadPlaywrightCliConfiguration({
