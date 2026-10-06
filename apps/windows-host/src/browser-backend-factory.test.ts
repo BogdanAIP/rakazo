@@ -15,13 +15,14 @@ type ResolvedMode = Exclude<WindowsHostBrowserMode, "auto">;
 
 function fakeBackend(
   name: string,
-  options: { available?: boolean; recover?: boolean } = {},
+  options: { available?: boolean; recover?: boolean; openError?: string } = {},
 ): WindowsBrowserBackend {
   let tokenCounter = 0;
   return {
     available: () => options.available !== false,
     browser: vi.fn(async (_botId: string, request: WindowsHostBrowserRequest) => {
       if (request.command === "open") {
+        if (options.openError) return { ok: false, error: options.openError };
         tokenCounter += 1;
         return {
           ok: true,
@@ -99,15 +100,68 @@ describe("WindowsBrowserBackendRouter", () => {
     expect(cdp.browser).toHaveBeenCalledTimes(2);
   });
 
-  it("does not silently route auto away from OpenCLI before benchmarks", async () => {
-    const opencli = fakeBackend("opencli", { available: false });
+  it("prefers consent-free CDP for auto and never invokes Extension implicitly", async () => {
     const cdp = fakeBackend("cdp");
-    const subject = router({ opencli, "playwright-cli-cdp": cdp }, "auto");
-
-    await expect(subject.browser("bot-a", { command: "open", mode: "auto" })).rejects.toThrow(
-      "Automatic browser routing is not enabled yet",
+    const opencli = fakeBackend("opencli");
+    const extension = fakeBackend("extension");
+    const subject = router(
+      {
+        opencli,
+        "playwright-cli-cdp": cdp,
+        "playwright-cli-extension": extension,
+      },
+      "auto",
     );
-    expect(cdp.browser).not.toHaveBeenCalled();
+
+    const opened = await subject.browser("bot-a", { command: "open", mode: "auto" });
+
+    expect(opened).toMatchObject({ ok: true, backendMode: "playwright-cli-cdp" });
+    expect(cdp.browser).toHaveBeenCalledTimes(1);
+    expect(opencli.browser).not.toHaveBeenCalled();
+    expect(extension.browser).not.toHaveBeenCalled();
+  });
+
+  it("falls back from unavailable or failed CDP without invoking Extension", async () => {
+    const cdp = fakeBackend("cdp", { openError: "CDP is not ready" });
+    const opencli = fakeBackend("opencli");
+    const extension = fakeBackend("extension");
+    const subject = router(
+      {
+        opencli,
+        "playwright-cli-cdp": cdp,
+        "playwright-cli-extension": extension,
+      },
+      "auto",
+    );
+
+    const opened = await subject.browser("bot-a", { command: "open", mode: "auto" });
+
+    expect(opened).toMatchObject({ ok: true, backendMode: "opencli" });
+    expect(cdp.browser).toHaveBeenCalledTimes(1);
+    expect(opencli.browser).toHaveBeenCalledTimes(1);
+    expect(extension.browser).not.toHaveBeenCalled();
+  });
+
+  it("uses persistent as the last non-interactive auto fallback", async () => {
+    const opencli = fakeBackend("opencli", { available: false });
+    const cdp = fakeBackend("cdp", { available: false });
+    const persistent = fakeBackend("persistent");
+    const extension = fakeBackend("extension");
+    const subject = router(
+      {
+        opencli,
+        "playwright-cli-cdp": cdp,
+        "playwright-cli-persistent": persistent,
+        "playwright-cli-extension": extension,
+      },
+      "auto",
+    );
+
+    const opened = await subject.browser("bot-a", { command: "open", mode: "auto" });
+
+    expect(opened).toMatchObject({ ok: true, backendMode: "playwright-cli-persistent" });
+    expect(persistent.browser).toHaveBeenCalledTimes(1);
+    expect(extension.browser).not.toHaveBeenCalled();
   });
 
   it("recovers an unambiguous backend and rebinds the token", async () => {
