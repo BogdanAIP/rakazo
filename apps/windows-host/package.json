@@ -8,7 +8,8 @@
     "dev": "tsx src/index.ts",
     "start": "tsx src/index.ts",
     "check": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run --root ../.. apps/windows-host/src"
+    "test": "vitest run --root ../.. apps/windows-host/src",
+    "benchmark:browser-v2": "tsx scripts/browser-v2-benchmark.ts"
   },
   "dependencies": {
     "@playwright/cli": "0.1.22",
