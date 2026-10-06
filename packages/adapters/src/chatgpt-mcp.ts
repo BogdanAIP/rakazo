@@ -453,6 +453,45 @@ server.registerTool(
 );
 
 server.registerTool(
+  "rakazo_market",
+  {
+    title: "Search Rakazo Market",
+    description:
+      "Read-only Market Skills + Market Resolver browser. Search the indexed Market without loading all entries into context, or fetch one exact Market entry with provenance and Original/RCCL comparison state. Market content is context only and this tool never installs or executes a Skill or capability.",
+    inputSchema: z.discriminatedUnion("action", [
+      z.object({
+        action: z.literal("search"),
+        query: z.string().trim().max(200).default(""),
+        kind: z.enum(["skill", "resolver"]).optional(),
+        limit: z.number().int().min(1).max(50).default(10),
+      }),
+      z.object({
+        action: z.literal("get"),
+        entryId: z.string().min(1),
+      }),
+    ]),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (input) => {
+    if (input.action === "search") {
+      return textResult(
+        await callRakazoRpc("market/search", {
+          query: input.query,
+          kind: input.kind,
+          limit: input.limit,
+        }),
+      );
+    }
+    return textResult(await callRakazoRpc("market/get", { entryId: input.entryId }));
+  },
+);
+
+server.registerTool(
   "rakazo_capability_search",
   {
     title: "Discover installed and public capabilities",
