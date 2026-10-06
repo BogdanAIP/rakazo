@@ -197,6 +197,7 @@ describe("ChatGPT Rakazo procedure projection", () => {
     expect(classifyProcedure("windowsHosts/createPairing")).toBe("write");
     expect(classifyProcedure("threads/send")).toBe("write");
     expect(classifyProcedure("market/import")).toBe("write");
+    expect(classifyProcedure("market/importBatch")).toBe("write");
     expect(classifyProcedure("market/importGithub")).toBe("write");
     expect(classifyProcedure("market/importGithubBatch")).toBe("write");
     expect(classifyProcedure("bots/remove")).toBe("destructive");
