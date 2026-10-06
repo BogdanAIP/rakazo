@@ -1422,7 +1422,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             peerMessage.intent === "question" ||
             peerMessage.repliesToRequest
             ? `Update from ${peerMessage.fromBotName}: ${peerMessage.text}`
-            : "The delegated bot completed its turn without a written summary."
+            : DELEGATED_EMPTY_NOTICE
           : undefined;
         const recallPromise =
           threadContext.includeSemanticRecall &&
@@ -4637,6 +4637,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (containsSecret(text, runSecrets)) {
             throw new Error("refusing to persist a secret in the thread");
           }
+          // Tool steps succeeded and the only completion text is the synthetic
+          // empty notice. That is a missed final answer or a swallowed provider
+          // failure, not a successful delegated summary.
+          if (
+            !handedOff &&
+            !silentReply.assembled.trim() &&
+            emptyDelegatedToolTurnShouldFail(completionBlocks)
+          ) {
+            throw new Error(TOOL_STEPS_WITHOUT_RESPONSE);
+          }
           if (!(await renewRunLease(deps, runId, workerId, fence))) return;
           const botMessageOutcome =
             run.trigger === "bot_message"
@@ -5148,6 +5158,23 @@ export function runReplyGuidance(trigger: string): string {
   return runAllowsSilentEmpty(trigger)
     ? ROUTINE_SILENT_REPLY_GUIDANCE
     : LONG_WORK_PROGRESS_GUIDANCE;
+}
+
+export const DELEGATED_EMPTY_NOTICE =
+  "The delegated bot completed its turn without a written summary.";
+
+/** Failure used when a tool-bearing turn would otherwise complete as the empty notice. */
+export const TOOL_STEPS_WITHOUT_RESPONSE =
+  "The model finished its tool steps without a written response.";
+
+/** True when the only written completion is the empty delegated notice after tool steps. */
+export function emptyDelegatedToolTurnShouldFail(blocks: MessageBlock[]): boolean {
+  const text = blocks
+    .filter((block): block is Extract<MessageBlock, { kind: "text" }> => block.kind === "text")
+    .map((block) => block.text)
+    .join("")
+    .trim();
+  return text === DELEGATED_EMPTY_NOTICE && blocks.some((block) => block.kind === "steps");
 }
 
 export function completionMessageSegments(
