@@ -32,31 +32,47 @@ The current Windows Host is directly coupled to `WindowsOpenCliBackend`. Browser
 
 ## Upstream Playwright findings
 
-Official Playwright MCP supports three useful state models:
+The current official Playwright project now provides both **Playwright CLI** and **Playwright MCP**.
 
-1. **Persistent profile** (default): cookies, login state and local storage survive between sessions in a dedicated Playwright profile. A custom `--user-data-dir` is supported.
-2. **Isolated context**: fresh state per session, optionally seeded with `--storage-state`.
-3. **Browser Extension mode**: `--extension` connects to existing Chrome/Edge tabs and reuses the browser profile's authenticated sessions, cookies and installed extensions.
+For Rakazo, the primary Browser v2 candidate is **Playwright CLI** because it matches the existing
+OpenCLI architecture: concise commands, named sessions, snapshots/refs, explicit attach/detach,
+persistent profiles and low model-context overhead. Microsoft explicitly positions the CLI as the
+more token-efficient agent workflow, while MCP is aimed at richer persistent agentic loops.
 
-Extension mode can pin a Chrome profile with `--profile-dir-name`. The Playwright extension uses a profile-specific `PLAYWRIGHT_MCP_EXTENSION_TOKEN` to authenticate the MCP server to the extension.
+Playwright CLI supports:
 
-As of the audit date, the latest official `microsoft/playwright-mcp` release is `v0.0.83`.
-Runtime integration should pin a reviewed version rather than executing `npx @latest`.
+1. **Named sessions** via `-s=<name>`, allowing Rakazo to map one server-minted browser task to one
+   backend session without sharing state accidentally.
+2. **Browser Extension attach** via `attach --extension=chrome`, reusing the user's existing
+   Chrome/Edge browser state and logged-in pages.
+3. **CDP attach** via `attach --cdp=chrome|msedge|<endpoint>`, with explicit browser-side remote
+   debugging opt-in.
+4. **Persistent profiles** via `open --persistent` or `open --profile=<path>`.
+5. **Accessibility snapshots and refs**, `find`, screenshots, tabs, console/network inspection,
+   tracing/video and a visual session dashboard.
+6. **Detach** semantics that leave an externally owned browser running.
+
+As of the audit date, the latest official `microsoft/playwright-cli` release is `v0.1.22`
+(`@playwright/cli@0.1.22`, Apache-2.0). The latest official Playwright MCP release is
+`v0.0.83`. Runtime integration should pin reviewed versions rather than executing
+`npm install @latest` or `npx @latest` during a task.
+
+Playwright MCP remains a possible optional future backend for workflows that materially benefit
+from its richer persistent MCP loop, but it is no longer the primary Browser v2 path.
 
 Official references:
 
+- https://playwright.dev/agent-cli/intro
+- https://github.com/microsoft/playwright-cli
+- https://github.com/microsoft/playwright
 - https://playwright.dev/mcp/configuration/browser-extension
-- https://playwright.dev/mcp/configuration/user-profile
-- https://playwright.dev/mcp/capabilities
-- https://playwright.dev/mcp/snapshots
 - https://github.com/microsoft/playwright-mcp
-- https://github.com/microsoft/playwright/tree/main/packages/extension
 
 ## Architecture decision
 
 ### External contract stays stable
 
-Do **not** expose a second Playwright MCP control plane to ChatGPT.
+Do **not** expose Playwright CLI or Playwright MCP as a second public control plane to ChatGPT.
 
 Keep:
 
@@ -87,12 +103,12 @@ Target steady state:
 ```text
 browser.semantic
     |
-    +-- Playwright extension backend
+    +-- Playwright CLI extension backend
     |     existing user's Chrome/Edge
-    |     explicit profile selection
+    |     explicit attach / named Rakazo-owned session
     |     authenticated sessions / SSO / 2FA
     |
-    +-- Playwright persistent backend
+    +-- Playwright CLI persistent backend
     |     dedicated Rakazo automation profile
     |
     +-- OpenCLI backend
@@ -110,9 +126,9 @@ Backend selection must be policy/config driven and observable. It must never sil
 - Never derive browser authority from a guessed tab/profile name.
 - Preserve server-minted Rakazo `sessionToken`.
 - Preserve per-task owned-tab tracking.
-- Existing user tabs may only be attached through an explicit Playwright extension/profile handoff.
-- Do not expose raw arbitrary JavaScript evaluation. The current official Playwright MCP core includes `browser_evaluate` and `browser_run_code_unsafe`; Rakazo must call a reviewed allowlist rather than projecting the upstream tool catalog.
-- Disable upstream WebMCP discovery by default (`--no-webmcp`). Page-registered tools are untrusted dynamic input and must not silently become Rakazo capabilities.
+- Existing user tabs may only be attached through an explicit Playwright extension/CDP handoff.
+- Never expose `eval`, `run-code`, raw WebMCP calls, cookie/storage mutation or unrestricted file upload merely because upstream CLI supports them. Rakazo must translate only a reviewed allowlist into its stable browser contract.
+- Disable WebMCP collection by default (`webmcp: false` / `PLAYWRIGHT_MCP_WEBMCP=false`). Page-registered tools are untrusted dynamic input and must not silently become Rakazo capabilities.
 - Network interception, cookies/storage mutation, downloads/uploads, tracing and devtools-style capabilities must be separately gated.
 - An unavailable Playwright backend must fail closed or use an explicitly configured fallback; it must not attach to an arbitrary browser profile.
 
@@ -146,28 +162,30 @@ The decision is therefore **Playwright + OpenCLI**, not Playwright replacing Ope
 
 Acceptance: all existing Windows Host/OpenCLI tests and CI remain green.
 
-### BV2-02 — Playwright capability probe and configuration
+### BV2-02 — Playwright CLI capability probe and configuration
 
 Add config-only discovery, no browser mutation:
 
-- backend mode: `opencli | playwright-extension | playwright-persistent | auto`;
-- detect a pinned, reviewed official Playwright runtime/package without `npx @latest` at execution time;
-- profile directory name is explicit;
+- backend mode: `opencli | playwright-cli-extension | playwright-cli-persistent | auto`;
+- detect a pinned, reviewed `@playwright/cli` entry without downloading `@latest` at execution time;
+- extension attach is explicit;
 - extension token comes only from protected local secret/env storage;
+- dedicated persistent profile path is explicit;
 - probe reports readiness without logging credentials.
 
-Acceptance: OpenCLI remains default; Playwright cannot become active accidentally.
+Acceptance: OpenCLI remains default; Playwright CLI cannot become active accidentally.
 
-### BV2-03 — Playwright extension backend, read-only semantic path
+### BV2-03 — Playwright CLI extension backend, read-only semantic path
 
-Implement:
+Implement a bounded CLI runner:
 
-- `open`, `snapshot`, `find`, `wait`, `extract`, `screenshot`, `close`;
-- explicit existing Chrome/Edge profile selection;
+- server-minted Rakazo token maps to a generated Playwright CLI named session;
+- `attach --extension=chrome` only after explicit configuration;
+- `snapshot`, `find`, bounded text extraction, screenshot and `detach`;
 - map Playwright semantic references to Rakazo observation-local refs;
-- preserve Rakazo session/token ownership.
+- preserve Rakazo session/token ownership and do not expose raw session enumeration.
 
-No arbitrary script evaluation, storage mutation, network interception or downloads.
+No `eval`, `run-code`, storage mutation, network routing, WebMCP or downloads.
 
 ### BV2-04 — navigation, action and owned tabs
 
@@ -179,7 +197,7 @@ Add:
 - stale-observation guards;
 - uncertain-action handling and ownership revocation matching the OpenCLI path.
 
-### BV2-05 — dedicated persistent Playwright profile
+### BV2-05 — dedicated persistent Playwright CLI profile
 
 For autonomous Rakazo tasks that should not use the human profile:
 
