@@ -362,6 +362,30 @@
       "path": ".claude/skills/ccxt-python/SKILL.md",
       "class": "reference-ready",
       "tags": ["python", "multi-exchange", "rest", "websocket", "market-data", "trading-bot"]
+    },
+    {
+      "repository": "Bitget-AI/agent-skill",
+      "commit": "55747b8a33236bbb4dcabffe22c42d302178268c",
+      "path": "skills/SKILL.md",
+      "class": "adapt-to-paper",
+      "tags": ["paper", "demo", "market-data", "futures", "funding", "positions", "risk"],
+      "notes": "Strong unified exchange Skill with public market data, --read-only and explicit --paper-trading. PAPER adaptation must never omit --paper-trading on write-like flows and must not mix live/demo credentials."
+    },
+    {
+      "repository": "crypto-com/crypto-agent-trading",
+      "commit": "92e80c5527312d0acdf769f16511ba3c6db1f2fe",
+      "path": "crypto-com-exchange/SKILL.md",
+      "class": "adapt-to-paper",
+      "tags": ["paper", "market-data", "spot", "derivatives", "portfolio"],
+      "notes": "Useful cdcx paper simulator plus no-auth market data. PAPER adaptation keeps cdcx paper/market flows and excludes live trade/account/funds mutations."
+    },
+    {
+      "repository": "crypto-com/crypto-agent-trading",
+      "commit": "92e80c5527312d0acdf769f16511ba3c6db1f2fe",
+      "path": "crypto-com-app/SKILL.md",
+      "class": "live-reference-only",
+      "tags": ["app", "portfolio", "fiat", "swap", "trade"],
+      "notes": "Live Crypto.com APP trading/funds workflow requiring API keys. Retain only as architecture/reference; do not install into PAPER Project."
     }
   ],
   "discoveredButNotImported": []
