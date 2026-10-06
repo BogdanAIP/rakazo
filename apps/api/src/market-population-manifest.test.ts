@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 type PopulationItem = {
   kind: "skill" | "resolver";
+  key: string;
   repository: string;
   sourceRef: string;
   sourcePath?: string;
@@ -52,14 +53,7 @@ describe("Market population manifest", () => {
 
     const items = data.batches.flatMap((batch) => batch.items);
     expect(items).toHaveLength(113);
-    expect(
-      new Set(
-        items.map(
-          (item) =>
-            `${item.kind}:${item.repository}:${item.sourceRef}:${item.sourcePath ?? item.sourceUrl}`,
-        ),
-      ).size,
-    ).toBe(113);
+    expect(new Set(items.map((item) => item.key)).size).toBe(113);
 
     for (const item of items) {
       expect(item.sourceRef).toMatch(/^[0-9a-f]{40}$/);
