@@ -1,4 +1,5 @@
 import type { ModelCatalogEntry } from "@rakazo/contracts";
+import { matchesSearchQuery } from "./search.js";
 
 /** Effort choices an OpenAI-compatible endpoint stores when reasoning is enabled. */
 export const COMPATIBLE_THINKING_LEVELS = [
