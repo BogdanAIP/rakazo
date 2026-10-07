@@ -1,5 +1,6 @@
-const PREVIEW_CSP =
-  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'";
+import { SANDBOXED_ARTIFACT_CSP } from "@rakazo/core";
+
+const PREVIEW_CSP = SANDBOXED_ARTIFACT_CSP;
 
 // frame-src about: allows srcdoc and rejects navigations the sandbox and inner CSP do not block.
 const SHELL_CSP =
