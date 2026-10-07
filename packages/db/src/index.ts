@@ -49,6 +49,7 @@ export {
   type TradingPaperResolvedResearchPreflight,
   verifyHistoricalTradingPaperResolvedResearchReserveApprovalInTransaction,
   verifyTradingPaperResolvedResearchAuthorityInTransaction,
+  verifyTradingPaperResolvedResearchReserveUseInTransaction,
 } from "./trading-paper-resolved-research-gate.js";
 export {
   applyApprovedTradingPaperControl,
