@@ -686,7 +686,12 @@ export async function rpc<T>(
       throw abortReason(error);
     });
     if (!res.ok || parsed.error) {
-      const message = parsed.error?.message ?? `rpc ${proc} failed`;
+      const jsonError = parsed.json as { message?: unknown } | undefined;
+      const message =
+        parsed.error?.message ??
+        (typeof jsonError?.message === "string" && jsonError.message
+          ? jsonError.message
+          : `rpc ${proc} failed`);
       const unauthorized = res.status === 401;
       // Without a Space header a 401 means the server no longer accepts the
       // session itself; Space recovery below probes the same way. Clearing it
