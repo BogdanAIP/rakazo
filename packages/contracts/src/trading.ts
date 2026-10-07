@@ -124,6 +124,21 @@ export type TradingSignal = z.infer<typeof TradingSignalSchema>;
  * This is deliberately data-only. A selected Market Resolver route or Skill
  * never carries PAPER or live execution authority into Trading Core.
  */
+export const TradingResolvedResearchImplementationSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  kind: z.enum(["mcp", "api", "cli", "browser", "computer", "native", "skill"]),
+  reference: z.string().trim().min(1).max(500),
+  priority: z.number().int().min(1).max(10_000),
+  readOnly: z.literal(true),
+});
+
+export const TradingResolvedResearchSkillProvenanceSchema = z.object({
+  marketEntryId: Id,
+  marketKey: z.string().trim().min(1).max(200),
+  sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  variant: z.enum(["original", "rccl", "wrapped", "hybrid"]),
+});
+
 export const TradingResolvedResearchProvenanceSchema = z.object({
   semanticKey: z
     .string()
@@ -133,21 +148,8 @@ export const TradingResolvedResearchProvenanceSchema = z.object({
     .regex(/^[a-z][a-z0-9._-]*$/),
   resolverKey: z.string().trim().min(1).max(200),
   resolverDigest: z.string().regex(/^[a-f0-9]{64}$/),
-  implementation: z.object({
-    name: z.string().trim().min(1).max(200),
-    kind: z.enum(["mcp", "api", "cli", "browser", "computer", "native", "skill"]),
-    reference: z.string().trim().min(1).max(500),
-    priority: z.number().int().min(1).max(10_000),
-    readOnly: z.literal(true),
-  }),
-  skill: z
-    .object({
-      marketEntryId: Id,
-      marketKey: z.string().trim().min(1).max(200),
-      sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
-      variant: z.enum(["original", "rccl", "wrapped", "hybrid"]),
-    })
-    .nullable(),
+  implementation: TradingResolvedResearchImplementationSchema,
+  skill: TradingResolvedResearchSkillProvenanceSchema.nullable(),
   resolvedAt: IsoDate,
 });
 export type TradingResolvedResearchProvenance = z.infer<
@@ -180,10 +182,8 @@ export const TradingResolvedResearchApprovalScopeSchema = z.object({
   semanticKey: TradingResolvedResearchProvenanceSchema.shape.semanticKey,
   resolverKey: TradingResolvedResearchProvenanceSchema.shape.resolverKey,
   resolverDigest: TradingResolvedResearchProvenanceSchema.shape.resolverDigest,
-  implementationReference:
-    TradingResolvedResearchProvenanceSchema.shape.implementation.shape.reference,
-  skillSourceDigest: TradingResolvedResearchProvenanceSchema.shape.skill.unwrap().shape.sourceDigest
-    .nullable(),
+  implementationReference: TradingResolvedResearchImplementationSchema.shape.reference,
+  skillSourceDigest: TradingResolvedResearchSkillProvenanceSchema.shape.sourceDigest.nullable(),
   strategyId: Id,
   strategyVersion: z.string().trim().min(1).max(128),
 });
