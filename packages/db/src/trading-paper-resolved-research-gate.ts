@@ -338,7 +338,9 @@ export async function readVerifiedTradingPaperResolvedResearchGate(
           return { configured: false, mode: "paper_only", ledgerId, enabled: false } as const;
         }
         if (row.spaceId !== owner.spaceId || row.userId !== owner.userId) {
-          throw new PaperResolvedResearchGateIntegrityError("Resolved research gate owner mismatch");
+          throw new PaperResolvedResearchGateIntegrityError(
+            "Resolved research gate owner mismatch",
+          );
         }
         return normalize(row);
       },
@@ -441,7 +443,13 @@ export async function readTradingPaperResolvedResearchPreflight(
   return withTransactionRetry(() =>
     prisma.$transaction(
       (tx) =>
-        assessTradingPaperResolvedResearchPreflightInTransaction(tx, owner, ledgerId, envelope, now),
+        assessTradingPaperResolvedResearchPreflightInTransaction(
+          tx,
+          owner,
+          ledgerId,
+          envelope,
+          now,
+        ),
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
   );
@@ -477,7 +485,9 @@ export async function applyApprovedTradingPaperResolvedResearchControl(
         });
         if (previous) {
           if (previous.spaceId !== owner.spaceId || previous.userId !== owner.userId) {
-            throw new PaperResolvedResearchGateIntegrityError("Resolved research gate owner mismatch");
+            throw new PaperResolvedResearchGateIntegrityError(
+              "Resolved research gate owner mismatch",
+            );
           }
           normalize(previous);
         }
