@@ -50,10 +50,11 @@ a future owner-approved PAPER strategy gate may authorize:
 - Resolver semantic key, entry key and digest;
 - exact selected implementation reference;
 - optional pinned Market Skill source digest;
-- strategy id and strategy version.
+- strategy id and strategy version;
+- proposal venue, market kind and action class (or null for `NO_TRADE`).
 
-The scope deliberately excludes signal-specific prices, evidence ids, risk budget and execution
-authority. `assessResolvedTradingResearch` is a pure read-only helper that validates the envelope,
+The scope deliberately excludes symbol-specific price levels, evidence ids, risk budget and
+execution authority. `assessResolvedTradingResearch` is a pure read-only helper that validates the envelope,
 derives that scope and returns only `proposal`, `no_trade` or `expired`. It performs no ledger
 write and grants no PAPER authority.
 
