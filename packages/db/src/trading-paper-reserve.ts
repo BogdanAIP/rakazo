@@ -1,5 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
-import { type TradingSignal, TradingSignalSchema } from "@rakazo/contracts";
+import {
+  type TradingResolvedResearchEnvelope,
+  type TradingSignal,
+  TradingSignalSchema,
+} from "@rakazo/contracts";
 import { estimateExactPaperSpotCapacity } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
@@ -8,6 +12,12 @@ import {
   PaperLifecycleAuditError,
 } from "./trading-paper-lifecycle-audit.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
+import {
+  recordTradingPaperResolvedResearchReserveUseInTransaction,
+  type TradingPaperResolvedResearchAuthority,
+  verifyTradingPaperResolvedResearchAuthorityInTransaction,
+  verifyTradingPaperResolvedResearchReserveUseInTransaction,
+} from "./trading-paper-resolved-research-gate.js";
 import {
   evaluateTradingPaperReservationInTransaction,
   type TradingPaperReservationDeny,
@@ -50,6 +60,7 @@ type ReserveDenyReason =
   | TradingPaperReservationDenyReason
   | "paper_capability_unapproved"
   | "paper_worker_signal_unapproved"
+  | "paper_resolved_research_unapproved"
   | "price_not_tick_aligned"
   | "capacity_unrepresentable"
   | "capacity_no_capacity"
