@@ -15,6 +15,16 @@ export const TradingPositiveDecimalSchema = TradingDecimalSchema.refine(
 export const TradingMarketKindSchema = z.enum(["spot", "perpetual", "dated_future", "dex_swap"]);
 export type TradingMarketKind = z.infer<typeof TradingMarketKindSchema>;
 
+export const TradingActionSchema = z.enum([
+  "spot_buy",
+  "spot_sell",
+  "long",
+  "short",
+  "reduce",
+  "close",
+]);
+export type TradingAction = z.infer<typeof TradingActionSchema>;
+
 export const TradingInstrumentSchema = z
   .object({
     venue: z.string().trim().min(1).max(80),
@@ -71,7 +81,7 @@ export const TradingSignalSchema = z
       /** A proposal is not an order and grants no execution authority. */
       executionStatus: z.literal("research_only"),
       market: TradingInstrumentSchema,
-      action: z.enum(["spot_buy", "spot_sell", "long", "short", "reduce", "close"]),
+      action: TradingActionSchema,
       entryTrigger: TradingPositiveDecimalSchema,
       stopLoss: TradingPositiveDecimalSchema,
       takeProfit: z.array(TradingPositiveDecimalSchema).min(1).max(8),
@@ -186,6 +196,9 @@ export const TradingResolvedResearchApprovalScopeSchema = z.object({
   skillSourceDigest: TradingResolvedResearchSkillProvenanceSchema.shape.sourceDigest.nullable(),
   strategyId: Id,
   strategyVersion: z.string().trim().min(1).max(128),
+  venue: z.string().trim().min(1).max(80).nullable(),
+  marketKind: TradingMarketKindSchema.nullable(),
+  action: TradingActionSchema.nullable(),
 });
 export type TradingResolvedResearchApprovalScope = z.infer<
   typeof TradingResolvedResearchApprovalScopeSchema
