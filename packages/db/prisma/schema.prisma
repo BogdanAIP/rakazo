@@ -1729,27 +1729,34 @@ model TradingPaperWorkerFillGate {
 /** Immutable audit provenance for one automatic synthetic PAPER fill.
  * This row is historical evidence only and grants no execution authority. */
 model TradingPaperWorkerFillUse {
-  ledgerId             String
-  reservationId        String
-  ledger               TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
-  spaceId              String
-  userId               String
-  signalId             String
-  fillApprovalEffectId String
-  strategyId           String
-  policyRevision       Int
-  gateRevision         Int
-  signalRevision       Int
-  fillRevision         Int
-  reserveEventSequence Int
-  fillEventSequence    Int
-  actedAt              DateTime
-  useSha256            String
-  createdAt            DateTime @default(now())
+  ledgerId               String
+  reservationId          String
+  ledger                 TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId                String
+  userId                 String
+  signalId               String
+  fillApprovalEffectId   String
+  targetApprovalEffectId String
+  strategyId             String
+  venue                  String
+  symbol                 String
+  policyRevision         Int
+  gateRevision           Int
+  signalRevision         Int
+  fillRevision           Int
+  targetRevision         Int
+  evidenceId             String
+  reserveEventSequence   Int
+  fillEventSequence      Int
+  actedAt                DateTime
+  useSha256              String
+  createdAt              DateTime @default(now())
 
   @@id([ledgerId, reservationId])
   @@unique([ledgerId, fillEventSequence])
   @@index([fillApprovalEffectId])
+  @@index([targetApprovalEffectId])
+  @@index([evidenceId])
   @@map("trading_paper_worker_fill_uses")
 }
 
