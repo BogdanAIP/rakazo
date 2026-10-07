@@ -24,7 +24,10 @@ export function buildApprovalAskBlock(
           toolName === "paper_position_control" ||
           toolName === "paper_worker_control" ||
           toolName === "paper_worker_start" ||
-          toolName === "paper_worker_recurrence_control"
+          toolName === "paper_worker_recurrence_control" ||
+          toolName === "paper_worker_market_target_control" ||
+          toolName === "paper_worker_signal_control" ||
+          toolName === "paper_worker_fill_control"
           ? `${summary}?`
           : `Review before ${summary}`,
         secrets,
@@ -77,11 +80,44 @@ export function buildApprovalAskBlock(
                       },
                       { id: "deny", label: "Cancel" },
                     ]
-                  : [
-                      { id: "allow", label: "Allow once" },
-                      { id: "always", label: "Always allow this tool" },
-                      { id: "deny", label: "Deny" },
-                    ],
+                  : toolName === "paper_worker_market_target_control"
+                    ? [
+                        {
+                          id: "allow",
+                          label:
+                            args.action === "disable"
+                              ? "Revoke paper market target"
+                              : "Approve paper market target",
+                        },
+                        { id: "deny", label: "Cancel" },
+                      ]
+                    : toolName === "paper_worker_signal_control"
+                      ? [
+                          {
+                            id: "allow",
+                            label:
+                              args.action === "disable"
+                                ? "Disable automatic PAPER reservations"
+                                : "Enable automatic PAPER reservations",
+                          },
+                          { id: "deny", label: "Cancel" },
+                        ]
+                      : toolName === "paper_worker_fill_control"
+                        ? [
+                            {
+                              id: "allow",
+                              label:
+                                args.action === "disable"
+                                  ? "Disable automatic PAPER fills"
+                                  : "Enable automatic PAPER fills",
+                            },
+                            { id: "deny", label: "Cancel" },
+                          ]
+                        : [
+                            { id: "allow", label: "Allow once" },
+                            { id: "always", label: "Always allow this tool" },
+                            { id: "deny", label: "Deny" },
+                          ],
   };
 }
 
@@ -122,6 +158,25 @@ function describeApprovalAction(toolName: string, args: Record<string, unknown>)
     const verb = args.action === "disable" ? "Revoke" : "Authorize";
     const ledger = args.ledger_id ? String(args.ledger_id) : "unknown ledger";
     return `${verb} recurring read-only paper preflights for “${ledger}”`;
+  }
+  if (toolName === "paper_worker_market_target_control") {
+    const verb = args.action === "disable" ? "Revoke" : "Approve";
+    const ledger = args.ledger_id ? String(args.ledger_id) : "unknown ledger";
+    const market =
+      args.action === "enable" && args.venue && args.symbol
+        ? ` ${String(args.venue).toUpperCase()} ${String(args.symbol)}`
+        : "";
+    return `${verb}${market} paper market target for “${ledger}”`;
+  }
+  if (toolName === "paper_worker_signal_control") {
+    const verb = args.action === "disable" ? "Disable" : "Enable";
+    const ledger = args.ledger_id ? String(args.ledger_id) : "unknown ledger";
+    return `${verb} automatic PAPER reservations for “${ledger}”`;
+  }
+  if (toolName === "paper_worker_fill_control") {
+    const verb = args.action === "disable" ? "Disable" : "Enable";
+    const ledger = args.ledger_id ? String(args.ledger_id) : "unknown ledger";
+    return `${verb} automatic PAPER fills for “${ledger}”`;
   }
   const target = pickScopeLabel(args);
   return target ? `${toolName} → ${target}` : toolName;
@@ -178,6 +233,36 @@ function formatApprovalDetail(
       "This changes only permission for future recurring read-only PAPER preflights. It does not enqueue a job or activate recurrence by itself, and it never authorizes trading or live orders.",
       `ledger: ${String(args.ledger_id ?? "")}`,
       `expected worker gate revision: ${String(args.expected_gate_revision ?? "")}`,
+    );
+  }
+  if (toolName === "paper_worker_market_target_control") {
+    lines.push(
+      "This changes only the approved public PAPER observation target. It does not fetch market data, mutate virtual money, use private exchange APIs, or authorize live orders.",
+      `ledger: ${String(args.ledger_id ?? "")}`,
+      `expected worker gate revision: ${String(args.expected_gate_revision ?? "")}`,
+      ...(args.action === "enable"
+        ? [
+            `venue: ${String(args.venue ?? "")}`,
+            `symbol: ${String(args.symbol ?? "")}`,
+          ]
+        : []),
+    );
+  }
+  if (toolName === "paper_worker_signal_control") {
+    lines.push(
+      "This changes only explicit permission for the PAPER worker to pass the fixed approved research strategy into the synthetic B7 reservation path. It does not fill a reservation or authorize live orders.",
+      `ledger: ${String(args.ledger_id ?? "")}`,
+      `expected worker gate revision: ${String(args.expected_gate_revision ?? "")}`,
+      ...(args.action === "enable" ? [`strategy: ${String(args.strategy_id ?? "")}`] : []),
+    );
+  }
+  if (toolName === "paper_worker_fill_control") {
+    lines.push(
+      "This changes only explicit permission for a future automatic synthetic PAPER full-fill attempt. Enabling it does not fetch a quote or fill now, and it never authorizes live orders.",
+      `ledger: ${String(args.ledger_id ?? "")}`,
+      `expected worker gate revision: ${String(args.expected_gate_revision ?? "")}`,
+      `expected signal revision: ${String(args.expected_signal_revision ?? "")}`,
+      ...(args.action === "enable" ? [`strategy: ${String(args.strategy_id ?? "")}`] : []),
     );
   }
   for (const key of ["collection", "title", "to", "subject", "amount", "body"]) {
