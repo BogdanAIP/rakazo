@@ -95,6 +95,7 @@ import {
   applyApprovedTradingPaperControl,
   applyApprovedTradingPaperProtectiveExitControl,
   applyApprovedTradingPaperWorkerControl,
+  applyApprovedTradingPaperWorkerMarketTargetControl,
   applyApprovedTradingPaperWorkerRecurrenceControl,
   createSpaceForMember,
   createThreadMessageInTransaction,
@@ -3587,6 +3588,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
               );
             }
             return applyApprovedTradingPaperWorkerRecurrenceControl(
+              deps.prisma,
+              { spaceId: run.spaceId, userId: run.userId },
+              applied.effect.id,
+            );
+          }
+          if (name === "paper_worker_market_target_control") {
+            if (!applied || !claimedEffect) {
+              throw new Error(
+                "Paper market target control requires a claimed explicit approval.",
+              );
+            }
+            return applyApprovedTradingPaperWorkerMarketTargetControl(
               deps.prisma,
               { spaceId: run.spaceId, userId: run.userId },
               applied.effect.id,
