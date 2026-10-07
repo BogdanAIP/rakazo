@@ -361,8 +361,8 @@ describePostgres("paper worker fill gate PostgreSQL authorization", () => {
     await expect(
       readVerifiedTradingPaperWorkerFillGate(second.prisma, owner, ledgerId),
     ).rejects.toBeInstanceOf(PaperWorkerFillGateIntegrityError);
-    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_buy" } })).toBe(
-      0,
-    );
+    expect(
+      await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_buy" } }),
+    ).toBe(0);
   });
 });
