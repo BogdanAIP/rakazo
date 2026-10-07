@@ -26,6 +26,10 @@ import {
   type TradingPaperWorkerFillAuthority,
   verifyTradingPaperWorkerFillAuthorityInTransaction,
 } from "./trading-paper-worker-fill-gate.js";
+import {
+  type TradingPaperWorkerMarketTargetAuthority,
+  verifyTradingPaperWorkerMarketTargetAuthorityInTransaction,
+} from "./trading-paper-worker-market-target.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 type Owner = { spaceId: string; userId: string };
@@ -74,6 +78,7 @@ export type TradingPaperFillResult =
         | "policy_revision_changed"
         | "paper_capability_unapproved"
         | "paper_worker_fill_unapproved"
+        | "paper_worker_target_unapproved"
         | "trusted_market_snapshot_unavailable"
         | "market_snapshot_stale"
         | "market_snapshot_mismatch"
@@ -376,6 +381,7 @@ export async function fillApprovedTradingPaperReservation(
   reservationId: string,
   evidenceId: string,
   workerFillAuthority?: TradingPaperWorkerFillAuthority,
+  workerTargetAuthority?: TradingPaperWorkerMarketTargetAuthority,
 ): Promise<TradingPaperFillResult> {
   const operation = async (): Promise<TradingPaperFillResult> =>
     prisma.$transaction(
@@ -385,16 +391,40 @@ export async function fillApprovedTradingPaperReservation(
         const prior = await readExistingFill(tx, owner, ledgerId, reservationId, evidenceId);
         if (prior) return prior;
 
+        if (Boolean(workerFillAuthority) !== Boolean(workerTargetAuthority)) {
+          throw new PaperFillIntegrityError(
+            "Automatic paper fill requires both F2 and market-target authorities",
+          );
+        }
+        const authorityNow = new Date();
         const currentWorkerAuthority = workerFillAuthority
           ? await verifyTradingPaperWorkerFillAuthorityInTransaction(
               tx,
               owner,
               workerFillAuthority,
-              new Date(),
+              authorityNow,
             )
           : null;
         if (workerFillAuthority && !currentWorkerAuthority) {
           return { status: "deny", mode: "paper_only", reason: "paper_worker_fill_unapproved" };
+        }
+        const currentTargetAuthority = workerTargetAuthority
+          ? await verifyTradingPaperWorkerMarketTargetAuthorityInTransaction(
+              tx,
+              owner,
+              workerTargetAuthority,
+              authorityNow,
+            )
+          : null;
+        if (workerTargetAuthority && !currentTargetAuthority) {
+          return { status: "deny", mode: "paper_only", reason: "paper_worker_target_unapproved" };
+        }
+        if (
+          currentWorkerAuthority &&
+          currentTargetAuthority &&
+          currentWorkerAuthority.gateRevision !== currentTargetAuthority.gateRevision
+        ) {
+          return { status: "deny", mode: "paper_only", reason: "paper_worker_target_unapproved" };
         }
 
         const policy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
@@ -415,6 +445,13 @@ export async function fillApprovedTradingPaperReservation(
         }
         if (reservation.policyRevision !== policy.revision) {
           return { status: "deny", mode: "paper_only", reason: "policy_revision_changed" };
+        }
+        if (
+          currentTargetAuthority &&
+          (reservation.market.venue !== currentTargetAuthority.venue ||
+            reservation.market.symbol !== currentTargetAuthority.symbol)
+        ) {
+          return { status: "deny", mode: "paper_only", reason: "paper_worker_target_unapproved" };
         }
         const approval = await verifyCurrentTradingPaperEnableAuditInTransaction(
           tx,
@@ -579,14 +616,16 @@ export async function fillApprovedTradingPaperReservation(
             decisionSha256: decisionDigest(normalized),
           },
         });
-        if (currentWorkerAuthority) {
+        if (currentWorkerAuthority && currentTargetAuthority) {
           await recordTradingPaperWorkerFillUseInTransaction(
             tx,
             owner,
             currentWorkerAuthority,
+            currentTargetAuthority,
             {
               reservationId,
               signalId: reservation.signalId,
+              evidenceId,
               reserveEventSequence: reservation.reserveEventSequence,
               fillEventSequence,
               actedAt: filledAt,
