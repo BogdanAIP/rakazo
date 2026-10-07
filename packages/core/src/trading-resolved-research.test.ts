@@ -110,10 +110,7 @@ describe("resolved trading research boundary", () => {
         reason: "No candidate passed the research filters.",
       },
     };
-    const result = assessResolvedTradingResearch(
-      envelope,
-      new Date("2026-10-07T20:30:00.000Z"),
-    );
+    const result = assessResolvedTradingResearch(envelope, new Date("2026-10-07T20:30:00.000Z"));
     expect(result.status).toBe("no_trade");
     expect(result.signal.kind).toBe("no_trade");
   });
