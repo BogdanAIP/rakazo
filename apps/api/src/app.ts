@@ -301,6 +301,7 @@ export async function createApp(
     {
       stdioEnabled: env.mcpStdioEnabled,
       allowedCommands: env.mcpStdioAllowedCommands,
+      allowedLaunches: env.mcpStdioAllowedLaunches,
       network: remoteConnectors,
       events,
       allowPrivateEndpoint: env.mcpAllowPrivateEndpoint,
