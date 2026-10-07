@@ -39,6 +39,9 @@ export function resolvedTradingResearchApprovalScope(
     skillSourceDigest: envelope.provenance.skill?.sourceDigest ?? null,
     strategyId: envelope.signal.strategyId,
     strategyVersion: envelope.signal.strategyVersion,
+    venue: envelope.signal.kind === "proposal" ? envelope.signal.market.venue : null,
+    marketKind: envelope.signal.kind === "proposal" ? envelope.signal.market.kind : null,
+    action: envelope.signal.kind === "proposal" ? envelope.signal.action : null,
   });
 }
 
