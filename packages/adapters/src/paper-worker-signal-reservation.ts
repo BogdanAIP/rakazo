@@ -11,10 +11,7 @@ type ReadSignalPreflight = typeof readTradingPaperWorkerSignalPreflight;
 type ReadResearch = typeof readVerifiedTradingPaperWorkerResearchOutputIfPresent;
 type ReserveSignal = typeof reserveApprovedTradingPaperSignal;
 type ReserveResult = Awaited<ReturnType<ReserveSignal>>;
-type ReadySignalPreflight = Extract<
-  Awaited<ReturnType<ReadSignalPreflight>>,
-  { status: "ready" }
->;
+type ReadySignalPreflight = Extract<Awaited<ReturnType<ReadSignalPreflight>>, { status: "ready" }>;
 
 export class PaperWorkerSignalReservationIntegrityError extends Error {
   constructor(message = "Synthetic paper worker signal reservation integrity mismatch") {
@@ -58,10 +55,7 @@ function sameMarket(left: TradingInstrument, right: TradingInstrument): boolean 
   );
 }
 
-function sameSignalAuthority(
-  left: ReadySignalPreflight,
-  right: ReadySignalPreflight,
-): boolean {
+function sameSignalAuthority(left: ReadySignalPreflight, right: ReadySignalPreflight): boolean {
   return (
     left.ledgerId === right.ledgerId &&
     left.strategyId === right.strategyId &&
@@ -182,9 +176,7 @@ export async function reservePersistedPaperWorkerProposal(
       status: "stop",
       ledgerId: payload.ledgerId,
       reason: "signal_scope_changed",
-      ...(confirmedGate.status === "deny"
-        ? { signalGateReason: confirmedGate.reason }
-        : {}),
+      ...(confirmedGate.status === "deny" ? { signalGateReason: confirmedGate.reason } : {}),
       signalId: signal.signalId,
     };
   }
