@@ -181,7 +181,9 @@ describe("handlePaperWorkerPreflightWithSuccessor", () => {
     expect(reserveSignal).not.toHaveBeenCalled();
     expect(fillSignal).not.toHaveBeenCalled();
     expect(enqueue).toHaveBeenCalledWith(localDeps, payload, now);
-    expect(handleStops.mock.invocationCallOrder[0]).toBeLessThan(enqueue.mock.invocationCallOrder[0]!);
+    expect(handleStops.mock.invocationCallOrder[0]).toBeLessThan(
+      enqueue.mock.invocationCallOrder[0]!,
+    );
   });
 
   it("stops before research, signal reserve and recurrence when the approved market target is unavailable", async () => {
