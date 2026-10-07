@@ -590,7 +590,8 @@ export async function createApp(
         isDeploymentOwner: actor.isDeploymentOwner,
       };
     },
-  });  app.use("/rpc/*", async (c, next) => {
+  });
+  app.use("/rpc/*", async (c, next) => {
     const actor = await sessionActor(c.req.raw);
     if (actor) {
       enrichLogContext({ "user.id": actor.userId, "space.id": actor.spaceId });
