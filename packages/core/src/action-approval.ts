@@ -42,6 +42,7 @@ const EXPLICIT_APPROVAL_BUILTIN_TOOLS = new Set([
   "paper_worker_recurrence_control",
   "paper_worker_market_target_control",
   "paper_worker_signal_control",
+  "paper_resolved_research_control",
   "paper_worker_fill_control",
 ]);
 
