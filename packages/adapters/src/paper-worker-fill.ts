@@ -75,8 +75,6 @@ function sameTarget(left: ReadyTarget, right: ReadyTarget): boolean {
 function fillEvidenceId(
   payload: BackgroundJobPayloads["paper.worker-preflight"],
   reservationId: string,
-  fill: ReadyFill,
-  target: ReadyTarget,
 ): string {
   const digest = createHash("sha256")
     .update(
@@ -86,12 +84,6 @@ function fillEvidenceId(
         payload.scheduledFor,
         payload.gateRevision,
         reservationId,
-        fill.fillRevision,
-        fill.fillApprovalEffectId,
-        target.targetRevision,
-        target.targetApprovalEffectId,
-        target.venue,
-        target.symbol,
       ]),
       "utf8",
     )
@@ -105,7 +97,8 @@ function fillEvidenceId(
  * F2 and the approved public market target are checked before the fresh quote
  * fetch and rechecked immediately afterwards. C1 receives the exact verified
  * F2 and market-target authorities and revalidates both again inside its own
- * serializable money transaction. The quote id is deterministic so a crash/retry cannot turn an
+ * serializable money transaction. The quote id is deterministic for the logical
+ * scheduled-wake + reservation attempt, so a crash/retry cannot turn an
  * uncertain successful fill into a second fill with different evidence.
  */
 export async function fillReservedPaperWorkerProposal(
@@ -172,7 +165,7 @@ export async function fillReservedPaperWorkerProposal(
     };
   }
 
-  const evidenceId = fillEvidenceId(payload, reservationId, fill, target);
+  const evidenceId = fillEvidenceId(payload, reservationId);
   const publicTarget: PublicPaperSpotTarget = {
     venue: target.venue,
     symbol: target.symbol,
