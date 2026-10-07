@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import {
+  type TradingPaperWorkerMarketTargetAuthority,
+  verifyHistoricalTradingPaperWorkerMarketTargetApprovalInTransaction,
+} from "./trading-paper-worker-market-target.js";
+import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import { assessTradingPaperWorkerSignalPreflightInTransaction } from "./trading-paper-worker-signal-gate.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
@@ -336,6 +341,7 @@ async function verifyEnabledApproval(
 type WorkerFillUseInput = {
   reservationId: string;
   signalId: string;
+  evidenceId: string;
   reserveEventSequence: number;
   fillEventSequence: number;
   actedAt: string;
@@ -348,11 +354,16 @@ function fillUseDigest(value: {
   userId: string;
   signalId: string;
   fillApprovalEffectId: string;
+  targetApprovalEffectId: string;
   strategyId: typeof STRATEGY_ID;
+  venue: "okx" | "bingx";
+  symbol: string;
   policyRevision: number;
   gateRevision: number;
   signalRevision: number;
   fillRevision: number;
+  targetRevision: number;
+  evidenceId: string;
   reserveEventSequence: number;
   fillEventSequence: number;
   actedAt: string;
@@ -366,11 +377,16 @@ function fillUseDigest(value: {
         value.userId,
         value.signalId,
         value.fillApprovalEffectId,
+        value.targetApprovalEffectId,
         value.strategyId,
+        value.venue,
+        value.symbol,
         value.policyRevision,
         value.gateRevision,
         value.signalRevision,
         value.fillRevision,
+        value.targetRevision,
+        value.evidenceId,
         value.reserveEventSequence,
         value.fillEventSequence,
         value.actedAt,
@@ -387,11 +403,16 @@ function normalizeFillUse(row: {
   userId: string;
   signalId: string;
   fillApprovalEffectId: string;
+  targetApprovalEffectId: string;
   strategyId: string;
+  venue: string;
+  symbol: string;
   policyRevision: number;
   gateRevision: number;
   signalRevision: number;
   fillRevision: number;
+  targetRevision: number;
+  evidenceId: string;
   reserveEventSequence: number;
   fillEventSequence: number;
   actedAt: Date;
@@ -405,17 +426,26 @@ function normalizeFillUse(row: {
     userId: row.userId,
     signalId: row.signalId,
     fillApprovalEffectId: row.fillApprovalEffectId,
+    targetApprovalEffectId: row.targetApprovalEffectId,
     strategyId: strategyId ?? STRATEGY_ID,
+    venue: row.venue === "okx" || row.venue === "bingx" ? row.venue : "okx",
+    symbol: row.symbol,
     policyRevision: row.policyRevision,
     gateRevision: row.gateRevision,
     signalRevision: row.signalRevision,
     fillRevision: row.fillRevision,
+    targetRevision: row.targetRevision,
+    evidenceId: row.evidenceId,
     reserveEventSequence: row.reserveEventSequence,
     fillEventSequence: row.fillEventSequence,
     actedAt: row.actedAt.toISOString(),
   };
   if (
     strategyId !== STRATEGY_ID ||
+    (row.venue !== "okx" && row.venue !== "bingx") ||
+    !/^[A-Z0-9]{2,40}-[A-Z0-9]{2,40}$/u.test(row.symbol) ||
+    !row.evidenceId ||
+    row.evidenceId.length > 128 ||
     !Number.isSafeInteger(row.policyRevision) ||
     row.policyRevision < 0 ||
     !Number.isSafeInteger(row.gateRevision) ||
@@ -424,6 +454,8 @@ function normalizeFillUse(row: {
     row.signalRevision < 1 ||
     !Number.isSafeInteger(row.fillRevision) ||
     row.fillRevision < 1 ||
+    !Number.isSafeInteger(row.targetRevision) ||
+    row.targetRevision < 1 ||
     !Number.isSafeInteger(row.reserveEventSequence) ||
     row.reserveEventSequence < 1 ||
     !Number.isSafeInteger(row.fillEventSequence) ||
@@ -454,16 +486,27 @@ export async function recordTradingPaperWorkerFillUseInTransaction(
   tx: Prisma.TransactionClient,
   owner: Owner,
   authority: TradingPaperWorkerFillAuthority,
+  targetAuthority: TradingPaperWorkerMarketTargetAuthority,
   input: WorkerFillUseInput,
 ): Promise<void> {
   await requireOwnedLedger(tx, owner, authority.ledgerId);
   const actedAt = new Date(input.actedAt);
+  if (
+    targetAuthority.ledgerId !== authority.ledgerId ||
+    targetAuthority.gateRevision !== authority.gateRevision
+  ) {
+    throw new PaperWorkerFillGateIntegrityError(
+      "Automatic paper fill target authority is outside F2 scope",
+    );
+  }
   if (
     !Number.isFinite(actedAt.getTime()) ||
     !input.reservationId ||
     input.reservationId.length > 128 ||
     !input.signalId ||
     input.signalId.length > 128 ||
+    !input.evidenceId ||
+    input.evidenceId.length > 128 ||
     !Number.isSafeInteger(input.reserveEventSequence) ||
     input.reserveEventSequence < 1 ||
     !Number.isSafeInteger(input.fillEventSequence) ||
@@ -478,11 +521,16 @@ export async function recordTradingPaperWorkerFillUseInTransaction(
     userId: owner.userId,
     signalId: input.signalId,
     fillApprovalEffectId: authority.fillApprovalEffectId,
+    targetApprovalEffectId: targetAuthority.targetApprovalEffectId,
     strategyId: authority.strategyId,
+    venue: targetAuthority.venue,
+    symbol: targetAuthority.symbol,
     policyRevision: authority.policyRevision,
     gateRevision: authority.gateRevision,
     signalRevision: authority.signalRevision,
     fillRevision: authority.fillRevision,
+    targetRevision: targetAuthority.targetRevision,
+    evidenceId: input.evidenceId,
     reserveEventSequence: input.reserveEventSequence,
     fillEventSequence: input.fillEventSequence,
     actedAt: actedAt.toISOString(),
@@ -501,6 +549,7 @@ export type HistoricalTradingPaperWorkerFillScope = {
   reservationId: string;
   signalId: string;
   policyRevision: number;
+  evidenceId: string;
   reserveEventSequence: number;
   fillEventSequence: number;
   actedAt: string;
@@ -545,6 +594,40 @@ export async function verifyHistoricalTradingPaperWorkerFillApprovalInTransactio
   }
   const request = parseRequest(effect.request);
   const result = objectResult(effect.result);
+  const targetApproved =
+    await verifyHistoricalTradingPaperWorkerMarketTargetApprovalInTransaction(
+      tx,
+      owner,
+      use.targetApprovalEffectId,
+      {
+        ledgerId: use.ledgerId,
+        venue: use.venue,
+        symbol: use.symbol,
+        gateRevision: use.gateRevision,
+        targetRevision: use.targetRevision,
+      },
+    );
+  if (!targetApproved) {
+    throw new PaperWorkerFillGateIntegrityError(
+      "Historical automatic fill lacks matching market-target approval",
+    );
+  }
+  const evidence = await verifyPublicPaperQuoteEvidenceInTransaction(
+    tx,
+    owner,
+    use.ledgerId,
+    use.evidenceId,
+  );
+  if (
+    !evidence ||
+    evidence.market.venue !== use.venue ||
+    evidence.market.symbol !== use.symbol
+  ) {
+    throw new PaperWorkerFillGateIntegrityError(
+      "Historical automatic fill evidence disagrees with approved target",
+    );
+  }
+
   if (
     request.action !== "enable" ||
     request.ledgerId !== use.ledgerId ||
@@ -571,6 +654,7 @@ export async function verifyHistoricalTradingPaperWorkerFillApprovalInTransactio
     expected.reservationId === use.reservationId &&
     expected.signalId === use.signalId &&
     expected.policyRevision === use.policyRevision &&
+    expected.evidenceId === use.evidenceId &&
     expected.reserveEventSequence === use.reserveEventSequence &&
     expected.fillEventSequence === use.fillEventSequence &&
     expected.actedAt === use.actedAt
