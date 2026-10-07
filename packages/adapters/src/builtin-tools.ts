@@ -995,6 +995,49 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    name: "paper_worker_fill_control",
+    description:
+      "Propose enabling or disabling a separate owner-approved permission for the PAPER worker to automatically attempt a synthetic full fill of an already reserved B7 PAPER hold produced under the exact approved breakout_20_1h_v1 signal-gate revision. This always requires fresh owner confirmation and cannot be auto-reviewed or permanently allowed. Enabling this permission does not fill any reservation, fetch market data, place an exchange order, use private APIs, or authorize live trading.",
+    inputSchema: {
+      oneOf: [
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "enable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+            expected_signal_revision: { type: "integer", minimum: 0 },
+            strategy_id: { type: "string", const: "breakout_20_1h_v1" },
+          },
+          required: [
+            "action",
+            "ledger_id",
+            "expected_gate_revision",
+            "expected_signal_revision",
+            "strategy_id",
+          ],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "disable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+            expected_signal_revision: { type: "integer", minimum: 0 },
+          },
+          required: [
+            "action",
+            "ledger_id",
+            "expected_gate_revision",
+            "expected_signal_revision",
+          ],
+          additionalProperties: false,
+        },
+      ],
+    },
+  },
+  {
     name: "spawn_bot",
     description:
       "Create a full, regular bot — the same kind the user creates from the + button. It gets its own thread, computer, and memory, and appears as a peer in the bot list. Do not also call run_subagent. Creating the bot is the whole action. Only set prompt if the user asked that new bot to start work immediately.",
