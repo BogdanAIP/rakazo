@@ -88,6 +88,12 @@ export {
   type VerifiedPaperWorkerResearchOutput,
 } from "./trading-paper-worker-research.js";
 export {
+  PaperWorkerAutomaticStopPreflightIntegrityError,
+  readVerifiedTradingPaperWorkerAutomaticStopCandidates,
+  type TradingPaperWorkerAutomaticStopCandidate,
+  type TradingPaperWorkerAutomaticStopPreflight,
+} from "./trading-paper-worker-stop-preflight.js";
+export {
   applyApprovedTradingPaperWorkerSignalControl,
   PaperWorkerSignalGateIntegrityError,
   readTradingPaperWorkerSignalPreflight,
