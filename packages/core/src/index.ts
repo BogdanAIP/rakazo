@@ -57,5 +57,6 @@ export * from "./trading-paper-ledger.js";
 export * from "./trading-paper-risk-state.js";
 export * from "./trading-replay.js";
 export * from "./trading-research.js";
+export * from "./trading-resolved-research.js";
 export * from "./trading-walkforward.js";
 export * from "./voice-chat-groups.js";
