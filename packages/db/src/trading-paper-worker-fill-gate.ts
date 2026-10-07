@@ -419,30 +419,10 @@ function normalizeFillUse(row: {
   useSha256: string;
 }) {
   const strategyId = row.strategyId === STRATEGY_ID ? STRATEGY_ID : null;
-  const value = {
-    ledgerId: row.ledgerId,
-    reservationId: row.reservationId,
-    spaceId: row.spaceId,
-    userId: row.userId,
-    signalId: row.signalId,
-    fillApprovalEffectId: row.fillApprovalEffectId,
-    targetApprovalEffectId: row.targetApprovalEffectId,
-    strategyId: strategyId ?? STRATEGY_ID,
-    venue: row.venue === "okx" || row.venue === "bingx" ? row.venue : "okx",
-    symbol: row.symbol,
-    policyRevision: row.policyRevision,
-    gateRevision: row.gateRevision,
-    signalRevision: row.signalRevision,
-    fillRevision: row.fillRevision,
-    targetRevision: row.targetRevision,
-    evidenceId: row.evidenceId,
-    reserveEventSequence: row.reserveEventSequence,
-    fillEventSequence: row.fillEventSequence,
-    actedAt: row.actedAt.toISOString(),
-  };
+  const venue = row.venue === "okx" || row.venue === "bingx" ? row.venue : null;
   if (
     strategyId !== STRATEGY_ID ||
-    (row.venue !== "okx" && row.venue !== "bingx") ||
+    venue === null ||
     !/^[A-Z0-9]{2,40}-[A-Z0-9]{2,40}$/u.test(row.symbol) ||
     !row.evidenceId ||
     row.evidenceId.length > 128 ||
@@ -459,10 +439,33 @@ function normalizeFillUse(row: {
     !Number.isSafeInteger(row.reserveEventSequence) ||
     row.reserveEventSequence < 1 ||
     !Number.isSafeInteger(row.fillEventSequence) ||
-    row.fillEventSequence <= row.reserveEventSequence ||
-    row.useSha256 !== fillUseDigest(value)
+    row.fillEventSequence <= row.reserveEventSequence
   ) {
     throw new PaperWorkerFillGateIntegrityError("Automatic paper fill provenance is invalid");
+  }
+  const value = {
+    ledgerId: row.ledgerId,
+    reservationId: row.reservationId,
+    spaceId: row.spaceId,
+    userId: row.userId,
+    signalId: row.signalId,
+    fillApprovalEffectId: row.fillApprovalEffectId,
+    targetApprovalEffectId: row.targetApprovalEffectId,
+    strategyId,
+    venue,
+    symbol: row.symbol,
+    policyRevision: row.policyRevision,
+    gateRevision: row.gateRevision,
+    signalRevision: row.signalRevision,
+    fillRevision: row.fillRevision,
+    targetRevision: row.targetRevision,
+    evidenceId: row.evidenceId,
+    reserveEventSequence: row.reserveEventSequence,
+    fillEventSequence: row.fillEventSequence,
+    actedAt: row.actedAt.toISOString(),
+  };
+  if (row.useSha256 !== fillUseDigest(value)) {
+    throw new PaperWorkerFillGateIntegrityError("Automatic paper fill provenance digest mismatch");
   }
   return value;
 }
