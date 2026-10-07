@@ -6969,6 +6969,13 @@ export async function runNotificationsEnabled(
   prisma: PrismaClient,
   run: { spaceId: string; userId: string; botId: string; threadId: string },
 ): Promise<boolean> {
+  return (await runNotice(prisma, run)).enabled;
+}
+
+async function runNotice(
+  prisma: PrismaClient,
+  run: { spaceId: string; userId: string; botId: string; threadId: string },
+): Promise<{ enabled: boolean; groupId: string | null }> {
   const source = await prisma.run.findFirst({
     where: {
       botId: run.botId,
@@ -6981,7 +6988,11 @@ export async function runNotificationsEnabled(
       thread: { select: { groupId: true } },
     },
   });
-  return Boolean(source && (source.thread.groupId || source.bot.notifyOnFinish));
+  if (!source) return { enabled: false, groupId: null };
+  return {
+    enabled: Boolean(source.thread.groupId || source.bot.notifyOnFinish),
+    groupId: source.thread.groupId,
+  };
 }
 
 async function notifyRun(
@@ -6990,13 +7001,13 @@ async function notifyRun(
   message: NotificationMessage,
 ) {
   if (!deps.notifications) return;
-  const enabled = await runNotificationsEnabled(deps.prisma, run).catch((error) => {
+  const notice = await runNotice(deps.prisma, run).catch((error) => {
     getLogger().error("notification preference lookup", error);
-    return false;
+    return null;
   });
-  if (!enabled) return;
+  if (!notice?.enabled) return;
   await deps.notifications
-    .send(message, {
+    .send(notice.groupId ? { ...message, groupId: notice.groupId } : message, {
       operationId: "notify",
       traceId: run.botId,
       spaceId: run.spaceId,
