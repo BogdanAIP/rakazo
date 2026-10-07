@@ -63,6 +63,13 @@ export {
   type VerifiedPaperWorkerResearchOutput,
 } from "./trading-paper-worker-research.js";
 export {
+  applyApprovedTradingPaperWorkerSignalControl,
+  PaperWorkerSignalGateIntegrityError,
+  readTradingPaperWorkerSignalPreflight,
+  readVerifiedTradingPaperWorkerSignalGate,
+  type TradingPaperWorkerSignalPreflight,
+} from "./trading-paper-worker-signal-gate.js";
+export {
   PaperWorkerSuccessorIntentIntegrityError,
   prepareTradingPaperWorkerSuccessorIntent,
   readVerifiedTradingPaperWorkerSuccessorIntent,
