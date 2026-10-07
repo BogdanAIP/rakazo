@@ -373,20 +373,19 @@ export async function reserveApprovedTradingPaperSignal(
             );
           }
         }
-        if (
-          proposal &&
-          (Date.parse(proposal.expiresAt) <= decisionNow ||
-            Date.parse(proposal.createdAt) > decisionNow + 2_000)
-        ) {
-          const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
-          return deny(
-            { ledgerRevision: recovered.row.version, policyRevision: currentPolicy.revision },
-            "signal_expired",
-          );
-        }
         if (proposal) {
           const existing = await readExistingDecision(tx, owner, ledgerId, proposal, evidenceId);
           if (existing) return existing;
+          if (
+            Date.parse(proposal.expiresAt) <= decisionNow ||
+            Date.parse(proposal.createdAt) > decisionNow + 2_000
+          ) {
+            const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
+            return deny(
+              { ledgerRevision: recovered.row.version, policyRevision: currentPolicy.revision },
+              "signal_expired",
+            );
+          }
         }
         await releaseTradingPaperReservationsInTransaction(
           tx,
