@@ -471,6 +471,25 @@ function normalizeFillUse(row: {
   return value;
 }
 
+export async function readTradingPaperWorkerFillUseInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  ledgerId: string,
+  reservationId: string,
+) {
+  await requireOwnedLedger(tx, owner, ledgerId);
+  const row = await tx.tradingPaperWorkerFillUse.findUnique({
+    where: { ledgerId_reservationId: { ledgerId, reservationId } },
+  });
+  if (!row) return null;
+  if (row.spaceId !== owner.spaceId || row.userId !== owner.userId) {
+    throw new PaperWorkerFillGateIntegrityError(
+      "Automatic paper fill provenance owner mismatch",
+    );
+  }
+  return normalizeFillUse(row);
+}
+
 export async function verifyTradingPaperWorkerFillAuthorityInTransaction(
   tx: Prisma.TransactionClient,
   owner: Owner,
