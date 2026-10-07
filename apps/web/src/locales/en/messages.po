@@ -2351,6 +2351,10 @@ msgstr "Load more"
 msgid "Load older runs"
 msgstr "Load older runs"
 
+#: src/pages/AccountSettingsOverlay.tsx
+msgid "Load web images automatically"
+msgstr "Load web images automatically"
+
 #: src/pages/ActivityList.tsx
 msgid "Loading activity…"
 msgstr "Loading activity…"

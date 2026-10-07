@@ -2351,6 +2351,10 @@ msgstr "Charger plus"
 msgid "Load older runs"
 msgstr "Charger les exécutions précédentes"
 
+#: src/pages/AccountSettingsOverlay.tsx
+msgid "Load web images automatically"
+msgstr "Charger automatiquement les images web"
+
 #: src/pages/ActivityList.tsx
 msgid "Loading activity…"
 msgstr "Chargement de l'activité…"
