@@ -2630,6 +2630,10 @@ function jsonResponse(body: unknown, init?: ResponseInit) {
   });
 }
 
+function rpcErrorResponse(status: number, code: string, message: string) {
+  return jsonResponse({ json: { defined: false, code, status, message } }, { status });
+}
+
 function snapshot(
   messages: MobileMessage[] = [],
   olderCursor: number | null = null,
