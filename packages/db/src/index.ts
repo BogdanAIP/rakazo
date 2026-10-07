@@ -42,6 +42,16 @@ export {
   readVerifiedTradingPaperRiskPolicy,
 } from "./trading-paper-risk-policy.js";
 export {
+  applyApprovedTradingPaperResolvedResearchControl,
+  assessTradingPaperResolvedResearchPreflightInTransaction,
+  type PaperResolvedResearchControlResult,
+  PaperResolvedResearchGateIntegrityError,
+  readTradingPaperResolvedResearchPreflight,
+  readVerifiedTradingPaperResolvedResearchGate,
+  type TradingPaperResolvedResearchGateStatus,
+  type TradingPaperResolvedResearchPreflight,
+} from "./trading-paper-resolved-research-gate.js";
+export {
   appendTradingPaperLedgerEvent,
   createTradingPaperLedger,
   PaperLedgerConflictError,
