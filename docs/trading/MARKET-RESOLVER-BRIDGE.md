@@ -80,8 +80,11 @@ authority, and requires the derived scope to exactly match the persisted approve
 revision change invalidates the gate until a new explicit approval is recorded.
 
 G1 is permission-only. Enabling, disabling or checking it writes no PAPER ledger event, creates no
-outbox item and cannot reserve, fill, close, sign, broadcast or submit any exchange order. Connecting
-a G1-ready proposal to the existing PAPER reserve writer remains a later separately reviewed step.
+outbox item and cannot reserve, fill, close, sign, broadcast or submit any exchange order. The
+`paper_resolved_research_control` builtin is a separate explicit-approval tool: every enable or
+disable requires a fresh owner confirmation and is excluded from Auto Review/permanent allow.
+Connecting a G1-ready proposal to the existing PAPER reserve writer remains a later separately
+reviewed step.
 
 ## Why G0 is separate from Market storage
 
