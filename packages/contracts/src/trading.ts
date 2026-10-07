@@ -118,6 +118,60 @@ export const TradingSignalSchema = z
   });
 export type TradingSignal = z.infer<typeof TradingSignalSchema>;
 
+/**
+ * Provenance for one Resolver-selected read-only research implementation.
+ *
+ * This is deliberately data-only. A selected Market Resolver route or Skill
+ * never carries PAPER or live execution authority into Trading Core.
+ */
+export const TradingResolvedResearchProvenanceSchema = z.object({
+  semanticKey: z
+    .string()
+    .trim()
+    .min(3)
+    .max(80)
+    .regex(/^[a-z][a-z0-9._-]*$/),
+  resolverKey: z.string().trim().min(1).max(200),
+  resolverDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  implementation: z.object({
+    name: z.string().trim().min(1).max(200),
+    kind: z.enum(["mcp", "api", "cli", "browser", "computer", "native", "skill"]),
+    reference: z.string().trim().min(1).max(500),
+    priority: z.number().int().min(1).max(10_000),
+    readOnly: z.literal(true),
+  }),
+  skill: z
+    .object({
+      marketEntryId: Id,
+      marketKey: z.string().trim().min(1).max(200),
+      sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
+      variant: z.enum(["original", "rccl", "wrapped", "hybrid"]),
+    })
+    .nullable(),
+  resolvedAt: IsoDate,
+});
+export type TradingResolvedResearchProvenance = z.infer<
+  typeof TradingResolvedResearchProvenanceSchema
+>;
+
+/**
+ * Normalized boundary between Market Resolver/Skills and Trading Core.
+ *
+ * The envelope can carry a proposal or explicit NO_TRADE, but it is always
+ * research-only and grants no reserve/fill/close authority. A later explicit
+ * strategy/risk gate must independently approve any PAPER state transition.
+ */
+export const TradingResolvedResearchEnvelopeSchema = z.object({
+  schemaVersion: z.literal("trading-resolved-research-v1"),
+  mode: z.literal("research_only"),
+  executionAuthority: z.literal("none"),
+  provenance: TradingResolvedResearchProvenanceSchema,
+  signal: TradingSignalSchema,
+});
+export type TradingResolvedResearchEnvelope = z.infer<
+  typeof TradingResolvedResearchEnvelopeSchema
+>;
+
 /** Read-only, user-invoked market prefilter. It creates no orders or buy/sell signals. */
 export const TradingScanRequestSchema = z.object({
   venue: z.enum(["bingx", "okx"]).default("bingx"),
