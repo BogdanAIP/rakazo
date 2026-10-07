@@ -1406,6 +1406,7 @@ model TradingPaperLedger {
   workerResearchRuns     TradingPaperWorkerResearch[]
   workerSignalGate       TradingPaperWorkerSignalGate?
   workerFillGate         TradingPaperWorkerFillGate?
+  workerFillUses         TradingPaperWorkerFillUse[]
 
   @@index([spaceId, ownerUserId])
   @@map("trading_paper_ledgers")
@@ -1723,6 +1724,33 @@ model TradingPaperWorkerFillGate {
 
   @@index([spaceId, userId])
   @@map("trading_paper_worker_fill_gates")
+}
+
+/** Immutable audit provenance for one automatic synthetic PAPER fill.
+ * This row is historical evidence only and grants no execution authority. */
+model TradingPaperWorkerFillUse {
+  ledgerId             String
+  reservationId        String
+  ledger               TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId              String
+  userId               String
+  signalId             String
+  fillApprovalEffectId String
+  strategyId           String
+  policyRevision       Int
+  gateRevision         Int
+  signalRevision       Int
+  fillRevision         Int
+  reserveEventSequence Int
+  fillEventSequence    Int
+  actedAt              DateTime
+  useSha256            String
+  createdAt            DateTime @default(now())
+
+  @@id([ledgerId, reservationId])
+  @@unique([ledgerId, fillEventSequence])
+  @@index([fillApprovalEffectId])
+  @@map("trading_paper_worker_fill_uses")
 }
 
 /** Durable deterministic research output only; never an order or risk approval. */
