@@ -168,8 +168,7 @@ function normalize(row: {
   targetSha256: string;
   updatedAt: Date;
 }): Extract<TradingPaperWorkerMarketTargetStatus, { configured: true }> {
-  const venue: Venue | null =
-    row.venue === "okx" || row.venue === "bingx" ? row.venue : null;
+  const venue: Venue | null = row.venue === "okx" || row.venue === "bingx" ? row.venue : null;
   const value = {
     ledgerId: row.ledgerId,
     spaceId: row.spaceId,
