@@ -135,6 +135,7 @@ export async function auditTradingPaperLifecycleInTransaction(
         reservationId: record.reservationId,
         signalId: reserve.signalId,
         policyRevision: record.policyRevision,
+        evidenceId: record.evidenceId,
         reserveEventSequence: record.reserveEventSequence,
         fillEventSequence: record.fillEventSequence,
         actedAt: record.filledAt.toISOString(),
