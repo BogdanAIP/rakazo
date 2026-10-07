@@ -354,6 +354,7 @@ export async function reserveApprovedTradingPaperSignal(
         await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         const currentPolicy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
+        const decisionNow = Date.now();
         if (workerSignalAuthority) {
           const currentAuthority = await assessTradingPaperWorkerSignalPreflightInTransaction(
             tx,
@@ -372,6 +373,17 @@ export async function reserveApprovedTradingPaperSignal(
             );
           }
         }
+        if (
+          proposal &&
+          (Date.parse(proposal.expiresAt) <= decisionNow ||
+            Date.parse(proposal.createdAt) > decisionNow + 2_000)
+        ) {
+          const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
+          return deny(
+            { ledgerRevision: recovered.row.version, policyRevision: currentPolicy.revision },
+            "signal_expired",
+          );
+        }
         if (proposal) {
           const existing = await readExistingDecision(tx, owner, ledgerId, proposal, evidenceId);
           if (existing) return existing;
@@ -384,7 +396,7 @@ export async function reserveApprovedTradingPaperSignal(
             ? "kill_switch"
             : "expired",
           currentPolicy.revision,
-          Date.now(),
+          decisionNow,
         );
         const evaluated = await evaluateTradingPaperReservationInTransaction(
           tx,
@@ -392,6 +404,7 @@ export async function reserveApprovedTradingPaperSignal(
           ledgerId,
           proposedSignal,
           evidenceId,
+          decisionNow,
         );
         if (evaluated.status === "deny") return evaluated;
         const signal = evaluated.signal;
