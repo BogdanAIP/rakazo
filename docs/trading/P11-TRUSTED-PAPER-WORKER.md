@@ -1,6 +1,6 @@
 # P11 — Trusted Paper Worker and independent Risk Manager: implementation gate
 
-Status: **P11A and P11B-0/1/2/3 deny-only prerequisites are in a stacked DRAFT**, while actual transactional reserve and P11C remain acceptance contracts. PR #11 / P10 genuine isolated-PostgreSQL race suite passed on exact head `ae49879289dc823e6f2ebf86c381e8adcfcd9ff6`. This document does not install, schedule, activate or authorize any worker. Neither live nor simulated exchange-order execution exists.
+Status: **P11A–P11D and P11E-0…E4 are implemented in draft PR #12**, including the owner-approved PAPER capability, worker/recurrence/market-target gates, durable Graphile recurrence and guarded public spot observation. The branch is not merged or deployed by this document. No worker chain starts by default: PAPER, worker, recurrence and market target remain separately default-deny, and the initial start still requires an explicit owner-approved `paper_worker_start`. E4 records public quote evidence only; it does not invoke a model or reserve/fill/close virtual money. No live exchange-order execution exists.
 
 ## Ownership and trust boundaries
 
@@ -236,7 +236,7 @@ D13 registers the already reviewed D10 composition for the existing `paper.worke
 
 Only after D2 is ready does the handler enter D12, which persists/reuses the D11 successor intent after the full D7 recurrence authorization check and then enqueues the exact durable successor timestamp. With no D6 recurrence permission, a valid one-shot wake simply finishes without a successor. Revoking or changing the paper/worker/recurrence revisions therefore stops the chain fail-closed.
 
-The registered handler still has no market-data adapter, model runtime, trading writer, exchange credential, private endpoint or order dispatcher. It does not create a Rakazo Routine and cannot reserve/fill/close virtual positions. This branch change is not deployed or merged by D13, so it does not alter the currently running Rakazo instance.
+At the D13 checkpoint the registered handler still had no market-data adapter, model runtime, trading writer, exchange credential, private endpoint or order dispatcher. E4 later adds only the separately authorized fixed-endpoint public spot observation path; the remaining D13 statements still hold for model execution and virtual/live trading. The handler does not create a Rakazo Routine and E4 does not itself reserve/fill/close virtual positions. None of these draft-branch changes imply deployment or merge.
 
 ## P11E-0 — gated public market observation primitive (not registered)
 
@@ -272,7 +272,7 @@ A crash after the evidence commit but before successor enqueue is therefore repl
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.
 
-## Acceptance before enabled paper scheduling
+## Acceptance before automated signal-to-paper mutation
 
 - P10 exact-head genuine isolated-Postgres races and restart reconstruction pass. Tests distinguish independent DB sessions from two separate OS processes; add a process-level stress gate if required by deployment topology.
 - Two independently connected workers race the same candidate: at most one reserved hold and one outbox; same idempotency key replays without mutation. Distinct candidates racing the last virtual cash cannot both spend it.
@@ -282,7 +282,7 @@ Start with reservation and explicit expiry/release under a trusted clock. Synthe
 
 ## Follow-on sequence
 
-1. P11A policy schema, migration and authenticated write restrictions (default deny).
-2. P11B transaction-scoped risk decision + synthetic reservation, CAS/idempotency and concurrency tests.
-3. P11C expiry/release, kill-switch reconciliation and restart consistency.
-4. Explicitly reviewed fill simulator and user-opt-in paper scheduling — **only after** the preceding stages pass. A separately approved live execution project must have independent instrument/venue/legal/financial safety gates.
+1. **P11E-5:** derive and durably persist a deterministic **research-only** signal/NO_TRADE result from the already authorized observation. Start with the existing validated OKX closed-1H history path; do not silently substitute another venue's candles.
+2. Add an equivalent validated BingX closed-candle source before claiming strategy parity for BingX targets; keep unsupported targets observation-only until then.
+3. Review a separate signal-to-PAPER decision slice that reuses B7/C1/C2 and the current independent risk manager. A research proposal must never become a reserve/fill merely because E4 observed a price.
+4. Expand spot research across the bounded altcoin universe, then review perpetual/dated-future paper semantics separately. **Live own-account execution remains a different project gate** with independent account/venue/legal/financial safeguards.
