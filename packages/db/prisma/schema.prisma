@@ -1402,6 +1402,7 @@ model TradingPaperLedger {
   workerGate            TradingPaperWorkerGate?
   workerRecurrence      TradingPaperWorkerRecurrence?
   workerSuccessorIntents TradingPaperWorkerSuccessorIntent[]
+  workerMarketTarget     TradingPaperWorkerMarketTarget?
 
   @@index([spaceId, ownerUserId])
   @@map("trading_paper_ledgers")
@@ -1655,6 +1656,27 @@ model TradingPaperWorkerSuccessorIntent {
   @@id([ledgerId, sourceScheduledFor, gateRevision, recurrenceRevision])
   @@index([spaceId, userId, createdAt])
   @@map("trading_paper_worker_successor_intents")
+}
+
+/** Explicit owner-approved market-observation target only.
+ * This row has no credentials, model invocation, trading writer or order authority. */
+model TradingPaperWorkerMarketTarget {
+  ledgerId          String             @id
+  ledger            TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId           String
+  userId            String
+  enabled           Boolean            @default(false)
+  venue             String?
+  symbol            String?
+  gateRevision      Int
+  targetRevision    Int                @default(0)
+  approvalEffectId  String
+  targetSha256      String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([spaceId, userId])
+  @@map("trading_paper_worker_market_targets")
 }
 
 /** Evidence only: no broker data, account keys or risk approval.

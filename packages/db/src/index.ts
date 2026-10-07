@@ -47,6 +47,13 @@ export {
   type TradingPaperWorkerRecurrencePreflight,
 } from "./trading-paper-worker-recurrence-gate.js";
 export {
+  applyApprovedTradingPaperWorkerMarketTargetControl,
+  PaperWorkerMarketTargetIntegrityError,
+  readTradingPaperWorkerMarketTargetPreflight,
+  readVerifiedTradingPaperWorkerMarketTarget,
+  type TradingPaperWorkerMarketTargetPreflight,
+} from "./trading-paper-worker-market-target.js";
+export {
   PaperWorkerSuccessorIntentIntegrityError,
   prepareTradingPaperWorkerSuccessorIntent,
   readVerifiedTradingPaperWorkerSuccessorIntent,
