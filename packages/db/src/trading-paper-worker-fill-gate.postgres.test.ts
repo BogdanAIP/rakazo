@@ -17,7 +17,6 @@ import {
   readVerifiedTradingPaperWorkerFillGate,
 } from "./trading-paper-worker-fill-gate.js";
 import { applyApprovedTradingPaperWorkerControl } from "./trading-paper-worker-gate.js";
-import { readVerifiedTradingPaperWorkerAutomaticStopCandidates } from "./trading-paper-worker-stop-preflight.js";
 import {
   applyApprovedTradingPaperWorkerMarketTargetControl,
   readTradingPaperWorkerMarketTargetPreflight,
@@ -26,6 +25,7 @@ import {
   applyApprovedTradingPaperWorkerSignalControl,
   readTradingPaperWorkerSignalPreflight,
 } from "./trading-paper-worker-signal-gate.js";
+import { readVerifiedTradingPaperWorkerAutomaticStopCandidates } from "./trading-paper-worker-stop-preflight.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
