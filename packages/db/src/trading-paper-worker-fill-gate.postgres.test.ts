@@ -17,6 +17,7 @@ import {
   readVerifiedTradingPaperWorkerFillGate,
 } from "./trading-paper-worker-fill-gate.js";
 import { applyApprovedTradingPaperWorkerControl } from "./trading-paper-worker-gate.js";
+import { readVerifiedTradingPaperWorkerAutomaticStopCandidates } from "./trading-paper-worker-stop-preflight.js";
 import {
   applyApprovedTradingPaperWorkerMarketTargetControl,
   readTradingPaperWorkerMarketTargetPreflight,
@@ -408,6 +409,37 @@ describePostgres("paper worker fill gate PostgreSQL authorization", () => {
       fillDecisions: 1,
       openPositions: 1,
       openReservations: 0,
+    });
+
+    const stopCandidates = await readVerifiedTradingPaperWorkerAutomaticStopCandidates(
+      second.prisma,
+      owner,
+      ledgerId,
+    );
+    expect(stopCandidates).toEqual({
+      status: "ready",
+      mode: "paper_only",
+      ledgerId,
+      positions: [
+        {
+          mode: "paper_only",
+          ledgerId,
+          positionId: reserved.reservationId,
+          signalId: proposal.signalId,
+          venue: "okx",
+          symbol: "SOL-USDT",
+          quantityBase: filled.quantityBase,
+          stopPriceQuote: "95",
+          policyRevision: 1,
+          gateRevision: 1,
+          signalRevision: 1,
+          fillRevision: 1,
+          targetRevision: 3,
+          fillApprovalEffectId: fillGate.id,
+          targetApprovalEffectId: reenableTarget.id,
+          fillEventSequence: filled.fillEventSequence,
+        },
+      ],
     });
 
     await first.prisma.tradingPaperWorkerFillUse.update({
