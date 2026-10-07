@@ -1405,6 +1405,7 @@ model TradingPaperLedger {
   workerMarketTarget     TradingPaperWorkerMarketTarget?
   workerResearchRuns     TradingPaperWorkerResearch[]
   workerSignalGate       TradingPaperWorkerSignalGate?
+  resolvedResearchGate   TradingPaperResolvedResearchGate?
   workerFillGate         TradingPaperWorkerFillGate?
   workerFillUses         TradingPaperWorkerFillUse[]
 
@@ -1702,6 +1703,28 @@ model TradingPaperWorkerSignalGate {
 
   @@index([spaceId, userId])
   @@map("trading_paper_worker_signal_gates")
+}
+
+/** Explicit owner-approved permission for one normalized Resolver/Skill research scope.
+ * Permission only: this row cannot reserve, fill, close or submit any exchange order. */
+model TradingPaperResolvedResearchGate {
+  ledgerId          String             @id
+  ledger            TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId           String
+  userId            String
+  enabled           Boolean            @default(false)
+  policyRevision    Int
+  gateRevision      Int
+  researchRevision  Int                @default(0)
+  approvalEffectId  String
+  scope             Json?
+  gateSha256        String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([spaceId, userId])
+  @@index([approvalEffectId])
+  @@map("trading_paper_resolved_research_gates")
 }
 
 /** Explicit owner-approved authority boundary for future automatic synthetic PAPER fills.
