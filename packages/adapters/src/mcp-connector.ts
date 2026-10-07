@@ -29,7 +29,7 @@ import {
 } from "./lazy-tool-catalog.js";
 import type { McpOAuthBroker, OAuthMaterial } from "./mcp-oauth.js";
 import { oauthMaterialSecrets } from "./mcp-oauth.js";
-import { McpSession } from "./mcp-transport.js";
+import { type McpAllowedStdioLaunch, McpSession } from "./mcp-transport.js";
 import { actorMayUsePrivateEndpoint } from "./private-endpoint.js";
 import type { RemoteTransportDependencies } from "./remote-mcp.js";
 import type { EncryptedSecretStore } from "./secrets.js";
@@ -100,6 +100,7 @@ export class McpConnector implements ConnectorProvider {
     private readonly options: {
       stdioEnabled?: boolean;
       allowedCommands?: string[];
+      allowedLaunches?: McpAllowedStdioLaunch[];
       network?: RemoteTransportDependencies;
       /** Audit sink for failed discovery. Without it the log line stays the only trace. */
       events?: Pick<ThreadEvents, "append">;
@@ -431,6 +432,7 @@ export class McpConnector implements ConnectorProvider {
           args,
           env,
           allowedCommands: this.options.allowedCommands ?? [],
+          allowedLaunches: this.options.allowedLaunches ?? [],
           signal: context.signal,
         });
       } else {

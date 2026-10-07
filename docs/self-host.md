@@ -280,6 +280,14 @@ owner can attach one on localhost, the same LAN, or a Docker network. Set
 `MCP_ALLOW_PRIVATE_ENDPOINT=true` on the API and worker to allow these for every user. Cloud
 metadata addresses stay blocked. Leave the flag unset on public installs.
 
+Local stdio MCP is separately opt-in with `MCP_STDIO_ENABLED=true`. The legacy
+`MCP_STDIO_ALLOWED_COMMANDS` list trusts one exact executable but permits any argv passed to that
+executable. For generic launchers such as `npx`, prefer `MCP_STDIO_ALLOWED_LAUNCHES`: it is a JSON
+array of exact `{"command":"...","args":[...]}` tuples and a server must match both command and the
+entire argv vector. This lets an operator approve one pinned package launch without turning the
+launcher into an arbitrary-package execution escape. Keep launcher versions pinned and use absolute
+command paths where practical.
+
 For servers that accept standard `reasoning_effort`, enable **Supports thinking** under
 **Advanced** when connecting. The setting is saved on the connection (no env var or restart).
 Existing connections default to disabled. Reconnect former Qwen-list or deployment-local models

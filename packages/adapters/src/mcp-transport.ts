@@ -54,13 +54,20 @@ export interface McpRemoteOptions {
   timeoutMs?: number;
 }
 
+export type McpAllowedStdioLaunch = {
+  command: string;
+  args: readonly string[];
+};
+
 export interface McpStdioOptions {
   command: string;
   args?: string[];
   cwd?: string;
   env?: Record<string, string>;
-  /** Exact executable allowlist. Stdio is otherwise disabled. */
+  /** Legacy exact-executable allowlist. Matching a command keeps its historical any-args behavior. */
   allowedCommands: readonly string[];
+  /** Safer exact command+argv allowlist for launchers such as npx. */
+  allowedLaunches?: readonly McpAllowedStdioLaunch[];
   maxBufferSize?: number;
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -227,10 +234,25 @@ export function withEndpointOriginFallback(
   };
 }
 
+export function isAllowedMcpStdioLaunch(options: McpStdioOptions): boolean {
+  const command = options.command.trim();
+  if (!command) return false;
+  if (options.allowedCommands.includes(command)) return true;
+  const args = options.args ?? [];
+  return (
+    options.allowedLaunches?.some(
+      (launch) =>
+        launch.command === command &&
+        launch.args.length === args.length &&
+        launch.args.every((value, index) => value === args[index]),
+    ) === true
+  );
+}
+
 function stdioParams(options: McpStdioOptions): StdioServerParameters {
   const command = options.command.trim();
-  if (!command || !options.allowedCommands.includes(command)) {
-    throw new Error("MCP stdio command is not in the configured allowlist");
+  if (!isAllowedMcpStdioLaunch(options)) {
+    throw new Error("MCP stdio launch is not in the configured allowlist");
   }
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(options.env ?? {})) {

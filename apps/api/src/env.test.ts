@@ -211,6 +211,51 @@ describe("loadEnv", () => {
     expect(loadEnv({ ...base, NODE_ENV: "development" }).nodeEnv).toBe("development");
   });
 
+  it("loads exact MCP stdio launch tuples separately from the legacy command allowlist", () => {
+    const env = loadEnv({
+      ...base,
+      MCP_STDIO_ENABLED: "true",
+      MCP_STDIO_ALLOWED_COMMANDS: "C:\\tools\\github-mcp-server.exe",
+      MCP_STDIO_ALLOWED_LAUNCHES: JSON.stringify([
+        {
+          command: "C:\\Program Files\\nodejs\\npx.cmd",
+          args: ["-y", "ccxt-mcp@0.1.3"],
+        },
+      ]),
+    });
+    expect(env.mcpStdioEnabled).toBe(true);
+    expect(env.mcpStdioAllowedCommands).toEqual(["C:\\tools\\github-mcp-server.exe"]);
+    expect(env.mcpStdioAllowedLaunches).toEqual([
+      {
+        command: "C:\\Program Files\\nodejs\\npx.cmd",
+        args: ["-y", "ccxt-mcp@0.1.3"],
+      },
+    ]);
+  });
+
+  it("fails closed on malformed MCP stdio launch policy", () => {
+    expect(() =>
+      loadEnv({
+        ...base,
+        MCP_STDIO_ALLOWED_LAUNCHES: "not-json",
+      }),
+    ).toThrow("valid JSON");
+    expect(() =>
+      loadEnv({
+        ...base,
+        MCP_STDIO_ALLOWED_LAUNCHES: JSON.stringify([
+          { command: "npx", args: ["-y", "ccxt-mcp@0.1.3"], shell: true },
+        ]),
+      }),
+    ).toThrow("unexpected fields");
+    expect(() =>
+      loadEnv({
+        ...base,
+        MCP_STDIO_ALLOWED_LAUNCHES: JSON.stringify([{ command: "", args: [] }]),
+      }),
+    ).toThrow("is invalid");
+  });
+
   it("defaults the remote MCP private-endpoint escape to off", () => {
     expect(loadEnv(base).mcpAllowPrivateEndpoint).toBe(false);
     expect(loadEnv({ ...base, MCP_ALLOW_PRIVATE_ENDPOINT: "true" }).mcpAllowPrivateEndpoint).toBe(
