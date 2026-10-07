@@ -235,7 +235,9 @@ describePostgres("resolved research PAPER gate PostgreSQL authorization", () => 
 
     const research = envelope();
     const scope = resolvedTradingResearchApprovalScope(research);
-    expect(await readVerifiedTradingPaperResolvedResearchGate(first.prisma, owner, ledgerId)).toEqual({
+    expect(
+      await readVerifiedTradingPaperResolvedResearchGate(first.prisma, owner, ledgerId),
+    ).toEqual({
       configured: false,
       mode: "paper_only",
       ledgerId,
