@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb, type Prisma } from "./client.js";
+import { recordPublicAdapterPaperQuoteEvidence } from "./trading-paper-quote-evidence.js";
+import { reserveApprovedTradingPaperSignal } from "./trading-paper-reserve.js";
 import {
   applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,
@@ -301,4 +303,177 @@ describePostgres("paper worker signal gate PostgreSQL authorization", () => {
       outboxBefore,
     );
   });
+  it("binds F0 authority inside B7 so a revoked gate cannot mutate virtual money", async () => {
+    const ledgerId = `paper-signal-b7-ledger-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: new Date(Date.now() - 60_000).toISOString(),
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "500",
+    });
+    await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+      allowedVenues: ["okx", "bingx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "300",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    });
+
+    const paper = await makeEffect("paper_trading_control", "b7-paper-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 0,
+    });
+    await applyApprovedTradingPaperControl(first.prisma, owner, paper.id);
+    const worker = await makeEffect("paper_worker_control", "b7-worker-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 1,
+      cadence_minutes: 15,
+    });
+    await applyApprovedTradingPaperWorkerControl(first.prisma, owner, worker.id);
+    const signalEnable = await makeEffect("paper_worker_signal_control", "b7-signal-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_gate_revision: 1,
+      strategy_id: "breakout_20_1h_v1",
+    });
+    await applyApprovedTradingPaperWorkerSignalControl(first.prisma, owner, signalEnable.id);
+
+    const oldAuthority = await readTradingPaperWorkerSignalPreflight(
+      first.prisma,
+      owner,
+      ledgerId,
+    );
+    if (oldAuthority.status !== "ready") throw new Error("expected ready F0 authority");
+
+    const observedAt = new Date().toISOString();
+    const market = {
+      venue: "okx",
+      kind: "spot",
+      symbol: "SOL-USDT",
+      base: "SOL",
+      quote: "USDT",
+      status: "active",
+      priceIncrement: "0.01",
+      quantityIncrement: "0.01",
+      minNotional: "5",
+      expiryAt: null,
+    } as const;
+    const evidence = await recordPublicAdapterPaperQuoteEvidence(
+      first.prisma,
+      owner,
+      ledgerId,
+      market,
+      {
+        venue: "okx",
+        kind: "spot",
+        symbol: "SOL-USDT",
+        observedAt,
+        fetchedAt: observedAt,
+        bid: "100",
+        ask: "100.1",
+        quoteVolume24h: "100000",
+      },
+    );
+    const proposal = {
+      kind: "proposal",
+      executionStatus: "research_only",
+      signalId: `paper-signal-b7-proposal-${suffix}`,
+      strategyId: "breakout_20_1h_v1",
+      strategyVersion: "1",
+      createdAt: new Date(Date.now() - 1_000).toISOString(),
+      expiresAt: new Date(Date.now() + 120_000).toISOString(),
+      evidenceIds: ["research-only"],
+      market,
+      action: "spot_buy",
+      entryTrigger: "100.1",
+      stopLoss: "95",
+      takeProfit: ["110"],
+      invalidation: "fixture",
+      rationale: "F1 transactional authority regression",
+      riskBudgetQuote: "10",
+      maxSlippageBps: null,
+    } as const;
+
+    const disableSignal = await makeEffect("paper_worker_signal_control", "b7-signal-disable", {
+      action: "disable",
+      ledger_id: ledgerId,
+      expected_gate_revision: 1,
+    });
+    await applyApprovedTradingPaperWorkerSignalControl(second.prisma, owner, disableSignal.id);
+    const before = {
+      events: await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } }),
+      outbox: await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } }),
+      decisions: await first.prisma.tradingPaperReservationDecision.count({ where: { ledgerId } }),
+    };
+    await expect(
+      reserveApprovedTradingPaperSignal(
+        first.prisma,
+        owner,
+        ledgerId,
+        proposal,
+        evidence.id,
+        oldAuthority,
+      ),
+    ).resolves.toMatchObject({
+      status: "deny",
+      reason: "paper_worker_signal_unapproved",
+    });
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(
+      before.events,
+    );
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+      before.outbox,
+    );
+    expect(await first.prisma.tradingPaperReservationDecision.count({ where: { ledgerId } })).toBe(
+      before.decisions,
+    );
+
+    const reenableSignal = await makeEffect("paper_worker_signal_control", "b7-signal-reenable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_gate_revision: 1,
+      strategy_id: "breakout_20_1h_v1",
+    });
+    await applyApprovedTradingPaperWorkerSignalControl(first.prisma, owner, reenableSignal.id);
+    const currentAuthority = await readTradingPaperWorkerSignalPreflight(
+      second.prisma,
+      owner,
+      ledgerId,
+    );
+    if (currentAuthority.status !== "ready") throw new Error("expected renewed F0 authority");
+
+    await expect(
+      reserveApprovedTradingPaperSignal(
+        second.prisma,
+        owner,
+        ledgerId,
+        proposal,
+        evidence.id,
+        currentAuthority,
+      ),
+    ).resolves.toMatchObject({
+      status: "reserved",
+      mode: "paper_only",
+      signalId: proposal.signalId,
+    });
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(1);
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(1);
+    expect(await first.prisma.tradingPaperReservationDecision.count({ where: { ledgerId } })).toBe(
+      1,
+    );
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_buy" } })).toBe(
+      0,
+    );
+  });
+
+
 });
