@@ -21,6 +21,11 @@ import {
   appendTradingPaperLedgerEventInTransaction,
   recoverTradingPaperLedgerInTransaction,
 } from "./trading-paper-store.js";
+import {
+  recordTradingPaperWorkerFillUseInTransaction,
+  type TradingPaperWorkerFillAuthority,
+  verifyTradingPaperWorkerFillAuthorityInTransaction,
+} from "./trading-paper-worker-fill-gate.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 type Owner = { spaceId: string; userId: string };
@@ -68,6 +73,7 @@ export type TradingPaperFillResult =
         | "reservation_expired"
         | "policy_revision_changed"
         | "paper_capability_unapproved"
+        | "paper_worker_fill_unapproved"
         | "trusted_market_snapshot_unavailable"
         | "market_snapshot_stale"
         | "market_snapshot_mismatch"
@@ -369,6 +375,7 @@ export async function fillApprovedTradingPaperReservation(
   ledgerId: string,
   reservationId: string,
   evidenceId: string,
+  workerFillAuthority?: TradingPaperWorkerFillAuthority,
 ): Promise<TradingPaperFillResult> {
   const operation = async (): Promise<TradingPaperFillResult> =>
     prisma.$transaction(
@@ -377,6 +384,18 @@ export async function fillApprovedTradingPaperReservation(
         await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         const prior = await readExistingFill(tx, owner, ledgerId, reservationId, evidenceId);
         if (prior) return prior;
+
+        const currentWorkerAuthority = workerFillAuthority
+          ? await verifyTradingPaperWorkerFillAuthorityInTransaction(
+              tx,
+              owner,
+              workerFillAuthority,
+              new Date(),
+            )
+          : null;
+        if (workerFillAuthority && !currentWorkerAuthority) {
+          return { status: "deny", mode: "paper_only", reason: "paper_worker_fill_unapproved" };
+        }
 
         const policy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         if (!policy.policy.enabled) {
@@ -541,7 +560,8 @@ export async function fillApprovedTradingPaperReservation(
           reservationId,
           requestSha256,
           evidenceId,
-          policyApprovalEffectId: approval.effectId,
+          policyApprovalEffectId:
+            currentWorkerAuthority?.fillApprovalEffectId ?? approval.effectId,
           policyRevision: policy.revision,
           reserveEventSequence: reservation.reserveEventSequence,
           fillEventSequence,
@@ -559,6 +579,20 @@ export async function fillApprovedTradingPaperReservation(
             decisionSha256: decisionDigest(normalized),
           },
         });
+        if (currentWorkerAuthority) {
+          await recordTradingPaperWorkerFillUseInTransaction(
+            tx,
+            owner,
+            currentWorkerAuthority,
+            {
+              reservationId,
+              signalId: reservation.signalId,
+              reserveEventSequence: reservation.reserveEventSequence,
+              fillEventSequence,
+              actedAt: filledAt,
+            },
+          );
+        }
         await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         return {
           status: "filled",
