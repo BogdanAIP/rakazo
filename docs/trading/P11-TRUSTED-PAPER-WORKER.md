@@ -295,6 +295,6 @@ Start with reservation and explicit expiry/release under a trusted clock. Synthe
 ## Follow-on sequence
 
 1. **P11E-5:** derive and durably persist a deterministic **research-only** signal/NO_TRADE result from the already authorized observation. Start with the existing validated OKX closed-1H history path; do not silently substitute another venue's candles.
-2. Add an equivalent validated BingX closed-candle source before claiming strategy parity for BingX targets; keep unsupported targets observation-only until then.
+2. Validate and register the new fixed-endpoint BingX closed-1H source in the worker research stage, preserving the same no-credentials, closed-bar, venue-matching rules.
 3. Review a separate signal-to-PAPER decision slice that reuses B7/C1/C2 and the current independent risk manager. A research proposal must never become a reserve/fill merely because E4 observed a price.
 4. Expand spot research across the bounded altcoin universe, then review perpetual/dated-future paper semantics separately. **Live own-account execution remains a different project gate** with independent account/venue/legal/financial safeguards.

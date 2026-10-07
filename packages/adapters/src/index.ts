@@ -114,6 +114,7 @@ export * from "./task-catalog.js";
 export * from "./teaching-session.js";
 export * from "./team-chat-messaging.js";
 export * from "./third-party-connector-emulator.js";
+export * from "./trading-bingx-history.js";
 export * from "./trading-bingx-public.js";
 export * from "./trading-history-dataset.js";
 export * from "./trading-okx-history.js";

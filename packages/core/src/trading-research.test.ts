@@ -59,6 +59,35 @@ describe("closed 1H breakout research baseline, with no execution capability", (
     expect(result.algorithm).toBe("breakout_20_1h_v1");
   });
 
+  it("uses the same deterministic baseline for BingX spot candles", () => {
+    const bingxMarket = TradingInstrumentSchema.parse({
+      venue: "bingx",
+      kind: "spot",
+      symbol: "DOGE-USDT",
+      base: "DOGE",
+      quote: "USDT",
+      status: "active",
+      priceIncrement: "0.01",
+      quantityIncrement: "1",
+      minNotional: "5",
+      expiryAt: null,
+    });
+    const bingxBars = bars("up").map((candle) =>
+      TradingCandleSchema.parse({
+        ...candle,
+        venue: "bingx",
+        kind: "spot",
+        symbol: "DOGE-USDT",
+      }),
+    );
+    const result = run(bingxBars, { market: bingxMarket });
+    expect(result.venue).toBe("bingx");
+    expect(result.signal.kind).toBe("proposal");
+    if (result.signal.kind !== "proposal") throw new Error("Missing BingX research proposal");
+    expect(result.signal.action).toBe("spot_buy");
+    expect(result.signal.evidenceIds[0]).toContain("bingx:DOGE-USDT");
+  });
+
   it("supports short proposals for perps, but not implicit spot shorting", () => {
     const short = run(bars("down"));
     expect(short.signal.kind).toBe("proposal");
