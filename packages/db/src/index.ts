@@ -28,6 +28,7 @@ export {
   PaperReservationDecisionIntegrityError,
   reserveApprovedTradingPaperSignal,
   type TradingPaperReserveResult,
+  type TradingPaperWorkerSignalReserveAuthority,
 } from "./trading-paper-reserve.js";
 export {
   applyApprovedTradingPaperControl,
