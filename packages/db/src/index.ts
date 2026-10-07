@@ -14,6 +14,7 @@ export * from "./model-credentials.js";
 export * from "./repos.js";
 export * from "./scope.js";
 export * from "./spaces.js";
+export { closeTradingPaperPositionOnStop } from "./trading-paper-close.js";
 export {
   fillApprovedTradingPaperReservation,
   type TradingPaperFillResult,
