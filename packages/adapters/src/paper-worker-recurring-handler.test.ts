@@ -50,6 +50,11 @@ const signalResult = {
   ledgerId: "paper-1",
   reason: "research_unavailable" as const,
 };
+const fillResult = {
+  status: "stop" as const,
+  ledgerId: "paper-1",
+  reason: "reservation_unavailable" as const,
+};
 
 describe("handlePaperWorkerPreflightWithSuccessor", () => {
   it("stops before observation, research, signal reserve and recurrence when D2 denies", async () => {
@@ -155,6 +160,7 @@ describe("handlePaperWorkerPreflightWithSuccessor", () => {
     const observe = vi.fn(async () => observed);
     const research = vi.fn(async () => researchResult);
     const reserveSignal = vi.fn(async () => signalResult);
+    const fillSignal = vi.fn(async () => fillResult);
     const enqueue = vi.fn(async () => ({
       status: "enqueued" as const,
       ledgerId: "paper-1",
@@ -172,6 +178,7 @@ describe("handlePaperWorkerPreflightWithSuccessor", () => {
         observe,
         research,
         reserveSignal,
+        fillSignal,
       ),
     ).resolves.toEqual({
       status: "ready",
@@ -179,6 +186,7 @@ describe("handlePaperWorkerPreflightWithSuccessor", () => {
       observation: observed,
       research: researchResult,
       signal: signalResult,
+      fill: fillResult,
       successor: {
         status: "enqueued",
         ledgerId: "paper-1",
@@ -188,11 +196,15 @@ describe("handlePaperWorkerPreflightWithSuccessor", () => {
     });
     expect(research).toHaveBeenCalledWith(deps.prisma, payload, observed, now);
     expect(reserveSignal).toHaveBeenCalledWith(deps.prisma, payload, 2, now);
+    expect(fillSignal).toHaveBeenCalledWith(deps.prisma, payload, signalResult, now);
     expect(enqueue).toHaveBeenCalledWith(deps, payload, now);
     expect(research.mock.invocationCallOrder[0]).toBeLessThan(
       reserveSignal.mock.invocationCallOrder[0]!,
     );
     expect(reserveSignal.mock.invocationCallOrder[0]).toBeLessThan(
+      fillSignal.mock.invocationCallOrder[0]!,
+    );
+    expect(fillSignal.mock.invocationCallOrder[0]).toBeLessThan(
       enqueue.mock.invocationCallOrder[0]!,
     );
   });
@@ -209,6 +221,7 @@ describe("handlePaperWorkerPreflightWithSuccessor", () => {
       symbol: "SOL-USDT",
     };
     const reserveSignal = vi.fn(async () => signalResult);
+    const fillSignal = vi.fn(async () => fillResult);
     const enqueue = vi.fn(async () => ({
       status: "enqueued" as const,
       ledgerId: "paper-1",
@@ -226,18 +239,22 @@ describe("handlePaperWorkerPreflightWithSuccessor", () => {
         vi.fn(async () => bingxObservation),
         vi.fn(async () => bingxResearch),
         reserveSignal,
+        fillSignal,
       ),
     ).resolves.toMatchObject({
       status: "ready",
       research: bingxResearch,
       signal: signalResult,
+      fill: fillResult,
       successor: { status: "enqueued" },
     });
     expect(reserveSignal).toHaveBeenCalledWith(deps.prisma, payload, 2, now);
+    expect(fillSignal).toHaveBeenCalledWith(deps.prisma, payload, signalResult, now);
   });
 
-  it("keeps recurrence denial inert after research and signal handling", async () => {
+  it("keeps recurrence denial inert after research, signal and fill handling", async () => {
     const reserveSignal = vi.fn(async () => signalResult);
+    const fillSignal = vi.fn(async () => fillResult);
     const enqueue = vi.fn(async () => ({
       status: "stop" as const,
       ledgerId: "paper-1",
@@ -254,12 +271,14 @@ describe("handlePaperWorkerPreflightWithSuccessor", () => {
         vi.fn(async () => observed),
         vi.fn(async () => researchResult),
         reserveSignal,
+        fillSignal,
       ),
     ).resolves.toMatchObject({
       status: "ready",
       observation: { status: "observed" },
       research: researchResult,
       signal: signalResult,
+      fill: fillResult,
       successor: { status: "stop", reason: "recurrence_denied" },
     });
   });
@@ -330,7 +349,28 @@ describe("handlePaperWorkerPreflightWithSuccessor", () => {
     expect(enqueue).not.toHaveBeenCalled();
   });
 
-  it("propagates successor queue uncertainty after durable observation, research and signal handling", async () => {
+  it("propagates fill integrity uncertainty before successor enqueue", async () => {
+    const enqueue = vi.fn();
+    const fillSignal = vi.fn(async () => {
+      throw new Error("fill integrity mismatch");
+    });
+    await expect(
+      handlePaperWorkerPreflightWithSuccessor(
+        deps,
+        payload,
+        now,
+        vi.fn(async () => readyPreflight),
+        enqueue,
+        vi.fn(async () => observed),
+        vi.fn(async () => researchResult),
+        vi.fn(async () => signalResult),
+        fillSignal,
+      ),
+    ).rejects.toThrow("fill integrity mismatch");
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it("propagates successor queue uncertainty after durable observation, research, signal and fill handling", async () => {
     const enqueue = vi.fn(async () => {
       throw new Error("queue unavailable");
     });
@@ -344,6 +384,7 @@ describe("handlePaperWorkerPreflightWithSuccessor", () => {
         vi.fn(async () => observed),
         vi.fn(async () => researchResult),
         vi.fn(async () => signalResult),
+        vi.fn(async () => fillResult),
       ),
     ).rejects.toThrow("queue unavailable");
   });
