@@ -110,13 +110,7 @@ function parseRequest(value: unknown): FillGateRequest {
   const action = row.action;
   const expectedKeys =
     action === "enable"
-      ? [
-          "action",
-          "expected_gate_revision",
-          "expected_signal_revision",
-          "ledger_id",
-          "strategy_id",
-        ]
+      ? ["action", "expected_gate_revision", "expected_signal_revision", "ledger_id", "strategy_id"]
       : ["action", "expected_gate_revision", "expected_signal_revision", "ledger_id"];
   if (
     (action !== "enable" && action !== "disable") ||
@@ -225,7 +219,9 @@ function normalize(row: {
     row.signalRevision < 0 ||
     !Number.isSafeInteger(row.fillRevision) ||
     row.fillRevision < 1 ||
-    (row.enabled ? strategyId !== STRATEGY_ID || row.signalRevision < 1 : row.strategyId !== null) ||
+    (row.enabled
+      ? strategyId !== STRATEGY_ID || row.signalRevision < 1
+      : row.strategyId !== null) ||
     row.gateSha256 !== digest(value)
   ) {
     throw new PaperWorkerFillGateIntegrityError();
@@ -467,9 +463,8 @@ export async function applyApprovedTradingPaperWorkerFillControl(
         let policyRevision = previous?.policyRevision ?? 0;
         let gateRevision = previous?.gateRevision ?? request.expectedGateRevision;
         let signalRevision = previous?.signalRevision ?? request.expectedSignalRevision;
-        let strategyId: typeof STRATEGY_ID | null = previous?.strategyId === STRATEGY_ID
-          ? STRATEGY_ID
-          : null;
+        let strategyId: typeof STRATEGY_ID | null =
+          previous?.strategyId === STRATEGY_ID ? STRATEGY_ID : null;
 
         if (request.action === "enable") {
           const signal = await assessTradingPaperWorkerSignalPreflightInTransaction(
