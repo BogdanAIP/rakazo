@@ -169,6 +169,87 @@ describe("buildApprovalAskBlock", () => {
     expect(enable.detail).toContain("expected worker gate revision: 7");
   });
 
+  it("uses one-time market-target approval with no always allow", () => {
+    const block = buildApprovalAskBlock(
+      "effect-paper-market",
+      "paper_worker_market_target_control",
+      {
+        action: "enable",
+        ledger_id: "paper-1",
+        expected_gate_revision: 7,
+        venue: "okx",
+        symbol: "SOL-USDT",
+      },
+      [],
+    );
+    expect(block).toMatchObject({
+      kind: "ask",
+      text: "Approve OKX SOL-USDT paper market target for “paper-1”?",
+      actions: [
+        { id: "allow", label: "Approve paper market target" },
+        { id: "deny", label: "Cancel" },
+      ],
+    });
+    expect(JSON.stringify(block)).not.toContain("Always allow");
+    if (block.kind !== "ask") throw new Error("expected ask block");
+    expect(block.detail).toContain("does not fetch market data");
+    expect(block.detail).toContain("venue: okx");
+    expect(block.detail).toContain("symbol: SOL-USDT");
+  });
+
+  it("uses one-time automatic PAPER reservation approval with no always allow", () => {
+    const block = buildApprovalAskBlock(
+      "effect-paper-signal",
+      "paper_worker_signal_control",
+      {
+        action: "enable",
+        ledger_id: "paper-1",
+        expected_gate_revision: 7,
+        strategy_id: "breakout_20_1h_v1",
+      },
+      [],
+    );
+    expect(block).toMatchObject({
+      kind: "ask",
+      text: "Enable automatic PAPER reservations for “paper-1”?",
+      actions: [
+        { id: "allow", label: "Enable automatic PAPER reservations" },
+        { id: "deny", label: "Cancel" },
+      ],
+    });
+    expect(JSON.stringify(block)).not.toContain("Always allow");
+    if (block.kind !== "ask") throw new Error("expected ask block");
+    expect(block.detail).toContain("synthetic B7 reservation path");
+    expect(block.detail).toContain("strategy: breakout_20_1h_v1");
+  });
+
+  it("uses one-time automatic PAPER fill approval with no always allow", () => {
+    const block = buildApprovalAskBlock(
+      "effect-paper-fill",
+      "paper_worker_fill_control",
+      {
+        action: "enable",
+        ledger_id: "paper-1",
+        expected_gate_revision: 7,
+        expected_signal_revision: 3,
+        strategy_id: "breakout_20_1h_v1",
+      },
+      [],
+    );
+    expect(block).toMatchObject({
+      kind: "ask",
+      text: "Enable automatic PAPER fills for “paper-1”?",
+      actions: [
+        { id: "allow", label: "Enable automatic PAPER fills" },
+        { id: "deny", label: "Cancel" },
+      ],
+    });
+    expect(JSON.stringify(block)).not.toContain("Always allow");
+    if (block.kind !== "ask") throw new Error("expected ask block");
+    expect(block.detail).toContain("does not fetch a quote or fill now");
+    expect(block.detail).toContain("expected signal revision: 3");
+  });
+
   it("uses a one-time create or cancel choice for a new security boundary", () => {
     const block = buildApprovalAskBlock(
       "effect-1",
