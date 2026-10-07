@@ -311,13 +311,7 @@ describe("reservePersistedPaperWorkerProposal", () => {
   it("rejects an invalid trusted clock or target revision without touching DB readers", async () => {
     const readSignal = vi.fn();
     await expect(
-      reservePersistedPaperWorkerProposal(
-        prisma,
-        payload,
-        2,
-        new Date("invalid"),
-        readSignal,
-      ),
+      reservePersistedPaperWorkerProposal(prisma, payload, 2, new Date("invalid"), readSignal),
     ).rejects.toBeInstanceOf(PaperWorkerSignalReservationIntegrityError);
     await expect(
       reservePersistedPaperWorkerProposal(prisma, payload, 0, now, readSignal),
