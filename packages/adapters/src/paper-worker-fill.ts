@@ -104,8 +104,8 @@ function fillEvidenceId(
  * The reservation must have come from the F1 result for this exact worker wake.
  * F2 and the approved public market target are checked before the fresh quote
  * fetch and rechecked immediately afterwards. C1 receives the exact verified
- * F2 authority and revalidates it again inside its own serializable money
- * transaction. The quote id is deterministic so a crash/retry cannot turn an
+ * F2 and market-target authorities and revalidates both again inside its own
+ * serializable money transaction. The quote id is deterministic so a crash/retry cannot turn an
  * uncertain successful fill into a second fill with different evidence.
  */
 export async function fillReservedPaperWorkerProposal(
@@ -217,6 +217,7 @@ export async function fillReservedPaperWorkerProposal(
     reservationId,
     evidenceId,
     confirmedFill,
+    confirmedTarget,
   );
   return {
     status: "fill_result",
