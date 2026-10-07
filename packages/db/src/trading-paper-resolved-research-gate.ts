@@ -653,6 +653,45 @@ export async function recordTradingPaperResolvedResearchReserveUseInTransaction(
   });
 }
 
+export async function verifyTradingPaperResolvedResearchReserveUseInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  authority: TradingPaperResolvedResearchAuthority,
+  expected: {
+    reservationId: string;
+    signalId: string;
+    evidenceId: string;
+    reserveEventSequence: number;
+  },
+): Promise<boolean> {
+  await requireOwnedLedger(tx, owner, authority.ledgerId);
+  const row = await tx.tradingPaperResolvedResearchReserveUse.findUnique({
+    where: {
+      ledgerId_reservationId: {
+        ledgerId: authority.ledgerId,
+        reservationId: expected.reservationId,
+      },
+    },
+  });
+  if (!row) return false;
+  if (row.spaceId !== owner.spaceId || row.userId !== owner.userId) {
+    throw new PaperResolvedResearchGateIntegrityError(
+      "Resolved research reserve provenance owner mismatch",
+    );
+  }
+  const use = normalizeReserveUse(row);
+  return (
+    use.researchApprovalEffectId === authority.researchApprovalEffectId &&
+    sameScope(use.scope, authority.scope) &&
+    use.policyRevision === authority.policyRevision &&
+    use.gateRevision === authority.gateRevision &&
+    use.researchRevision === authority.researchRevision &&
+    use.signalId === expected.signalId &&
+    use.evidenceId === expected.evidenceId &&
+    use.reserveEventSequence === expected.reserveEventSequence
+  );
+}
+
 export type HistoricalTradingPaperResolvedResearchReserveScope = {
   ledgerId: string;
   reservationId: string;
