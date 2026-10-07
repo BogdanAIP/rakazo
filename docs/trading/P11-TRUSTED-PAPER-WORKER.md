@@ -244,6 +244,12 @@ E0 starts the market-observation side without activating trading. A new internal
 
 The primitive is deliberately **not** registered in the production background handler and is not exported as an RPC/MCP action. It has no signal generator, model runtime, reservation/fill/close writer, private exchange endpoint, API key or order dispatcher. The target is not yet recurrence-authorized or persisted, so E0 is only plumbing plus fail-closed tests. A later slice must add explicit owner-scoped target authorization before any recurring handler is allowed to call it.
 
+## P11E-1 — explicit owner-approved market target (permission only)
+
+E1 adds a separate default-deny authorization boundary for **which public spot market** a PAPER worker may observe. The new `paper_worker_market_target_control` builtin is a mandatory explicit-approval tool: Auto Review and permanent allow rules cannot bypass it. Enabling binds exactly one `okx|bingx + SYMBOL-QUOTE` target to the current verified worker-gate revision, checks that the symbol quote currency matches the ledger, persists an owner/space-scoped revisioned SHA-256-protected row, and stores the completed approval effect as provenance.
+
+The target preflight re-verifies that completed approval, the current D1 worker preflight and the exact gate revision. Disabling is stale-safe so revocation cannot be blocked by later worker configuration changes. The DB control has no market adapter or `JobPublisher`: changing the target does not fetch a quote, enqueue work, create a Routine, wake a model, mutate virtual money or contact a private exchange endpoint. A disposable PostgreSQL suite proves enable, wrong-quote denial, worker-gate invalidation, stale-safe disable and tamper failure. E0 is still **not** registered into the recurring handler after E1; that wiring remains a separate review step.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.
