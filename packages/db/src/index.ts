@@ -14,6 +14,10 @@ export * from "./model-credentials.js";
 export * from "./repos.js";
 export * from "./scope.js";
 export * from "./spaces.js";
+export {
+  fillApprovedTradingPaperReservation,
+  type TradingPaperFillResult,
+} from "./trading-paper-fill.js";
 export { applyApprovedTradingPaperProtectiveExitControl } from "./trading-paper-protective-exit-authority.js";
 export {
   PaperQuoteEvidenceError,
@@ -50,6 +54,7 @@ export {
   PaperWorkerFillGateIntegrityError,
   readTradingPaperWorkerFillPreflight,
   readVerifiedTradingPaperWorkerFillGate,
+  type TradingPaperWorkerFillAuthority,
   type TradingPaperWorkerFillGateStatus,
   type TradingPaperWorkerFillPreflight,
 } from "./trading-paper-worker-fill-gate.js";
