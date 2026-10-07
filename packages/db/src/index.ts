@@ -65,10 +65,13 @@ export {
 } from "./trading-paper-worker-gate.js";
 export {
   applyApprovedTradingPaperWorkerMarketTargetControl,
+  assessTradingPaperWorkerMarketTargetPreflightInTransaction,
   PaperWorkerMarketTargetIntegrityError,
   readTradingPaperWorkerMarketTargetPreflight,
   readVerifiedTradingPaperWorkerMarketTarget,
+  type TradingPaperWorkerMarketTargetAuthority,
   type TradingPaperWorkerMarketTargetPreflight,
+  verifyTradingPaperWorkerMarketTargetAuthorityInTransaction,
 } from "./trading-paper-worker-market-target.js";
 export {
   applyApprovedTradingPaperWorkerRecurrenceControl,
