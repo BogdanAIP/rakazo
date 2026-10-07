@@ -161,6 +161,7 @@ describe("reservePersistedPaperWorkerProposal", () => {
       payload.ledgerId,
       stored.output.signal,
       stored.record.quoteEvidenceId,
+      readyGate,
     );
   });
 
