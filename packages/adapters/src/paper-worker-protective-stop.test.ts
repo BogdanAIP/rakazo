@@ -2,6 +2,7 @@ import type { BackgroundJobPayloads } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import { handleVerifiedPaperWorkerAutomaticStops } from "./paper-worker-protective-stop.js";
+import { capturePublicPaperSpotEvidence } from "./trading-paper-public-capture.js";
 
 const payload: BackgroundJobPayloads["paper.worker-preflight"] = {
   ledgerId: "paper-1",
@@ -140,10 +141,12 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
       .fn()
       .mockResolvedValueOnce(candidatePreflight)
       .mockResolvedValueOnce(candidatePreflight);
-    const capture = vi.fn(async () => ({
-      id: `paper-worker:${"a".repeat(64)}`,
-      source: "public_adapter_observation" as const,
-    }));
+    const capture = vi.fn(
+      async (..._args: Parameters<typeof capturePublicPaperSpotEvidence>) => ({
+        id: `paper-worker:${"a".repeat(64)}`,
+        source: "public_adapter_observation" as const,
+      }),
+    );
     const close = vi.fn(async () => ({
       status: "deny" as const,
       mode: "paper_only" as const,
@@ -190,7 +193,10 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
       positions: [candidate, secondCandidate],
     };
     const readWake = vi.fn().mockResolvedValueOnce(readyWake).mockResolvedValueOnce(readyWake);
-    const readCandidates = vi.fn().mockResolvedValueOnce(candidates).mockResolvedValueOnce(candidates);
+    const readCandidates = vi
+      .fn()
+      .mockResolvedValueOnce(candidates)
+      .mockResolvedValueOnce(candidates);
     const capture = vi.fn(async () => ({
       id: `paper-worker:${"b".repeat(64)}`,
       source: "public_adapter_observation" as const,
