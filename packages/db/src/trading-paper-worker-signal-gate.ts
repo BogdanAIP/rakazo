@@ -341,7 +341,10 @@ export async function readTradingPaperWorkerSignalPreflight(
             workerReason: worker.reason,
           };
         }
-        if (worker.gateRevision !== gate.gateRevision || worker.policyRevision !== gate.policyRevision) {
+        if (
+          worker.gateRevision !== gate.gateRevision ||
+          worker.policyRevision !== gate.policyRevision
+        ) {
           return {
             status: "deny",
             mode: "paper_only",
@@ -398,7 +401,9 @@ export async function applyApprovedTradingPaperWorkerSignalControl(
         });
         if (previous) {
           if (previous.spaceId !== owner.spaceId || previous.userId !== owner.userId) {
-            throw new PaperWorkerSignalGateIntegrityError("Paper worker signal gate owner mismatch");
+            throw new PaperWorkerSignalGateIntegrityError(
+              "Paper worker signal gate owner mismatch",
+            );
           }
           normalize(previous);
         }
