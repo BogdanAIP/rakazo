@@ -1023,18 +1023,12 @@ export const builtinAgentTools: ConnectorTool[] = [
                 resolverDigest: { type: "string", pattern: "^[a-f0-9]{64}$" },
                 implementationReference: { type: "string", minLength: 1, maxLength: 500 },
                 skillSourceDigest: {
-                  anyOf: [
-                    { type: "string", pattern: "^[a-f0-9]{64}$" },
-                    { type: "null" },
-                  ],
+                  anyOf: [{ type: "string", pattern: "^[a-f0-9]{64}$" }, { type: "null" }],
                 },
                 strategyId: { type: "string", minLength: 1 },
                 strategyVersion: { type: "string", minLength: 1, maxLength: 128 },
                 venue: {
-                  anyOf: [
-                    { type: "string", minLength: 1, maxLength: 80 },
-                    { type: "null" },
-                  ],
+                  anyOf: [{ type: "string", minLength: 1, maxLength: 80 }, { type: "null" }],
                 },
                 marketKind: {
                   anyOf: [
