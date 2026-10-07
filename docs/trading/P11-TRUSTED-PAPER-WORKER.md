@@ -250,6 +250,12 @@ E1 adds a separate default-deny authorization boundary for **which public spot m
 
 The target preflight re-verifies that completed approval, the current D1 worker preflight and the exact gate revision. Disabling is stale-safe so revocation cannot be blocked by later worker configuration changes. The DB control has no market adapter or `JobPublisher`: changing the target does not fetch a quote, enqueue work, create a Routine, wake a model, mutate virtual money or contact a private exchange endpoint. A disposable PostgreSQL suite proves enable, wrong-quote denial, worker-gate invalidation, stale-safe disable and tamper failure. E0 is still **not** registered into the recurring handler after E1; that wiring remains a separate review step.
 
+## P11E-2 — resolve approved target before public observation (not registered)
+
+E2 removes the caller-supplied market from the observation path. The internal observation composition now obtains `venue + symbol` only from the verified E1 target preflight, checks the queued worker payload against the exact current gate revision, and only then calls the fixed-endpoint public adapter. A denied target or stale queued wake performs **zero public requests and zero evidence writes**; adapter uncertainty is propagated rather than converted into synthetic evidence.
+
+This remains deliberately unregistered in `paper.worker-preflight`. Before production recurrence may call E2, the observation needs a durable idempotency boundary keyed to the scheduled worker wake so a crash/retry cannot create multiple logically equivalent quote-evidence records.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.

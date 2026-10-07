@@ -1,50 +1,69 @@
 import type { BackgroundJobPayloads } from "@rakazo/adapter-kit";
-import type { PrismaClient } from "@rakazo/db";
 import {
-  handlePaperWorkerPreflight,
-  type PaperWorkerPreflightJobResult,
-} from "./paper-worker-background.js";
+  type PrismaClient,
+  readTradingPaperWorkerMarketTargetPreflight,
+  type TradingPaperWorkerMarketTargetPreflight,
+} from "@rakazo/db";
 import {
   capturePublicPaperSpotEvidence,
   type PublicPaperSpotTarget,
 } from "./trading-paper-public-capture.js";
 
-type HandlePreflight = typeof handlePaperWorkerPreflight;
+type ReadTargetPreflight = typeof readTradingPaperWorkerMarketTargetPreflight;
 type CaptureEvidence = typeof capturePublicPaperSpotEvidence;
+type ReadyTarget = Extract<TradingPaperWorkerMarketTargetPreflight, { status: "ready" }>;
 
 export type PaperWorkerMarketObservationResult =
   | {
       status: "stop";
-      preflight: Exclude<PaperWorkerPreflightJobResult, { status: "ready" }>;
+      reason: "target_denied" | "queued_gate_revision_stale";
+      targetPreflight: TradingPaperWorkerMarketTargetPreflight;
     }
   | {
       status: "observed";
-      preflight: Extract<PaperWorkerPreflightJobResult, { status: "ready" }>;
+      targetPreflight: ReadyTarget;
       target: PublicPaperSpotTarget;
       evidence: { id: string; source: "public_adapter_observation" };
     };
 
-/** P11E-0 internal composition only. It may persist one verified public quote
- * observation after the existing D2 worker preflight is ready, but it has no
- * production caller, recurrence wiring, trading writer, signal generator,
- * model runtime, exchange credential or private endpoint. */
-export async function observeAuthorizedPaperWorkerSpotMarket(
+/** P11E-2 internal composition only. The public target is never supplied by a
+ * caller: it must come from the E1 owner-approved target preflight, which also
+ * revalidates PAPER + worker approval provenance. The queued D1 gate revision
+ * is checked again before any network request. This still has no production
+ * background registration, signal/model runtime or trading writer. */
+export async function observeConfiguredPaperWorkerSpotMarket(
   prisma: PrismaClient,
   payload: BackgroundJobPayloads["paper.worker-preflight"],
-  target: PublicPaperSpotTarget,
-  handlePreflight: HandlePreflight = handlePaperWorkerPreflight,
+  now: Date = new Date(),
+  readTargetPreflight: ReadTargetPreflight = readTradingPaperWorkerMarketTargetPreflight,
   captureEvidence: CaptureEvidence = capturePublicPaperSpotEvidence,
 ): Promise<PaperWorkerMarketObservationResult> {
-  const preflight = await handlePreflight(prisma, payload);
-  if (preflight.status !== "ready") {
-    return { status: "stop", preflight };
+  if (!Number.isFinite(now.getTime())) {
+    throw new Error("Invalid paper market observation clock");
   }
 
+  const targetPreflight = await readTargetPreflight(
+    prisma,
+    { spaceId: payload.spaceId, userId: payload.userId },
+    payload.ledgerId,
+    now,
+  );
+  if (targetPreflight.status !== "ready") {
+    return { status: "stop", reason: "target_denied", targetPreflight };
+  }
+  if (targetPreflight.gateRevision !== payload.gateRevision) {
+    return { status: "stop", reason: "queued_gate_revision_stale", targetPreflight };
+  }
+
+  const target: PublicPaperSpotTarget = {
+    venue: targetPreflight.venue,
+    symbol: targetPreflight.symbol,
+  };
   const evidence = await captureEvidence(
     prisma,
     { spaceId: payload.spaceId, userId: payload.userId },
     payload.ledgerId,
     target,
   );
-  return { status: "observed", preflight, target, evidence };
+  return { status: "observed", targetPreflight, target, evidence };
 }
