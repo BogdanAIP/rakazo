@@ -274,6 +274,12 @@ E5 adds a separate append-once research record keyed by the exact worker `schedu
 
 A transient/invalid OKX history response yields an observation-only `history_unavailable` result rather than inventing candles or killing integrity state; DB/evidence integrity errors still propagate. This is still **research only**. E5 creates no reserve, fill, close, paper balance change, model call or live order. The initial adapter path intentionally supports only the already validated OKX closed-1H research feed. A BingX target remains observation-only until a separately validated BingX candle source exists; Rakazo must not mix OKX candles into a BingX signal and pretend the venue matches.
 
+## P11E-5c — guarded research registration
+
+The registered `paper.worker-preflight` chain now runs **D2 worker preflight → E1/E3 public observation → E5 research → D11/D12 successor**. For OKX, E5 first replays an already verified durable result; otherwise it reads the exact E3 quote evidence, fetches validated closed 1H history and runs the existing deterministic `breakout_20_1h_v1` baseline. A missing/invalid public history response is an observation-only cycle and does not invent data. BingX remains explicitly observation-only until its own history adapter is reviewed.
+
+Only evidence/research integrity failures abort before successor scheduling. Research success, NO_TRADE, unsupported BingX research and transient OKX history unavailability can all continue recurrence. The production chain still cannot reserve or fill virtual funds from a research proposal; signal-to-PAPER mutation remains a separate reviewed gate.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.
