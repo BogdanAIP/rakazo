@@ -22,6 +22,10 @@ import {
   appendTradingPaperLedgerEventInTransaction,
   recoverTradingPaperLedgerInTransaction,
 } from "./trading-paper-store.js";
+import {
+  assessTradingPaperWorkerSignalPreflightInTransaction,
+  type TradingPaperWorkerSignalPreflight,
+} from "./trading-paper-worker-signal-gate.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 type Owner = { spaceId: string; userId: string };
@@ -45,6 +49,7 @@ export class PaperReservationDecisionIntegrityError extends Error {
 type ReserveDenyReason =
   | TradingPaperReservationDenyReason
   | "paper_capability_unapproved"
+  | "paper_worker_signal_unapproved"
   | "price_not_tick_aligned"
   | "capacity_unrepresentable"
   | "capacity_no_capacity"
@@ -70,6 +75,27 @@ export type TradingPaperReserveResult =
   | (Omit<TradingPaperReservationDeny, "reason"> & { reason: ReserveDenyReason })
   | TradingPaperReserveCreated
   | TradingPaperReserveDuplicate;
+
+export type TradingPaperWorkerSignalReserveAuthority = Extract<
+  TradingPaperWorkerSignalPreflight,
+  { status: "ready" }
+>;
+
+function sameWorkerSignalAuthority(
+  left: TradingPaperWorkerSignalReserveAuthority,
+  right: TradingPaperWorkerSignalReserveAuthority,
+): boolean {
+  return (
+    left.ledgerId === right.ledgerId &&
+    left.strategyId === right.strategyId &&
+    left.policyRevision === right.policyRevision &&
+    left.gateRevision === right.gateRevision &&
+    left.signalRevision === right.signalRevision &&
+    left.signalApprovalEffectId === right.signalApprovalEffectId &&
+    left.workerApprovalEffectId === right.workerApprovalEffectId &&
+    left.paperApprovalEffectId === right.paperApprovalEffectId
+  );
+}
 
 function sha256(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value), "utf8").digest("hex");
@@ -315,6 +341,7 @@ export async function reserveApprovedTradingPaperSignal(
   ledgerId: string,
   proposedSignal: unknown,
   evidenceId: string,
+  workerSignalAuthority?: TradingPaperWorkerSignalReserveAuthority,
 ): Promise<TradingPaperReserveResult> {
   const parsed = TradingSignalSchema.safeParse(proposedSignal);
   const proposal = parsed.success && parsed.data.kind === "proposal" ? parsed.data : null;
@@ -326,11 +353,29 @@ export async function reserveApprovedTradingPaperSignal(
       async (tx) => {
         await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
+        const currentPolicy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
+        if (workerSignalAuthority) {
+          const currentAuthority = await assessTradingPaperWorkerSignalPreflightInTransaction(
+            tx,
+            owner,
+            ledgerId,
+            new Date(),
+          );
+          if (
+            currentAuthority.status !== "ready" ||
+            !sameWorkerSignalAuthority(workerSignalAuthority, currentAuthority)
+          ) {
+            const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
+            return deny(
+              { ledgerRevision: recovered.row.version, policyRevision: currentPolicy.revision },
+              "paper_worker_signal_unapproved",
+            );
+          }
+        }
         if (proposal) {
           const existing = await readExistingDecision(tx, owner, ledgerId, proposal, evidenceId);
           if (existing) return existing;
         }
-        const currentPolicy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         await releaseTradingPaperReservationsInTransaction(
           tx,
           owner,
