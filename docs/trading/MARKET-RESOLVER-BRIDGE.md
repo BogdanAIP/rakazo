@@ -58,6 +58,31 @@ execution authority. `assessResolvedTradingResearch` is a pure read-only helper 
 derives that scope and returns only `proposal`, `no_trade` or `expired`. It performs no ledger
 write and grants no PAPER authority.
 
+## G1 — explicit generic PAPER research-source approval
+
+G1 adds a separate persisted permission boundary for Resolver-produced research. It does **not**
+reuse or widen the legacy `breakout_20_1h_v1` worker signal gate.
+
+An owner-approved `paper_resolved_research_control` effect may enable exactly one
+`TradingResolvedResearchApprovalScope` for one PAPER ledger and the currently authorized worker
+revision. The stored gate binds:
+
+- Resolver semantic key, resolver key and digest;
+- exact selected implementation reference;
+- optional Market Skill source digest;
+- strategy id/version plus proposal venue, market kind and action class;
+- current PAPER policy revision and worker gate revision;
+- a monotonically increasing research approval revision and the exact approval effect id.
+
+The G1 preflight validates a fresh `TradingResolvedResearchEnvelope`, rejects `NO_TRADE` and
+expired proposals, verifies the completed explicit approval provenance, rechecks current D2 worker
+authority, and requires the derived scope to exactly match the persisted approved scope. Any worker
+revision change invalidates the gate until a new explicit approval is recorded.
+
+G1 is permission-only. Enabling, disabling or checking it writes no PAPER ledger event, creates no
+outbox item and cannot reserve, fill, close, sign, broadcast or submit any exchange order. Connecting
+a G1-ready proposal to the existing PAPER reserve writer remains a later separately reviewed step.
+
 ## Why G0 is separate from Market storage
 
 The Market/Capability Profile line and the stacked Trading PR line currently diverge from a common
