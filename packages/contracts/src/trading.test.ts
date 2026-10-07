@@ -97,7 +97,6 @@ describe("trading contracts (research-only)", () => {
     expect(TradingSignalSchema.safeParse({ ...proposal, maxSlippageBps: -1 }).success).toBe(false);
   });
 
-
   it("accepts a Resolver-selected research proposal without granting execution authority", () => {
     const proposal = {
       ...base,
