@@ -95,6 +95,7 @@ import {
   applyApprovedTradingPaperControl,
   applyApprovedTradingPaperProtectiveExitControl,
   applyApprovedTradingPaperWorkerControl,
+  applyApprovedTradingPaperWorkerFillControl,
   applyApprovedTradingPaperWorkerMarketTargetControl,
   applyApprovedTradingPaperWorkerRecurrenceControl,
   applyApprovedTradingPaperWorkerSignalControl,
@@ -3609,6 +3610,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
               throw new Error("Paper worker signal control requires a claimed explicit approval.");
             }
             return applyApprovedTradingPaperWorkerSignalControl(
+              deps.prisma,
+              { spaceId: run.spaceId, userId: run.userId },
+              applied.effect.id,
+            );
+          }
+          if (name === "paper_worker_fill_control") {
+            if (!applied || !claimedEffect) {
+              throw new Error("Paper worker fill control requires a claimed explicit approval.");
+            }
+            return applyApprovedTradingPaperWorkerFillControl(
               deps.prisma,
               { spaceId: run.spaceId, userId: run.userId },
               applied.effect.id,
