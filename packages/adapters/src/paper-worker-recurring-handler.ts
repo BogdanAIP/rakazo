@@ -9,6 +9,10 @@ import {
   type PaperWorkerFillAttemptResult,
 } from "./paper-worker-fill.js";
 import {
+  handleVerifiedPaperWorkerAutomaticStops,
+  type PaperWorkerAutomaticStopHandlingResult,
+} from "./paper-worker-protective-stop.js";
+import {
   observeConfiguredPaperWorkerSpotMarket,
   type PaperWorkerMarketObservationResult,
 } from "./paper-worker-market-observation.js";
@@ -31,6 +35,7 @@ type ObserveMarket = typeof observeConfiguredPaperWorkerSpotMarket;
 type ResearchMarket = typeof researchObservedPaperWorkerMarket;
 type ReserveSignal = typeof reservePersistedPaperWorkerProposal;
 type FillSignal = typeof fillReservedPaperWorkerProposal;
+type HandleAutomaticStops = typeof handleVerifiedPaperWorkerAutomaticStops;
 type ReadyPreflight = Extract<PaperWorkerPreflightJobResult, { status: "ready" }>;
 type StoppedObservation = Extract<PaperWorkerMarketObservationResult, { status: "stop" }>;
 type CompletedObservation = Extract<PaperWorkerMarketObservationResult, { status: "observed" }>;
@@ -40,6 +45,13 @@ export type PaperWorkerRecurringHandlerResult =
       status: "stop";
       stage: "preflight";
       preflight: Exclude<PaperWorkerPreflightJobResult, { status: "ready" }>;
+    }
+  | {
+      status: "stop";
+      stage: "protective_stop";
+      preflight: ReadyPreflight;
+      protectiveStop: Exclude<PaperWorkerAutomaticStopHandlingResult, { status: "continue" }>;
+      successor: AuthorizedPaperWorkerSuccessorScheduleResult;
     }
   | {
       status: "stop";
@@ -57,15 +69,19 @@ export type PaperWorkerRecurringHandlerResult =
       successor: AuthorizedPaperWorkerSuccessorScheduleResult;
     };
 
-/** P11F-3 production PAPER wake composition. D2 revalidates the worker gate,
- * E1/E3 persist one approved public quote, E5/E6 replay or derive the durable
- * deterministic research result, F0/F1 may create only a B7 synthetic reserve,
- * and F2/F3 independently gate a fresh public quote into C1 full PAPER fill.
- * C1 revalidates F2 again inside its serializable money transaction and stores
- * immutable F3 approval provenance. D11/D12 schedule the successor afterwards.
- * No private exchange API, broker dispatcher or live order exists in this path. */
+/** P11F-5 production PAPER wake composition. D2 revalidates the worker gate,
+ * then F4/F5 service at most one verified automatic position stop before any
+ * new research or exposure. Only when no protective action blocks the wake do
+ * E1/E3, E5/E6, F0/F1 and F2/F3 run. C2 remains the synthetic close money
+ * boundary and independently requires enabled PAPER with an unlatched kill
+ * switch. D11/D12 schedule the successor. No private exchange API, broker
+ * dispatcher or live order exists in this path. */
 export async function handlePaperWorkerPreflightWithSuccessor(
-  deps: { prisma: PrismaClient; jobs: Pick<JobPublisher, "enqueue"> },
+  deps: {
+    prisma: PrismaClient;
+    jobs: Pick<JobPublisher, "enqueue">;
+    handleAutomaticStops?: HandleAutomaticStops;
+  },
   payload: BackgroundJobPayloads["paper.worker-preflight"],
   now: Date = new Date(),
   handlePreflight: HandlePreflight = handlePaperWorkerPreflight,
@@ -81,6 +97,20 @@ export async function handlePaperWorkerPreflightWithSuccessor(
   const preflight = await handlePreflight(deps.prisma, payload);
   if (preflight.status !== "ready") {
     return { status: "stop", stage: "preflight", preflight };
+  }
+
+  const protectiveStop = await (
+    deps.handleAutomaticStops ?? handleVerifiedPaperWorkerAutomaticStops
+  )(deps.prisma, payload, now);
+  if (protectiveStop.status !== "continue") {
+    const successor = await enqueueSuccessor(deps, payload, now);
+    return {
+      status: "stop",
+      stage: "protective_stop",
+      preflight,
+      protectiveStop,
+      successor,
+    };
   }
 
   const observation = await observeMarket(deps.prisma, payload, now);
