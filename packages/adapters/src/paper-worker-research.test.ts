@@ -65,6 +65,7 @@ describe("researchObservedPaperWorkerMarket", () => {
         observation,
         now,
         read,
+        vi.fn(async () => null),
         history,
         research,
         record,
@@ -137,6 +138,7 @@ describe("researchObservedPaperWorkerMarket", () => {
         okxObservation,
         now,
         read,
+        vi.fn(async () => null),
         history,
         research,
         record,
@@ -167,6 +169,97 @@ describe("researchObservedPaperWorkerMarket", () => {
         output,
       },
     );
+  });
+
+  it("replays durable research before reading evidence or public history", async () => {
+    const output = TradingResearchOutputSchema.parse({
+      algorithm: "breakout_20_1h_v1",
+      venue: "okx",
+      market,
+      fetchedAt: now.toISOString(),
+      candleCount: 0,
+      latestClosedAt: null,
+      signal: {
+        kind: "no_trade",
+        signalId: "okx:SOL-USDT:1H:no-bars:abstain",
+        strategyId: "breakout_20_1h_v1",
+        strategyVersion: "1",
+        createdAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + 30 * 60_000).toISOString(),
+        evidenceIds: ["okx:SOL-USDT:1H:no-bars"],
+        reason: "already persisted",
+      },
+    });
+    const existing = {
+      record: {
+        status: "duplicate" as const,
+        ledgerId: "paper-1",
+        sourceScheduledFor: payload.scheduledFor,
+        gateRevision: 7,
+        targetRevision: 4,
+        quoteEvidenceId: okxObservation.evidence.id,
+        algorithm: output.algorithm,
+        signalId: output.signal.signalId,
+        signalKind: output.signal.kind,
+      },
+      output,
+    };
+    const readEvidence = vi.fn();
+    const history = vi.fn();
+
+    await expect(
+      researchObservedPaperWorkerMarket(
+        {} as PrismaClient,
+        payload,
+        okxObservation,
+        new Date(now.getTime() + 10 * 60_000),
+        readEvidence,
+        vi.fn(async () => existing),
+        history,
+      ),
+    ).resolves.toEqual({ status: "researched", ...existing });
+    expect(readEvidence).not.toHaveBeenCalled();
+    expect(history).not.toHaveBeenCalled();
+  });
+
+  it("continues as observation-only when OKX history is unavailable", async () => {
+    const at = now.toISOString();
+    const read = vi.fn(async () => ({
+      id: okxObservation.evidence.id,
+      source: "public_adapter_observation" as const,
+      market,
+      ticker: {
+        venue: "okx" as const,
+        kind: "spot" as const,
+        symbol: "SOL-USDT",
+        bid: "100",
+        ask: "100.1",
+        quoteVolume24h: "100000",
+        observedAt: at,
+        fetchedAt: at,
+      },
+    }));
+    const record = vi.fn();
+    await expect(
+      researchObservedPaperWorkerMarket(
+        {} as PrismaClient,
+        payload,
+        okxObservation,
+        now,
+        read,
+        vi.fn(async () => null),
+        vi.fn(async () => {
+          throw new Error("history endpoint unavailable");
+        }),
+        vi.fn(),
+        record,
+      ),
+    ).resolves.toEqual({
+      status: "history_unavailable",
+      venue: "okx",
+      symbol: "SOL-USDT",
+    });
+    expect(record).not.toHaveBeenCalled();
   });
 
   it("propagates durable research-write conflicts", async () => {
@@ -214,6 +307,7 @@ describe("researchObservedPaperWorkerMarket", () => {
         okxObservation,
         now,
         read,
+        vi.fn(async () => null),
         vi.fn(async () => ({ fetchedAt: at, candles: [] })),
         vi.fn(() => output),
         record,

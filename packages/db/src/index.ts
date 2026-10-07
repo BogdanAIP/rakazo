@@ -57,7 +57,9 @@ export {
 export {
   PaperWorkerResearchIntegrityError,
   type PaperWorkerResearchRecord,
+  type VerifiedPaperWorkerResearchOutput,
   readVerifiedTradingPaperWorkerResearchOutput,
+  readVerifiedTradingPaperWorkerResearchOutputIfPresent,
   recordTradingPaperWorkerResearchOutput,
 } from "./trading-paper-worker-research.js";
 export {

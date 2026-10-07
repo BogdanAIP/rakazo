@@ -232,12 +232,17 @@ export async function recordTradingPaperWorkerResearchOutput(
   );
 }
 
-export async function readVerifiedTradingPaperWorkerResearchOutput(
+export type VerifiedPaperWorkerResearchOutput = {
+  record: PaperWorkerResearchRecord;
+  output: TradingResearchOutput;
+};
+
+export async function readVerifiedTradingPaperWorkerResearchOutputIfPresent(
   prisma: Db,
   owner: Owner,
   ledgerId: string,
   input: Omit<ResearchWrite, "output" | "quoteEvidenceId">,
-): Promise<{ record: PaperWorkerResearchRecord; output: TradingResearchOutput }> {
+): Promise<VerifiedPaperWorkerResearchOutput | null> {
   const scheduled = new Date(input.sourceScheduledFor);
   if (
     !Number.isFinite(scheduled.getTime()) ||
@@ -250,7 +255,7 @@ export async function readVerifiedTradingPaperWorkerResearchOutput(
   }
   return withTransactionRetry(() =>
     prisma.$transaction(
-      async (tx) => {
+      async (tx): Promise<VerifiedPaperWorkerResearchOutput | null> => {
         const row = await tx.tradingPaperWorkerResearch.findUnique({
           where: {
             ledgerId_sourceScheduledFor_gateRevision_targetRevision: {
@@ -261,8 +266,9 @@ export async function readVerifiedTradingPaperWorkerResearchOutput(
             },
           },
         });
-        if (!row || row.spaceId !== owner.spaceId || row.userId !== owner.userId) {
-          throw new PaperWorkerResearchIntegrityError("Paper worker research unavailable");
+        if (!row) return null;
+        if (row.spaceId !== owner.spaceId || row.userId !== owner.userId) {
+          throw new PaperWorkerResearchIntegrityError("Paper worker research owner mismatch");
         }
         const output = rowOutput(row.output);
         const evidence = await verifyPublicPaperQuoteEvidenceInTransaction(
@@ -293,7 +299,7 @@ export async function readVerifiedTradingPaperWorkerResearchOutput(
         }
         return {
           record: {
-            status: "duplicate" as const,
+            status: "duplicate",
             ledgerId,
             sourceScheduledFor: row.sourceScheduledFor.toISOString(),
             gateRevision: row.gateRevision,
@@ -309,4 +315,22 @@ export async function readVerifiedTradingPaperWorkerResearchOutput(
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
   );
+}
+
+export async function readVerifiedTradingPaperWorkerResearchOutput(
+  prisma: Db,
+  owner: Owner,
+  ledgerId: string,
+  input: Omit<ResearchWrite, "output" | "quoteEvidenceId">,
+): Promise<VerifiedPaperWorkerResearchOutput> {
+  const existing = await readVerifiedTradingPaperWorkerResearchOutputIfPresent(
+    prisma,
+    owner,
+    ledgerId,
+    input,
+  );
+  if (!existing) {
+    throw new PaperWorkerResearchIntegrityError("Paper worker research unavailable");
+  }
+  return existing;
 }

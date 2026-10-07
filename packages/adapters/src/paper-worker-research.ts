@@ -5,6 +5,7 @@ import {
   type PaperWorkerResearchRecord,
   type PrismaClient,
   readVerifiedPublicPaperQuoteEvidence,
+  readVerifiedTradingPaperWorkerResearchOutputIfPresent,
   recordTradingPaperWorkerResearchOutput,
 } from "@rakazo/db";
 import type { PaperWorkerMarketObservationResult } from "./paper-worker-market-observation.js";
@@ -12,6 +13,7 @@ import { fetchOkxClosedOneHourHistory, type OkxClosedHistory } from "./trading-o
 
 type CompletedObservation = Extract<PaperWorkerMarketObservationResult, { status: "observed" }>;
 type ReadEvidence = typeof readVerifiedPublicPaperQuoteEvidence;
+type ReadExistingResearch = typeof readVerifiedTradingPaperWorkerResearchOutputIfPresent;
 type FetchHistory = typeof fetchOkxClosedOneHourHistory;
 type Research = typeof researchClosedHourBreakout;
 type RecordResearch = typeof recordTradingPaperWorkerResearchOutput;
@@ -20,6 +22,11 @@ export type PaperWorkerResearchResult =
   | {
       status: "unsupported_target";
       venue: "bingx";
+      symbol: string;
+    }
+  | {
+      status: "history_unavailable";
+      venue: "okx";
       symbol: string;
     }
   | {
@@ -38,6 +45,7 @@ export async function researchObservedPaperWorkerMarket(
   observation: CompletedObservation,
   now: Date = new Date(),
   readEvidence: ReadEvidence = readVerifiedPublicPaperQuoteEvidence,
+  readExistingResearch: ReadExistingResearch = readVerifiedTradingPaperWorkerResearchOutputIfPresent,
   fetchHistory: FetchHistory = fetchOkxClosedOneHourHistory,
   research: Research = researchClosedHourBreakout,
   recordResearch: RecordResearch = recordTradingPaperWorkerResearchOutput,
@@ -54,6 +62,15 @@ export async function researchObservedPaperWorkerMarket(
   }
 
   const owner = { spaceId: payload.spaceId, userId: payload.userId };
+  const existing = await readExistingResearch(prisma, owner, payload.ledgerId, {
+    sourceScheduledFor: payload.scheduledFor,
+    gateRevision: payload.gateRevision,
+    targetRevision: observation.targetPreflight.targetRevision,
+  });
+  if (existing) {
+    return { status: "researched", ...existing };
+  }
+
   const evidence = await readEvidence(prisma, owner, payload.ledgerId, observation.evidence.id);
   if (
     evidence.market.venue !== "okx" ||
@@ -63,7 +80,16 @@ export async function researchObservedPaperWorkerMarket(
     throw new Error("Observed paper market evidence no longer matches the approved OKX target");
   }
 
-  const history: OkxClosedHistory = await fetchHistory(evidence.market, { now });
+  let history: OkxClosedHistory;
+  try {
+    history = await fetchHistory(evidence.market, { now });
+  } catch {
+    return {
+      status: "history_unavailable",
+      venue: "okx",
+      symbol: observation.target.symbol,
+    };
+  }
   const output = research({
     market: evidence.market,
     candles: history.candles,
