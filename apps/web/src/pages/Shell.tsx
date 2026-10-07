@@ -196,13 +196,13 @@ import {
 import { markAfterPaint, markOnce } from "../lib/performance";
 import { quoteDraftForSelection } from "../lib/quote-selection";
 import { getResponseStreamingEnabled, subscribeResponseStreaming } from "../lib/response-streaming";
-import { rosterWorkStatusLabel } from "../lib/roster-status";
 import type { Panel, RightPanelState } from "../lib/right-panel-state";
 import {
   readRightPanelState,
   rightPanelStorageKey,
   writeRightPanelState,
 } from "../lib/right-panel-state";
+import { rosterWorkStatusLabel } from "../lib/roster-status";
 import { clearSpaceSelection, rpc, selectedSpaceId, selectSpace } from "../lib/rpc";
 import { readSeenRunErrorIds, rememberSeenRunErrorId } from "../lib/run-error-storage";
 import { sharedInflight } from "../lib/shared-inflight";
