@@ -300,6 +300,14 @@ F0 authorization is checked before the durable research lookup and again immedia
 
 F1 can create only the existing synthetic `reserve` hold; it does not call C1 fill, create an exchange order, use a private endpoint, read an API key or add a broker/outbox dispatcher. The recurring order is now **D2 preflight → E1/E3 public observation → E5/E6 durable research → F0/F1 gated B7 reserve attempt → D11/D12 successor**. A durable proposal can therefore be rejected by either F0/F1 or B7 without being converted into a fill. Fill automation remains a separate later review gate.
 
+## P11F-2 — explicit automatic PAPER fill permission only
+
+F2 adds a **second independent owner approval boundary** before any future automatic C1 full-fill may be considered. The new `paper_worker_fill_control` cannot be Auto Reviewed or permanently allowed. Enabling it binds the exact current paper-policy revision, worker-gate revision, F0 signal-gate revision and fixed `breakout_20_1h_v1` strategy into an owner/space-scoped SHA-256-protected row with its own monotonically increasing fill revision.
+
+The fill preflight revalidates the completed F2 approval and then re-runs the full F0 signal preflight in the same serializable read snapshot. Disabling or changing the signal gate, worker gate or paper policy therefore invalidates the old fill permission; re-enabling upstream authority requires a **new separate F2 approval**. Disable remains fail-safe and does not depend on the upstream signal gate still being ready.
+
+This slice is permission/configuration only. It creates **zero reserve, `fill_buy`, `fill_sell`, ledger, outbox or Routine mutations**, does not fetch a quote, does not consume a reservation and does not call C1. It has no exchange credentials, private endpoint, broker dispatcher or live-order path. A later separately reviewed F3 slice may bind a fresh approved public quote and a still-current F2 authority to the existing C1 synthetic full-fill writer; until then, automatic fills remain impossible.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.
@@ -316,5 +324,6 @@ Start with reservation and explicit expiry/release under a trusted clock. Synthe
 
 1. **P11E-5:** derive and durably persist a deterministic **research-only** signal/NO_TRADE result from the already authorized observation. Start with the existing validated OKX closed-1H history path; do not silently substitute another venue's candles.
 2. **Completed in P11E-6:** BingX now has a venue-matching fixed-endpoint closed-1H research source with no credentials.
-3. **P11F-1 implemented:** only a verified durable E5/E6 proposal can cross the explicit F0 signal permission into B7, and F0 is revalidated inside B7's serializable reserve transaction. `NO_TRADE`, stale/expired scope and revoked permission remain non-mutating. Next, keep fill as a separate explicit automation gate before any C1 wiring.
+3. **P11F-1 implemented:** only a verified durable E5/E6 proposal can cross the explicit F0 signal permission into B7, and F0 is revalidated inside B7's serializable reserve transaction. `NO_TRADE`, stale/expired scope and revoked permission remain non-mutating.
+4. **P11F-2 implemented:** automatic synthetic fill has its own explicit owner-approved gate bound to the exact F0/worker/paper revisions. It still performs no fill. Next, review F3 as a fresh-quote + F2-authority bridge into C1 while keeping live execution out of scope.
 4. Expand spot research across the bounded altcoin universe, then review perpetual/dated-future paper semantics separately. **Live own-account execution remains a different project gate** with independent account/venue/legal/financial safeguards.
