@@ -14,6 +14,11 @@ const now = new Date("2026-10-05T12:01:00.000Z");
 const deps = {
   prisma: {} as PrismaClient,
   jobs: { enqueue: vi.fn(async () => undefined) } as Pick<JobPublisher, "enqueue">,
+  handleAutomaticStops: vi.fn(async () => ({
+    status: "continue" as const,
+    ledgerId: "paper-1",
+    checkedPositions: 0,
+  })),
 };
 const readyPreflight = {
   status: "ready" as const,
@@ -113,6 +118,70 @@ describe("handlePaperWorkerPreflightWithSuccessor", () => {
     expect(research).not.toHaveBeenCalled();
     expect(reserveSignal).not.toHaveBeenCalled();
     expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it("services F5 before new research and schedules the successor after a bounded automatic close", async () => {
+    const handleStops = vi.fn(async () => ({
+      status: "close_result" as const,
+      ledgerId: "paper-1",
+      checkedPositions: 1,
+      positionId: "position-1",
+      evidenceId: `paper-worker:${"f".repeat(64)}`,
+      close: {
+        status: "closed" as const,
+        mode: "paper_only" as const,
+        positionId: "position-1",
+        signalId: "signal-1",
+        closeEventId: "close-1",
+        closeEventSequence: 9,
+        policyRevision: 3,
+        quantityBase: "1",
+        executedPriceQuote: "94.9",
+        feeQuote: "0.1",
+        stopPriceQuote: "95",
+        closedAt: "2026-10-05T12:01:01.000Z",
+      },
+    }));
+    const localDeps = { ...deps, handleAutomaticStops: handleStops };
+    const observe = vi.fn();
+    const research = vi.fn();
+    const reserveSignal = vi.fn();
+    const fillSignal = vi.fn();
+    const enqueue = vi.fn(async () => ({
+      status: "enqueued" as const,
+      ledgerId: "paper-1",
+      gateRevision: 7,
+      scheduledFor: "2026-10-05T12:15:00.000Z",
+    }));
+
+    await expect(
+      handlePaperWorkerPreflightWithSuccessor(
+        localDeps,
+        payload,
+        now,
+        vi.fn(async () => readyPreflight),
+        enqueue,
+        observe,
+        research,
+        reserveSignal,
+        fillSignal,
+      ),
+    ).resolves.toMatchObject({
+      status: "stop",
+      stage: "protective_stop",
+      protectiveStop: {
+        status: "close_result",
+        positionId: "position-1",
+      },
+      successor: { status: "enqueued" },
+    });
+    expect(handleStops).toHaveBeenCalledWith(deps.prisma, payload, now);
+    expect(observe).not.toHaveBeenCalled();
+    expect(research).not.toHaveBeenCalled();
+    expect(reserveSignal).not.toHaveBeenCalled();
+    expect(fillSignal).not.toHaveBeenCalled();
+    expect(enqueue).toHaveBeenCalledWith(localDeps, payload, now);
+    expect(handleStops.mock.invocationCallOrder[0]).toBeLessThan(enqueue.mock.invocationCallOrder[0]!);
   });
 
   it("stops before research, signal reserve and recurrence when the approved market target is unavailable", async () => {
