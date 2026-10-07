@@ -270,15 +270,21 @@ A crash after the evidence commit but before successor enqueue is therefore repl
 
 ## P11E-5 — durable deterministic research output (not registered)
 
-E5 adds a separate append-once research record keyed by the exact worker `scheduledFor + gateRevision + targetRevision`. The record stores the normalized `TradingResearchOutput`, signal/NO_TRADE id, algorithm and the E3 public quote-evidence id under an owner/space-scoped SHA-256 integrity digest. The DB writer re-verifies the public evidence and requires the research market to match that verified OKX market exactly. Before any history fetch, the adapter first checks for an already persisted verified result and replays it without recalculation; this prevents a Graphile retry with a later server clock from generating a conflicting signal timestamp.
+E5 adds a separate append-once research record keyed by the exact worker `scheduledFor + gateRevision + targetRevision`. The record stores the normalized `TradingResearchOutput`, signal/NO_TRADE id, algorithm and the E3 public quote-evidence id under an owner/space-scoped SHA-256 integrity digest. The DB writer re-verifies the public evidence and requires the research output venue/market to match that verified public market exactly. Before any history fetch, the adapter first checks for an already persisted verified result and replays it without recalculation; this prevents a Graphile retry with a later server clock from generating a conflicting signal timestamp.
 
-A transient/invalid OKX history response yields an observation-only `history_unavailable` result rather than inventing candles or killing integrity state; DB/evidence integrity errors still propagate. This is still **research only**. E5 creates no reserve, fill, close, paper balance change, model call or live order. The initial adapter path intentionally supports only the already validated OKX closed-1H research feed. A BingX target remains observation-only until a separately validated BingX candle source exists; Rakazo must not mix OKX candles into a BingX signal and pretend the venue matches.
+A transient/invalid OKX history response yields an observation-only `history_unavailable` result rather than inventing candles or killing integrity state; DB/evidence integrity errors still propagate. This is still **research only**. E5 creates no reserve, fill, close, paper balance change, model call or live order. The research adapter now dispatches only to the matching fixed public history source: OKX observations use OKX closed 1H candles and BingX observations use BingX closed 1H candles. Cross-venue candle substitution remains forbidden.
 
 ## P11E-5c — guarded research registration
 
-The registered `paper.worker-preflight` chain now runs **D2 worker preflight → E1/E3 public observation → E5 research → D11/D12 successor**. For OKX, E5 first replays an already verified durable result; otherwise it reads the exact E3 quote evidence, fetches validated closed 1H history and runs the existing deterministic `breakout_20_1h_v1` baseline. A missing/invalid public history response is an observation-only cycle and does not invent data. BingX remains explicitly observation-only until its own history adapter is reviewed.
+The registered `paper.worker-preflight` chain now runs **D2 worker preflight → E1/E3 public observation → E5 research → D11/D12 successor**. For OKX, E5 first replays an already verified durable result; otherwise it reads the exact E3 quote evidence, fetches validated closed 1H history and runs the existing deterministic `breakout_20_1h_v1` baseline. A missing/invalid public history response is an observation-only cycle and does not invent data. Both OKX and BingX now have separately validated fixed-endpoint closed-1H adapters; a research output must preserve the same venue as its verified quote evidence.
 
 Only evidence/research integrity failures abort before successor scheduling. Research success, NO_TRADE, unsupported BingX research and transient OKX history unavailability can all continue recurrence. The production chain still cannot reserve or fill virtual funds from a research proposal; signal-to-PAPER mutation remains a separate reviewed gate.
+
+## P11E-6 — BingX venue-matching closed-history research
+
+BingX worker observations can now use the official unauthenticated spot kline endpoint through a fixed-origin adapter. The adapter requests at most 100 one-hour candles, accepts only active BingX spot symbols, excludes the still-open hour from trusted research, validates timestamp alignment/duration and OHLC bounds, uses quote-asset volume, rejects duplicates and never accepts caller-provided URLs, credentials or headers.
+
+The shared `breakout_20_1h_v1` research baseline now preserves `market.venue` and validates candle identity for either OKX or BingX. Durable E5 research persistence also binds the output venue to the verified E3 public quote evidence. This adds research parity for BingX spot only; it does not add BingX private API, derivatives execution, account access or PAPER mutation.
 
 ## P11C — Bounded synthetic lifecycle, separate gate
 
@@ -295,6 +301,6 @@ Start with reservation and explicit expiry/release under a trusted clock. Synthe
 ## Follow-on sequence
 
 1. **P11E-5:** derive and durably persist a deterministic **research-only** signal/NO_TRADE result from the already authorized observation. Start with the existing validated OKX closed-1H history path; do not silently substitute another venue's candles.
-2. Validate and register the new fixed-endpoint BingX closed-1H source in the worker research stage, preserving the same no-credentials, closed-bar, venue-matching rules.
+2. **Completed in P11E-6:** BingX now has a venue-matching fixed-endpoint closed-1H research source with no credentials.
 3. Review a separate signal-to-PAPER decision slice that reuses B7/C1/C2 and the current independent risk manager. A research proposal must never become a reserve/fill merely because E4 observed a price.
 4. Expand spot research across the bounded altcoin universe, then review perpetual/dated-future paper semantics separately. **Live own-account execution remains a different project gate** with independent account/venue/legal/financial safeguards.

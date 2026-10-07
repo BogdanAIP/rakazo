@@ -136,7 +136,10 @@ export async function recordTradingPaperWorkerResearchOutput(
         if (!evidence) {
           throw new PaperWorkerResearchIntegrityError("Worker quote evidence unavailable");
         }
-        if (evidence.market.venue !== "okx" || !sameMarket(evidence.market, parsed.output.market)) {
+        if (
+          parsed.output.venue !== evidence.market.venue ||
+          !sameMarket(evidence.market, parsed.output.market)
+        ) {
           throw new PaperWorkerResearchIntegrityError(
             "Research market differs from verified quote evidence",
           );
@@ -278,7 +281,8 @@ export async function readVerifiedTradingPaperWorkerResearchOutputIfPresent(
           row.quoteEvidenceId,
         );
         if (
-          evidence?.market.venue !== "okx" ||
+          !evidence ||
+          output.venue !== evidence.market.venue ||
           !sameMarket(evidence.market, output.market) ||
           row.algorithm !== output.algorithm ||
           row.signalId !== output.signal.signalId ||

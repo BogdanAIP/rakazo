@@ -1,5 +1,5 @@
 import type { BackgroundJobPayloads } from "@rakazo/adapter-kit";
-import type { TradingResearchOutput } from "@rakazo/contracts";
+import type { TradingInstrument, TradingResearchOutput } from "@rakazo/contracts";
 import { researchClosedHourBreakout } from "@rakazo/core";
 import {
   type PaperWorkerResearchRecord,
@@ -8,25 +8,25 @@ import {
   readVerifiedTradingPaperWorkerResearchOutputIfPresent,
   recordTradingPaperWorkerResearchOutput,
 } from "@rakazo/db";
+import { fetchBingxClosedOneHourHistory } from "./trading-bingx-history.js";
 import type { PaperWorkerMarketObservationResult } from "./paper-worker-market-observation.js";
-import { fetchOkxClosedOneHourHistory, type OkxClosedHistory } from "./trading-okx-history.js";
+import { fetchOkxClosedOneHourHistory } from "./trading-okx-history.js";
 
 type CompletedObservation = Extract<PaperWorkerMarketObservationResult, { status: "observed" }>;
 type ReadEvidence = typeof readVerifiedPublicPaperQuoteEvidence;
 type ReadExistingResearch = typeof readVerifiedTradingPaperWorkerResearchOutputIfPresent;
-type FetchHistory = typeof fetchOkxClosedOneHourHistory;
+type ClosedHistory = Awaited<ReturnType<typeof fetchOkxClosedOneHourHistory>>;
+type FetchHistory = (
+  market: TradingInstrument,
+  options: { now?: Date },
+) => Promise<ClosedHistory>;
 type Research = typeof researchClosedHourBreakout;
 type RecordResearch = typeof recordTradingPaperWorkerResearchOutput;
 
 export type PaperWorkerResearchResult =
   | {
-      status: "unsupported_target";
-      venue: "bingx";
-      symbol: string;
-    }
-  | {
       status: "history_unavailable";
-      venue: "okx";
+      venue: "okx" | "bingx";
       symbol: string;
     }
   | {
@@ -35,10 +35,18 @@ export type PaperWorkerResearchResult =
       record: PaperWorkerResearchRecord;
     };
 
-/** P11E-5 research-only composition. It consumes only an already durable E3
- * observation. OKX history uses the fixed public 1H adapter and the existing
- * deterministic breakout baseline. BingX is intentionally abstained until a
- * venue-matching closed-candle adapter is separately reviewed. */
+async function fetchClosedOneHourHistory(
+  market: TradingInstrument,
+  options: { now?: Date },
+): Promise<ClosedHistory> {
+  return market.venue === "bingx"
+    ? fetchBingxClosedOneHourHistory(market, options)
+    : fetchOkxClosedOneHourHistory(market, options);
+}
+
+/** P11E-6 research-only composition. It consumes only an already durable E3
+ * observation, fetches venue-matching fixed-endpoint closed 1H history and
+ * runs the same deterministic breakout baseline for OKX or BingX spot. */
 export async function researchObservedPaperWorkerMarket(
   prisma: PrismaClient,
   payload: BackgroundJobPayloads["paper.worker-preflight"],
@@ -46,21 +54,13 @@ export async function researchObservedPaperWorkerMarket(
   now: Date = new Date(),
   readEvidence: ReadEvidence = readVerifiedPublicPaperQuoteEvidence,
   readExistingResearch: ReadExistingResearch = readVerifiedTradingPaperWorkerResearchOutputIfPresent,
-  fetchHistory: FetchHistory = fetchOkxClosedOneHourHistory,
+  fetchHistory: FetchHistory = fetchClosedOneHourHistory,
   research: Research = researchClosedHourBreakout,
   recordResearch: RecordResearch = recordTradingPaperWorkerResearchOutput,
 ): Promise<PaperWorkerResearchResult> {
   if (!Number.isFinite(now.getTime())) {
     throw new Error("Invalid paper worker research clock");
   }
-  if (observation.target.venue === "bingx") {
-    return {
-      status: "unsupported_target",
-      venue: "bingx",
-      symbol: observation.target.symbol,
-    };
-  }
-
   const owner = { spaceId: payload.spaceId, userId: payload.userId };
   const existing = await readExistingResearch(prisma, owner, payload.ledgerId, {
     sourceScheduledFor: payload.scheduledFor,
@@ -73,20 +73,20 @@ export async function researchObservedPaperWorkerMarket(
 
   const evidence = await readEvidence(prisma, owner, payload.ledgerId, observation.evidence.id);
   if (
-    evidence.market.venue !== "okx" ||
+    evidence.market.venue !== observation.target.venue ||
     evidence.market.symbol !== observation.target.symbol ||
     evidence.market.kind !== "spot"
   ) {
-    throw new Error("Observed paper market evidence no longer matches the approved OKX target");
+    throw new Error("Observed paper market evidence no longer matches the approved target");
   }
 
-  let history: OkxClosedHistory;
+  let history: ClosedHistory;
   try {
     history = await fetchHistory(evidence.market, { now });
   } catch {
     return {
       status: "history_unavailable",
-      venue: "okx",
+      venue: observation.target.venue,
       symbol: observation.target.symbol,
     };
   }

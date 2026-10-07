@@ -174,14 +174,14 @@ describe("handlePaperWorkerPreflightWithSuccessor", () => {
     expect(research.mock.invocationCallOrder[0]).toBeLessThan(enqueue.mock.invocationCallOrder[0]!);
   });
 
-  it("keeps an observation-only BingX target recurring without inventing research", async () => {
+  it("keeps BingX recurring when its public history is temporarily unavailable", async () => {
     const bingxObservation = {
       ...observed,
       targetPreflight: { ...observed.targetPreflight, venue: "bingx" as const },
       target: { venue: "bingx" as const, symbol: "SOL-USDT" },
     };
     const bingxResearch = {
-      status: "unsupported_target" as const,
+      status: "history_unavailable" as const,
       venue: "bingx" as const,
       symbol: "SOL-USDT",
     };
