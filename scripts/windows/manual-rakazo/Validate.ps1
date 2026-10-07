@@ -42,12 +42,12 @@ foreach ($forbidden in @('runtimes connect', 'runtimes stop', 'schtasks', 'Regis
 }
 $guiStatusText = [IO.File]::ReadAllText($guiStatusPath)
 foreach ($needed in @(
-    "Join-Path $PSScriptRoot 'Rakazo.ps1'",
+    'Join-Path $PSScriptRoot ''Rakazo.ps1''',
     'RedirectStandardOutput = $controllerStdout',
     'RedirectStandardError = $controllerStderr',
     'launcher-stage.log',
     'gui-controller.stderr.log',
-    "if ($stage -ceq 'tray active')",
+    'if ($stage -ceq ''tray active'')',
     '[System.Windows.Forms.Application]::Run($form)',
     'Get-RelevantErrorText',
     'Rakazo ещё запускается'
