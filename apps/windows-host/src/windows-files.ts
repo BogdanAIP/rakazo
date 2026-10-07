@@ -60,7 +60,10 @@ async function validateDirectoryHandle(handle: Win32FileHandle, root: string) {
 }
 
 /** Node BigIntStats.nlink is bigint; reject zero/multiple links in either stats mode. */
-export function isSingleLinkRegularFile(info: {\n  isFile(): boolean;\n  nlink: number | bigint;\n}): boolean {
+export function isSingleLinkRegularFile(info: {
+  isFile(): boolean;
+  nlink: number | bigint;
+}): boolean {
   return info.isFile() && BigInt(info.nlink) === 1n;
 }
 

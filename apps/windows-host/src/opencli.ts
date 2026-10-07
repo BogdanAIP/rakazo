@@ -166,7 +166,9 @@ export class WindowsOpenCliBackend {
         }
       }
       if (this.sessions.size >= MAX_ACTIVE_SESSIONS) {
-        throw new Error(\n          "Too many live browser sessions; close your own session or wait for expiry",\n        );
+        throw new Error(
+          "Too many live browser sessions; close your own session or wait for expiry",
+        );
       }
       const sessionToken = randomUUID();
       this.sessions.set(sessionToken, { botId, lastActivity: now });
