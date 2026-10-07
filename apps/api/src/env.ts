@@ -1,4 +1,5 @@
 import {
+  type McpAllowedStdioLaunch,
   resolveCloudAgentProvider,
   resolveDeploymentModel,
   resolveSandboxProvider,
@@ -83,6 +84,7 @@ export interface AppEnv {
   wakeupDriver: string;
   mcpStdioEnabled: boolean;
   mcpStdioAllowedCommands: string[];
+  mcpStdioAllowedLaunches: McpAllowedStdioLaunch[];
   /** Deployment-owner escape for remote MCP on RFC1918 / Docker-network hosts. */
   mcpAllowPrivateEndpoint: boolean;
   port: number;
@@ -174,6 +176,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean),
+    mcpStdioAllowedLaunches: parseMcpStdioAllowedLaunches(source.MCP_STDIO_ALLOWED_LAUNCHES),
     mcpAllowPrivateEndpoint: source.MCP_ALLOW_PRIVATE_ENDPOINT === "true",
     port: Number(source.API_PORT ?? 3100),
     gitSha: optional(source.GIT_SHA) ?? optional(source.RAKAZO_GIT_SHA),
@@ -187,6 +190,41 @@ function required(source: NodeJS.ProcessEnv, key: string): string {
   const value = source[key];
   if (!value) throw new Error(`Missing ${key}`);
   return value;
+}
+
+function parseMcpStdioAllowedLaunches(value: string | undefined): McpAllowedStdioLaunch[] {
+  const raw = value?.trim();
+  if (!raw) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("MCP_STDIO_ALLOWED_LAUNCHES must be valid JSON");
+  }
+  if (!Array.isArray(parsed) || parsed.length > 64) {
+    throw new Error("MCP_STDIO_ALLOWED_LAUNCHES must be an array with at most 64 entries");
+  }
+  return parsed.map((entry, index) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new Error(`MCP_STDIO_ALLOWED_LAUNCHES[${index}] must be an object`);
+    }
+    const record = entry as Record<string, unknown>;
+    if (JSON.stringify(Object.keys(record).sort()) !== JSON.stringify(["args", "command"])) {
+      throw new Error(`MCP_STDIO_ALLOWED_LAUNCHES[${index}] has unexpected fields`);
+    }
+    const command = typeof record.command === "string" ? record.command.trim() : "";
+    const args = record.args;
+    if (
+      !command ||
+      command.length > 512 ||
+      !Array.isArray(args) ||
+      args.length > 64 ||
+      args.some((arg) => typeof arg !== "string" || arg.length > 2_048)
+    ) {
+      throw new Error(`MCP_STDIO_ALLOWED_LAUNCHES[${index}] is invalid`);
+    }
+    return { command, args: args as string[] };
+  });
 }
 
 function optional(value: string | undefined): string | undefined {
