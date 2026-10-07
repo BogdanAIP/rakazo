@@ -70,7 +70,7 @@ describe("createBackgroundJobHandlers", () => {
     installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] }));
   });
 
-  it("routes paper worker wake through guarded recurrence without model execution", async () => {
+  it("routes paper worker wake through guarded observation and recurrence without model execution", async () => {
     const prisma = {} as unknown as PrismaClient;
     const jobs = { enqueue: vi.fn(async () => undefined) } as unknown as JobPublisher;
     const executor = {

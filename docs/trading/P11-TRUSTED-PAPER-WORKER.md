@@ -262,6 +262,12 @@ E3 gives every approved public observation a deterministic evidence ID derived f
 
 This closes the crash/retry duplication hole before production registration. The existing non-worker public capture path still uses random evidence IDs, while the E2 worker path always supplies its durable scheduled-wake ID. PostgreSQL coverage verifies that a retry with a changed quote cannot overwrite or duplicate the first committed evidence. E3 still does not register market polling into the background handler.
 
+## P11E-4 — production registration of guarded public observation
+
+E4 activates the previously inert observation path inside the already registered `paper.worker-preflight` handler. The order is strict: **D2 worker preflight → E1/E3 approved-target observation → D11/D12 successor**. A denied/stale worker gate performs no market access; a denied/stale target performs no public request and stops that recurrence chain; a public-adapter failure propagates so the same scheduled Graphile job can retry under the deterministic E3 evidence ID. The successor is attempted only after the observation is durable.
+
+A crash after the evidence commit but before successor enqueue is therefore replay-safe: the repeated wake resolves to the same `paper-worker:<sha256>` evidence row, while the existing D11/D12 successor intent remains the queue-side idempotency barrier. E4 still has **no model call, private exchange credential, reservation/fill/close writer, futures route, wallet action or live order path**.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.
