@@ -873,7 +873,7 @@ model AgentSkill {
   name        String
   description String
   content     String
-  /// user | builtin | plugin вЂ” only user skills are writable via API/tools.
+  /// user | builtin | plugin — only user skills are writable via API/tools.
   source      String   @default("user")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -1119,7 +1119,7 @@ model UsageRecord {
   /// Which bot spent this. Deliberately NOT a relation: a usage row is spend that really
   /// happened, and no lifecycle event on the bot may delete it or blank its attribution.
   /// `Cascade` erased the row; `SetNull` would erase the attribution instead, and because
-  /// deleting a bot also deletes its runs, `runId` goes null in the same breath вЂ” the row
+  /// deleting a bot also deletes its runs, `runId` goes null in the same breath — the row
   /// would keep only space, user, model and token counts.
   ///
   /// So the id outlives the bot and may dangle. Read it with a LEFT JOIN; `BotDeletion.id`
@@ -1253,7 +1253,7 @@ model BotMcpServer {
 model MessagingIdentity {
   id                   String    @id @default(cuid())
   provider             String
-  /// Sender address within the provider: E.164 number, Slack user id, вЂ¦.
+  /// Sender address within the provider: E.164 number, Slack user id, ….
   address              String
   /// Opaque provider thread id for the 1:1 conversation; learned on inbound.
   dmThreadId           String?

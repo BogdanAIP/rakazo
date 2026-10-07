@@ -309,7 +309,7 @@ export async function createApp(
     pipedreamOverride ??
     (isPipedreamEnabled(pipedreamConfig) ? new PipedreamConnector(pipedreamConfig) : undefined);
   // This process registers the inbound sink (messaging.onInbound below),
-  // so it's the one that must hold Telegram's live getUpdates connection вЂ”
+  // so it's the one that must hold Telegram's live getUpdates connection —
   // see messagingPlatformsFromEnv's docstring for why a second poller
   // elsewhere (e.g. the worker) would actively break this.
   const messagingPlatforms = messagingPlatformsFromEnv(env, { pollInboundMessages: true });
@@ -642,7 +642,7 @@ export async function createApp(
         signupAllowlist: env.signupAllowlist,
       },
       typing: (threadId) => {
-        // Keep conversation addresses out of trace ids вЂ” those reach logs
+        // Keep conversation addresses out of trace ids — those reach logs
         // and telemetry, a different trust boundary than the database.
         const operationId = `messaging.typing:${randomUUID()}`;
         return messaging.sendTyping(threadId, {
@@ -832,7 +832,7 @@ export async function createApp(
           return;
         }
         // Bridge is still starting (or retrying). Do not fall through to the
-        // personal-line inbound path вЂ” that bypasses externalMessage ownership
+        // personal-line inbound path — that bypasses externalMessage ownership
         // and can wake routines for unlinked TeamChat senders.
         if (teamChatInitTask) {
           const pending = pendingTeamChatInbound.enqueue(event);
@@ -851,7 +851,7 @@ export async function createApp(
     // registered) immediately rather than waiting for the first webhook
     // POST or outbound send to lazily trigger it. This is the process that
     // owns the inbound sink registered just above, so it must be the one
-    // holding the live connection вЂ” a second poller elsewhere (e.g. the
+    // holding the live connection — a second poller elsewhere (e.g. the
     // worker) would only fight this one for Telegram's single getUpdates
     // slot without ever seeing the messages itself.
     // Bounded retries cover transient Telegram startup failures; polling-only

@@ -182,7 +182,7 @@ export function CreateBotForm({
         disabled={!name.trim() || submitting}
         onClick={() => void handleSubmit()}
       >
-        {submitting ? <Trans>CreatingвЂ¦</Trans> : <Trans>Create</Trans>}
+        {submitting ? <Trans>Creating…</Trans> : <Trans>Create</Trans>}
       </Button>
     </div>
   );
@@ -265,7 +265,7 @@ export function BotSettings({
         setCredentials(nextCredentials);
         setCatalog(nextCatalog);
         setMe(nextMe);
-        // Only mark ready on success вЂ” a failed catalog load must not clear
+        // Only mark ready on success — a failed catalog load must not clear
         // an existing thinkingLevel override on save.
         setModelMetaReady(true);
       })
@@ -295,14 +295,14 @@ export function BotSettings({
               key: modelOptionKey(credential.provider, credential.modelId),
               provider: credential.provider,
               modelId: credential.modelId,
-              label: `${credential.label} В· ${credential.modelId}`,
+              label: `${credential.label} · ${credential.modelId}`,
             },
           ]
         : providerModels.map((entry) => ({
             key: modelOptionKey(entry.provider, entry.id),
             provider: entry.provider,
             modelId: entry.id,
-            label: `${entry.providerName ?? entry.provider} В· ${entry.label}`,
+            label: `${entry.providerName ?? entry.provider} · ${entry.label}`,
           }));
     for (const option of options) {
       if (seenOptions.has(option.key)) continue;
@@ -490,7 +490,7 @@ export function BotSettings({
             <Trans>Advanced</Trans>
           </span>
           <span aria-hidden="true" className="transition-transform group-open:rotate-90">
-            вЂє
+            ›
           </span>
         </summary>
         <ComputerModePicker value={computerMode} onChange={setComputerMode} />

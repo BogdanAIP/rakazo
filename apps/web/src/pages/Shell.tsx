@@ -893,7 +893,7 @@ export function ShellPage() {
         const archivedFresh =
           archivedRequest != null && archivedRequest === archivedBotsRefreshEpoch.current;
         // A newer non-archived refresh can win the bots epoch while an older
-        // includeArchived request still owns archivedBotsRefreshEpoch вЂ” apply
+        // includeArchived request still owns archivedBotsRefreshEpoch — apply
         // whichever slices are still current.
         if (!botsFresh && !archivedFresh) return;
         if (archivedFresh && archived) setArchivedBots(archived);
@@ -1512,7 +1512,7 @@ export function ShellPage() {
         key: showSpaceNames ? `space:${space.id}:${group.key}` : group.key,
         title: showSpaceNames
           ? group.title
-            ? `${space.name} В· ${group.title}`
+            ? `${space.name} · ${group.title}`
             : space.name
           : group.title,
         showLock: showSpaceNames,
@@ -2298,7 +2298,7 @@ export function ShellPage() {
     if (!id) return;
     await refreshThreadRef.current(id);
   }, []);
-  // Teach chrome needs skills applied before this resolves вЂ” refreshThread only
+  // Teach chrome needs skills applied before this resolves — refreshThread only
   // kicks skills.list off in the background, so Stop teaching would never mount
   // if that background call failed or lagged behind local recovery.
   const refreshActiveTeaching = useCallback(async () => {
@@ -2529,7 +2529,7 @@ export function ShellPage() {
   }, [panel]);
 
   // The routine panel copies a routine's data into local draft state at click time
-  // rather than deriving it from `active`, so it goes stale across a bot switch вЂ”
+  // rather than deriving it from `active`, so it goes stale across a bot switch —
   // without this, Save on bot B could silently update bot A's routine.
   useEffect(() => {
     setEditingRoutine(null);
@@ -4421,7 +4421,7 @@ export function ShellPage() {
       {booting ? (
         <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-[22px] bg-background/95">
           <div className="text-[19px] font-medium text-foreground">
-            <Trans>Booting up {computerBot?.name ?? active?.name}вЂ™s computer</Trans>
+            <Trans>Booting up {computerBot?.name ?? active?.name}’s computer</Trans>
           </div>
           <div className="h-[5px] w-[min(420px,70%)] overflow-hidden rounded-full bg-accent">
             <div className="h-full w-2/3 rounded-full bg-primary" />
@@ -4702,7 +4702,7 @@ const Transcript = memo(function Transcript({
       // Repeat firings for an unchanged selection reuse the draft so the
       // transcript isn't re-rendered by every unrelated selection event. A
       // moved selection (e.g. keyboard-selecting a second occurrence of the
-      // same text) must carry its new Range вЂ” the pill anchors to it.
+      // same text) must carry its new Range — the pill anchors to it.
       if (
         prev &&
         prev.message === draft.message &&
@@ -4794,7 +4794,7 @@ const Transcript = memo(function Transcript({
   // A jump scroll must win over follow-the-tail: unfollow inside the commit
   // that mounts the row so a live commit cannot cancel the animation, keep
   // retrying while the pinned window is still rendering, and suppress the
-  // near-end follow re-arm only for the jump's own scroll events вЂ” scrollend
+  // near-end follow re-arm only for the jump's own scroll events — scrollend
   // (or user input interrupting it, which also fires scrollend) ends the
   // suppression, with the timeout as fallback when no scroll happens.
   useLayoutEffect(() => {
@@ -4903,7 +4903,7 @@ const Transcript = memo(function Transcript({
             onClick={() => void loadOlder()}
             className="self-center rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground hover:bg-muted hover:text-foreground/75 disabled:opacity-50"
           >
-            {loadingOlder ? t`LoadingвЂ¦` : t`Load earlier messages`}
+            {loadingOlder ? t`Loading…` : t`Load earlier messages`}
           </button>
         ) : null}
         {groupVoiceChats(reactionView.visibleMessages).map((item) => {
@@ -5104,7 +5104,7 @@ const QuoteSelectionButton = memo(function QuoteSelectionButton({
     };
     update();
     window.addEventListener("resize", update);
-    // Scroll doesn't bubble вЂ” listen on the capture phase to catch any scroller.
+    // Scroll doesn't bubble — listen on the capture phase to catch any scroller.
     window.addEventListener("scroll", update, { capture: true, passive: true });
     return () => {
       window.removeEventListener("resize", update);
@@ -5199,7 +5199,7 @@ const Composer = memo(function Composer({
   const [selectedMentions, setSelectedMentions] = useState<ComposerMention[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [replyAnnouncement, setReplyAnnouncement] = useState("");
-  // What the live region currently holds вЂ” a send disarming the reply clears
+  // What the live region currently holds — a send disarming the reply clears
   // "reply" text, while an explicit cancel must keep "Reply cancelled".
   const replyAnnouncementKind = useRef<"reply" | "cancelled" | null>(null);
   const prevReplyTarget = useRef<ThreadMessage | null>(null);
@@ -5461,9 +5461,9 @@ const Composer = memo(function Composer({
     prevReplyTarget.current = replyTarget ?? null;
     if (!replyTarget) {
       // Cancel (or send) within the delay must not let a stale "Replying to"
-      // overwrite the cancel announcement вЂ” kill the pending timer.
+      // overwrite the cancel announcement — kill the pending timer.
       window.clearTimeout(announceTimer.current);
-      // A send disarms the reply without touching the region вЂ” drop the stale
+      // A send disarms the reply without touching the region — drop the stale
       // "Replying to" so it cannot linger or re-announce. An explicit cancel
       // sets "Reply cancelled" in the same event, so only clear "reply" text.
       if (replyAnnouncementKind.current === "reply") {
@@ -5474,7 +5474,7 @@ const Composer = memo(function Composer({
     }
     if (!prev || prev.id !== replyTarget.id) {
       textareaRef.current?.focus();
-      // Clear-then-set so a switch between same-author targets re-announces вЂ”
+      // Clear-then-set so a switch between same-author targets re-announces —
       // identical live-region text would otherwise be a no-op.
       setReplyAnnouncement("");
       replyAnnouncementKind.current = null;
@@ -5530,7 +5530,7 @@ const Composer = memo(function Composer({
         >
           <span className="min-w-0 flex-1 truncate text-muted-foreground">
             {replyQuote
-              ? t`Replying to ${replyName}: вЂњ${replyQuote}вЂќ`
+              ? t`Replying to ${replyName}: “${replyQuote}”`
               : t`Replying to ${replyName}`}
           </span>
           <button
@@ -5538,13 +5538,13 @@ const Composer = memo(function Composer({
             aria-label={t`Cancel reply`}
             onClick={() => {
               replyAnnouncementKind.current = "cancelled";
-              // Kill a pending arm announce in this event вЂ” the effect's
+              // Kill a pending arm announce in this event — the effect's
               // cleanup can lag the timer, and a late "Replying to" would
               // then be cleared as stale, dropping the cancel announcement.
               window.clearTimeout(announceTimer.current);
               onClearReply?.();
               setReplyAnnouncement(t`Reply cancelled`);
-              // The chip unmounts with this button вЂ” keep focus in the composer.
+              // The chip unmounts with this button — keep focus in the composer.
               textareaRef.current?.focus();
             }}
             className="shrink-0 text-muted-foreground hover:text-foreground"
@@ -5791,7 +5791,7 @@ const Composer = memo(function Composer({
               showComposerPlaceholder
                 ? activeName
                   ? t`Message ${activeName}`
-                  : t`MessageвЂ¦`
+                  : t`Message…`
                 : undefined
             }
             aria-label={activeName ? t`Message ${activeName}` : t`Message`}
@@ -5937,7 +5937,7 @@ function accessibleReplyExcerpt(text: string, max = 120): string {
   if (normalized.length <= max) return normalized;
   // Reserve a slot for the ellipsis; never split a surrogate pair at the cut.
   const end = (normalized.charCodeAt(max - 2) & 0xfc00) === 0xd800 ? max - 2 : max - 1;
-  return `${normalized.slice(0, end).trimEnd()}вЂ¦`;
+  return `${normalized.slice(0, end).trimEnd()}…`;
 }
 
 function formatRosterTime(isoDate?: string | null): string {
@@ -6114,7 +6114,7 @@ function ComputerReleaseActions({
         <Trans>Skip</Trans>
       </Button>
       <Button type="button" size="sm" onClick={() => void onRelease("done")}>
-        <Trans>IвЂ™m done</Trans>
+        <Trans>I’m done</Trans>
       </Button>
     </div>
   );
@@ -6203,7 +6203,7 @@ const MessageView = memo(function MessageView({
           // hide the quote, and an unbounded quote can be thousands of chars.
           aria-label={
             message.replyQuote
-              ? t`Jump to replied message: вЂњ${accessibleReplyExcerpt(message.replyQuote)}вЂќ`
+              ? t`Jump to replied message: “${accessibleReplyExcerpt(message.replyQuote)}”`
               : replyPreview
                 ? t`Jump to replied message: ${accessibleReplyExcerpt(previewMessageText(replyPreview))}`
                 : t`Jump to replied message`
@@ -6213,7 +6213,7 @@ const MessageView = memo(function MessageView({
           dir="auto"
         >
           {message.replyQuote
-            ? `вЂњ${message.replyQuote}вЂќ`
+            ? `“${message.replyQuote}”`
             : replyPreview
               ? previewMessageText(replyPreview)
               : t`Earlier message`}
@@ -6338,7 +6338,7 @@ const MessageView = memo(function MessageView({
               className="flex items-center justify-center gap-2 py-1 text-[13.5px] text-muted-foreground"
             >
               <span>
-                {messageProviderLabel(block.provider, block.transport)} В· {block.fromLabel}:{" "}
+                {messageProviderLabel(block.provider, block.transport)} · {block.fromLabel}:{" "}
                 {block.text}
               </span>
             </div>
@@ -6350,7 +6350,7 @@ const MessageView = memo(function MessageView({
               key={i}
               className="flex items-center justify-center gap-2 py-1 text-[13.5px] text-muted-foreground"
             >
-              <span className="text-warning">в—·</span>
+              <span className="text-warning">◷</span>
               <span>{block.text}</span>
             </div>
           );
@@ -6642,7 +6642,7 @@ function computerPlaceholder(
   booting: boolean,
   label: string,
 ) {
-  if (state === "booting" || booting) return t`Booting live desktopвЂ¦`;
+  if (state === "booting" || booting) return t`Booting live desktop…`;
   if (state === "running") return label;
   if (state === "suspended") return t`Computer is asleep. Open it to wake.`;
   if (state === "error") return t`Computer failed to boot`;
@@ -6650,7 +6650,7 @@ function computerPlaceholder(
 }
 
 function computerLabel(mode: ComputerStatus["mode"] | undefined, botName: string) {
-  return mode === "dedicated" ? t`${botName}вЂ™s computer` : t`Team Computer`;
+  return mode === "dedicated" ? t`${botName}’s computer` : t`Team Computer`;
 }
 
 function newClientNonce(): string {
