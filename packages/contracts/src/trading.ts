@@ -170,6 +170,27 @@ export const TradingResolvedResearchEnvelopeSchema = z.object({
 });
 export type TradingResolvedResearchEnvelope = z.infer<typeof TradingResolvedResearchEnvelopeSchema>;
 
+/**
+ * Immutable research-source identity that a later explicit PAPER strategy gate
+ * may approve. It intentionally omits a signal's price levels and evidence so
+ * approval cannot be confused with an order or one specific fill.
+ */
+export const TradingResolvedResearchApprovalScopeSchema = z.object({
+  schemaVersion: z.literal("trading-resolved-research-scope-v1"),
+  semanticKey: TradingResolvedResearchProvenanceSchema.shape.semanticKey,
+  resolverKey: TradingResolvedResearchProvenanceSchema.shape.resolverKey,
+  resolverDigest: TradingResolvedResearchProvenanceSchema.shape.resolverDigest,
+  implementationReference:
+    TradingResolvedResearchProvenanceSchema.shape.implementation.shape.reference,
+  skillSourceDigest: TradingResolvedResearchProvenanceSchema.shape.skill.unwrap().shape.sourceDigest
+    .nullable(),
+  strategyId: Id,
+  strategyVersion: z.string().trim().min(1).max(128),
+});
+export type TradingResolvedResearchApprovalScope = z.infer<
+  typeof TradingResolvedResearchApprovalScopeSchema
+>;
+
 /** Read-only, user-invoked market prefilter. It creates no orders or buy/sell signals. */
 export const TradingScanRequestSchema = z.object({
   venue: z.enum(["bingx", "okx"]).default("bingx"),
