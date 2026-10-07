@@ -84,11 +84,11 @@ describe("read-only BingX closed 1H history", () => {
     await expect(history({ code: 0, data: [] }, { ...market, venue: "okx" })).rejects.toThrow(
       "Unsupported",
     );
-    await expect(
-      history({ code: 0, data: [] }, { ...market, kind: "perpetual" }),
-    ).rejects.toThrow("Unsupported");
-    await expect(
-      history({ code: 0, data: [] }, { ...market, symbol: "SOL/USDT" }),
-    ).rejects.toThrow("Unsupported");
+    await expect(history({ code: 0, data: [] }, { ...market, kind: "perpetual" })).rejects.toThrow(
+      "Unsupported",
+    );
+    await expect(history({ code: 0, data: [] }, { ...market, symbol: "SOL/USDT" })).rejects.toThrow(
+      "Unsupported",
+    );
   });
 });

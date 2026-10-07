@@ -68,7 +68,7 @@ export async function fetchBingxClosedOneHourHistory(
     headers: { Accept: "application/json" },
     signal: AbortSignal.timeout(10_000),
   });
-  if (!response.ok) throw new Error("BingX public history HTTP error: " + response.status);
+  if (!response.ok) throw new Error(`BingX public history HTTP error: ${response.status}`);
   const body = await response.text();
   if (body.length > MAX_RESPONSE_CHARS) throw new Error("BingX public history response too large");
 
@@ -80,7 +80,7 @@ export async function fetchBingxClosedOneHourHistory(
   }
   const parsed = responseSchema.parse(payload);
   if (String(parsed.code) !== "0") {
-    throw new Error("BingX public history API error: " + String(parsed.code));
+    throw new Error(`BingX public history API error: ${String(parsed.code)}`);
   }
 
   const candles: TradingCandle[] = [];
