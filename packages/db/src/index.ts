@@ -31,6 +31,7 @@ export * from "./trading-paper-reservation-preflight.js";
 export {
   PaperReservationConflictError,
   PaperReservationDecisionIntegrityError,
+  reserveApprovedResolvedTradingPaperSignal,
   reserveApprovedTradingPaperSignal,
   type TradingPaperReserveResult,
   type TradingPaperWorkerSignalReserveAuthority,
