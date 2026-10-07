@@ -102,6 +102,29 @@ export type TradingPaperWorkerFillPreflight =
       currentSignalRevision?: number;
     };
 
+export type TradingPaperWorkerFillAuthority = Extract<
+  TradingPaperWorkerFillPreflight,
+  { status: "ready" }
+>;
+
+function sameFillAuthority(
+  left: TradingPaperWorkerFillAuthority,
+  right: TradingPaperWorkerFillAuthority,
+): boolean {
+  return (
+    left.ledgerId === right.ledgerId &&
+    left.strategyId === right.strategyId &&
+    left.policyRevision === right.policyRevision &&
+    left.gateRevision === right.gateRevision &&
+    left.signalRevision === right.signalRevision &&
+    left.fillRevision === right.fillRevision &&
+    left.fillApprovalEffectId === right.fillApprovalEffectId &&
+    left.signalApprovalEffectId === right.signalApprovalEffectId &&
+    left.workerApprovalEffectId === right.workerApprovalEffectId &&
+    left.paperApprovalEffectId === right.paperApprovalEffectId
+  );
+}
+
 function parseRequest(value: unknown): FillGateRequest {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new PaperWorkerFillGateIntegrityError("Invalid paper worker fill gate payload");
@@ -308,6 +331,250 @@ async function verifyEnabledApproval(
       "Paper worker fill approval disagrees with persisted gate",
     );
   }
+}
+
+type WorkerFillUseInput = {
+  reservationId: string;
+  signalId: string;
+  reserveEventSequence: number;
+  fillEventSequence: number;
+  actedAt: string;
+};
+
+function fillUseDigest(value: {
+  ledgerId: string;
+  reservationId: string;
+  spaceId: string;
+  userId: string;
+  signalId: string;
+  fillApprovalEffectId: string;
+  strategyId: typeof STRATEGY_ID;
+  policyRevision: number;
+  gateRevision: number;
+  signalRevision: number;
+  fillRevision: number;
+  reserveEventSequence: number;
+  fillEventSequence: number;
+  actedAt: string;
+}): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        value.ledgerId,
+        value.reservationId,
+        value.spaceId,
+        value.userId,
+        value.signalId,
+        value.fillApprovalEffectId,
+        value.strategyId,
+        value.policyRevision,
+        value.gateRevision,
+        value.signalRevision,
+        value.fillRevision,
+        value.reserveEventSequence,
+        value.fillEventSequence,
+        value.actedAt,
+      ]),
+      "utf8",
+    )
+    .digest("hex");
+}
+
+function normalizeFillUse(row: {
+  ledgerId: string;
+  reservationId: string;
+  spaceId: string;
+  userId: string;
+  signalId: string;
+  fillApprovalEffectId: string;
+  strategyId: string;
+  policyRevision: number;
+  gateRevision: number;
+  signalRevision: number;
+  fillRevision: number;
+  reserveEventSequence: number;
+  fillEventSequence: number;
+  actedAt: Date;
+  useSha256: string;
+}) {
+  const strategyId = row.strategyId === STRATEGY_ID ? STRATEGY_ID : null;
+  const value = {
+    ledgerId: row.ledgerId,
+    reservationId: row.reservationId,
+    spaceId: row.spaceId,
+    userId: row.userId,
+    signalId: row.signalId,
+    fillApprovalEffectId: row.fillApprovalEffectId,
+    strategyId: strategyId ?? STRATEGY_ID,
+    policyRevision: row.policyRevision,
+    gateRevision: row.gateRevision,
+    signalRevision: row.signalRevision,
+    fillRevision: row.fillRevision,
+    reserveEventSequence: row.reserveEventSequence,
+    fillEventSequence: row.fillEventSequence,
+    actedAt: row.actedAt.toISOString(),
+  };
+  if (
+    strategyId !== STRATEGY_ID ||
+    !Number.isSafeInteger(row.policyRevision) ||
+    row.policyRevision < 0 ||
+    !Number.isSafeInteger(row.gateRevision) ||
+    row.gateRevision < 0 ||
+    !Number.isSafeInteger(row.signalRevision) ||
+    row.signalRevision < 1 ||
+    !Number.isSafeInteger(row.fillRevision) ||
+    row.fillRevision < 1 ||
+    !Number.isSafeInteger(row.reserveEventSequence) ||
+    row.reserveEventSequence < 1 ||
+    !Number.isSafeInteger(row.fillEventSequence) ||
+    row.fillEventSequence <= row.reserveEventSequence ||
+    row.useSha256 !== fillUseDigest(value)
+  ) {
+    throw new PaperWorkerFillGateIntegrityError("Automatic paper fill provenance is invalid");
+  }
+  return value;
+}
+
+export async function verifyTradingPaperWorkerFillAuthorityInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  expected: TradingPaperWorkerFillAuthority,
+  now: Date,
+): Promise<TradingPaperWorkerFillAuthority | null> {
+  const current = await assessTradingPaperWorkerFillPreflightInTransaction(
+    tx,
+    owner,
+    expected.ledgerId,
+    now,
+  );
+  return current.status === "ready" && sameFillAuthority(expected, current) ? current : null;
+}
+
+export async function recordTradingPaperWorkerFillUseInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  authority: TradingPaperWorkerFillAuthority,
+  input: WorkerFillUseInput,
+): Promise<void> {
+  await requireOwnedLedger(tx, owner, authority.ledgerId);
+  const actedAt = new Date(input.actedAt);
+  if (
+    !Number.isFinite(actedAt.getTime()) ||
+    !input.reservationId ||
+    input.reservationId.length > 128 ||
+    !input.signalId ||
+    input.signalId.length > 128 ||
+    !Number.isSafeInteger(input.reserveEventSequence) ||
+    input.reserveEventSequence < 1 ||
+    !Number.isSafeInteger(input.fillEventSequence) ||
+    input.fillEventSequence <= input.reserveEventSequence
+  ) {
+    throw new PaperWorkerFillGateIntegrityError("Invalid automatic paper fill provenance scope");
+  }
+  const value = {
+    ledgerId: authority.ledgerId,
+    reservationId: input.reservationId,
+    spaceId: owner.spaceId,
+    userId: owner.userId,
+    signalId: input.signalId,
+    fillApprovalEffectId: authority.fillApprovalEffectId,
+    strategyId: authority.strategyId,
+    policyRevision: authority.policyRevision,
+    gateRevision: authority.gateRevision,
+    signalRevision: authority.signalRevision,
+    fillRevision: authority.fillRevision,
+    reserveEventSequence: input.reserveEventSequence,
+    fillEventSequence: input.fillEventSequence,
+    actedAt: actedAt.toISOString(),
+  };
+  await tx.tradingPaperWorkerFillUse.create({
+    data: {
+      ...value,
+      actedAt,
+      useSha256: fillUseDigest(value),
+    },
+  });
+}
+
+export type HistoricalTradingPaperWorkerFillScope = {
+  ledgerId: string;
+  reservationId: string;
+  signalId: string;
+  policyRevision: number;
+  reserveEventSequence: number;
+  fillEventSequence: number;
+  actedAt: string;
+};
+
+export async function verifyHistoricalTradingPaperWorkerFillApprovalInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  effectId: string,
+  expected: HistoricalTradingPaperWorkerFillScope,
+): Promise<boolean> {
+  await requireOwnedLedger(tx, owner, expected.ledgerId);
+  const row = await tx.tradingPaperWorkerFillUse.findUnique({
+    where: {
+      ledgerId_reservationId: {
+        ledgerId: expected.ledgerId,
+        reservationId: expected.reservationId,
+      },
+    },
+  });
+  if (!row) return false;
+  if (row.spaceId !== owner.spaceId || row.userId !== owner.userId) {
+    throw new PaperWorkerFillGateIntegrityError("Automatic paper fill provenance owner mismatch");
+  }
+  const use = normalizeFillUse(row);
+  if (use.fillApprovalEffectId !== effectId) return false;
+
+  const effect = await tx.externalEffect.findUnique({
+    where: { id: effectId },
+    include: { run: { select: { spaceId: true, userId: true } } },
+  });
+  if (
+    effect?.status !== "completed" ||
+    effect.kind !== "paper_worker_fill_control" ||
+    effect.spaceId !== owner.spaceId ||
+    effect.run.spaceId !== owner.spaceId ||
+    effect.run.userId !== owner.userId
+  ) {
+    throw new PaperWorkerFillGateIntegrityError(
+      "Historical automatic fill lacks explicit F2 approval provenance",
+    );
+  }
+  const request = parseRequest(effect.request);
+  const result = objectResult(effect.result);
+  if (
+    request.action !== "enable" ||
+    request.ledgerId !== use.ledgerId ||
+    request.expectedGateRevision !== use.gateRevision ||
+    request.expectedSignalRevision !== use.signalRevision ||
+    request.strategyId !== use.strategyId ||
+    result?.ok !== true ||
+    result.mode !== "paper_only" ||
+    result.action !== "enable" ||
+    result.ledgerId !== use.ledgerId ||
+    result.enabled !== true ||
+    result.strategyId !== use.strategyId ||
+    result.policyRevision !== use.policyRevision ||
+    result.gateRevision !== use.gateRevision ||
+    result.signalRevision !== use.signalRevision ||
+    result.fillRevision !== use.fillRevision
+  ) {
+    throw new PaperWorkerFillGateIntegrityError(
+      "Historical automatic fill approval disagrees with persisted provenance",
+    );
+  }
+  return (
+    expected.ledgerId === use.ledgerId &&
+    expected.reservationId === use.reservationId &&
+    expected.signalId === use.signalId &&
+    expected.policyRevision === use.policyRevision &&
+    expected.reserveEventSequence === use.reserveEventSequence &&
+    expected.fillEventSequence === use.fillEventSequence &&
+    expected.actedAt === use.actedAt
+  );
 }
 
 export async function readVerifiedTradingPaperWorkerFillGate(
