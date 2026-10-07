@@ -858,6 +858,181 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    name: "paper_trading_control",
+    description:
+      "Propose enabling or disabling Rakazo's synthetic PAPER-ONLY trading capability for one existing ledger at an exact policy revision. Use only when the user explicitly asks for this control change. This always requires a fresh confirmation card; it cannot be auto-reviewed or permanently allowed. It never authorizes live exchange orders, credentials, leverage, futures, wallets, or real funds, and it cannot change risk limits.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["enable", "disable"] },
+        ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+        expected_policy_revision: { type: "integer", minimum: 0 },
+      },
+      required: ["action", "ledger_id", "expected_policy_revision"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "paper_position_control",
+    description:
+      "Propose a short-lived, one-time authorization for a protective synthetic PAPER exit of exactly one already-open position while the paper kill-switch remains latched. Use only when the user explicitly asks to authorize management of that existing paper position. This always requires a fresh confirmation card and cannot be auto-reviewed or permanently allowed. This authorization step does not close the position, enable new entries, contact an exchange, or authorize live trading.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["authorize_protective_stop_exit"] },
+        ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+        position_id: { type: "string", minLength: 1, maxLength: 128 },
+        expected_policy_revision: { type: "integer", minimum: 0 },
+      },
+      required: ["action", "ledger_id", "position_id", "expected_policy_revision"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "paper_worker_control",
+    description:
+      "Propose enabling or disabling a default-deny background PAPER-worker gate for one ledger at an exact paper-policy revision. This always requires a fresh confirmation card and cannot be auto-reviewed or permanently allowed. Enabling records only permission plus a 5-1440 minute cadence; it does not create a schedule, enqueue Graphile work, wake a model, place any order, contact an exchange, or enable live trading.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["enable", "disable"] },
+        ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+        expected_policy_revision: { type: "integer", minimum: 0 },
+        cadence_minutes: { type: "integer", minimum: 5, maximum: 1440 },
+      },
+      required: ["action", "ledger_id", "expected_policy_revision"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "paper_worker_start",
+    description:
+      "Propose scheduling exactly one delayed read-only PAPER worker preflight for one ledger at an exact already-approved worker-gate revision. This always requires a fresh confirmation card and cannot be auto-reviewed or permanently allowed. The configured gate cadence is used; this action does not create recurrence, wake a model, poll market data, mutate the trading ledger, place any order, contact an exchange, or authorize live trading.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+        expected_gate_revision: { type: "integer", minimum: 0 },
+      },
+      required: ["ledger_id", "expected_gate_revision"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "paper_worker_recurrence_control",
+    description:
+      "Propose enabling or disabling explicit permission for future recurring read-only PAPER preflights on one ledger at an exact worker-gate revision. This always requires a fresh confirmation card and cannot be auto-reviewed or permanently allowed. Enabling permission does not enqueue a job, create recurrence, wake a model, poll market data, mutate the trading ledger, place any order, contact an exchange, or authorize live trading.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["enable", "disable"] },
+        ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+        expected_gate_revision: { type: "integer", minimum: 0 },
+      },
+      required: ["action", "ledger_id", "expected_gate_revision"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "paper_worker_market_target_control",
+    description:
+      "Propose enabling or disabling one owner-approved public PAPER market-observation target (OKX or BingX spot symbol) for a ledger at an exact worker-gate revision. This always requires a fresh confirmation card and cannot be auto-reviewed or permanently allowed. It records configuration only: it does not fetch market data, enqueue work, wake a model, mutate virtual money, contact private exchange endpoints, or authorize live trading.",
+    inputSchema: {
+      oneOf: [
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "enable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+            venue: { type: "string", enum: ["okx", "bingx"] },
+            symbol: { type: "string", pattern: "^[A-Z0-9]{2,40}-[A-Z0-9]{2,40}$" },
+          },
+          required: ["action", "ledger_id", "expected_gate_revision", "venue", "symbol"],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "disable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+          },
+          required: ["action", "ledger_id", "expected_gate_revision"],
+          additionalProperties: false,
+        },
+      ],
+    },
+  },
+  {
+    name: "paper_worker_signal_control",
+    description:
+      "Propose enabling or disabling explicit permission for the PAPER worker to use durable breakout_20_1h_v1 research proposals in a future automatic synthetic PAPER reservation stage. This always requires fresh owner confirmation and cannot be auto-reviewed or permanently allowed. Enabling this permission does not reserve or spend virtual funds, create a fill, place an exchange order, use private APIs, or authorize live trading.",
+    inputSchema: {
+      oneOf: [
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "enable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+            strategy_id: { type: "string", const: "breakout_20_1h_v1" },
+          },
+          required: ["action", "ledger_id", "expected_gate_revision", "strategy_id"],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "disable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+          },
+          required: ["action", "ledger_id", "expected_gate_revision"],
+          additionalProperties: false,
+        },
+      ],
+    },
+  },
+  {
+    name: "paper_worker_fill_control",
+    description:
+      "Propose enabling or disabling a separate owner-approved permission for the PAPER worker to automatically attempt a synthetic full fill of an already reserved B7 PAPER hold produced under the exact approved breakout_20_1h_v1 signal-gate revision. This always requires fresh owner confirmation and cannot be auto-reviewed or permanently allowed. Enabling this permission does not fill any reservation, fetch market data, place an exchange order, use private APIs, or authorize live trading.",
+    inputSchema: {
+      oneOf: [
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "enable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+            expected_signal_revision: { type: "integer", minimum: 0 },
+            strategy_id: { type: "string", const: "breakout_20_1h_v1" },
+          },
+          required: [
+            "action",
+            "ledger_id",
+            "expected_gate_revision",
+            "expected_signal_revision",
+            "strategy_id",
+          ],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "disable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+            expected_signal_revision: { type: "integer", minimum: 0 },
+          },
+          required: ["action", "ledger_id", "expected_gate_revision", "expected_signal_revision"],
+          additionalProperties: false,
+        },
+      ],
+    },
+  },
+  {
     name: "spawn_bot",
     description:
       "Create a full, regular bot — the same kind the user creates from the + button. It gets its own thread, computer, and memory, and appears as a peer in the bot list. Do not also call run_subagent. Creating the bot is the whole action. Only set prompt if the user asked that new bot to start work immediately.",

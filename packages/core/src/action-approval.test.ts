@@ -27,6 +27,22 @@ describe("toolRequiresApproval", () => {
     expect(toolRequiresApproval("cloud_agent_launch", false)).toBe(true);
     expect(toolRequiresApproval("create_space", false)).toBe(true);
     expect(toolRequiresExplicitApproval("create_space")).toBe(true);
+    expect(toolRequiresApproval("paper_trading_control", false)).toBe(true);
+    expect(toolRequiresExplicitApproval("paper_trading_control")).toBe(true);
+    expect(toolRequiresApproval("paper_position_control", false)).toBe(true);
+    expect(toolRequiresExplicitApproval("paper_position_control")).toBe(true);
+    expect(toolRequiresApproval("paper_worker_control", false)).toBe(true);
+    expect(toolRequiresExplicitApproval("paper_worker_control")).toBe(true);
+    expect(toolRequiresApproval("paper_worker_start", false)).toBe(true);
+    expect(toolRequiresExplicitApproval("paper_worker_start")).toBe(true);
+    expect(toolRequiresApproval("paper_worker_recurrence_control", false)).toBe(true);
+    expect(toolRequiresExplicitApproval("paper_worker_recurrence_control")).toBe(true);
+    expect(toolRequiresApproval("paper_worker_market_target_control", false)).toBe(true);
+    expect(toolRequiresExplicitApproval("paper_worker_market_target_control")).toBe(true);
+    expect(toolRequiresApproval("paper_worker_signal_control", false)).toBe(true);
+    expect(toolRequiresExplicitApproval("paper_worker_signal_control")).toBe(true);
+    expect(toolRequiresApproval("paper_worker_fill_control", false)).toBe(true);
+    expect(toolRequiresExplicitApproval("paper_worker_fill_control")).toBe(true);
     expect(toolRequiresExplicitApproval("archive_bot")).toBe(false);
   });
 

@@ -103,7 +103,8 @@ async function assertMember(tx: Prisma.TransactionClient, owner: Owner): Promise
  * blocks future writes rather than silently accepting cached virtual money.
  * Hashes detect accidental DB edits, NOT an adversary with DB write privilege.
  */
-async function recover(
+/** Internal-only: full verified replay in an existing transaction; callers must not expose it to RPC. */
+export async function recoverTradingPaperLedgerInTransaction(
   tx: Prisma.TransactionClient,
   owner: Owner,
   ledgerId: string,
@@ -228,7 +229,7 @@ export async function readVerifiedTradingPaperLedger(
   return withTransactionRetry(() =>
     prisma.$transaction(
       async (tx) => {
-        const verified = await recover(tx, owner, ledgerId);
+        const verified = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
         return verified.state;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -242,67 +243,76 @@ export async function readVerifiedTradingPaperLedger(
  * atomically updates projection + event + inert outbox row. A concurrent
  * conflicting revision either loses CAS or aborts the serializable transaction.
  */
+export async function appendTradingPaperLedgerEventInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  raw: PaperEvent,
+): Promise<{ status: "appended" | "duplicate"; state: TradingPaperLedgerState }> {
+  const event = normalizedEvent(raw);
+  const { row, events, state } = await recoverTradingPaperLedgerInTransaction(
+    tx,
+    owner,
+    event.ledgerId,
+  );
+  const existing = events.find((entry) => entry.eventId === event.eventId);
+  if (existing) {
+    if (payload(existing) !== payload(event)) {
+      throw new PaperLedgerConflictError("Duplicate paper ID has a conflicting payload");
+    }
+    return { status: "duplicate", state };
+  }
+  if (event.sequence !== row.version + 1) {
+    throw new PaperLedgerConflictError("Paper event sequence gap or concurrent stale writer");
+  }
+  if (events.length >= MAX_REPLAY_EVENTS) {
+    throw new PaperLedgerConflictError("Paper journal exceeds bounded full replay");
+  }
+  const next = replayTradingPaperLedger({ ...header(row), events: [...events, event] });
+  const eventDigest = sha256(payload(event));
+  const chain = chained(row.headSha256, eventDigest);
+  const changed = await tx.tradingPaperLedger.updateMany({
+    where: {
+      id: row.id,
+      spaceId: owner.spaceId,
+      ownerUserId: owner.userId,
+      version: row.version,
+      headSha256: row.headSha256,
+    },
+    data: {
+      version: { increment: 1 },
+      projection: asJson(next),
+      projectionSha256: sha256(stateJson(next)),
+      headSha256: chain,
+    },
+  });
+  if (changed.count !== 1) throw new PaperLedgerConflictError("Paper version CAS failed");
+  await tx.tradingPaperLedgerEvent.create({
+    data: {
+      ledgerId: row.id,
+      sequence: event.sequence,
+      eventId: event.eventId,
+      kind: event.kind,
+      recordedAt: new Date(event.recordedAt),
+      payload: asJson(event),
+      payloadSha256: eventDigest,
+      previousSha256: row.headSha256,
+      chainSha256: chain,
+    },
+  });
+  await tx.tradingPaperLedgerOutbox.create({
+    data: { ledgerId: row.id, sequence: event.sequence, status: "pending" },
+  });
+  return { status: "appended", state: next };
+}
+
 export async function appendTradingPaperLedgerEvent(
   prisma: PaperStoreDb,
   owner: Owner,
   raw: PaperEvent,
 ): Promise<{ status: "appended" | "duplicate"; state: TradingPaperLedgerState }> {
-  const event = normalizedEvent(raw);
   return withTransactionRetry(() =>
-    prisma.$transaction(
-      async (tx) => {
-        const { row, events, state } = await recover(tx, owner, event.ledgerId);
-        const existing = events.find((entry) => entry.eventId === event.eventId);
-        if (existing) {
-          if (payload(existing) !== payload(event)) {
-            throw new PaperLedgerConflictError("Duplicate paper ID has a conflicting payload");
-          }
-          return { status: "duplicate" as const, state };
-        }
-        if (event.sequence !== row.version + 1) {
-          throw new PaperLedgerConflictError("Paper event sequence gap or concurrent stale writer");
-        }
-        if (events.length >= MAX_REPLAY_EVENTS) {
-          throw new PaperLedgerConflictError("Paper journal exceeds bounded full replay");
-        }
-        const next = replayTradingPaperLedger({ ...header(row), events: [...events, event] });
-        const digest = sha256(payload(event));
-        const chain = chained(row.headSha256, digest);
-        const changed = await tx.tradingPaperLedger.updateMany({
-          where: {
-            id: row.id,
-            spaceId: owner.spaceId,
-            ownerUserId: owner.userId,
-            version: row.version,
-            headSha256: row.headSha256,
-          },
-          data: {
-            version: { increment: 1 },
-            projection: asJson(next),
-            projectionSha256: sha256(stateJson(next)),
-            headSha256: chain,
-          },
-        });
-        if (changed.count !== 1) throw new PaperLedgerConflictError("Paper version CAS failed");
-        await tx.tradingPaperLedgerEvent.create({
-          data: {
-            ledgerId: row.id,
-            sequence: event.sequence,
-            eventId: event.eventId,
-            kind: event.kind,
-            recordedAt: new Date(event.recordedAt),
-            payload: asJson(event),
-            payloadSha256: digest,
-            previousSha256: row.headSha256,
-            chainSha256: chain,
-          },
-        });
-        await tx.tradingPaperLedgerOutbox.create({
-          data: { ledgerId: row.id, sequence: event.sequence, status: "pending" },
-        });
-        return { status: "appended" as const, state: next };
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    ),
+    prisma.$transaction((tx) => appendTradingPaperLedgerEventInTransaction(tx, owner, raw), {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    }),
   );
 }

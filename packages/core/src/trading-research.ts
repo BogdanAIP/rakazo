@@ -34,10 +34,10 @@ export function researchClosedHourBreakout(input: ResearchInput): TradingResearc
   const latest = candles.at(-1);
   const latestOpened = latest ? Date.parse(latest.openedAt) : Number.NaN;
   const closedAt = Number.isFinite(latestOpened) ? latestOpened + HOUR : null;
-  const evidenceId = "okx:" + market.symbol + ":1H:" + (latest?.openedAt ?? "no-bars");
+  const evidenceId = `${market.venue}:${market.symbol}:1H:${latest?.openedAt ?? "no-bars"}`;
   const resultBase = {
     algorithm: STRATEGY,
-    venue: "okx" as const,
+    venue: market.venue,
     market,
     fetchedAt,
     candleCount: candles.length,
@@ -49,7 +49,7 @@ export function researchClosedHourBreakout(input: ResearchInput): TradingResearc
       ...resultBase,
       signal: TradingSignalSchema.parse({
         kind: "no_trade",
-        signalId: evidenceId + ":abstain",
+        signalId: `${evidenceId}:abstain`,
         strategyId: STRATEGY,
         strategyVersion: "1",
         createdAt,
@@ -59,7 +59,7 @@ export function researchClosedHourBreakout(input: ResearchInput): TradingResearc
       }),
     });
 
-  if (market.venue !== "okx" || market.status !== "active") {
+  if (market.status !== "active") {
     return noTrade("The venue/instrument is unavailable or inactive.");
   }
   if (market.kind !== "spot" && market.kind !== "perpetual") {

@@ -76,9 +76,7 @@ function nt(): NtFns {
   // Use the libuv exports from the *running Node executable*. An arbitrary
   // msvcrt/ucrtbase DLL may have a different fd table from Node's CRT; mixing
   // those tables can reject valid descriptors or crash the process.
-  const nodeModule = kernel32.func(
-    "void * __stdcall GetModuleHandleW(void *lpModuleName)",
-  )(null);
+  const nodeModule = kernel32.func("void * __stdcall GetModuleHandleW(void *lpModuleName)")(null);
   if (!nodeModule) throw new Error("Node executable module unavailable");
   const getProcAddress = kernel32.func(
     "void * __stdcall GetProcAddress(void *hModule, str lpProcName)",

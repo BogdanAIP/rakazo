@@ -22,6 +22,13 @@ const payloadSchemas = {
   "history.compact": z.object({ threadId: z.string().min(1) }),
   "messaging.deliver": z.object({ runId: z.string().min(1).optional() }),
   "cloud_agent.poll": z.object({ agentId: z.string().min(1) }),
+  "paper.worker-preflight": z.object({
+    ledgerId: z.string().min(1).max(128),
+    spaceId: z.string().min(1),
+    userId: z.string().min(1),
+    gateRevision: z.number().int().nonnegative(),
+    scheduledFor: z.string().datetime({ offset: true }),
+  }),
 } satisfies { [Name in BackgroundJobName]: z.ZodType<BackgroundJobPayloads[Name]> };
 
 export function parseBackgroundJob(name: string, payload: unknown): BackgroundJob {
@@ -138,6 +145,36 @@ export function historyCompactJob(threadId: string): BackgroundJob {
     payload: { threadId },
     replaceKey: historyCompactJobKey(threadId),
     maxAttempts: HISTORY_COMPACT_MAX_ATTEMPTS,
+  };
+}
+
+export const PAPER_WORKER_PREFLIGHT_MAX_ATTEMPTS = 3;
+
+export function paperWorkerPreflightJobKey(ledgerId: string): string {
+  return `paper.worker-preflight:${ledgerId}`;
+}
+
+/** Typed read-only worker validation job. Merely constructing this value does
+ * not enqueue it; no production caller wires it to JobPublisher in P11D-2. */
+export function paperWorkerPreflightJob(input: {
+  ledgerId: string;
+  spaceId: string;
+  userId: string;
+  gateRevision: number;
+  scheduledFor: Date;
+}): BackgroundJob {
+  return {
+    name: "paper.worker-preflight",
+    payload: {
+      ledgerId: input.ledgerId,
+      spaceId: input.spaceId,
+      userId: input.userId,
+      gateRevision: input.gateRevision,
+      scheduledFor: input.scheduledFor.toISOString(),
+    },
+    availableAt: input.scheduledFor,
+    replaceKey: paperWorkerPreflightJobKey(input.ledgerId),
+    maxAttempts: PAPER_WORKER_PREFLIGHT_MAX_ATTEMPTS,
   };
 }
 

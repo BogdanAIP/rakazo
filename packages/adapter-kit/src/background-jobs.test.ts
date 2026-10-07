@@ -5,6 +5,9 @@ import {
   historyCompactJob,
   historyCompactJobKey,
   messagingDeliverJob,
+  PAPER_WORKER_PREFLIGHT_MAX_ATTEMPTS,
+  paperWorkerPreflightJob,
+  paperWorkerPreflightJobKey,
   parseBackgroundJob,
 } from "./background-jobs.js";
 import type { BackgroundJobHandlers } from "./types.js";
@@ -20,6 +23,7 @@ function handlers(): BackgroundJobHandlers {
     "history.compact": vi.fn(async () => undefined),
     "messaging.deliver": vi.fn(async () => undefined),
     "cloud_agent.poll": vi.fn(async () => undefined),
+    "paper.worker-preflight": vi.fn(async () => undefined),
   };
 }
 
@@ -79,6 +83,49 @@ describe("background job contracts", () => {
       computerId: "computer-1",
       leaseId: "lease-1",
     });
+  });
+});
+
+describe("paperWorkerPreflightJob", () => {
+  it("builds and dispatches a typed read-only job without a recurrence contract", async () => {
+    const scheduledFor = new Date("2026-10-05T12:00:00.000Z");
+    const job = paperWorkerPreflightJob({
+      ledgerId: "paper-1",
+      spaceId: "space-1",
+      userId: "user-1",
+      gateRevision: 7,
+      scheduledFor,
+    });
+    expect(job).toEqual({
+      name: "paper.worker-preflight",
+      payload: {
+        ledgerId: "paper-1",
+        spaceId: "space-1",
+        userId: "user-1",
+        gateRevision: 7,
+        scheduledFor: scheduledFor.toISOString(),
+      },
+      availableAt: scheduledFor,
+      replaceKey: paperWorkerPreflightJobKey("paper-1"),
+      maxAttempts: PAPER_WORKER_PREFLIGHT_MAX_ATTEMPTS,
+    });
+    expect(PAPER_WORKER_PREFLIGHT_MAX_ATTEMPTS).toBeLessThan(25);
+
+    const target = handlers();
+    await dispatchBackgroundJob(target, job.name, job.payload);
+    expect(target["paper.worker-preflight"]).toHaveBeenCalledWith(job.payload);
+  });
+
+  it("rejects malformed worker scope before dispatch", () => {
+    expect(() =>
+      parseBackgroundJob("paper.worker-preflight", {
+        ledgerId: "paper-1",
+        spaceId: "space-1",
+        userId: "user-1",
+        gateRevision: -1,
+        scheduledFor: "not-a-date",
+      }),
+    ).toThrow();
   });
 });
 

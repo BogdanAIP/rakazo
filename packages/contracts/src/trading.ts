@@ -176,7 +176,7 @@ export const TradingCatalogOutputSchema = z.object({
 /** Exactly one closed 1H source bar; quote volume is normalized by OKX volCcyQuote. */
 export const TradingCandleSchema = z
   .object({
-    venue: z.literal("okx"),
+    venue: z.enum(["okx", "bingx"]),
     kind: z.enum(["spot", "perpetual", "dated_future"]),
     symbol: z.string().trim().min(3).max(128),
     openedAt: IsoDate,
@@ -213,7 +213,7 @@ export type TradingCandleResearchInput = z.infer<typeof TradingCandleResearchInp
 
 export const TradingResearchOutputSchema = z.object({
   algorithm: z.literal("breakout_20_1h_v1"),
-  venue: z.literal("okx"),
+  venue: z.enum(["okx", "bingx"]),
   market: TradingInstrumentSchema,
   fetchedAt: IsoDate,
   candleCount: z.number().int().nonnegative().max(100),

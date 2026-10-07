@@ -12,12 +12,19 @@ import { createBackgroundJobHandlers } from "./background-job-handlers.js";
 import { createRunExecutor } from "./executor.js";
 import { compactHistory } from "./history-compaction.js";
 import { deliverMessagingOutbound, mirrorMessagingOutbound } from "./messaging-delivery.js";
+import { handlePaperWorkerPreflightWithSuccessor } from "./paper-worker-recurring-handler.js";
 import type { EncryptedSecretStore } from "./secrets.js";
 
 vi.mock("./history-compaction.js", () => ({ compactHistory: vi.fn(async () => undefined) }));
 vi.mock("./messaging-delivery.js", () => ({
   deliverMessagingOutbound: vi.fn(async () => undefined),
   mirrorMessagingOutbound: vi.fn(async () => undefined),
+}));
+vi.mock("./paper-worker-recurring-handler.js", () => ({
+  handlePaperWorkerPreflightWithSuccessor: vi.fn(async () => ({
+    status: "stop",
+    preflight: { status: "deny", reason: "worker_gate_disabled" },
+  })),
 }));
 
 describe("createBackgroundJobHandlers", () => {
@@ -61,6 +68,41 @@ describe("createBackgroundJobHandlers", () => {
       true,
     );
     installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] }));
+  });
+
+  it("routes paper worker wake through guarded observation and recurrence without model execution", async () => {
+    const prisma = {} as unknown as PrismaClient;
+    const jobs = { enqueue: vi.fn(async () => undefined) } as unknown as JobPublisher;
+    const executor = {
+      continueRun: vi.fn(async () => undefined),
+      wakeRoutine: vi.fn(async () => undefined),
+    } as unknown as ReturnType<typeof createRunExecutor>;
+    const handlers = createBackgroundJobHandlers({
+      executor,
+      prisma,
+      sandbox: {} as unknown as SandboxProvider,
+      home: {} as unknown as AgentHomeStore,
+      jobs,
+      events: {} as unknown as ThreadEvents,
+      workerId: "worker-1",
+      runtime: {} as unknown as AgentRuntime,
+      secretStore: {} as unknown as EncryptedSecretStore,
+      memoryProviders: { resolve: vi.fn(async () => null) },
+    });
+    const payload = {
+      ledgerId: "paper-1",
+      spaceId: "space-1",
+      userId: "user-1",
+      gateRevision: 7,
+      scheduledFor: "2026-10-05T12:00:00.000Z",
+    };
+
+    await handlers["paper.worker-preflight"](payload);
+
+    expect(handlePaperWorkerPreflightWithSuccessor).toHaveBeenCalledWith({ prisma, jobs }, payload);
+    expect(jobs.enqueue).not.toHaveBeenCalled();
+    expect(executor.continueRun).not.toHaveBeenCalled();
+    expect(executor.wakeRoutine).not.toHaveBeenCalled();
   });
 
   it("compacts the requested thread with the runtime, job publisher, and model key it was given", async () => {

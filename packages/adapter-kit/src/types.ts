@@ -548,6 +548,14 @@ export interface BackgroundJobPayloads {
   "messaging.deliver": { runId?: string };
   /** Reconcile durable remote-agent intent; scope is loaded from the database. */
   "cloud_agent.poll": { agentId: string };
+  /** Read-only PAPER worker wake validation; no trading action is carried in the payload. */
+  "paper.worker-preflight": {
+    ledgerId: string;
+    spaceId: string;
+    userId: string;
+    gateRevision: number;
+    scheduledFor: string;
+  };
 }
 
 export type BackgroundJobName = keyof BackgroundJobPayloads;
