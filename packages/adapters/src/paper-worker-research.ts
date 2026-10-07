@@ -8,18 +8,15 @@ import {
   readVerifiedTradingPaperWorkerResearchOutputIfPresent,
   recordTradingPaperWorkerResearchOutput,
 } from "@rakazo/db";
-import { fetchBingxClosedOneHourHistory } from "./trading-bingx-history.js";
 import type { PaperWorkerMarketObservationResult } from "./paper-worker-market-observation.js";
+import { fetchBingxClosedOneHourHistory } from "./trading-bingx-history.js";
 import { fetchOkxClosedOneHourHistory } from "./trading-okx-history.js";
 
 type CompletedObservation = Extract<PaperWorkerMarketObservationResult, { status: "observed" }>;
 type ReadEvidence = typeof readVerifiedPublicPaperQuoteEvidence;
 type ReadExistingResearch = typeof readVerifiedTradingPaperWorkerResearchOutputIfPresent;
 type ClosedHistory = Awaited<ReturnType<typeof fetchOkxClosedOneHourHistory>>;
-type FetchHistory = (
-  market: TradingInstrument,
-  options: { now?: Date },
-) => Promise<ClosedHistory>;
+type FetchHistory = (market: TradingInstrument, options: { now?: Date }) => Promise<ClosedHistory>;
 type Research = typeof researchClosedHourBreakout;
 type RecordResearch = typeof recordTradingPaperWorkerResearchOutput;
 
