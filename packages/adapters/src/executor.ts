@@ -94,6 +94,7 @@ import {
   appendEventInTransaction,
   applyApprovedTradingPaperControl,
   applyApprovedTradingPaperProtectiveExitControl,
+  applyApprovedTradingPaperResolvedResearchControl,
   applyApprovedTradingPaperWorkerControl,
   applyApprovedTradingPaperWorkerFillControl,
   applyApprovedTradingPaperWorkerMarketTargetControl,
@@ -3610,6 +3611,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
               throw new Error("Paper worker signal control requires a claimed explicit approval.");
             }
             return applyApprovedTradingPaperWorkerSignalControl(
+              deps.prisma,
+              { spaceId: run.spaceId, userId: run.userId },
+              applied.effect.id,
+            );
+          }
+          if (name === "paper_resolved_research_control") {
+            if (!applied || !claimedEffect) {
+              throw new Error(
+                "Resolved research PAPER control requires a claimed explicit approval.",
+              );
+            }
+            return applyApprovedTradingPaperResolvedResearchControl(
               deps.prisma,
               { spaceId: run.spaceId, userId: run.userId },
               applied.effect.id,
