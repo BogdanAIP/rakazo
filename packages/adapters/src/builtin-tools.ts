@@ -934,6 +934,37 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    name: "paper_worker_market_target_control",
+    description:
+      "Propose enabling or disabling one owner-approved public PAPER market-observation target (OKX or BingX spot symbol) for a ledger at an exact worker-gate revision. This always requires a fresh confirmation card and cannot be auto-reviewed or permanently allowed. It records configuration only: it does not fetch market data, enqueue work, wake a model, mutate virtual money, contact private exchange endpoints, or authorize live trading.",
+    inputSchema: {
+      oneOf: [
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "enable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+            venue: { type: "string", enum: ["okx", "bingx"] },
+            symbol: { type: "string", pattern: "^[A-Z0-9]{2,40}-[A-Z0-9]{2,40}$" },
+          },
+          required: ["action", "ledger_id", "expected_gate_revision", "venue", "symbol"],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "disable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+          },
+          required: ["action", "ledger_id", "expected_gate_revision"],
+          additionalProperties: false,
+        },
+      ],
+    },
+  },
+  {
     name: "spawn_bot",
     description:
       "Create a full, regular bot — the same kind the user creates from the + button. It gets its own thread, computer, and memory, and appears as a peer in the bot list. Do not also call run_subagent. Creating the bot is the whole action. Only set prompt if the user asked that new bot to start work immediately.",
