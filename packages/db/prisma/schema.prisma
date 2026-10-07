@@ -1403,6 +1403,7 @@ model TradingPaperLedger {
   workerRecurrence      TradingPaperWorkerRecurrence?
   workerSuccessorIntents TradingPaperWorkerSuccessorIntent[]
   workerMarketTarget     TradingPaperWorkerMarketTarget?
+  workerResearchRuns     TradingPaperWorkerResearch[]
 
   @@index([spaceId, ownerUserId])
   @@map("trading_paper_ledgers")
@@ -1677,6 +1678,29 @@ model TradingPaperWorkerMarketTarget {
 
   @@index([spaceId, userId])
   @@map("trading_paper_worker_market_targets")
+}
+
+/** Durable deterministic research output only; never an order or risk approval. */
+model TradingPaperWorkerResearch {
+  ledgerId           String
+  sourceScheduledFor DateTime
+  gateRevision       Int
+  targetRevision     Int
+  ledger             TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId            String
+  userId             String
+  quoteEvidenceId    String
+  algorithm          String
+  signalId           String
+  signalKind         String
+  output             Json
+  outputSha256       String
+  createdAt          DateTime @default(now())
+
+  @@id([ledgerId, sourceScheduledFor, gateRevision, targetRevision])
+  @@index([spaceId, userId, createdAt])
+  @@index([ledgerId, signalId])
+  @@map("trading_paper_worker_research")
 }
 
 /** Evidence only: no broker data, account keys or risk approval.

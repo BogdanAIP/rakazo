@@ -55,6 +55,12 @@ export {
   type TradingPaperWorkerRecurrencePreflight,
 } from "./trading-paper-worker-recurrence-gate.js";
 export {
+  PaperWorkerResearchIntegrityError,
+  readVerifiedTradingPaperWorkerResearchOutput,
+  recordTradingPaperWorkerResearchOutput,
+  type PaperWorkerResearchRecord,
+} from "./trading-paper-worker-research.js";
+export {
   PaperWorkerSuccessorIntentIntegrityError,
   prepareTradingPaperWorkerSuccessorIntent,
   readVerifiedTradingPaperWorkerSuccessorIntent,

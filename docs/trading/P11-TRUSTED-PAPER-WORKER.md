@@ -268,6 +268,12 @@ E4 activates the previously inert observation path inside the already registered
 
 A crash after the evidence commit but before successor enqueue is therefore replay-safe: the repeated wake resolves to the same `paper-worker:<sha256>` evidence row, while the existing D11/D12 successor intent remains the queue-side idempotency barrier. E4 still has **no model call, private exchange credential, reservation/fill/close writer, futures route, wallet action or live order path**.
 
+## P11E-5 — durable deterministic research output (not registered)
+
+E5 adds a separate append-once research record keyed by the exact worker `scheduledFor + gateRevision + targetRevision`. The record stores the normalized `TradingResearchOutput`, signal/NO_TRADE id, algorithm and the E3 public quote-evidence id under an owner/space-scoped SHA-256 integrity digest. The DB writer re-verifies the public evidence and requires the research market to match that verified OKX market exactly. Identical replay returns `duplicate`; a changed output under the same worker scope fails closed instead of overwriting history.
+
+This is still **research only**. E5 creates no reserve, fill, close, paper balance change, model call or live order. The initial adapter path intentionally supports only the already validated OKX closed-1H research feed. A BingX target remains observation-only until a separately validated BingX candle source exists; Rakazo must not mix OKX candles into a BingX signal and pretend the venue matches.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.
