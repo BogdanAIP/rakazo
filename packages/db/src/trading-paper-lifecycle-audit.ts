@@ -6,6 +6,7 @@ import { Prisma } from "./client.js";
 import { verifyHistoricalTradingPaperProtectiveExitApprovalInTransaction } from "./trading-paper-protective-exit-authority.js";
 import { verifyTradingPaperStopGuardsInTransaction } from "./trading-paper-stop-guard.js";
 import { recoverTradingPaperLedgerInTransaction } from "./trading-paper-store.js";
+import { verifyHistoricalTradingPaperWorkerFillApprovalInTransaction } from "./trading-paper-worker-fill-gate.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 type Owner = { spaceId: string; userId: string };
@@ -116,6 +117,32 @@ export async function auditTradingPaperLifecycleInTransaction(
       "Missing or mismatched historical owner-enable approval",
     );
   }
+  async function approvedFill(
+    record: (typeof fills)[number],
+    decision: (typeof reservations)[number],
+    reserve: Buy extends never ? never : Reserve,
+  ) {
+    if (record.policyApprovalEffectId === decision.policyApprovalEffectId) {
+      approved(record.policyApprovalEffectId, record.policyRevision);
+      return;
+    }
+    const worker = await verifyHistoricalTradingPaperWorkerFillApprovalInTransaction(
+      tx,
+      owner,
+      record.policyApprovalEffectId,
+      {
+        ledgerId: record.ledgerId,
+        reservationId: record.reservationId,
+        signalId: reserve.signalId,
+        policyRevision: record.policyRevision,
+        reserveEventSequence: record.reserveEventSequence,
+        fillEventSequence: record.fillEventSequence,
+        actedAt: record.filledAt.toISOString(),
+      },
+    );
+    assert(worker, "Missing or mismatched historical automatic-fill approval");
+  }
+
   async function approvedClose(record: (typeof closes)[number]) {
     const enable = byApproval.get(record.policyApprovalEffectId);
     if (enable) {
@@ -195,7 +222,6 @@ export async function auditTradingPaperLifecycleInTransaction(
         record.feeQuote === event.feeQuote &&
         record.filledAt.toISOString() === event.recordedAt &&
         record.stopPriceQuote === decision.stopPriceQuote &&
-        record.policyApprovalEffectId === decision.policyApprovalEffectId &&
         record.policyRevision === decision.policyRevision,
       "Buy event missing its matching fill decision",
     );
@@ -219,7 +245,7 @@ export async function auditTradingPaperLifecycleInTransaction(
         ]),
       "Fill decision digest mismatch",
     );
-    approved(record.policyApprovalEffectId, record.policyRevision);
+    await approvedFill(record, decision, reserve);
     costs.set(
       event.reservationId,
       (units(event.quantityBase) * units(event.executedPriceQuote) + SCALE - 1n) / SCALE +
