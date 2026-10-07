@@ -87,6 +87,7 @@ export async function evaluateTradingPaperReservationInTransaction(
   ledgerId: string,
   proposedSignal: unknown,
   evidenceId: string | null,
+  decisionNowOverride?: number,
 ): Promise<TradingPaperReservationDeny | TradingPaperReservationReady> {
   const { row, events, state } = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
   const verified = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
@@ -102,7 +103,8 @@ export async function evaluateTradingPaperReservationInTransaction(
   if (policy.killSwitch) return deny("kill_switch_active");
   if (state.quoteCurrency !== policy.quoteCurrency) return deny("quote_currency_mismatch");
 
-  const decisionNow = Date.now();
+  const decisionNow = decisionNowOverride ?? Date.now();
+  if (!Number.isFinite(decisionNow)) throw new Error("Invalid paper reservation decision clock");
   const risk = deriveTradingPaperRiskState(
     {
       version: "paper_spot_full_fill_v1",
