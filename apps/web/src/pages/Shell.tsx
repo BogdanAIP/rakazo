@@ -3875,11 +3875,19 @@ export function ShellPage() {
                 group={activeGroup}
                 bots={bots}
                 onSave={async (input) => {
+                  const savedPanelKey = panelStorageKey;
                   const updated = await rpc.groups.update({ groupId: activeGroup.id, ...input });
                   setGroups((current) =>
                     current.map((group) => (group.id === updated.id ? updated : group)),
                   );
-                  setPanel(null);
+                  if (savedPanelKey && panelStorageKeyRef.current !== savedPanelKey) {
+                    writeRightPanelState(savedPanelKey, null);
+                    pendingPanelRestore.current = null;
+                    setRestoredPanelKey(null);
+                    setPanelState(null);
+                  } else {
+                    setPanel(null);
+                  }
                   await Promise.all([refreshBots(), refreshGroupThread(activeGroup.id)]).catch(
                     () => undefined,
                   );
