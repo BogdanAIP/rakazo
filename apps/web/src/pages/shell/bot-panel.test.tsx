@@ -17,6 +17,11 @@ vi.mock("../../lib/rpc", () => ({
     me: vi.fn().mockResolvedValue(null),
   },
 }));
+vi.mock("@lingui/core/macro", () => {
+  const t = (parts: TemplateStringsArray, ...values: unknown[]) =>
+    parts.reduce((text, part, index) => `${text}${index > 0 ? values[index - 1] : ""}${part}`, "");
+  return { t };
+});
 vi.mock("@lingui/react/macro", () => {
   const t = (parts: TemplateStringsArray, ...values: unknown[]) =>
     parts.reduce((text, part, index) => `${text}${index > 0 ? values[index - 1] : ""}${part}`, "");
