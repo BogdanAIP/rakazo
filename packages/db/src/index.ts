@@ -36,12 +36,6 @@ export {
   type TradingPaperWorkerSignalReserveAuthority,
 } from "./trading-paper-reserve.js";
 export {
-  applyApprovedTradingPaperControl,
-  createDisabledTradingPaperRiskPolicy,
-  PaperRiskPolicyIntegrityError,
-  readVerifiedTradingPaperRiskPolicy,
-} from "./trading-paper-risk-policy.js";
-export {
   applyApprovedTradingPaperResolvedResearchControl,
   assessTradingPaperResolvedResearchPreflightInTransaction,
   type PaperResolvedResearchControlResult,
@@ -51,6 +45,12 @@ export {
   type TradingPaperResolvedResearchGateStatus,
   type TradingPaperResolvedResearchPreflight,
 } from "./trading-paper-resolved-research-gate.js";
+export {
+  applyApprovedTradingPaperControl,
+  createDisabledTradingPaperRiskPolicy,
+  PaperRiskPolicyIntegrityError,
+  readVerifiedTradingPaperRiskPolicy,
+} from "./trading-paper-risk-policy.js";
 export {
   appendTradingPaperLedgerEvent,
   createTradingPaperLedger,
