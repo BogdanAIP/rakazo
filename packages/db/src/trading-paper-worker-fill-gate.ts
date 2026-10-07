@@ -483,9 +483,7 @@ export async function readTradingPaperWorkerFillUseInTransaction(
   });
   if (!row) return null;
   if (row.spaceId !== owner.spaceId || row.userId !== owner.userId) {
-    throw new PaperWorkerFillGateIntegrityError(
-      "Automatic paper fill provenance owner mismatch",
-    );
+    throw new PaperWorkerFillGateIntegrityError("Automatic paper fill provenance owner mismatch");
   }
   return normalizeFillUse(row);
 }
