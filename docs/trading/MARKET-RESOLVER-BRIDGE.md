@@ -42,6 +42,21 @@ The envelope cannot reserve, fill, close, sign, broadcast or submit any order. A
 transition must pass a separately persisted and versioned strategy/risk approval after the envelope
 has been verified.
 
+### G0.1 — immutable approval scope
+
+`TradingResolvedResearchApprovalScope` reduces a validated envelope to the immutable identity that
+a future owner-approved PAPER strategy gate may authorize:
+
+- Resolver semantic key, entry key and digest;
+- exact selected implementation reference;
+- optional pinned Market Skill source digest;
+- strategy id and strategy version.
+
+The scope deliberately excludes signal-specific prices, evidence ids, risk budget and execution
+authority. `assessResolvedTradingResearch` is a pure read-only helper that validates the envelope,
+derives that scope and returns only `proposal`, `no_trade` or `expired`. It performs no ledger
+write and grants no PAPER authority.
+
 ## Why G0 is separate from Market storage
 
 The Market/Capability Profile line and the stacked Trading PR line currently diverge from a common
