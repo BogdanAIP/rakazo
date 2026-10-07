@@ -57,10 +57,10 @@ export {
 export {
   PaperWorkerResearchIntegrityError,
   type PaperWorkerResearchRecord,
-  type VerifiedPaperWorkerResearchOutput,
   readVerifiedTradingPaperWorkerResearchOutput,
   readVerifiedTradingPaperWorkerResearchOutputIfPresent,
   recordTradingPaperWorkerResearchOutput,
+  type VerifiedPaperWorkerResearchOutput,
 } from "./trading-paper-worker-research.js";
 export {
   PaperWorkerSuccessorIntentIntegrityError,
