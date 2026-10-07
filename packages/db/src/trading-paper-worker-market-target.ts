@@ -8,7 +8,13 @@ type Owner = { spaceId: string; userId: string };
 type Db = Pick<PrismaClient, "$transaction">;
 type Venue = "okx" | "bingx";
 type TargetRequest =
-  | { action: "enable"; ledgerId: string; expectedGateRevision: number; venue: Venue; symbol: string }
+  | {
+      action: "enable";
+      ledgerId: string;
+      expectedGateRevision: number;
+      venue: Venue;
+      symbol: string;
+    }
   | { action: "disable"; ledgerId: string; expectedGateRevision: number };
 
 export class PaperWorkerMarketTargetIntegrityError extends Error {
@@ -162,7 +168,8 @@ function normalize(row: {
   targetSha256: string;
   updatedAt: Date;
 }): Extract<TradingPaperWorkerMarketTargetStatus, { configured: true }> {
-  const venue = row.venue === "okx" || row.venue === "bingx" ? row.venue : null;
+  const venue: Venue | null =
+    row.venue === "okx" || row.venue === "bingx" ? row.venue : null;
   const value = {
     ledgerId: row.ledgerId,
     spaceId: row.spaceId,

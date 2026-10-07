@@ -183,12 +183,14 @@ describePostgres("paper worker market target PostgreSQL authorization", () => {
   it("binds one explicit target to the current worker gate and revokes stale-safe", async () => {
     const ledgerId = `paper-target-ledger-${suffix}`;
     await createEnabledPaperWorker(ledgerId, "main");
-    expect(await readVerifiedTradingPaperWorkerMarketTarget(first.prisma, owner, ledgerId)).toEqual({
-      configured: false,
-      mode: "paper_only",
-      ledgerId,
-      enabled: false,
-    });
+    expect(await readVerifiedTradingPaperWorkerMarketTarget(first.prisma, owner, ledgerId)).toEqual(
+      {
+        configured: false,
+        mode: "paper_only",
+        ledgerId,
+        enabled: false,
+      },
+    );
 
     const routinesBefore = await first.prisma.routine.count({
       where: { spaceId: owner.spaceId, userId: owner.userId },

@@ -3595,9 +3595,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           if (name === "paper_worker_market_target_control") {
             if (!applied || !claimedEffect) {
-              throw new Error(
-                "Paper market target control requires a claimed explicit approval.",
-              );
+              throw new Error("Paper market target control requires a claimed explicit approval.");
             }
             return applyApprovedTradingPaperWorkerMarketTargetControl(
               deps.prisma,
