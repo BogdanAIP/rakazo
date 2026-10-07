@@ -1026,12 +1026,7 @@ export const builtinAgentTools: ConnectorTool[] = [
             expected_gate_revision: { type: "integer", minimum: 0 },
             expected_signal_revision: { type: "integer", minimum: 0 },
           },
-          required: [
-            "action",
-            "ledger_id",
-            "expected_gate_revision",
-            "expected_signal_revision",
-          ],
+          required: ["action", "ledger_id", "expected_gate_revision", "expected_signal_revision"],
           additionalProperties: false,
         },
       ],
