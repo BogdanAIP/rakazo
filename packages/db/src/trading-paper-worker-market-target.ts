@@ -84,6 +84,27 @@ export type TradingPaperWorkerMarketTargetPreflight =
       currentGateRevision?: number;
     };
 
+export type TradingPaperWorkerMarketTargetAuthority = Extract<
+  TradingPaperWorkerMarketTargetPreflight,
+  { status: "ready" }
+>;
+
+function sameTargetAuthority(
+  left: TradingPaperWorkerMarketTargetAuthority,
+  right: TradingPaperWorkerMarketTargetAuthority,
+): boolean {
+  return (
+    left.ledgerId === right.ledgerId &&
+    left.venue === right.venue &&
+    left.symbol === right.symbol &&
+    left.gateRevision === right.gateRevision &&
+    left.targetRevision === right.targetRevision &&
+    left.targetApprovalEffectId === right.targetApprovalEffectId &&
+    left.workerApprovalEffectId === right.workerApprovalEffectId &&
+    left.paperApprovalEffectId === right.paperApprovalEffectId
+  );
+}
+
 const SYMBOL = /^[A-Z0-9]{2,40}-[A-Z0-9]{2,40}$/u;
 
 function parseRequest(value: unknown): TargetRequest {
@@ -298,6 +319,81 @@ export async function readVerifiedTradingPaperWorkerMarketTarget(
   );
 }
 
+export async function assessTradingPaperWorkerMarketTargetPreflightInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  ledgerId: string,
+  now: Date,
+): Promise<TradingPaperWorkerMarketTargetPreflight> {
+  if (!Number.isFinite(now.getTime())) {
+    throw new PaperWorkerMarketTargetIntegrityError("Invalid paper market target clock");
+  }
+  await requireOwnedLedger(tx, owner, ledgerId);
+  const row = await tx.tradingPaperWorkerMarketTarget.findUnique({ where: { ledgerId } });
+  if (!row) {
+    return { status: "deny", mode: "paper_only", ledgerId, reason: "target_disabled" };
+  }
+  if (row.spaceId !== owner.spaceId || row.userId !== owner.userId) {
+    throw new PaperWorkerMarketTargetIntegrityError("Paper market target owner mismatch");
+  }
+  const target = normalize(row);
+  if (!target.enabled || target.venue === null || target.symbol === null) {
+    return { status: "deny", mode: "paper_only", ledgerId, reason: "target_disabled" };
+  }
+  await verifyEnabledApproval(tx, owner, target);
+  const worker = await assessTradingPaperWorkerWakePreflightInTransaction(
+    tx,
+    owner,
+    ledgerId,
+    now,
+  );
+  if (worker.status !== "ready") {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "worker_preflight_denied",
+      workerReason: worker.reason,
+    };
+  }
+  if (worker.gateRevision !== target.gateRevision) {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "target_gate_changed",
+      currentGateRevision: worker.gateRevision,
+    };
+  }
+  return {
+    status: "ready",
+    mode: "paper_only",
+    ledgerId,
+    venue: target.venue,
+    symbol: target.symbol,
+    gateRevision: target.gateRevision,
+    targetRevision: target.targetRevision,
+    targetApprovalEffectId: target.approvalEffectId,
+    workerApprovalEffectId: worker.workerApprovalEffectId,
+    paperApprovalEffectId: worker.paperApprovalEffectId,
+  };
+}
+
+export async function verifyTradingPaperWorkerMarketTargetAuthorityInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  expected: TradingPaperWorkerMarketTargetAuthority,
+  now: Date,
+): Promise<TradingPaperWorkerMarketTargetAuthority | null> {
+  const current = await assessTradingPaperWorkerMarketTargetPreflightInTransaction(
+    tx,
+    owner,
+    expected.ledgerId,
+    now,
+  );
+  return current.status === "ready" && sameTargetAuthority(expected, current) ? current : null;
+}
+
 export async function readTradingPaperWorkerMarketTargetPreflight(
   prisma: Db,
   owner: Owner,
@@ -306,62 +402,59 @@ export async function readTradingPaperWorkerMarketTargetPreflight(
 ): Promise<TradingPaperWorkerMarketTargetPreflight> {
   return withTransactionRetry(() =>
     prisma.$transaction(
-      async (tx): Promise<TradingPaperWorkerMarketTargetPreflight> => {
-        if (!Number.isFinite(now.getTime())) {
-          throw new PaperWorkerMarketTargetIntegrityError("Invalid paper market target clock");
-        }
-        await requireOwnedLedger(tx, owner, ledgerId);
-        const row = await tx.tradingPaperWorkerMarketTarget.findUnique({ where: { ledgerId } });
-        if (!row) {
-          return { status: "deny", mode: "paper_only", ledgerId, reason: "target_disabled" };
-        }
-        if (row.spaceId !== owner.spaceId || row.userId !== owner.userId) {
-          throw new PaperWorkerMarketTargetIntegrityError("Paper market target owner mismatch");
-        }
-        const target = normalize(row);
-        if (!target.enabled || target.venue === null || target.symbol === null) {
-          return { status: "deny", mode: "paper_only", ledgerId, reason: "target_disabled" };
-        }
-        await verifyEnabledApproval(tx, owner, target);
-        const worker = await assessTradingPaperWorkerWakePreflightInTransaction(
-          tx,
-          owner,
-          ledgerId,
-          now,
-        );
-        if (worker.status !== "ready") {
-          return {
-            status: "deny",
-            mode: "paper_only",
-            ledgerId,
-            reason: "worker_preflight_denied",
-            workerReason: worker.reason,
-          };
-        }
-        if (worker.gateRevision !== target.gateRevision) {
-          return {
-            status: "deny",
-            mode: "paper_only",
-            ledgerId,
-            reason: "target_gate_changed",
-            currentGateRevision: worker.gateRevision,
-          };
-        }
-        return {
-          status: "ready",
-          mode: "paper_only",
-          ledgerId,
-          venue: target.venue,
-          symbol: target.symbol,
-          gateRevision: target.gateRevision,
-          targetRevision: target.targetRevision,
-          targetApprovalEffectId: target.approvalEffectId,
-          workerApprovalEffectId: worker.workerApprovalEffectId,
-          paperApprovalEffectId: worker.paperApprovalEffectId,
-        };
-      },
+      (tx) => assessTradingPaperWorkerMarketTargetPreflightInTransaction(tx, owner, ledgerId, now),
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
+  );
+}
+
+export type HistoricalTradingPaperWorkerMarketTargetScope = {
+  ledgerId: string;
+  venue: Venue;
+  symbol: string;
+  gateRevision: number;
+  targetRevision: number;
+};
+
+export async function verifyHistoricalTradingPaperWorkerMarketTargetApprovalInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  effectId: string,
+  expected: HistoricalTradingPaperWorkerMarketTargetScope,
+): Promise<boolean> {
+  await requireOwnedLedger(tx, owner, expected.ledgerId);
+  const effect = await tx.externalEffect.findUnique({
+    where: { id: effectId },
+    include: { run: { select: { spaceId: true, userId: true } } },
+  });
+  if (
+    effect?.status !== "completed" ||
+    effect.kind !== "paper_worker_market_target_control" ||
+    effect.spaceId !== owner.spaceId ||
+    effect.run.spaceId !== owner.spaceId ||
+    effect.run.userId !== owner.userId
+  ) {
+    throw new PaperWorkerMarketTargetIntegrityError(
+      "Historical paper market target lacks completed explicit approval provenance",
+    );
+  }
+  const request = parseRequest(effect.request);
+  const result = objectResult(effect.result);
+  return (
+    request.action === "enable" &&
+    request.ledgerId === expected.ledgerId &&
+    request.expectedGateRevision === expected.gateRevision &&
+    request.venue === expected.venue &&
+    request.symbol === expected.symbol &&
+    result?.ok === true &&
+    result.mode === "paper_only" &&
+    result.action === "enable" &&
+    result.ledgerId === expected.ledgerId &&
+    result.enabled === true &&
+    result.venue === expected.venue &&
+    result.symbol === expected.symbol &&
+    result.gateRevision === expected.gateRevision &&
+    result.targetRevision === expected.targetRevision
   );
 }
 
