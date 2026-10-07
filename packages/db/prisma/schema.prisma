@@ -1406,6 +1406,7 @@ model TradingPaperLedger {
   workerResearchRuns     TradingPaperWorkerResearch[]
   workerSignalGate       TradingPaperWorkerSignalGate?
   resolvedResearchGate   TradingPaperResolvedResearchGate?
+  resolvedResearchReserveUses TradingPaperResolvedResearchReserveUse[]
   workerFillGate         TradingPaperWorkerFillGate?
   workerFillUses         TradingPaperWorkerFillUse[]
 
@@ -1725,6 +1726,33 @@ model TradingPaperResolvedResearchGate {
   @@index([spaceId, userId])
   @@index([approvalEffectId])
   @@map("trading_paper_resolved_research_gates")
+}
+
+/** Immutable provenance for a G1-authorized synthetic PAPER reserve.
+ * This row is audit evidence only and never grants fill/live execution authority. */
+model TradingPaperResolvedResearchReserveUse {
+  ledgerId                 String
+  reservationId            String
+  ledger                   TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId                  String
+  userId                   String
+  signalId                 String
+  researchApprovalEffectId String
+  scope                    Json
+  policyRevision           Int
+  gateRevision             Int
+  researchRevision         Int
+  evidenceId               String
+  reserveEventSequence     Int
+  actedAt                  DateTime
+  useSha256                String
+  createdAt                DateTime @default(now())
+
+  @@id([ledgerId, reservationId])
+  @@unique([ledgerId, signalId])
+  @@index([researchApprovalEffectId])
+  @@index([ledgerId, reserveEventSequence])
+  @@map("trading_paper_resolved_research_reserve_uses")
 }
 
 /** Explicit owner-approved authority boundary for future automatic synthetic PAPER fills.
