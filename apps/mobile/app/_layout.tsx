@@ -1,4 +1,4 @@
-import { DarkTheme, Stack, ThemeProvider } from "expo-router";
+import { DarkTheme, router, Stack, ThemeProvider } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
@@ -8,8 +8,15 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { AvatarStyleProvider } from "../components/avatar-style";
 import { CallCard } from "../components/CallCard";
 import { ComputerUpdateProgress } from "../components/computer-update-progress";
-import { currentApiBase, loadApiBase, loadSessionToken, selectedSpaceId } from "../lib/api";
+import {
+  currentApiBase,
+  loadApiBase,
+  loadSessionToken,
+  selectedSpaceId,
+  subscribeSessionRejected,
+} from "../lib/api";
 import { loadAppearancePreference, mobileTokens } from "../lib/appearance";
+import { explicitSignInRoute } from "../lib/auth-routing";
 import { bootstrapI18n, useI18n } from "../lib/i18n";
 import {
   configureForegroundNotifications,
@@ -46,6 +53,15 @@ export default function Layout() {
       },
     };
   }, [resolved]);
+
+  useEffect(() => {
+    if (!ready) return;
+    // A session revoked or expired on the server ends here, from whichever screen noticed it.
+    return subscribeSessionRejected(() => {
+      if (router.canDismiss()) router.dismissAll();
+      router.replace(explicitSignInRoute);
+    });
+  }, [ready]);
 
   useEffect(() => {
     void Promise.all([

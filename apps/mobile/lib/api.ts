@@ -445,7 +445,19 @@ export async function requestPasswordReset(email: string, redirectTo: string): P
   if (!response.ok) throw new Error(responseErrorMessage(body, t("Could not send reset email")));
 }
 
+/** Revoking other sessions also refuses this one until the replacement is saved. */
+let passwordChangesInFlight = 0;
+
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  passwordChangesInFlight += 1;
+  try {
+    await replaceSessionAfterPasswordChange(currentPassword, newPassword);
+  } finally {
+    passwordChangesInFlight -= 1;
+  }
+}
+
+async function replaceSessionAfterPasswordChange(currentPassword: string, newPassword: string) {
   const apiBase = currentApiBase();
   const generation = currentSessionGeneration();
   const headers = await authHeaders();
@@ -577,6 +589,21 @@ export async function deleteAccount(password: string) {
   await clearSpace();
 }
 
+const sessionRejectedListeners = new Set<() => void>();
+
+/** Runs after the server rejected the stored session and it was cleared. */
+export function subscribeSessionRejected(listener: () => void): () => void {
+  sessionRejectedListeners.add(listener);
+  return () => {
+    sessionRejectedListeners.delete(listener);
+  };
+}
+
+async function rejectSession() {
+  await clearSessionToken();
+  for (const listener of sessionRejectedListeners) listener();
+}
+
 export async function rpc<T>(
   proc: string,
   body: unknown = {},
@@ -588,6 +615,7 @@ export async function rpc<T>(
   } = {},
 ): Promise<T> {
   const requestSpaceGeneration = spaceSelectionGeneration;
+  const requestSessionGeneration = currentSessionGeneration();
   const uses = aiDataUsesForProcedure(proc, body);
   const consentContext =
     options.requestContext ?? (uses.length ? await captureApiRequestContext() : undefined);
@@ -653,12 +681,27 @@ export async function rpc<T>(
     });
     if (!res.ok || parsed.error) {
       const message = parsed.error?.message ?? `rpc ${proc} failed`;
-      const unauthorized = res.status === 401 || /unauthorized/i.test(message);
+      const unauthorized = res.status === 401;
+      // Without a Space header a 401 means the server no longer accepts the
+      // session itself; Space recovery below probes the same way. Clearing it
+      // bumps the session generation, so only the first rejection of a session
+      // acts, and a 401 sent before a newer sign-in or a password change on
+      // this device cannot clear the session that replaced it.
+      if (
+        unauthorized &&
+        !requestSpaceId &&
+        requestHeaders.authorization &&
+        !options.requestContext &&
+        !passwordChangesInFlight &&
+        requestSessionGeneration === currentSessionGeneration()
+      ) {
+        await rejectSession();
+      }
       // After a delete where SecureStore could not clear the stale id, restart
       // reloads it and the first RPCs 401. Probe once without a Space header:
       // success means the selection was inaccessible (clear it); failure means
-      // the session itself is bad (restore the selection so a later sign-in
-      // keeps the user's Space). Never replay a mutation against the default
+      // the session itself is bad (restore the selection; it stays until
+      // sign-in resets it). Never replay a mutation against the default
       // Space — only safe reads may retry as themselves; other procs probe
       // with spaces/list, then fail the original call.
       const previousSpaceId = selectedSpaceId();
