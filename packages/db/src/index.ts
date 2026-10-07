@@ -38,12 +38,17 @@ export {
 export {
   applyApprovedTradingPaperResolvedResearchControl,
   assessTradingPaperResolvedResearchPreflightInTransaction,
+  type HistoricalTradingPaperResolvedResearchReserveScope,
   type PaperResolvedResearchControlResult,
   PaperResolvedResearchGateIntegrityError,
   readTradingPaperResolvedResearchPreflight,
   readVerifiedTradingPaperResolvedResearchGate,
+  recordTradingPaperResolvedResearchReserveUseInTransaction,
+  type TradingPaperResolvedResearchAuthority,
   type TradingPaperResolvedResearchGateStatus,
   type TradingPaperResolvedResearchPreflight,
+  verifyHistoricalTradingPaperResolvedResearchReserveApprovalInTransaction,
+  verifyTradingPaperResolvedResearchAuthorityInTransaction,
 } from "./trading-paper-resolved-research-gate.js";
 export {
   applyApprovedTradingPaperControl,
