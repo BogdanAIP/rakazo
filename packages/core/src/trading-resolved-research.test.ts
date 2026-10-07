@@ -78,6 +78,9 @@ describe("resolved trading research boundary", () => {
       skillSourceDigest: "b".repeat(64),
       strategyId: "resolver-strategy",
       strategyVersion: "2",
+      venue: "okx",
+      marketKind: "spot",
+      action: "spot_buy",
     });
     expect(scope).not.toHaveProperty("entryTrigger");
     expect(scope).not.toHaveProperty("riskBudgetQuote");
@@ -113,6 +116,11 @@ describe("resolved trading research boundary", () => {
     const result = assessResolvedTradingResearch(envelope, new Date("2026-10-07T20:30:00.000Z"));
     expect(result.status).toBe("no_trade");
     expect(result.signal.kind).toBe("no_trade");
+    expect(result.scope).toMatchObject({
+      venue: null,
+      marketKind: null,
+      action: null,
+    });
   });
 
   it("fails before returning a scope for non-read-only Resolver provenance or an invalid clock", () => {
