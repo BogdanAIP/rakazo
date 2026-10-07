@@ -347,11 +347,7 @@ describePostgres("paper worker signal gate PostgreSQL authorization", () => {
     });
     await applyApprovedTradingPaperWorkerSignalControl(first.prisma, owner, signalEnable.id);
 
-    const oldAuthority = await readTradingPaperWorkerSignalPreflight(
-      first.prisma,
-      owner,
-      ledgerId,
-    );
+    const oldAuthority = await readTradingPaperWorkerSignalPreflight(first.prisma, owner, ledgerId);
     if (oldAuthority.status !== "ready") throw new Error("expected ready F0 authority");
 
     const observedAt = new Date().toISOString();
