@@ -466,10 +466,8 @@ describePostgres("paper worker signal gate PostgreSQL authorization", () => {
     expect(await first.prisma.tradingPaperReservationDecision.count({ where: { ledgerId } })).toBe(
       1,
     );
-    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_buy" } })).toBe(
-      0,
-    );
+    expect(
+      await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_buy" } }),
+    ).toBe(0);
   });
-
-
 });
