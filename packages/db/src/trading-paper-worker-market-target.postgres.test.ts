@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createDb } from "./client.js";
+import { createDb, type Prisma } from "./client.js";
 import {
   applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,
@@ -139,7 +139,7 @@ describePostgres("paper worker market target PostgreSQL authorization", () => {
         kind,
         idempotencyKey: `paper-target-key-${label}-${suffix}`,
         status: "executing",
-        request,
+        request: request as Prisma.InputJsonValue,
       },
     });
   };
