@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb, type Prisma } from "./client.js";
 import {
+  readVerifiedPublicPaperQuoteEvidence,
+  recordIdempotentPublicAdapterPaperQuoteEvidence,
+} from "./trading-paper-quote-evidence.js";
+import {
   applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,
 } from "./trading-paper-risk-policy.js";
@@ -16,10 +20,6 @@ import {
   readTradingPaperWorkerMarketTargetPreflight,
   readVerifiedTradingPaperWorkerMarketTarget,
 } from "./trading-paper-worker-market-target.js";
-import {
-  readVerifiedPublicPaperQuoteEvidence,
-  recordIdempotentPublicAdapterPaperQuoteEvidence,
-} from "./trading-paper-quote-evidence.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
