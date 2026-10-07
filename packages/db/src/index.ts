@@ -70,6 +70,16 @@ export {
   type VerifiedPaperWorkerResearchOutput,
 } from "./trading-paper-worker-research.js";
 export {
+  applyApprovedTradingPaperWorkerFillControl,
+  assessTradingPaperWorkerFillPreflightInTransaction,
+  PaperWorkerFillGateIntegrityError,
+  readTradingPaperWorkerFillPreflight,
+  readVerifiedTradingPaperWorkerFillGate,
+  type PaperWorkerFillControlResult,
+  type TradingPaperWorkerFillGateStatus,
+  type TradingPaperWorkerFillPreflight,
+} from "./trading-paper-worker-fill-gate.js";
+export {
   applyApprovedTradingPaperWorkerSignalControl,
   PaperWorkerSignalGateIntegrityError,
   readTradingPaperWorkerSignalPreflight,
