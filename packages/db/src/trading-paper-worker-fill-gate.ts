@@ -419,7 +419,8 @@ function normalizeFillUse(row: {
   useSha256: string;
 }) {
   const strategyId = row.strategyId === STRATEGY_ID ? STRATEGY_ID : null;
-  const venue = row.venue === "okx" || row.venue === "bingx" ? row.venue : null;
+  const venue: "okx" | "bingx" | null =
+    row.venue === "okx" || row.venue === "bingx" ? row.venue : null;
   if (
     strategyId !== STRATEGY_ID ||
     venue === null ||
