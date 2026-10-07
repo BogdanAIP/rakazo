@@ -5,8 +5,8 @@ import {
   type PaperWorkerPreflightJobResult,
 } from "./paper-worker-background.js";
 import {
-  type PaperWorkerFillAttemptResult,
   fillReservedPaperWorkerProposal,
+  type PaperWorkerFillAttemptResult,
 } from "./paper-worker-fill.js";
 import {
   observeConfiguredPaperWorkerSpotMarket,

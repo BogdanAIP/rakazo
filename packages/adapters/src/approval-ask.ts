@@ -241,10 +241,7 @@ function formatApprovalDetail(
       `ledger: ${String(args.ledger_id ?? "")}`,
       `expected worker gate revision: ${String(args.expected_gate_revision ?? "")}`,
       ...(args.action === "enable"
-        ? [
-            `venue: ${String(args.venue ?? "")}`,
-            `symbol: ${String(args.symbol ?? "")}`,
-          ]
+        ? [`venue: ${String(args.venue ?? "")}`, `symbol: ${String(args.symbol ?? "")}`]
         : []),
     );
   }

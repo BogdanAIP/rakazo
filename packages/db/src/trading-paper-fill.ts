@@ -597,8 +597,7 @@ export async function fillApprovedTradingPaperReservation(
           reservationId,
           requestSha256,
           evidenceId,
-          policyApprovalEffectId:
-            currentWorkerAuthority?.fillApprovalEffectId ?? approval.effectId,
+          policyApprovalEffectId: currentWorkerAuthority?.fillApprovalEffectId ?? approval.effectId,
           policyRevision: policy.revision,
           reserveEventSequence: reservation.reserveEventSequence,
           fillEventSequence,

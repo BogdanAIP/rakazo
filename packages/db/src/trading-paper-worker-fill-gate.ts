@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import {
   type TradingPaperWorkerMarketTargetAuthority,
   verifyHistoricalTradingPaperWorkerMarketTargetApprovalInTransaction,
 } from "./trading-paper-worker-market-target.js";
-import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import { assessTradingPaperWorkerSignalPreflightInTransaction } from "./trading-paper-worker-signal-gate.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
@@ -597,19 +597,18 @@ export async function verifyHistoricalTradingPaperWorkerFillApprovalInTransactio
   }
   const request = parseRequest(effect.request);
   const result = objectResult(effect.result);
-  const targetApproved =
-    await verifyHistoricalTradingPaperWorkerMarketTargetApprovalInTransaction(
-      tx,
-      owner,
-      use.targetApprovalEffectId,
-      {
-        ledgerId: use.ledgerId,
-        venue: use.venue,
-        symbol: use.symbol,
-        gateRevision: use.gateRevision,
-        targetRevision: use.targetRevision,
-      },
-    );
+  const targetApproved = await verifyHistoricalTradingPaperWorkerMarketTargetApprovalInTransaction(
+    tx,
+    owner,
+    use.targetApprovalEffectId,
+    {
+      ledgerId: use.ledgerId,
+      venue: use.venue,
+      symbol: use.symbol,
+      gateRevision: use.gateRevision,
+      targetRevision: use.targetRevision,
+    },
+  );
   if (!targetApproved) {
     throw new PaperWorkerFillGateIntegrityError(
       "Historical automatic fill lacks matching market-target approval",
@@ -621,11 +620,7 @@ export async function verifyHistoricalTradingPaperWorkerFillApprovalInTransactio
     use.ledgerId,
     use.evidenceId,
   );
-  if (
-    !evidence ||
-    evidence.market.venue !== use.venue ||
-    evidence.market.symbol !== use.symbol
-  ) {
+  if (!evidence || evidence.market.venue !== use.venue || evidence.market.symbol !== use.symbol) {
     throw new PaperWorkerFillGateIntegrityError(
       "Historical automatic fill evidence disagrees with approved target",
     );

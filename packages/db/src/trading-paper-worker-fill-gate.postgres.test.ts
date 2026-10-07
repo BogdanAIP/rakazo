@@ -431,10 +431,12 @@ describePostgres("paper worker fill gate PostgreSQL authorization", () => {
       },
       data: { useSha256: use.useSha256 },
     });
-    await expect(auditTradingPaperLifecycle(second.prisma, owner, ledgerId)).resolves.toMatchObject({
-      status: "verified",
-      fillDecisions: 1,
-    });
+    await expect(auditTradingPaperLifecycle(second.prisma, owner, ledgerId)).resolves.toMatchObject(
+      {
+        status: "verified",
+        fillDecisions: 1,
+      },
+    );
   });
 
   it("requires separate fill permission and invalidates it when the signal gate changes", async () => {

@@ -341,12 +341,7 @@ export async function assessTradingPaperWorkerMarketTargetPreflightInTransaction
     return { status: "deny", mode: "paper_only", ledgerId, reason: "target_disabled" };
   }
   await verifyEnabledApproval(tx, owner, target);
-  const worker = await assessTradingPaperWorkerWakePreflightInTransaction(
-    tx,
-    owner,
-    ledgerId,
-    now,
-  );
+  const worker = await assessTradingPaperWorkerWakePreflightInTransaction(tx, owner, ledgerId, now);
   if (worker.status !== "ready") {
     return {
       status: "deny",
