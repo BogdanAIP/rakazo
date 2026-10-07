@@ -304,6 +304,58 @@ export async function readVerifiedTradingPaperWorkerSignalGate(
   );
 }
 
+export async function assessTradingPaperWorkerSignalPreflightInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  ledgerId: string,
+  now: Date,
+): Promise<TradingPaperWorkerSignalPreflight> {
+  await requireOwnedLedger(tx, owner, ledgerId);
+  const row = await tx.tradingPaperWorkerSignalGate.findUnique({ where: { ledgerId } });
+  if (!row) {
+    return { status: "deny", mode: "paper_only", ledgerId, reason: "signal_gate_disabled" };
+  }
+  if (row.spaceId !== owner.spaceId || row.userId !== owner.userId) {
+    throw new PaperWorkerSignalGateIntegrityError("Paper worker signal gate owner mismatch");
+  }
+  const gate = normalize(row);
+  if (!gate.enabled || gate.strategyId !== STRATEGY_ID) {
+    return { status: "deny", mode: "paper_only", ledgerId, reason: "signal_gate_disabled" };
+  }
+  await verifyEnabledApproval(tx, owner, gate);
+  const worker = await assessTradingPaperWorkerWakePreflightInTransaction(tx, owner, ledgerId, now);
+  if (worker.status !== "ready") {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "worker_preflight_denied",
+      workerReason: worker.reason,
+    };
+  }
+  if (worker.gateRevision !== gate.gateRevision || worker.policyRevision !== gate.policyRevision) {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "signal_gate_worker_changed",
+      currentGateRevision: worker.gateRevision,
+    };
+  }
+  return {
+    status: "ready",
+    mode: "paper_only",
+    ledgerId,
+    strategyId: STRATEGY_ID,
+    policyRevision: gate.policyRevision,
+    gateRevision: gate.gateRevision,
+    signalRevision: gate.signalRevision,
+    signalApprovalEffectId: gate.approvalEffectId,
+    workerApprovalEffectId: worker.workerApprovalEffectId,
+    paperApprovalEffectId: worker.paperApprovalEffectId,
+  };
+}
+
 export async function readTradingPaperWorkerSignalPreflight(
   prisma: Db,
   owner: Owner,
@@ -312,60 +364,7 @@ export async function readTradingPaperWorkerSignalPreflight(
 ): Promise<TradingPaperWorkerSignalPreflight> {
   return withTransactionRetry(() =>
     prisma.$transaction(
-      async (tx): Promise<TradingPaperWorkerSignalPreflight> => {
-        await requireOwnedLedger(tx, owner, ledgerId);
-        const row = await tx.tradingPaperWorkerSignalGate.findUnique({ where: { ledgerId } });
-        if (!row) {
-          return { status: "deny", mode: "paper_only", ledgerId, reason: "signal_gate_disabled" };
-        }
-        if (row.spaceId !== owner.spaceId || row.userId !== owner.userId) {
-          throw new PaperWorkerSignalGateIntegrityError("Paper worker signal gate owner mismatch");
-        }
-        const gate = normalize(row);
-        if (!gate.enabled || gate.strategyId !== STRATEGY_ID) {
-          return { status: "deny", mode: "paper_only", ledgerId, reason: "signal_gate_disabled" };
-        }
-        await verifyEnabledApproval(tx, owner, gate);
-        const worker = await assessTradingPaperWorkerWakePreflightInTransaction(
-          tx,
-          owner,
-          ledgerId,
-          now,
-        );
-        if (worker.status !== "ready") {
-          return {
-            status: "deny",
-            mode: "paper_only",
-            ledgerId,
-            reason: "worker_preflight_denied",
-            workerReason: worker.reason,
-          };
-        }
-        if (
-          worker.gateRevision !== gate.gateRevision ||
-          worker.policyRevision !== gate.policyRevision
-        ) {
-          return {
-            status: "deny",
-            mode: "paper_only",
-            ledgerId,
-            reason: "signal_gate_worker_changed",
-            currentGateRevision: worker.gateRevision,
-          };
-        }
-        return {
-          status: "ready",
-          mode: "paper_only",
-          ledgerId,
-          strategyId: STRATEGY_ID,
-          policyRevision: gate.policyRevision,
-          gateRevision: gate.gateRevision,
-          signalRevision: gate.signalRevision,
-          signalApprovalEffectId: gate.approvalEffectId,
-          workerApprovalEffectId: worker.workerApprovalEffectId,
-          paperApprovalEffectId: worker.paperApprovalEffectId,
-        };
-      },
+      (tx) => assessTradingPaperWorkerSignalPreflightInTransaction(tx, owner, ledgerId, now),
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
   );
