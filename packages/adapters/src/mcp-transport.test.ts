@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { StoredMcpOAuthProvider } from "./mcp-oauth.js";
 import {
+  isAllowedMcpStdioLaunch,
   McpSession,
   secureFetch,
   validateUrl,
@@ -52,6 +53,47 @@ describe("MCP transport seam", () => {
     ).rejects.toThrow("allowlist");
     await session.close();
     assert.ok(true);
+  });
+
+  it("allows an exact command+argv tuple without broadly allowing the launcher", () => {
+    const launch = {
+      command: "C:\\Program Files\\nodejs\\npx.cmd",
+      args: ["-y", "ccxt-mcp@0.1.3"],
+    };
+    expect(
+      isAllowedMcpStdioLaunch({
+        ...launch,
+        allowedCommands: [],
+        allowedLaunches: [launch],
+      }),
+    ).toBe(true);
+    expect(
+      isAllowedMcpStdioLaunch({
+        command: launch.command,
+        args: ["-y", "another-package"],
+        allowedCommands: [],
+        allowedLaunches: [launch],
+      }),
+    ).toBe(false);
+    expect(
+      isAllowedMcpStdioLaunch({
+        command: launch.command,
+        args: [...launch.args, "--extra"],
+        allowedCommands: [],
+        allowedLaunches: [launch],
+      }),
+    ).toBe(false);
+  });
+
+  it("preserves the legacy exact-command allowlist behavior", () => {
+    expect(
+      isAllowedMcpStdioLaunch({
+        command: "/opt/github-mcp-server",
+        args: ["stdio", "--read-only"],
+        allowedCommands: ["/opt/github-mcp-server"],
+        allowedLaunches: [],
+      }),
+    ).toBe(true);
   });
 
   it("rejects remote endpoints that resolve to a private address", async () => {
