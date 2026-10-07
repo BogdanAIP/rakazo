@@ -13,8 +13,8 @@ import {
   enqueueAuthorizedPaperWorkerSuccessor,
 } from "./paper-worker-recurrence-scheduler.js";
 import {
-  researchObservedPaperWorkerMarket,
   type PaperWorkerResearchResult,
+  researchObservedPaperWorkerMarket,
 } from "./paper-worker-research.js";
 
 type HandlePreflight = typeof handlePaperWorkerPreflight;
