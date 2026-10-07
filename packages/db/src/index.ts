@@ -44,6 +44,16 @@ export {
   readVerifiedTradingPaperLedger,
 } from "./trading-paper-store.js";
 export {
+  applyApprovedTradingPaperWorkerFillControl,
+  assessTradingPaperWorkerFillPreflightInTransaction,
+  type PaperWorkerFillControlResult,
+  PaperWorkerFillGateIntegrityError,
+  readTradingPaperWorkerFillPreflight,
+  readVerifiedTradingPaperWorkerFillGate,
+  type TradingPaperWorkerFillGateStatus,
+  type TradingPaperWorkerFillPreflight,
+} from "./trading-paper-worker-fill-gate.js";
+export {
   applyApprovedTradingPaperWorkerControl,
   readTradingPaperWorkerWakePreflight,
   readVerifiedTradingPaperWorkerGate,
@@ -69,16 +79,6 @@ export {
   recordTradingPaperWorkerResearchOutput,
   type VerifiedPaperWorkerResearchOutput,
 } from "./trading-paper-worker-research.js";
-export {
-  applyApprovedTradingPaperWorkerFillControl,
-  assessTradingPaperWorkerFillPreflightInTransaction,
-  PaperWorkerFillGateIntegrityError,
-  readTradingPaperWorkerFillPreflight,
-  readVerifiedTradingPaperWorkerFillGate,
-  type PaperWorkerFillControlResult,
-  type TradingPaperWorkerFillGateStatus,
-  type TradingPaperWorkerFillPreflight,
-} from "./trading-paper-worker-fill-gate.js";
 export {
   applyApprovedTradingPaperWorkerSignalControl,
   PaperWorkerSignalGateIntegrityError,
