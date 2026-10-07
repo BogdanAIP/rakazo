@@ -5,7 +5,7 @@ import { fetchOkxPublicCatalog, fetchOkxPublicSpotTickers } from "./trading-okx-
 
 type Owner = { spaceId: string; userId: string };
 type PaperDb = Pick<PrismaClient, "$transaction">;
-type Target = { venue: "okx" | "bingx"; symbol: string };
+export type PublicPaperSpotTarget = { venue: "okx" | "bingx"; symbol: string };
 
 /** Explicit trusted-Rakazo-internal invocation ONLY; never an AI/RPC action or
  * recurring poller. Endpoints are hardcoded in existing keyless GET adapters;
@@ -16,7 +16,7 @@ export async function capturePublicPaperSpotEvidence(
   prisma: PaperDb,
   owner: Owner,
   ledgerId: string,
-  target: Target,
+  target: PublicPaperSpotTarget,
 ): Promise<{ id: string; source: "public_adapter_observation" }> {
   if (!/^[A-Z0-9]{2,40}-[A-Z0-9]{2,40}$/.test(target.symbol)) {
     throw new Error("Invalid public spot symbol");

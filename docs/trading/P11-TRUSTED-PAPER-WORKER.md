@@ -238,6 +238,12 @@ Only after D2 is ready does the handler enter D12, which persists/reuses the D11
 
 The registered handler still has no market-data adapter, model runtime, trading writer, exchange credential, private endpoint or order dispatcher. It does not create a Rakazo Routine and cannot reserve/fill/close virtual positions. This branch change is not deployed or merged by D13, so it does not alter the currently running Rakazo instance.
 
+## P11E-0 — gated public market observation primitive (not registered)
+
+E0 starts the market-observation side without activating trading. A new internal adapter composition first runs the existing D2 worker preflight. A denied or stale wake stops before any public request or evidence write. Only a `ready` wake may call the already-reviewed fixed-endpoint public spot capture adapter for an explicit internal `okx|bingx + symbol` target and persist one SHA-protected `public_adapter_observation` row.
+
+The primitive is deliberately **not** registered in the production background handler and is not exported as an RPC/MCP action. It has no signal generator, model runtime, reservation/fill/close writer, private exchange endpoint, API key or order dispatcher. The target is not yet recurrence-authorized or persisted, so E0 is only plumbing plus fail-closed tests. A later slice must add explicit owner-scoped target authorization before any recurring handler is allowed to call it.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.
