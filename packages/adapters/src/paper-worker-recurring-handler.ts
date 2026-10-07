@@ -9,13 +9,13 @@ import {
   type PaperWorkerFillAttemptResult,
 } from "./paper-worker-fill.js";
 import {
-  handleVerifiedPaperWorkerAutomaticStops,
-  type PaperWorkerAutomaticStopHandlingResult,
-} from "./paper-worker-protective-stop.js";
-import {
   observeConfiguredPaperWorkerSpotMarket,
   type PaperWorkerMarketObservationResult,
 } from "./paper-worker-market-observation.js";
+import {
+  handleVerifiedPaperWorkerAutomaticStops,
+  type PaperWorkerAutomaticStopHandlingResult,
+} from "./paper-worker-protective-stop.js";
 import {
   type AuthorizedPaperWorkerSuccessorScheduleResult,
   enqueueAuthorizedPaperWorkerSuccessor,
