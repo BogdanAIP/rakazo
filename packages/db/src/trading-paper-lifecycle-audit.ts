@@ -120,7 +120,7 @@ export async function auditTradingPaperLifecycleInTransaction(
   async function approvedFill(
     record: (typeof fills)[number],
     decision: (typeof reservations)[number],
-    reserve: Buy extends never ? never : Reserve,
+    reserve: Reserve,
   ) {
     if (record.policyApprovalEffectId === decision.policyApprovalEffectId) {
       approved(record.policyApprovalEffectId, record.policyRevision);
