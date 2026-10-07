@@ -35,11 +35,11 @@ function Get-TailText {
 
 function Get-RelevantErrorText {
     param([string]$Stage)
-    $parts = New-Object 'System.Collections.Generic.List[string]'
+    $parts = @()
     $controllerError = Get-TailText -Path $controllerStderr -Lines 35
     if ($controllerError) {
-        [void]$parts.Add('Controller error:')
-        [void]$parts.Add($controllerError)
+        $parts += 'Controller error:'
+        $parts += $controllerError
     }
 
     $role = $null
@@ -51,17 +51,17 @@ function Get-RelevantErrorText {
     if ($role) {
         $roleError = Get-TailText -Path (Join-Path $stateDir ($role + '.stderr.log')) -Lines 35
         if ($roleError) {
-            [void]$parts.Add('')
-            [void]$parts.Add(($role.ToUpperInvariant() + ' error:'))
-            [void]$parts.Add($roleError)
+            $parts += ''
+            $parts += ($role.ToUpperInvariant() + ' error:')
+            $parts += $roleError
         }
     }
     elseif ($Stage -match '(?i)postgres') {
         $postgresError = Get-TailText -Path (Join-Path $HOME 'RakazoData\postgres17.log') -Lines 35
         if ($postgresError) {
             [void]$parts.Add('')
-            [void]$parts.Add('PostgreSQL log:')
-            [void]$parts.Add($postgresError)
+            $parts += 'PostgreSQL log:'
+            $parts += $postgresError
         }
     }
 
