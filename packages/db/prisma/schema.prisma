@@ -1405,6 +1405,7 @@ model TradingPaperLedger {
   workerMarketTarget     TradingPaperWorkerMarketTarget?
   workerResearchRuns     TradingPaperWorkerResearch[]
   workerSignalGate       TradingPaperWorkerSignalGate?
+  workerFillGate         TradingPaperWorkerFillGate?
 
   @@index([spaceId, ownerUserId])
   @@map("trading_paper_ledgers")
@@ -1700,6 +1701,28 @@ model TradingPaperWorkerSignalGate {
 
   @@index([spaceId, userId])
   @@map("trading_paper_worker_signal_gates")
+}
+
+/** Explicit owner-approved authority boundary for future automatic synthetic PAPER fills.
+ * Permission only: this row cannot fill a reservation or submit any exchange order. */
+model TradingPaperWorkerFillGate {
+  ledgerId          String             @id
+  ledger            TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId           String
+  userId            String
+  enabled           Boolean            @default(false)
+  strategyId        String?
+  policyRevision    Int
+  gateRevision      Int
+  signalRevision    Int
+  fillRevision      Int                @default(0)
+  approvalEffectId  String
+  gateSha256        String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([spaceId, userId])
+  @@map("trading_paper_worker_fill_gates")
 }
 
 /** Durable deterministic research output only; never an order or risk approval. */
