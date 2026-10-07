@@ -92,6 +92,11 @@ export type TradingPaperWorkerSignalReserveAuthority = Extract<
   { status: "ready" }
 >;
 
+type TradingPaperResolvedResearchReserveAuthority = {
+  envelope: TradingResolvedResearchEnvelope;
+  authority: TradingPaperResolvedResearchAuthority;
+};
+
 function sameWorkerSignalAuthority(
   left: TradingPaperWorkerSignalReserveAuthority,
   right: TradingPaperWorkerSignalReserveAuthority,
@@ -353,6 +358,7 @@ export async function reserveApprovedTradingPaperSignal(
   proposedSignal: unknown,
   evidenceId: string,
   workerSignalAuthority?: TradingPaperWorkerSignalReserveAuthority,
+  resolvedResearch?: TradingPaperResolvedResearchReserveAuthority,
 ): Promise<TradingPaperReserveResult> {
   const parsed = TradingSignalSchema.safeParse(proposedSignal);
   const proposal = parsed.success && parsed.data.kind === "proposal" ? parsed.data : null;
@@ -366,6 +372,37 @@ export async function reserveApprovedTradingPaperSignal(
         await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         const currentPolicy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         const decisionNow = Date.now();
+        if (workerSignalAuthority && resolvedResearch) {
+          throw new PaperReservationDecisionIntegrityError(
+            "A PAPER reserve cannot use legacy and resolved-research authorities together",
+          );
+        }
+        let currentResolvedAuthority: TradingPaperResolvedResearchAuthority | null = null;
+        if (resolvedResearch) {
+          if (
+            !proposal ||
+            JSON.stringify(proposal) !== JSON.stringify(resolvedResearch.envelope.signal)
+          ) {
+            throw new PaperReservationDecisionIntegrityError(
+              "Resolved research envelope differs from the proposed PAPER signal",
+            );
+          }
+          currentResolvedAuthority =
+            await verifyTradingPaperResolvedResearchAuthorityInTransaction(
+              tx,
+              owner,
+              resolvedResearch.authority,
+              resolvedResearch.envelope,
+              new Date(decisionNow),
+            );
+          if (!currentResolvedAuthority) {
+            const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
+            return deny(
+              { ledgerRevision: recovered.row.version, policyRevision: currentPolicy.revision },
+              "paper_resolved_research_unapproved",
+            );
+          }
+        }
         if (workerSignalAuthority) {
           const currentAuthority = await assessTradingPaperWorkerSignalPreflightInTransaction(
             tx,
@@ -386,7 +423,28 @@ export async function reserveApprovedTradingPaperSignal(
         }
         if (proposal) {
           const existing = await readExistingDecision(tx, owner, ledgerId, proposal, evidenceId);
-          if (existing) return existing;
+          if (existing) {
+            if (currentResolvedAuthority) {
+              const verifiedUse =
+                await verifyTradingPaperResolvedResearchReserveUseInTransaction(
+                  tx,
+                  owner,
+                  currentResolvedAuthority,
+                  {
+                    reservationId: existing.reservationId,
+                    signalId: existing.signalId,
+                    evidenceId,
+                    reserveEventSequence: existing.eventSequence,
+                  },
+                );
+              if (!verifiedUse) {
+                throw new PaperReservationConflictError(
+                  "Existing reserve lacks matching G2 approval provenance",
+                );
+              }
+            }
+            return existing;
+          }
           if (
             Date.parse(proposal.expiresAt) <= decisionNow ||
             Date.parse(proposal.createdAt) > decisionNow + 2_000
@@ -505,7 +563,8 @@ export async function reserveApprovedTradingPaperSignal(
             signalId: signal.signalId,
             requestSha256,
             evidenceId,
-            policyApprovalEffectId: approval.effectId,
+            policyApprovalEffectId:
+              currentResolvedAuthority?.researchApprovalEffectId ?? approval.effectId,
             policyRevision: evaluated.policyRevision,
             ledgerRevisionBefore: evaluated.ledgerRevision,
             eventSequence,
@@ -526,6 +585,20 @@ export async function reserveApprovedTradingPaperSignal(
               decisionSha256: decisionDigest(normalized),
             },
           });
+          if (currentResolvedAuthority) {
+            await recordTradingPaperResolvedResearchReserveUseInTransaction(
+              tx,
+              owner,
+              currentResolvedAuthority,
+              {
+                reservationId,
+                signalId: signal.signalId,
+                evidenceId,
+                reserveEventSequence: eventSequence,
+                actedAt: event.recordedAt,
+              },
+            );
+          }
           await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
           return {
             status: "reserved",
