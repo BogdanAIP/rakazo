@@ -112,7 +112,8 @@ function parseInput(input: ResearchWrite): {
 
 function rowOutput(value: Prisma.JsonValue): TradingResearchOutput {
   const parsed = TradingResearchOutputSchema.safeParse(value);
-  if (!parsed.success) throw new PaperWorkerResearchIntegrityError("Stored research output invalid");
+  if (!parsed.success)
+    throw new PaperWorkerResearchIntegrityError("Stored research output invalid");
   return parsed.data;
 }
 
@@ -271,8 +272,7 @@ export async function readVerifiedTradingPaperWorkerResearchOutput(
           row.quoteEvidenceId,
         );
         if (
-          !evidence ||
-          evidence.market.venue !== "okx" ||
+          evidence?.market.venue !== "okx" ||
           !sameMarket(evidence.market, output.market) ||
           row.algorithm !== output.algorithm ||
           row.signalId !== output.signal.signalId ||

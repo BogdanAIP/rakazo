@@ -7,11 +7,8 @@ import {
   readVerifiedPublicPaperQuoteEvidence,
   recordTradingPaperWorkerResearchOutput,
 } from "@rakazo/db";
-import {
-  fetchOkxClosedOneHourHistory,
-  type OkxClosedHistory,
-} from "./trading-okx-history.js";
 import type { PaperWorkerMarketObservationResult } from "./paper-worker-market-observation.js";
+import { fetchOkxClosedOneHourHistory, type OkxClosedHistory } from "./trading-okx-history.js";
 
 type CompletedObservation = Extract<PaperWorkerMarketObservationResult, { status: "observed" }>;
 type ReadEvidence = typeof readVerifiedPublicPaperQuoteEvidence;

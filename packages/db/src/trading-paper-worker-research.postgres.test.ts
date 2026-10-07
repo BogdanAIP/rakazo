@@ -191,8 +191,6 @@ describePostgres("paper worker research PostgreSQL persistence", () => {
         output: conflicting,
       }),
     ).rejects.toBeInstanceOf(PaperWorkerResearchIntegrityError);
-    expect(
-      await first.prisma.tradingPaperWorkerResearch.count({ where: { ledgerId } }),
-    ).toBe(1);
+    expect(await first.prisma.tradingPaperWorkerResearch.count({ where: { ledgerId } })).toBe(1);
   });
 });

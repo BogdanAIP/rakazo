@@ -56,9 +56,9 @@ export {
 } from "./trading-paper-worker-recurrence-gate.js";
 export {
   PaperWorkerResearchIntegrityError,
+  type PaperWorkerResearchRecord,
   readVerifiedTradingPaperWorkerResearchOutput,
   recordTradingPaperWorkerResearchOutput,
-  type PaperWorkerResearchRecord,
 } from "./trading-paper-worker-research.js";
 export {
   PaperWorkerSuccessorIntentIntegrityError,
