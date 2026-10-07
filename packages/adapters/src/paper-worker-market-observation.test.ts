@@ -50,6 +50,7 @@ describe("observeConfiguredPaperWorkerSpotMarket", () => {
       { spaceId: "space-1", userId: "user-1" },
       "paper-1",
       { venue: "okx", symbol: "SOL-USDT" },
+      expect.stringMatching(/^paper-worker:[a-f0-9]{64}$/u),
     );
   });
 

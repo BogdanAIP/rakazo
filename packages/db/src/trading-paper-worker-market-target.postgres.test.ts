@@ -16,6 +16,10 @@ import {
   readTradingPaperWorkerMarketTargetPreflight,
   readVerifiedTradingPaperWorkerMarketTarget,
 } from "./trading-paper-worker-market-target.js";
+import {
+  readVerifiedPublicPaperQuoteEvidence,
+  recordIdempotentPublicAdapterPaperQuoteEvidence,
+} from "./trading-paper-quote-evidence.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
@@ -310,6 +314,68 @@ describePostgres("paper worker market target PostgreSQL authorization", () => {
       enabled: true,
       gateRevision: 3,
     });
+  });
+
+  it("deduplicates public quote evidence for the same scheduled worker wake", async () => {
+    const ledgerId = `paper-target-idempotent-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: new Date(Date.now() - 30_000).toISOString(),
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "500",
+    });
+    const at = new Date().toISOString();
+    const market = {
+      venue: "okx",
+      kind: "spot",
+      symbol: "SOL-USDT",
+      base: "SOL",
+      quote: "USDT",
+      status: "active",
+      priceIncrement: "0.01",
+      quantityIncrement: "0.01",
+      minNotional: "5",
+      expiryAt: null,
+    };
+    const firstTicker = {
+      venue: "okx",
+      kind: "spot",
+      symbol: "SOL-USDT",
+      bid: "100",
+      ask: "100.1",
+      quoteVolume24h: "100000",
+      observedAt: at,
+      fetchedAt: at,
+    };
+    const retryTicker = { ...firstTicker, bid: "101", ask: "101.1" };
+    const evidenceId = `paper-worker:${"a".repeat(64)}`;
+
+    await expect(
+      recordIdempotentPublicAdapterPaperQuoteEvidence(
+        first.prisma,
+        owner,
+        ledgerId,
+        evidenceId,
+        market,
+        firstTicker,
+      ),
+    ).resolves.toEqual({ id: evidenceId, source: "public_adapter_observation" });
+    await expect(
+      recordIdempotentPublicAdapterPaperQuoteEvidence(
+        second.prisma,
+        owner,
+        ledgerId,
+        evidenceId,
+        market,
+        retryTicker,
+      ),
+    ).resolves.toEqual({ id: evidenceId, source: "public_adapter_observation" });
+    expect(
+      await first.prisma.tradingPaperQuoteEvidence.count({ where: { id: evidenceId, ledgerId } }),
+    ).toBe(1);
+    await expect(
+      readVerifiedPublicPaperQuoteEvidence(first.prisma, owner, ledgerId, evidenceId),
+    ).resolves.toMatchObject({ ticker: { bid: "100", ask: "100.1" } });
   });
 
   it("fails closed when enabled target approval provenance is tampered", async () => {

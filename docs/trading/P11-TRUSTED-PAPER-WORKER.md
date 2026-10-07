@@ -256,6 +256,12 @@ E2 removes the caller-supplied market from the observation path. The internal ob
 
 This remains deliberately unregistered in `paper.worker-preflight`. Before production recurrence may call E2, the observation needs a durable idempotency boundary keyed to the scheduled worker wake so a crash/retry cannot create multiple logically equivalent quote-evidence records.
 
+## P11E-3 — durable scheduled-wake quote idempotency (not registered)
+
+E3 gives every approved public observation a deterministic evidence ID derived from the exact ledger, `scheduledFor`, queued gate revision, target revision, target approval effect, venue and symbol. The DB writer accepts only the `paper-worker:<sha256>` namespace and treats a repeated ID as the same observation: it verifies and returns the already stored public evidence instead of appending another row. A concurrent unique-key race falls back to verification of the committed row.
+
+This closes the crash/retry duplication hole before production registration. The existing non-worker public capture path still uses random evidence IDs, while the E2 worker path always supplies its durable scheduled-wake ID. PostgreSQL coverage verifies that a retry with a changed quote cannot overwrite or duplicate the first committed evidence. E3 still does not register market polling into the background handler.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.

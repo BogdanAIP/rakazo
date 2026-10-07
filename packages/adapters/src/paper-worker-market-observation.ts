@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { BackgroundJobPayloads } from "@rakazo/adapter-kit";
 import {
   type PrismaClient,
@@ -26,11 +27,32 @@ export type PaperWorkerMarketObservationResult =
       evidence: { id: string; source: "public_adapter_observation" };
     };
 
-/** P11E-2 internal composition only. The public target is never supplied by a
- * caller: it must come from the E1 owner-approved target preflight, which also
- * revalidates PAPER + worker approval provenance. The queued D1 gate revision
- * is checked again before any network request. This still has no production
- * background registration, signal/model runtime or trading writer. */
+function evidenceIdForWake(
+  payload: BackgroundJobPayloads["paper.worker-preflight"],
+  target: ReadyTarget,
+): string {
+  const digest = createHash("sha256")
+    .update(
+      JSON.stringify([
+        payload.ledgerId,
+        payload.scheduledFor,
+        payload.gateRevision,
+        target.targetRevision,
+        target.targetApprovalEffectId,
+        target.venue,
+        target.symbol,
+      ]),
+      "utf8",
+    )
+    .digest("hex");
+  return `paper-worker:${digest}`;
+}
+
+/** P11E-3 internal composition only. The public target is never supplied by a
+ * caller: it must come from the E1 owner-approved target preflight. The quote
+ * evidence ID is deterministic for this exact scheduled wake + target revision,
+ * so Graphile retries cannot create a second logical observation. This still
+ * has no production background registration, signal/model runtime or writer. */
 export async function observeConfiguredPaperWorkerSpotMarket(
   prisma: PrismaClient,
   payload: BackgroundJobPayloads["paper.worker-preflight"],
@@ -64,6 +86,7 @@ export async function observeConfiguredPaperWorkerSpotMarket(
     { spaceId: payload.spaceId, userId: payload.userId },
     payload.ledgerId,
     target,
+    evidenceIdForWake(payload, targetPreflight),
   );
   return { status: "observed", targetPreflight, target, evidence };
 }

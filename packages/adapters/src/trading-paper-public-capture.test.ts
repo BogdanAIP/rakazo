@@ -3,6 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { capturePublicPaperSpotEvidence } from "./trading-paper-public-capture.js";
 
 vi.mock("@rakazo/db", () => ({
+  recordIdempotentPublicAdapterPaperQuoteEvidence: vi.fn(async () => ({
+    id: "worker-stored",
+    source: "public_adapter_observation",
+  })),
   recordPublicAdapterPaperQuoteEvidence: vi.fn(async () => ({
     id: "synthetic-stored",
     source: "public_adapter_observation",

@@ -1,5 +1,8 @@
 import type { PrismaClient } from "@rakazo/db";
-import { recordPublicAdapterPaperQuoteEvidence } from "@rakazo/db";
+import {
+  recordIdempotentPublicAdapterPaperQuoteEvidence,
+  recordPublicAdapterPaperQuoteEvidence,
+} from "@rakazo/db";
 import { fetchBingxPublicSpotSnapshot } from "./trading-bingx-public.js";
 import { fetchOkxPublicCatalog, fetchOkxPublicSpotTickers } from "./trading-okx-public.js";
 
@@ -17,6 +20,7 @@ export async function capturePublicPaperSpotEvidence(
   owner: Owner,
   ledgerId: string,
   target: PublicPaperSpotTarget,
+  evidenceId?: string,
 ): Promise<{ id: string; source: "public_adapter_observation" }> {
   if (!/^[A-Z0-9]{2,40}-[A-Z0-9]{2,40}$/.test(target.symbol)) {
     throw new Error("Invalid public spot symbol");
@@ -49,5 +53,14 @@ export async function capturePublicPaperSpotEvidence(
   }
   // All owner, quote-currency, metadata, precision and freshness checks are
   // repeated by the DB service; no later stage may trust this return as allow.
-  return recordPublicAdapterPaperQuoteEvidence(prisma, owner, ledgerId, markets[0], tickers[0]);
+  return evidenceId
+    ? recordIdempotentPublicAdapterPaperQuoteEvidence(
+        prisma,
+        owner,
+        ledgerId,
+        evidenceId,
+        markets[0],
+        tickers[0],
+      )
+    : recordPublicAdapterPaperQuoteEvidence(prisma, owner, ledgerId, markets[0], tickers[0]);
 }

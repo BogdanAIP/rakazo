@@ -180,10 +180,11 @@ export async function readVerifiedPaperQuoteEvidence(
  * This function is DB-only; its inputs must originate from the fixed-endpoint
  * adapter function, never a model, RPC route or caller-reported source label.
  * Hash is an integrity checksum, NOT an exchange signature or risk approval. */
-export async function recordPublicAdapterPaperQuoteEvidence(
+async function recordPublicAdapterPaperQuoteEvidenceWithId(
   prisma: PaperDb,
   owner: Owner,
   ledgerId: string,
+  id: string,
   rawMarket: unknown,
   rawTicker: unknown,
 ): Promise<{ id: string; source: typeof PUBLIC_SOURCE }> {
@@ -191,34 +192,95 @@ export async function recordPublicAdapterPaperQuoteEvidence(
   const ticker = TradingTickerSchema.parse(rawTicker);
   validatePair(market, ticker);
   validateTicker(ticker, Date.now());
-  const id = randomUUID();
-  return withTransactionRetry(() =>
-    prisma.$transaction(
-      async (tx) => {
-        await requireOwner(tx, owner, ledgerId);
-        const ledger = await tx.tradingPaperLedger.findUniqueOrThrow({
-          where: { id: ledgerId },
-          select: { quoteCurrency: true },
-        });
-        if (market.quote !== ledger.quoteCurrency) {
-          throw new PaperQuoteEvidenceError("Observed quote currency differs from ledger");
-        }
-        await tx.tradingPaperQuoteEvidence.create({
-          data: {
-            id,
-            ledgerId,
-            source: PUBLIC_SOURCE,
-            market: JSON.parse(JSON.stringify(market)) as Prisma.InputJsonValue,
-            payload: JSON.parse(JSON.stringify(ticker)) as Prisma.InputJsonValue,
-            payloadSha256: publicSha(market, ticker),
-            observedAt: new Date(ticker.observedAt),
-            fetchedAt: new Date(ticker.fetchedAt),
-          },
-        });
-        return { id, source: PUBLIC_SOURCE };
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    ),
+  try {
+    return await withTransactionRetry(() =>
+      prisma.$transaction(
+        async (tx) => {
+          await requireOwner(tx, owner, ledgerId);
+          const existing = await tx.tradingPaperQuoteEvidence.findFirst({
+            where: { id, ledgerId },
+            select: { id: true },
+          });
+          if (existing) {
+            const checked = await verifyPublicPaperQuoteEvidenceInTransaction(
+              tx,
+              owner,
+              ledgerId,
+              id,
+            );
+            if (!checked) throw new PaperQuoteEvidenceError();
+            return { id, source: PUBLIC_SOURCE };
+          }
+          const ledger = await tx.tradingPaperLedger.findUniqueOrThrow({
+            where: { id: ledgerId },
+            select: { quoteCurrency: true },
+          });
+          if (market.quote !== ledger.quoteCurrency) {
+            throw new PaperQuoteEvidenceError("Observed quote currency differs from ledger");
+          }
+          await tx.tradingPaperQuoteEvidence.create({
+            data: {
+              id,
+              ledgerId,
+              source: PUBLIC_SOURCE,
+              market: JSON.parse(JSON.stringify(market)) as Prisma.InputJsonValue,
+              payload: JSON.parse(JSON.stringify(ticker)) as Prisma.InputJsonValue,
+              payloadSha256: publicSha(market, ticker),
+              observedAt: new Date(ticker.observedAt),
+              fetchedAt: new Date(ticker.fetchedAt),
+            },
+          });
+          return { id, source: PUBLIC_SOURCE };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
+    );
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+      await readVerifiedPublicPaperQuoteEvidence(prisma, owner, ledgerId, id);
+      return { id, source: PUBLIC_SOURCE };
+    }
+    throw error;
+  }
+}
+
+export async function recordPublicAdapterPaperQuoteEvidence(
+  prisma: PaperDb,
+  owner: Owner,
+  ledgerId: string,
+  rawMarket: unknown,
+  rawTicker: unknown,
+): Promise<{ id: string; source: typeof PUBLIC_SOURCE }> {
+  return recordPublicAdapterPaperQuoteEvidenceWithId(
+    prisma,
+    owner,
+    ledgerId,
+    randomUUID(),
+    rawMarket,
+    rawTicker,
+  );
+}
+
+/** Worker-only durable idempotency key. Reusing the same scheduled-wake ID
+ * returns the already verified observation instead of inserting another row. */
+export async function recordIdempotentPublicAdapterPaperQuoteEvidence(
+  prisma: PaperDb,
+  owner: Owner,
+  ledgerId: string,
+  id: string,
+  rawMarket: unknown,
+  rawTicker: unknown,
+): Promise<{ id: string; source: typeof PUBLIC_SOURCE }> {
+  if (!/^paper-worker:[a-f0-9]{64}$/u.test(id)) {
+    throw new PaperQuoteEvidenceError("Invalid paper worker evidence id");
+  }
+  return recordPublicAdapterPaperQuoteEvidenceWithId(
+    prisma,
+    owner,
+    ledgerId,
+    id,
+    rawMarket,
+    rawTicker,
   );
 }
 
