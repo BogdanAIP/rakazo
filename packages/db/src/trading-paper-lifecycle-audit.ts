@@ -4,6 +4,7 @@ import { deriveTradingPaperRiskState } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
 import { verifyHistoricalTradingPaperProtectiveExitApprovalInTransaction } from "./trading-paper-protective-exit-authority.js";
+import { verifyHistoricalTradingPaperResolvedResearchReserveApprovalInTransaction } from "./trading-paper-resolved-research-gate.js";
 import { verifyTradingPaperStopGuardsInTransaction } from "./trading-paper-stop-guard.js";
 import { recoverTradingPaperLedgerInTransaction } from "./trading-paper-store.js";
 import { verifyHistoricalTradingPaperWorkerFillApprovalInTransaction } from "./trading-paper-worker-fill-gate.js";
@@ -117,6 +118,32 @@ export async function auditTradingPaperLifecycleInTransaction(
       "Missing or mismatched historical owner-enable approval",
     );
   }
+  async function approvedReserve(
+    record: (typeof reservations)[number],
+    reserve: Reserve,
+  ) {
+    const enable = byApproval.get(record.policyApprovalEffectId);
+    if (enable) {
+      approved(record.policyApprovalEffectId, record.policyRevision);
+      return;
+    }
+    const resolved = await verifyHistoricalTradingPaperResolvedResearchReserveApprovalInTransaction(
+      tx,
+      owner,
+      record.policyApprovalEffectId,
+      {
+        ledgerId: record.ledgerId,
+        reservationId: record.reservationId,
+        signalId: reserve.signalId,
+        policyRevision: record.policyRevision,
+        evidenceId: record.evidenceId,
+        reserveEventSequence: record.eventSequence,
+        actedAt: reserve.recordedAt,
+      },
+    );
+    assert(resolved, "Missing or mismatched historical resolved-research reserve approval");
+  }
+
   async function approvedFill(
     record: (typeof fills)[number],
     decision: (typeof reservations)[number],
@@ -203,7 +230,7 @@ export async function auditTradingPaperLifecycleInTransaction(
         ]),
       "Reserve decision digest mismatch",
     );
-    approved(decision.policyApprovalEffectId, decision.policyRevision);
+    await approvedReserve(decision, event);
   }
 
   const costs = new Map<string, bigint>();
