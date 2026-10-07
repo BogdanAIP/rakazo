@@ -193,6 +193,7 @@ describe("fillReservedPaperWorkerProposal", () => {
       "paper-resv:1",
       result.evidenceId,
       readyFill,
+      readyTarget,
     );
     expect(capture.mock.invocationCallOrder[0]).toBeLessThan(fill.mock.invocationCallOrder[0]!);
   });
