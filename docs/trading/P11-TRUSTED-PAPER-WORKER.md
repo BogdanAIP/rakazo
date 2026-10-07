@@ -286,6 +286,12 @@ BingX worker observations can now use the official unauthenticated spot kline en
 
 The shared `breakout_20_1h_v1` research baseline now preserves `market.venue` and validates candle identity for either OKX or BingX. Durable E5 research persistence also binds the output venue to the verified E3 public quote evidence. This adds research parity for BingX spot only; it does not add BingX private API, derivatives execution, account access or PAPER mutation.
 
+## P11F-0 — explicit automatic PAPER signal gate (permission only)
+
+The first signal-to-PAPER step is a new **separate owner approval boundary**, not a direct connection from E5/E6 research to B7 reserve. `paper_worker_signal_control` always requires fresh explicit confirmation and cannot be Auto Reviewed or permanently allowed. Enabling binds exactly the current verified worker-gate/paper-policy revisions and the fixed strategy id `breakout_20_1h_v1` into an owner/space-scoped revisioned SHA-256-protected gate.
+
+The gate's read-only preflight revalidates its completed approval plus the full D1 worker/paper approval chain. Disabling is stale-safe; changing/re-enabling the worker invalidates the older automatic-signal permission until separately re-approved. The control service has no JobPublisher, market adapter or paper writer. Enabling it creates **zero Routine, ledger event, outbox, reserve, fill or close records**. P11F-0 therefore authorizes only a future attempt to pass a durable research proposal into the already independent B7 risk/reserve service; that wiring is a later slice.
+
 ## P11C — Bounded synthetic lifecycle, separate gate
 
 Start with reservation and explicit expiry/release under a trusted clock. Synthetic fills must be reviewed separately: quote observation time, conservative spread/slippage/fee model, full-lot-only behavior, tick/lot precision, no backdated or expired fill, no asserted fills from research output, no retries after uncertain outcomes, and restart reconciliation. An indicative stop is not an exchange stop; real-time market equity/daily loss requires a defensible persisted mark/stop model. Perpetual/dated futures, leverage, shorts, DEX, DeFi, actual paper exchange accounts and any **live** orders are out of scope.
@@ -302,5 +308,5 @@ Start with reservation and explicit expiry/release under a trusted clock. Synthe
 
 1. **P11E-5:** derive and durably persist a deterministic **research-only** signal/NO_TRADE result from the already authorized observation. Start with the existing validated OKX closed-1H history path; do not silently substitute another venue's candles.
 2. **Completed in P11E-6:** BingX now has a venue-matching fixed-endpoint closed-1H research source with no credentials.
-3. Review a separate signal-to-PAPER decision slice that reuses B7/C1/C2 and the current independent risk manager. A research proposal must never become a reserve/fill merely because E4 observed a price.
+3. **P11F started:** P11F-0 adds a separate explicit automatic-PAPER signal permission. Next, wire only an approved durable proposal through a read-only gate into B7 reserve; fill remains separate.
 4. Expand spot research across the bounded altcoin universe, then review perpetual/dated-future paper semantics separately. **Live own-account execution remains a different project gate** with independent account/venue/legal/financial safeguards.
