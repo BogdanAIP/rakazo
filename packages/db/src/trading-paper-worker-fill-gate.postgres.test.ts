@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb, type Prisma } from "./client.js";
+import { fillApprovedTradingPaperReservation } from "./trading-paper-fill.js";
+import { auditTradingPaperLifecycle } from "./trading-paper-lifecycle-audit.js";
+import { recordPublicAdapterPaperQuoteEvidence } from "./trading-paper-quote-evidence.js";
+import { reserveApprovedTradingPaperSignal } from "./trading-paper-reserve.js";
 import {
   applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,
@@ -13,7 +17,14 @@ import {
   readVerifiedTradingPaperWorkerFillGate,
 } from "./trading-paper-worker-fill-gate.js";
 import { applyApprovedTradingPaperWorkerControl } from "./trading-paper-worker-gate.js";
-import { applyApprovedTradingPaperWorkerSignalControl } from "./trading-paper-worker-signal-gate.js";
+import {
+  applyApprovedTradingPaperWorkerMarketTargetControl,
+  readTradingPaperWorkerMarketTargetPreflight,
+} from "./trading-paper-worker-market-target.js";
+import {
+  applyApprovedTradingPaperWorkerSignalControl,
+  readTradingPaperWorkerSignalPreflight,
+} from "./trading-paper-worker-signal-gate.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
@@ -90,7 +101,8 @@ describePostgres("paper worker fill gate PostgreSQL authorization", () => {
       | "paper_trading_control"
       | "paper_worker_control"
       | "paper_worker_signal_control"
-      | "paper_worker_fill_control",
+      | "paper_worker_fill_control"
+      | "paper_worker_market_target_control",
     label: string,
     request: Prisma.InputJsonValue,
   ) => {
@@ -145,6 +157,285 @@ describePostgres("paper worker fill gate PostgreSQL authorization", () => {
       },
     });
   };
+
+  it("F3 revalidates F2 and market target inside C1 and keeps restart-verifiable provenance", async () => {
+    const ledgerId = `paper-fill-f3-ledger-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: new Date(Date.now() - 60_000).toISOString(),
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "500",
+    });
+    await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+      allowedVenues: ["okx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "300",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    });
+
+    const paper = await makeEffect("paper_trading_control", "f3-paper-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 0,
+    });
+    await applyApprovedTradingPaperControl(first.prisma, owner, paper.id);
+    const worker = await makeEffect("paper_worker_control", "f3-worker-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 1,
+      cadence_minutes: 15,
+    });
+    await applyApprovedTradingPaperWorkerControl(first.prisma, owner, worker.id);
+    const target = await makeEffect("paper_worker_market_target_control", "f3-target-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_gate_revision: 1,
+      venue: "okx",
+      symbol: "SOL-USDT",
+    });
+    await applyApprovedTradingPaperWorkerMarketTargetControl(first.prisma, owner, target.id);
+    const signal = await makeEffect("paper_worker_signal_control", "f3-signal-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_gate_revision: 1,
+      strategy_id: "breakout_20_1h_v1",
+    });
+    await applyApprovedTradingPaperWorkerSignalControl(first.prisma, owner, signal.id);
+    const fillGate = await makeEffect("paper_worker_fill_control", "f3-fill-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_gate_revision: 1,
+      expected_signal_revision: 1,
+      strategy_id: "breakout_20_1h_v1",
+    });
+    await applyApprovedTradingPaperWorkerFillControl(first.prisma, owner, fillGate.id);
+
+    const signalAuthority = await readTradingPaperWorkerSignalPreflight(
+      first.prisma,
+      owner,
+      ledgerId,
+    );
+    const fillAuthority = await readTradingPaperWorkerFillPreflight(first.prisma, owner, ledgerId);
+    const targetAuthority = await readTradingPaperWorkerMarketTargetPreflight(
+      first.prisma,
+      owner,
+      ledgerId,
+    );
+    if (signalAuthority.status !== "ready") throw new Error("expected F0 authority");
+    if (fillAuthority.status !== "ready") throw new Error("expected F2 authority");
+    if (targetAuthority.status !== "ready") throw new Error("expected target authority");
+
+    const market = {
+      venue: "okx",
+      kind: "spot",
+      symbol: "SOL-USDT",
+      base: "SOL",
+      quote: "USDT",
+      status: "active",
+      priceIncrement: "0.01",
+      quantityIncrement: "0.01",
+      minNotional: "5",
+      expiryAt: null,
+    } as const;
+    const reserveAt = new Date().toISOString();
+    const reserveEvidence = await recordPublicAdapterPaperQuoteEvidence(
+      first.prisma,
+      owner,
+      ledgerId,
+      market,
+      {
+        venue: "okx",
+        kind: "spot",
+        symbol: "SOL-USDT",
+        observedAt: reserveAt,
+        fetchedAt: reserveAt,
+        bid: "100",
+        ask: "100.1",
+        quoteVolume24h: "100000",
+      },
+    );
+    const proposal = {
+      kind: "proposal",
+      executionStatus: "research_only",
+      signalId: `paper-fill-f3-signal-${suffix}`,
+      strategyId: "breakout_20_1h_v1",
+      strategyVersion: "1",
+      createdAt: new Date(Date.now() - 1_000).toISOString(),
+      expiresAt: new Date(Date.now() + 120_000).toISOString(),
+      evidenceIds: ["research-only"],
+      market,
+      action: "spot_buy",
+      entryTrigger: "100.1",
+      stopLoss: "95",
+      takeProfit: ["110"],
+      invalidation: "fixture",
+      rationale: "F3 transactional authority regression",
+      riskBudgetQuote: "10",
+      maxSlippageBps: null,
+    } as const;
+    const reserved = await reserveApprovedTradingPaperSignal(
+      first.prisma,
+      owner,
+      ledgerId,
+      proposal,
+      reserveEvidence.id,
+      signalAuthority,
+    );
+    if (reserved.status !== "reserved") throw new Error("expected F1 reservation");
+
+    const fillAt = new Date().toISOString();
+    const fillEvidence = await recordPublicAdapterPaperQuoteEvidence(
+      first.prisma,
+      owner,
+      ledgerId,
+      market,
+      {
+        venue: "okx",
+        kind: "spot",
+        symbol: "SOL-USDT",
+        observedAt: fillAt,
+        fetchedAt: fillAt,
+        bid: "99.99",
+        ask: "100",
+        quoteVolume24h: "100000",
+      },
+    );
+
+    const disableTarget = await makeEffect(
+      "paper_worker_market_target_control",
+      "f3-target-disable",
+      {
+        action: "disable",
+        ledger_id: ledgerId,
+        expected_gate_revision: 0,
+      },
+    );
+    await applyApprovedTradingPaperWorkerMarketTargetControl(
+      second.prisma,
+      owner,
+      disableTarget.id,
+    );
+    const reenableTarget = await makeEffect(
+      "paper_worker_market_target_control",
+      "f3-target-reenable",
+      {
+        action: "enable",
+        ledger_id: ledgerId,
+        expected_gate_revision: 1,
+        venue: "okx",
+        symbol: "SOL-USDT",
+      },
+    );
+    await applyApprovedTradingPaperWorkerMarketTargetControl(
+      second.prisma,
+      owner,
+      reenableTarget.id,
+    );
+
+    await expect(
+      fillApprovedTradingPaperReservation(
+        first.prisma,
+        owner,
+        ledgerId,
+        reserved.reservationId,
+        fillEvidence.id,
+        fillAuthority,
+        targetAuthority,
+      ),
+    ).resolves.toMatchObject({
+      status: "deny",
+      reason: "paper_worker_target_unapproved",
+    });
+    expect(
+      await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_buy" } }),
+    ).toBe(0);
+
+    const renewedTarget = await readTradingPaperWorkerMarketTargetPreflight(
+      first.prisma,
+      owner,
+      ledgerId,
+    );
+    if (renewedTarget.status !== "ready") throw new Error("expected renewed target authority");
+    const filled = await fillApprovedTradingPaperReservation(
+      second.prisma,
+      owner,
+      ledgerId,
+      reserved.reservationId,
+      fillEvidence.id,
+      fillAuthority,
+      renewedTarget,
+    );
+    expect(filled).toMatchObject({
+      status: "filled",
+      mode: "paper_only",
+      reservationId: reserved.reservationId,
+    });
+    if (filled.status !== "filled") throw new Error("expected F3 fill");
+
+    const use = await first.prisma.tradingPaperWorkerFillUse.findUniqueOrThrow({
+      where: {
+        ledgerId_reservationId: {
+          ledgerId,
+          reservationId: reserved.reservationId,
+        },
+      },
+    });
+    expect(use).toMatchObject({
+      fillApprovalEffectId: fillGate.id,
+      targetApprovalEffectId: reenableTarget.id,
+      strategyId: "breakout_20_1h_v1",
+      venue: "okx",
+      symbol: "SOL-USDT",
+      policyRevision: 1,
+      gateRevision: 1,
+      signalRevision: 1,
+      fillRevision: 1,
+      targetRevision: 3,
+      evidenceId: fillEvidence.id,
+      reserveEventSequence: reserved.eventSequence,
+      fillEventSequence: filled.fillEventSequence,
+    });
+    await expect(auditTradingPaperLifecycle(first.prisma, owner, ledgerId)).resolves.toMatchObject({
+      status: "verified",
+      fillDecisions: 1,
+      openPositions: 1,
+      openReservations: 0,
+    });
+
+    await first.prisma.tradingPaperWorkerFillUse.update({
+      where: {
+        ledgerId_reservationId: {
+          ledgerId,
+          reservationId: reserved.reservationId,
+        },
+      },
+      data: { useSha256: "0".repeat(64) },
+    });
+    await expect(auditTradingPaperLifecycle(second.prisma, owner, ledgerId)).rejects.toBeInstanceOf(
+      PaperWorkerFillGateIntegrityError,
+    );
+    await first.prisma.tradingPaperWorkerFillUse.update({
+      where: {
+        ledgerId_reservationId: {
+          ledgerId,
+          reservationId: reserved.reservationId,
+        },
+      },
+      data: { useSha256: use.useSha256 },
+    });
+    await expect(auditTradingPaperLifecycle(second.prisma, owner, ledgerId)).resolves.toMatchObject({
+      status: "verified",
+      fillDecisions: 1,
+    });
+  });
 
   it("requires separate fill permission and invalidates it when the signal gate changes", async () => {
     const ledgerId = `paper-fill-gate-ledger-${suffix}`;
