@@ -636,10 +636,58 @@ export async function reserveApprovedTradingPaperSignal(
           await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
           const existing = await readExistingDecision(tx, owner, ledgerId, proposal, evidenceId);
           if (!existing) throw error;
+          if (resolvedResearch) {
+            const currentAuthority =
+              await verifyTradingPaperResolvedResearchAuthorityInTransaction(
+                tx,
+                owner,
+                resolvedResearch.authority,
+                resolvedResearch.envelope,
+                new Date(),
+              );
+            if (!currentAuthority) throw error;
+            const verifiedUse =
+              await verifyTradingPaperResolvedResearchReserveUseInTransaction(
+                tx,
+                owner,
+                currentAuthority,
+                {
+                  reservationId: existing.reservationId,
+                  signalId: existing.signalId,
+                  evidenceId,
+                  reserveEventSequence: existing.eventSequence,
+                },
+              );
+            if (!verifiedUse) throw error;
+          }
           return existing;
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       ),
     );
   }
+}
+
+
+/** G2 PAPER-only bridge from one explicitly approved Resolver/Skill proposal
+ * into the existing B7 synthetic reserve/risk transaction. It revalidates G1
+ * in the same serializable transaction and records immutable approval
+ * provenance. It cannot fill the reservation or contact an exchange. */
+export async function reserveApprovedResolvedTradingPaperSignal(
+  prisma: PaperDb,
+  owner: Owner,
+  ledgerId: string,
+  envelope: TradingResolvedResearchEnvelope,
+  evidenceId: string,
+  authority: TradingPaperResolvedResearchAuthority,
+): Promise<TradingPaperReserveResult> {
+  return reserveApprovedTradingPaperSignal(
+    prisma,
+    owner,
+    ledgerId,
+    envelope.signal,
+    evidenceId,
+    undefined,
+    { envelope, authority },
+  );
 }
