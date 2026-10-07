@@ -168,9 +168,7 @@ export const TradingResolvedResearchEnvelopeSchema = z.object({
   provenance: TradingResolvedResearchProvenanceSchema,
   signal: TradingSignalSchema,
 });
-export type TradingResolvedResearchEnvelope = z.infer<
-  typeof TradingResolvedResearchEnvelopeSchema
->;
+export type TradingResolvedResearchEnvelope = z.infer<typeof TradingResolvedResearchEnvelopeSchema>;
 
 /** Read-only, user-invoked market prefilter. It creates no orders or buy/sell signals. */
 export const TradingScanRequestSchema = z.object({
