@@ -314,6 +314,7 @@ describe("handlePreparedPaperWorkerResolvedResearch", () => {
       "paper-resv:1",
       fillEvidenceId,
       fillAuthority,
+      undefined,
     );
   });
 
