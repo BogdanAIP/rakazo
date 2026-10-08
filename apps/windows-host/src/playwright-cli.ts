@@ -47,6 +47,7 @@ interface PlaywrightCliSessionState {
   backendReady: boolean;
   tabs: Map<string, BrowserTab>;
   observation?: BrowserObservation;
+  refSources?: Map<string, string>;
 }
 
 interface PlaywrightCliJson {
@@ -244,6 +245,51 @@ function parseJson(output: string): PlaywrightCliJson {
   return value;
 }
 
+function aliasSnapshotRefs(snapshot: unknown): {
+  snapshot: unknown;
+  sources: Map<string, string>;
+} {
+  const reserved = new Set<string>();
+  const sources = new Map<string, string>();
+  const sourceAliases = new Map<string, string>();
+  let next = 1;
+  const collect = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const child of value) collect(child);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    const record = value as Record<string, unknown>;
+    if (typeof record.ref === "string" && /^e[0-9]{1,6}$/u.test(record.ref)) {
+      reserved.add(record.ref);
+      sources.set(record.ref, record.ref);
+    }
+    for (const child of Object.values(record)) collect(child);
+  };
+  collect(snapshot);
+  const visit = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(visit);
+    if (!value || typeof value !== "object") return value;
+    const record = value as Record<string, unknown>;
+    const result: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(record)) {
+      if (key === "ref" && typeof child === "string" && /^f[0-9]+e[0-9]{1,6}$/u.test(child)) {
+        let alias = sourceAliases.get(child);
+        if (!alias) {
+          do { alias = "e" + String(next++); } while (reserved.has(alias));
+          reserved.add(alias);
+          sourceAliases.set(child, alias);
+          sources.set(alias, child);
+        }
+        result[key] = alias;
+      } else {
+        result[key] = visit(child);
+      }
+    }
+    return result;
+  };
+  return { snapshot: visit(snapshot), sources };
+}
 function snapshotTree(snapshot: unknown): string {
   return JSON.stringify(snapshot ?? [], null, 2).slice(0, MAX_OUTPUT_BYTES);
 }
@@ -547,7 +593,7 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
     if (request.command === "find") {
       try {
         const payload = parseJson(await this.invoke(session, ["snapshot", request.css]));
-        return { ok: true, content: snapshotTree(payload.snapshot) };
+        return { ok: true, content: snapshotTree(aliasSnapshotRefs(payload.snapshot).snapshot) };
       } catch (error) {
         return {
           ok: false,
@@ -652,6 +698,7 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
     const previous = state.observation;
     if (!previous) throw new Error("Observe this browser session before acting");
 
+    const previousSources = new Map(state.refSources);
     let completed = 0;
     let mutationStarted = false;
     try {
@@ -659,7 +706,10 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
         const current = await this.observe(session, state);
         const expected = previous.elements.find((element) => element.ref === action.ref);
         const actual = current.elements.find((element) => element.ref === action.ref);
+        const sourceRef = state.refSources?.get(action.ref);
         if (
+          !sourceRef ||
+          sourceRef !== previousSources.get(action.ref) ||
           !expected ||
           !actual ||
           expected.role !== actual.role ||
@@ -679,11 +729,11 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
 
         mutationStarted = true;
         if (action.kind === "click") {
-          parseJson(await this.invoke(session, ["click", action.ref]));
+          parseJson(await this.invoke(session, ["click", sourceRef]));
         } else if (action.kind === "fill") {
-          parseJson(await this.invoke(session, ["fill", action.ref, action.text]));
+          parseJson(await this.invoke(session, ["fill", sourceRef, action.text]));
         } else {
-          parseJson(await this.invoke(session, ["click", action.ref]));
+          parseJson(await this.invoke(session, ["click", sourceRef]));
           parseJson(await this.invoke(session, ["type", action.text]));
         }
         completed += 1;
@@ -754,6 +804,7 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
       if (!this.config.userDataDir) throw new Error("Playwright user-data directory is missing");
       const args = ["open", "about:blank", `--profile=${this.config.userDataDir}`];
       if (this.config.browserChannel) args.push(`--browser=${this.config.browserChannel}`);
+      if (this.config.headed === true) args.push("--headed");
       parseJson(await this.invoke(session, args, ATTACH_TIMEOUT_MS));
     } else {
       throw new Error("Playwright CLI backend is not selected");
@@ -842,11 +893,13 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
       throw new Error("Browser tab changed during observation; take another snapshot");
     }
 
+    const aliased = aliasSnapshotRefs(snapshot.snapshot);
+    state.refSources = aliased.sources;
     const observation: BrowserObservation = {
       url: currentAfter.url,
       title: currentAfter.title,
-      tree: snapshotTree(snapshot.snapshot),
-      elements: snapshotElements(snapshot.snapshot),
+      tree: snapshotTree(aliased.snapshot),
+      elements: snapshotElements(aliased.snapshot),
       pageId: currentAfter.pageId,
       pageIds: after.map((tab) => tab.pageId),
     };
@@ -866,7 +919,7 @@ export class WindowsPlaywrightCliBackend implements WindowsBrowserBackend {
       try {
         if (kind === "selector") {
           const payload = parseJson(await this.invoke(session, ["snapshot", value]));
-          return { ok: true, content: snapshotTree(payload.snapshot) };
+          return { ok: true, content: snapshotTree(aliasSnapshotRefs(payload.snapshot).snapshot) };
         }
         const payload = parseJson(await this.invoke(session, ["find", value, "--max-results=1"]));
         const content = typeof payload.result === "string" ? payload.result : "";

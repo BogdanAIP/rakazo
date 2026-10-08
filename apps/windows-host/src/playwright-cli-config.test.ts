@@ -21,6 +21,13 @@ describe("Playwright CLI configuration", () => {
     });
   });
 
+  it("enables visible Persistent login only with explicit opt-in", () => {
+    expect(loadPlaywrightCliConfiguration({ USERPROFILE: "C:\\Users\\test" }).headed).toBe(false);
+    expect(loadPlaywrightCliConfiguration({
+      USERPROFILE: "C:\\Users\\test",
+      RAKAZO_PLAYWRIGHT_HEADED: "true",
+    }).headed).toBe(true);
+  });
   it("requires explicit entry and browser for CDP attach", () => {
     const config = loadPlaywrightCliConfiguration({
       RAKAZO_BROWSER_BACKEND: "playwright-cli-cdp",

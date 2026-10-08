@@ -19,6 +19,7 @@ export interface PlaywrightCliConfiguration {
   browserChannel: PlaywrightCliBrowserChannel | null;
   cdpEndpoint: string | null;
   userDataDir: string | null;
+  headed?: boolean;
 }
 
 const require = createRequire(import.meta.url);
@@ -98,6 +99,7 @@ export function loadPlaywrightCliConfiguration(
     ),
     browserChannel: optionalBrowserChannel(env.RAKAZO_PLAYWRIGHT_BROWSER_CHANNEL),
     cdpEndpoint: optionalCdpEndpoint(env.RAKAZO_PLAYWRIGHT_CDP_ENDPOINT),
+    headed: ["1", "true", "yes"].includes(env.RAKAZO_PLAYWRIGHT_HEADED?.trim().toLowerCase() ?? ""),
     userDataDir: optionalAbsolutePath(
       env.RAKAZO_PLAYWRIGHT_USER_DATA_DIR ?? defaultUserDataDir,
       "RAKAZO_PLAYWRIGHT_USER_DATA_DIR",
