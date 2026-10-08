@@ -13,33 +13,35 @@ type WorkerPayload = BackgroundJobPayloads["paper.worker-preflight"];
  * The Market service remains responsible for owner-scoped Resolver lookup,
  * deterministic selection, and pinned Skill content verification.
  */
-export type PaperWorkerPreparedMarketResearch =
-  | {
-      selection: { status: "deny" };
-      provenance: null;
-      skillContent: null;
-    }
-  | {
-      selection: {
-        status: "ready";
-        resolver: { semanticKey: string; key: string; digest: string };
-        implementation: {
-          name: string;
-          kind: string;
-          reference: string;
-          priority: number;
-          readOnly: boolean;
-        };
-        skill: {
-          entryId: string;
-          key: string;
-          digest: string;
-          variant: string;
-        } | null;
-      };
-      provenance: unknown;
-      skillContent: string | null;
-    };
+type ReadySelection = {
+  status: "ready";
+  resolver: { semanticKey: string; key: string; digest: string };
+  implementation: {
+    name: string;
+    kind: string;
+    reference: string;
+    priority: number;
+    readOnly: boolean;
+  };
+  skill: {
+    entryId: string;
+    key: string;
+    digest: string;
+    variant: string;
+  } | null;
+};
+
+// A single structural object matches MarketResolverPreparedResearch directly:
+// Zod's cross-field refinements do not form a discriminated TS union.
+export type PaperWorkerPreparedMarketResearch = {
+  selection: { status: "deny" } | ReadySelection;
+  provenance: unknown | null;
+  skillContent: string | null;
+};
+
+export type PaperWorkerReadyMarketResearch = PaperWorkerPreparedMarketResearch & {
+  selection: ReadySelection;
+};
 
 export type PaperWorkerMarketPrepare = (
   payload: WorkerPayload,
@@ -47,7 +49,7 @@ export type PaperWorkerMarketPrepare = (
 ) => Promise<PaperWorkerPreparedMarketResearch>;
 
 export type PaperWorkerMarketResearchRunner = (
-  prepared: Extract<PaperWorkerPreparedMarketResearch, { selection: { status: "ready" } }>,
+  prepared: PaperWorkerReadyMarketResearch,
   payload: WorkerPayload,
   now: Date,
 ) => Promise<unknown>;
@@ -120,7 +122,8 @@ export function createPreparedMarketResearchProvider(
       throw new Error("Unpinned Market Skill content cannot be executed");
     }
 
-    const signal = await runResearch(prepared, payload, now);
+    const ready: PaperWorkerReadyMarketResearch = { ...prepared, selection };
+    const signal = await runResearch(ready, payload, now);
     return buildTradingResolvedResearchEnvelope(provenance, signal);
   };
 }
