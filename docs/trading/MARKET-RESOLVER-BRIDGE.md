@@ -193,6 +193,39 @@ Resolver/Skills integration rather than another hard-coded trading-worker venue 
 G5 closes at most one position per wake and retains the existing no-same-wake-reentry behavior.
 It adds no private exchange API, credential, wallet action, broker dispatcher or live-order path.
 
+## G6 — generic Resolver/Skill worker composition seam
+
+G6 removes the requirement that the recurring PAPER worker itself know how research was produced.
+A new internal worker composition accepts one already prepared
+`TradingResolvedResearchEnvelope` from an injected research-only provider plus an injected trusted
+public-evidence capture function.
+
+The G6 path is deliberately authority-free at its input boundary. For a proposal it:
+
+- checks the explicit G1 scope before any quote capture;
+- captures one deterministic trusted quote for the G2 reserve;
+- delegates to G2, which rechecks G1 inside the same serializable risk/reserve transaction;
+- returns the verified reserve without filling when the separate G3 fill permission is disabled;
+- only when G3 is ready, captures a **second fresh** deterministic quote and delegates to G4;
+- preserves all existing PAPER policy, risk, kill-switch, idempotency and historical provenance
+  checks in G1-G4.
+
+A Resolver `NO_TRADE` remains an abstention and causes no quote capture or PAPER write.
+
+The recurring handler now has an optional G6 runner slot. When that slot is explicitly wired, the
+worker services protective stops first and then uses G6 instead of the legacy hard-coded
+OKX/BingX + `breakout_20_1h_v1` research chain. Without the slot, the legacy path remains unchanged.
+
+There is intentionally **no default G6 provider** in the Trading branch. The provider must come
+from the Market line after the branches share a common integration base. This prevents Trading from
+copying Market storage, Resolver seeds or Skill invocation code. The Market side already has the
+matching read-only `market/select` / `market/prepare` provenance boundary; its pinned provenance
+shape is accepted directly by `buildTradingResolvedResearchEnvelope`.
+
+G6 still contains no private exchange API, credential, wallet signer, live-order payload or
+`trading.execute` capability. Resolver/Skill selection remains research authority only; G1 and G3
+remain separate explicit owner approvals for PAPER state transitions.
+
 ## Why G0 is separate from Market storage
 
 The Market/Capability Profile line and the stacked Trading PR line currently diverge from a common
