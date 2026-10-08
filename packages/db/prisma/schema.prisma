@@ -1408,6 +1408,7 @@ model TradingPaperLedger {
   resolvedResearchGate   TradingPaperResolvedResearchGate?
   resolvedResearchReserveUses TradingPaperResolvedResearchReserveUse[]
   resolvedResearchFillGate TradingPaperResolvedResearchFillGate?
+  resolvedResearchFillUses TradingPaperResolvedResearchFillUse[]
   workerFillGate         TradingPaperWorkerFillGate?
   workerFillUses         TradingPaperWorkerFillUse[]
 
@@ -1750,6 +1751,37 @@ model TradingPaperResolvedResearchFillGate {
   @@index([spaceId, userId])
   @@index([approvalEffectId])
   @@map("trading_paper_resolved_research_fill_gates")
+}
+
+/** Immutable provenance for one G3-authorized synthetic PAPER fill.
+ * This row is historical audit evidence only and grants no future authority. */
+model TradingPaperResolvedResearchFillUse {
+  ledgerId                 String
+  reservationId            String
+  ledger                   TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId                  String
+  userId                   String
+  signalId                 String
+  fillApprovalEffectId     String
+  researchApprovalEffectId String
+  scope                    Json
+  policyRevision           Int
+  gateRevision             Int
+  researchRevision         Int
+  fillRevision             Int
+  evidenceId               String
+  reserveEventSequence     Int
+  fillEventSequence        Int
+  actedAt                  DateTime
+  useSha256                String
+  createdAt                DateTime @default(now())
+
+  @@id([ledgerId, reservationId])
+  @@unique([ledgerId, fillEventSequence])
+  @@index([fillApprovalEffectId])
+  @@index([researchApprovalEffectId])
+  @@index([evidenceId])
+  @@map("trading_paper_resolved_research_fill_uses")
 }
 
 /** Immutable provenance for a G1-authorized synthetic PAPER reserve.
