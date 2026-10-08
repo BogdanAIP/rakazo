@@ -8,7 +8,11 @@ import {
 type Owner = { spaceId: string; userId: string };
 type Schedule = typeof enqueuePaperWorkerPreflightOnce;
 
-function parseStartArgs(value: unknown): { ledgerId: string; expectedGateRevision: number; expectedSessionRevision?: number } {
+function parseStartArgs(value: unknown): {
+  ledgerId: string;
+  expectedGateRevision: number;
+  expectedSessionRevision?: number;
+} {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Invalid paper worker start payload");
   }
@@ -16,7 +20,8 @@ function parseStartArgs(value: unknown): { ledgerId: string; expectedGateRevisio
   const keys = Object.keys(row).sort();
   if (
     JSON.stringify(keys) !== JSON.stringify(["expected_gate_revision", "ledger_id"]) &&
-    JSON.stringify(keys) !== JSON.stringify(["expected_gate_revision", "expected_session_revision", "ledger_id"])
+    JSON.stringify(keys) !==
+      JSON.stringify(["expected_gate_revision", "expected_session_revision", "ledger_id"])
   ) {
     throw new Error("Unexpected paper worker start fields");
   }
@@ -41,7 +46,9 @@ function parseStartArgs(value: unknown): { ledgerId: string; expectedGateRevisio
   return {
     ledgerId,
     expectedGateRevision: revision as number,
-    ...(sessionRevision !== undefined ? { expectedSessionRevision: sessionRevision as number } : {}),
+    ...(sessionRevision !== undefined
+      ? { expectedSessionRevision: sessionRevision as number }
+      : {}),
   };
 }
 
@@ -59,6 +66,8 @@ export async function startPaperWorkerPreflightOnce(
     userId: owner.userId,
     ledgerId: request.ledgerId,
     expectedGateRevision: request.expectedGateRevision,
-    ...(request.expectedSessionRevision ? { expectedSessionRevision: request.expectedSessionRevision } : {}),
+    ...(request.expectedSessionRevision
+      ? { expectedSessionRevision: request.expectedSessionRevision }
+      : {}),
   });
 }
