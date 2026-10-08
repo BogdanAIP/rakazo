@@ -4,6 +4,8 @@ import {
   type MarketResolverImplementation,
   type MarketResolverPinnedResearchProvenance,
   MarketResolverPinnedResearchProvenanceSchema,
+  type MarketResolverPreparedResearch,
+  MarketResolverPreparedResearchSchema,
   MarketResolverPlanSchema,
   type MarketResolverReadOnlySelection,
   MarketResolverReadOnlySelectionSchema,
@@ -196,6 +198,32 @@ export function readPinnedMarketResolverSkillContent(
     );
   }
   return { entry, content, variant: selected.variant };
+}
+
+export function prepareMarketResolverResearch(
+  selectionInput: unknown,
+  entryInput: unknown | undefined,
+  resolvedAt: string,
+): MarketResolverPreparedResearch {
+  const selection = MarketResolverReadOnlySelectionSchema.parse(selectionInput);
+  if (selection.status === "deny") {
+    return MarketResolverPreparedResearchSchema.parse({
+      selection,
+      provenance: null,
+      skillContent: null,
+    });
+  }
+
+  const provenance = pinMarketResolverResearchProvenance(selection, resolvedAt);
+  const skillContent =
+    selection.skill === null
+      ? null
+      : readPinnedMarketResolverSkillContent(selection, entryInput).content;
+  return MarketResolverPreparedResearchSchema.parse({
+    selection,
+    provenance,
+    skillContent,
+  });
 }
 
 export function pinMarketResolverResearchProvenance(
