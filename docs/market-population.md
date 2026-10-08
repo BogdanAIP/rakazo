@@ -134,6 +134,23 @@ The distinction remains:
 known in Market != installed != assigned != authorized != selected for this task
 ```
 
+## Runtime Resolver selection
+
+`market.resolve` produces a deterministic data-only candidate plan. A separate core adapter,
+`selectMarketResolverReadOnlyImplementation`, converts that plan into a research-safe selection:
+
+- it independently requires `readOnly = true`;
+- it follows Resolver priority/name/reference ordering deterministically;
+- a `market:` implementation or `skillReference` is eligible only when the plan carries one
+  exact owned Market Skill entry id/key/source digest/preferred variant;
+- missing or ambiguous Skill links are skipped explicitly rather than guessed;
+- direct non-Market routes cannot smuggle unrelated Market Skill provenance;
+- inconsistent `preferred` versus candidate order is treated as plan-integrity failure.
+
+The selector does not install or invoke a Skill and grants no PAPER or live execution authority.
+For Trading, this selected/pinned provenance is the object that should later be mapped into the
+research-only Trading Resolver envelope once the Market and Trading lines share an integration base.
+
 ## RPC surface
 
 Read:
