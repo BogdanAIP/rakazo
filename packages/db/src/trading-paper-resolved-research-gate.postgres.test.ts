@@ -168,7 +168,8 @@ describePostgres("resolved research PAPER gate PostgreSQL authorization", () => 
           marketEntryId: `market-skill-${suffix}`,
           marketKey: "ccxt.trading-signal",
           sourceDigest: "b".repeat(64),
-          variant: "original",
+          variant: "rccl",
+          contentSha256: "c".repeat(64),
         },
         resolvedAt: new Date(Date.now() - 2_000).toISOString(),
       },
@@ -299,6 +300,48 @@ describePostgres("resolved research PAPER gate PostgreSQL authorization", () => 
         owner,
         ledgerId,
         differentImplementation,
+      ),
+    ).resolves.toMatchObject({
+      status: "deny",
+      reason: "resolved_research_scope_mismatch",
+    });
+
+    const changedSkillVariant = envelope({
+      provenance: {
+        ...research.provenance,
+        skill: {
+          ...research.provenance.skill!,
+          variant: "wrapped",
+        },
+      },
+    });
+    await expect(
+      readTradingPaperResolvedResearchPreflight(
+        second.prisma,
+        owner,
+        ledgerId,
+        changedSkillVariant,
+      ),
+    ).resolves.toMatchObject({
+      status: "deny",
+      reason: "resolved_research_scope_mismatch",
+    });
+
+    const changedInstructions = envelope({
+      provenance: {
+        ...research.provenance,
+        skill: {
+          ...research.provenance.skill!,
+          contentSha256: "d".repeat(64),
+        },
+      },
+    });
+    await expect(
+      readTradingPaperResolvedResearchPreflight(
+        second.prisma,
+        owner,
+        ledgerId,
+        changedInstructions,
       ),
     ).resolves.toMatchObject({
       status: "deny",
