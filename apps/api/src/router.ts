@@ -169,6 +169,8 @@ import {
   IsolationError,
   issueMessagingLinkCode,
   listWindowsHosts,
+  listOwnedTradingPaperJournals,
+  readOwnedTradingPaperJournal,
   lockOwnedGroup,
   newestModelCredentialOrder,
   newestVoiceCredentialOrder,
@@ -669,6 +671,20 @@ export function createRouter(deps: RouterDeps) {
 
   return os.router({
     trading: {
+      // Dedicated authenticated read-only human UI. This cannot append/submit orders.
+      journalList: authed.trading.journalList.handler(({ context }) =>
+        listOwnedTradingPaperJournals(deps.prisma, context.actor),
+      ),
+      journalRead: authed.trading.journalRead.handler(async ({ context, input }) => {
+        const journal = await readOwnedTradingPaperJournal(
+          deps.prisma,
+          context.actor,
+          input.ledgerId,
+          input.beforeSequence,
+        );
+        if (!journal) throw new ORPCError("NOT_FOUND");
+        return journal;
+      }),
       // User-invoked public GET requests only. No exchange keys, wallet or execution capability.
       list: authed.trading.list.handler(async ({ input }) => {
         if (input.venue === "okx") {
