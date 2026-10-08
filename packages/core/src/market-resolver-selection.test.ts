@@ -1,4 +1,5 @@
 import type {
+  MarketEntry,
   MarketResolverImplementation,
   MarketResolverPlan,
   MarketResolverSkillLink,
@@ -7,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   MarketResolverSelectionIntegrityError,
   pinMarketResolverResearchProvenance,
+  readPinnedMarketResolverSkillContent,
   selectMarketResolverReadOnlyImplementation,
 } from "./market-resolver-selection.js";
 
@@ -52,6 +54,32 @@ const plan = (
   },
   preferred,
   candidates,
+});
+
+
+const marketSkillEntry = (overrides: Partial<MarketEntry> = {}): MarketEntry => ({
+  id: "market-skill-1",
+  kind: "skill",
+  key: "okx/agent-trade-kit:skills/okx-cex-market/SKILL.md@abc",
+  name: "okx-cex-market",
+  description: "Read-only market data Skill.",
+  tags: ["trading", "research-ready", "market-data"],
+  originalContent: "---\nname: okx-cex-market\ndescription: Read market data.\n---\nOriginal.",
+  adaptedContent: null,
+  adaptationMode: null,
+  preferredVariant: "original",
+  sourceUrl: "https://github.com/okx/agent-trade-kit/blob/" + "c".repeat(40) + "/SKILL.md",
+  repository: "okx/agent-trade-kit",
+  sourcePath: "skills/okx-cex-market/SKILL.md",
+  sourceRef: "c".repeat(40),
+  license: "MIT",
+  digest: digest("b"),
+  trust: "curated",
+  metrics: {},
+  metadata: {},
+  createdAt: "2026-10-08T07:00:00.000Z",
+  updatedAt: "2026-10-08T07:00:00.000Z",
+  ...overrides,
 });
 
 describe("selectMarketResolverReadOnlyImplementation", () => {
@@ -187,6 +215,79 @@ describe("selectMarketResolverReadOnlyImplementation", () => {
   });
 });
 
+
+describe("readPinnedMarketResolverSkillContent", () => {
+  it("reads exactly the selected original Skill without installing it", () => {
+    const skill = resolvedSkill();
+    const candidate = implementation({
+      name: "OKX CEX Market Skill",
+      reference: "market:okx/agent-trade-kit:okx-cex-market",
+      skill,
+    });
+    const selection = selectMarketResolverReadOnlyImplementation(plan([candidate]));
+    const entry = marketSkillEntry();
+
+    expect(readPinnedMarketResolverSkillContent(selection, entry)).toEqual({
+      entry,
+      content: entry.originalContent,
+      variant: "original",
+    });
+  });
+
+  it("reads only the exact pinned adapted variant", () => {
+    const skill = resolvedSkill({ variant: "rccl" });
+    const candidate = implementation({
+      name: "OKX CEX Market Skill",
+      reference: "market:okx/agent-trade-kit:okx-cex-market",
+      skill,
+    });
+    const selection = selectMarketResolverReadOnlyImplementation(plan([candidate]));
+    const entry = marketSkillEntry({
+      preferredVariant: "rccl",
+      adaptationMode: "rccl",
+      adaptedContent:
+        "---\nname: okx-cex-market\ndescription: Read market data.\n---\nRCCL adapted.",
+    });
+
+    expect(readPinnedMarketResolverSkillContent(selection, entry)).toMatchObject({
+      content: entry.adaptedContent,
+      variant: "rccl",
+    });
+  });
+
+  it("fails closed when the selected Skill revision or preferred variant changed", () => {
+    const skill = resolvedSkill();
+    const candidate = implementation({
+      reference: "market:okx/agent-trade-kit:okx-cex-market",
+      skill,
+    });
+    const selection = selectMarketResolverReadOnlyImplementation(plan([candidate]));
+
+    expect(() =>
+      readPinnedMarketResolverSkillContent(
+        selection,
+        marketSkillEntry({ digest: digest("d") }),
+      ),
+    ).toThrow("Market Skill entry changed after Resolver selection");
+    expect(() =>
+      readPinnedMarketResolverSkillContent(
+        selection,
+        marketSkillEntry({
+          preferredVariant: "rccl",
+          adaptationMode: "rccl",
+          adaptedContent: "adapted",
+        }),
+      ),
+    ).toThrow("Market Skill entry changed after Resolver selection");
+  });
+
+  it("rejects direct Resolver routes because no Market Skill was pinned", () => {
+    const selection = selectMarketResolverReadOnlyImplementation(plan([implementation()]));
+    expect(() =>
+      readPinnedMarketResolverSkillContent(selection, marketSkillEntry()),
+    ).toThrow("Resolver selection does not pin a Market Skill");
+  });
+});
 
 describe("pinMarketResolverResearchProvenance", () => {
   it("pins exact Resolver and Market Skill provenance without carrying invocation data", () => {
