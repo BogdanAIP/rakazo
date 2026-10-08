@@ -27,6 +27,7 @@ const payloadSchemas = {
     spaceId: z.string().min(1),
     userId: z.string().min(1),
     gateRevision: z.number().int().nonnegative(),
+    sessionRevision: z.number().int().positive().safe().optional(),
     scheduledFor: z.string().datetime({ offset: true }),
   }),
 } satisfies { [Name in BackgroundJobName]: z.ZodType<BackgroundJobPayloads[Name]> };
