@@ -4,6 +4,8 @@ Status: **authoritative architecture and migration plan**
 Last updated: **2026-10-01**  
 Primary working branch: `feature/chatgpt-mcp-upstream-2026-09-29`
 
+**Optional Trading extension (planning only):** [Rakazo Trading overview](./trading/README.md), [roadmap](./trading/ROADMAP.md), [candidate/evidence register](./trading/RESEARCH.md). Trading is subordinate to the existing Rakazo core and Plugin R; no live orders, secrets or runtime changes are authorized by these documents.
+
 **Physical-pilot evidence (2026-10-01):** [Windows Host capability audit and blocker log](./windows-host-capability-audit-2026-10-01.md). Earlier sections below are historical and may describe an earlier migration state; use the live consolidated-state decision here instead. The native Windows fd/HANDLE bridge and file containment smoke passed on the physical Windows laptop; full Windows Host tests passed **28/28**. The original Plugin R tunnel now uses the MCP from the new checkout, its `health` and `windowsHosts/list` pass, one physical Windows Host is paired and sends fresh heartbeat. User physically verified the internal API dispatched `identity.get` to the correct installation and `process.list` returned five processes. This is successful native read-only dispatch, **not yet proof of bot-linked commands through R**. An attempted new read-only test bot returned a server error and `bots/list` confirmed it was not created; preserve the original ChatGPT Compute anchor, which still reports an existing Docker computer.
 
 ### One Rakazo application, manually launched (corrected decision, 2026-10-01)

@@ -22,6 +22,7 @@ const READ_ACTIONS = new Set([
   "read",
   "context",
   "all",
+  "analyze",
   "bootstrap",
   "catalog",
   "catalogSearch",
