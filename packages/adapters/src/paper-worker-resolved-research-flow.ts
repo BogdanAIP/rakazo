@@ -12,6 +12,10 @@ import {
 } from "@rakazo/db";
 
 type Owner = { spaceId: string; userId: string };
+type ReadResearchPreflight = typeof readTradingPaperResolvedResearchPreflight;
+type ReserveResolvedSignal = typeof reserveApprovedResolvedTradingPaperSignal;
+type ReadFillPreflight = typeof readTradingPaperResolvedResearchFillPreflight;
+type FillResolvedReservation = typeof fillApprovedResolvedTradingPaperReservation;
 
 export type PaperWorkerResolvedResearchProvider = (
   payload: BackgroundJobPayloads["paper.worker-preflight"],
@@ -99,6 +103,12 @@ export async function handlePreparedPaperWorkerResolvedResearch(
   provider: PaperWorkerResolvedResearchProvider,
   captureEvidence: PaperWorkerResolvedResearchEvidenceCapture,
   now: Date = new Date(),
+  services: {
+    readResearchPreflight?: ReadResearchPreflight;
+    reserveResolvedSignal?: ReserveResolvedSignal;
+    readFillPreflight?: ReadFillPreflight;
+    fillResolvedReservation?: FillResolvedReservation;
+  } = {},
 ): Promise<PaperWorkerResolvedResearchFlowResult> {
   if (!Number.isFinite(now.getTime())) {
     throw new Error("Invalid resolved research worker clock");
@@ -114,7 +124,9 @@ export async function handlePreparedPaperWorkerResolvedResearch(
     };
   }
 
-  const researchAuthority = await readTradingPaperResolvedResearchPreflight(
+  const researchAuthority = await (
+    services.readResearchPreflight ?? readTradingPaperResolvedResearchPreflight
+  )(
     prisma,
     owner,
     payload.ledgerId,
@@ -143,7 +155,9 @@ export async function handlePreparedPaperWorkerResolvedResearch(
     throw new Error("Resolved research reserve evidence id changed during capture");
   }
 
-  const reservation = await reserveApprovedResolvedTradingPaperSignal(
+  const reservation = await (
+    services.reserveResolvedSignal ?? reserveApprovedResolvedTradingPaperSignal
+  )(
     prisma,
     owner,
     payload.ledgerId,
@@ -161,7 +175,9 @@ export async function handlePreparedPaperWorkerResolvedResearch(
     };
   }
 
-  const fillAuthority = await readTradingPaperResolvedResearchFillPreflight(
+  const fillAuthority = await (
+    services.readFillPreflight ?? readTradingPaperResolvedResearchFillPreflight
+  )(
     prisma,
     owner,
     payload.ledgerId,
@@ -198,7 +214,9 @@ export async function handlePreparedPaperWorkerResolvedResearch(
     throw new Error("Resolved research fill evidence id changed during capture");
   }
 
-  const fill = await fillApprovedResolvedTradingPaperReservation(
+  const fill = await (
+    services.fillResolvedReservation ?? fillApprovedResolvedTradingPaperReservation
+  )(
     prisma,
     owner,
     payload.ledgerId,
