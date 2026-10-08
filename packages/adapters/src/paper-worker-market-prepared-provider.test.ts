@@ -103,9 +103,7 @@ describe("Market prepare -> Trading G6 research-only provider", () => {
         ...provenance,
         skill: {
           ...provenance.skill,
-          contentSha256: createHash("sha256")
-            .update(prepared.skillContent)
-            .digest("hex"),
+          contentSha256: createHash("sha256").update(prepared.skillContent).digest("hex"),
         },
       },
       signal,
