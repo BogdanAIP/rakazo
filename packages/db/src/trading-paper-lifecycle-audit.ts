@@ -167,24 +167,23 @@ export async function auditTradingPaperLifecycleInTransaction(
       },
     );
     if (worker) return;
-    const resolved =
-      await verifyHistoricalTradingPaperResolvedResearchFillApprovalInTransaction(
-        tx,
-        owner,
-        record.policyApprovalEffectId,
-        {
-          ledgerId: record.ledgerId,
-          reservationId: record.reservationId,
-          signalId: reserve.signalId,
-          policyRevision: record.policyRevision,
-          reserveEvidenceId: decision.evidenceId,
-          evidenceId: record.evidenceId,
-          reserveEventSequence: record.reserveEventSequence,
-          fillEventSequence: record.fillEventSequence,
-          actedAt: record.filledAt.toISOString(),
-          market: reserve.market,
-        },
-      );
+    const resolved = await verifyHistoricalTradingPaperResolvedResearchFillApprovalInTransaction(
+      tx,
+      owner,
+      record.policyApprovalEffectId,
+      {
+        ledgerId: record.ledgerId,
+        reservationId: record.reservationId,
+        signalId: reserve.signalId,
+        policyRevision: record.policyRevision,
+        reserveEvidenceId: decision.evidenceId,
+        evidenceId: record.evidenceId,
+        reserveEventSequence: record.reserveEventSequence,
+        fillEventSequence: record.fillEventSequence,
+        actedAt: record.filledAt.toISOString(),
+        market: reserve.market,
+      },
+    );
     assert(resolved, "Missing or mismatched historical automatic-fill approval");
   }
 
