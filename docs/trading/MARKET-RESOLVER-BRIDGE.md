@@ -132,6 +132,30 @@ fetch market data. A later G4 fill bridge must revalidate G3 inside the same ser
 transaction, verify the exact G2 reserve provenance and require fresh trusted public quote evidence
 before delegating to the existing synthetic PAPER fill/risk checks.
 
+## G4 — transactional G3 -> synthetic PAPER fill bridge
+
+G4 connects one verified G2 reservation to the existing synthetic full-fill writer only after a
+separately approved G3 fill authority is present. The bridge remains entirely inside the PAPER
+ledger.
+
+Inside the same serializable fill transaction G4:
+
+- rejects mixing generic G3 authority with the legacy F2/market-target authority pair;
+- revalidates the current G3 gate, which in turn revalidates the exact G1 scope and current D2/PAPER
+  revisions;
+- verifies the reservation's immutable G2 provenance and requires its G1 approval effect to match
+  the G3 scope lineage;
+- requires a fresh trusted public quote evidence record for the exact reservation market;
+- reuses the existing policy, kill-switch, reservation-expiry, spread, slippage, held-quote,
+  stop-price and synthetic full-fill checks;
+- records the G3 approval effect on the fill decision and a separate immutable
+  `TradingPaperResolvedResearchFillUse` row binding the G1/G3 approvals, scope/revisions, original
+  reserve evidence, fresh fill evidence and reserve/fill event sequences;
+- verifies that historical provenance in strict lifecycle audit and on idempotent replay.
+
+G4 adds no close authority and contains no exchange account, private endpoint, signing function,
+wallet action or live-order payload. Generic automatic stop handling remains a separate future gate.
+
 ## Why G0 is separate from Market storage
 
 The Market/Capability Profile line and the stacked Trading PR line currently diverge from a common
