@@ -147,6 +147,10 @@ export const TradingResolvedResearchSkillProvenanceSchema = z.object({
   marketKey: z.string().trim().min(1).max(200),
   sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
   variant: z.enum(["original", "rccl", "wrapped", "hybrid"]),
+  /** SHA-256 of the exact selected instruction TEXT, not of the Market source revision.
+   * Optional only for archived pre-G9 research envelopes. The G7 Market bridge
+   * always adds it. Adapted variants cannot receive v1 PAPER approvals. */
+  contentSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 });
 
 export const TradingResolvedResearchProvenanceSchema = z.object({
@@ -187,7 +191,7 @@ export type TradingResolvedResearchEnvelope = z.infer<typeof TradingResolvedRese
  * may approve. It intentionally omits a signal's price levels and evidence so
  * approval cannot be confused with an order or one specific fill.
  */
-export const TradingResolvedResearchApprovalScopeSchema = z.object({
+const TradingResolvedResearchApprovalScopeV1Schema = z.object({
   schemaVersion: z.literal("trading-resolved-research-scope-v1"),
   semanticKey: TradingResolvedResearchProvenanceSchema.shape.semanticKey,
   resolverKey: TradingResolvedResearchProvenanceSchema.shape.resolverKey,
@@ -200,6 +204,26 @@ export const TradingResolvedResearchApprovalScopeSchema = z.object({
   marketKind: TradingMarketKindSchema.nullable(),
   action: TradingActionSchema.nullable(),
 });
+
+/**
+ * G9: an explicit owner approval for a Market Skill MUST bind the chosen
+ * original/RCCL/wrapped/hybrid version AND SHA-256 of the actual instructions.
+ *
+ * V1 is retained strictly for replay/verification of existing historic grants.
+ * Parsing and hashing stored v1 JSON must remain stable. G7 research with
+ * pinned selected Skill content derives v2, never upgrades a v1 grant.
+ */
+const TradingResolvedResearchApprovalScopeV2Schema =
+  TradingResolvedResearchApprovalScopeV1Schema.omit({ schemaVersion: true }).extend({
+    schemaVersion: z.literal("trading-resolved-research-scope-v2"),
+    skillVariant: TradingResolvedResearchSkillProvenanceSchema.shape.variant,
+    skillContentSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  });
+
+export const TradingResolvedResearchApprovalScopeSchema = z.discriminatedUnion("schemaVersion", [
+  TradingResolvedResearchApprovalScopeV1Schema,
+  TradingResolvedResearchApprovalScopeV2Schema,
+]);
 export type TradingResolvedResearchApprovalScope = z.infer<
   typeof TradingResolvedResearchApprovalScopeSchema
 >;
