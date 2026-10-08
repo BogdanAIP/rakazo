@@ -10,6 +10,7 @@ import {
   MarketResolverContentSchema,
   type MarketResolverImplementation,
   type MarketResolverPlan,
+  type MarketResolverPreparedResearch,
   type MarketResolverReadOnlySelection,
   type MarketResolverSkillLink,
 } from "@rakazo/contracts";
@@ -17,6 +18,7 @@ import {
   analyzeRcclSkillMd,
   buildSkillMd,
   parseSkillMd,
+  prepareMarketResolverResearch,
   selectMarketResolverReadOnlyImplementation,
 } from "@rakazo/core";
 import { IsolationError, type Prisma, type PrismaClient } from "@rakazo/db";
@@ -635,6 +637,24 @@ export function createMarketService(
         requireReadOnly: false,
       });
       return selectMarketResolverReadOnlyImplementation(plan);
+    },
+
+    async prepare(
+      actor: Actor,
+      input: {
+        semanticKey: string;
+        resolverKey?: string;
+        expectedDigest?: string;
+        allowedKinds?: Array<MarketResolverImplementation["kind"]>;
+        limit: number;
+      },
+    ): Promise<MarketResolverPreparedResearch> {
+      const selection = await this.select(actor, input);
+      const entry =
+        selection.status === "ready" && selection.skill
+          ? mapMarketEntry(await owned(prisma, actor, selection.skill.entryId))
+          : undefined;
+      return prepareMarketResolverResearch(selection, entry, new Date().toISOString());
     },
 
     async importGithub(
