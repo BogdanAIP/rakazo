@@ -305,6 +305,40 @@ export async function assessTradingPaperEntrySessionInTransaction(
   };
 }
 
+/**
+ * H1b — optional, explicit session fencing for the new session-aware worker.
+ * Locks the SAME owner ledger row used by Start/Pause/End before the final
+ * permission check. A transaction that reaches this barrier after Pause has
+ * committed cannot create exposure with the previous session revision.
+ *
+ * No session revision means NO session authority. Legacy callers must be
+ * migrated before this becomes the only production automated trading path.
+ */
+export async function lockAndVerifyTradingPaperEntrySessionInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  ledgerId: string,
+  expectedSessionRevision: number,
+): Promise<PaperEntrySessionEntryPreflight> {
+  if (!Number.isSafeInteger(expectedSessionRevision) || expectedSessionRevision < 1) {
+    throw new PaperEntrySessionIntegrityError("Invalid expected PAPER entry-session revision");
+  }
+  const locked = await tx.$queryRaw<Array<{ id: string }>>(
+    Prisma.sql`SELECT "id" FROM "trading_paper_ledgers"
+               WHERE "id" = ${ledgerId} AND "spaceId" = ${owner.spaceId}
+                 AND "ownerUserId" = ${owner.userId} FOR UPDATE`,
+  );
+  if (locked.length !== 1 || locked[0]?.id !== ledgerId) {
+    throw new PaperEntrySessionIntegrityError("PAPER entry session ledger lock unavailable");
+  }
+  return assessTradingPaperEntrySessionInTransaction(
+    tx,
+    owner,
+    ledgerId,
+    expectedSessionRevision,
+  );
+}
+
 /** H1 permission writer: ALL calls require a claimed, owner-approved effect.
  * Start issues a finite lease but NEVER schedules or submits a PAPER order.
  * Pause/End fence the entry lease by incrementing the revision; existing
