@@ -243,34 +243,50 @@ export function PaperJournalPage() {
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
-                      <th className="p-2">Дата</th><th className="p-2">Операция</th>
-                      <th className="p-2">Инструмент / ID</th><th className="p-2">Количество</th>
-                      <th className="p-2">Цена</th><th className="p-2">Комиссия</th>
-                    </tr></thead>
-                    <tbody>{events.map((event) => (
-                      <tr key={event.eventId} className="border-b border-border/60">
-                        <td className="whitespace-nowrap p-2">{dateTime(event.recordedAt)}</td>
-                        <td className="p-2">{kinds[event.kind]}</td>
-                        <td className="p-2">
-                          {event.kind === "reserve" ? event.market.symbol : eventId(event)}
-                        </td>
-                        <td className="p-2 tabular-nums">
-                          {event.kind !== "release" ? event.quantityBase : "—"}
-                        </td>
-                        <td className="p-2 tabular-nums">
-                          {event.kind === "fill_buy" || event.kind === "fill_sell" ? event.executedPriceQuote : "—"}
-                        </td>
-                        <td className="p-2 tabular-nums">
-                          {event.kind === "fill_buy" || event.kind === "fill_sell" ? event.feeQuote : "—"}
-                        </td>
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="p-2">Дата</th>
+                        <th className="p-2">Операция</th>
+                        <th className="p-2">Инструмент / ID</th>
+                        <th className="p-2">Количество</th>
+                        <th className="p-2">Цена</th>
+                        <th className="p-2">Комиссия</th>
                       </tr>
-                    ))}</tbody>
+                    </thead>
+                    <tbody>
+                      {events.map((event) => (
+                        <tr key={event.eventId} className="border-b border-border/60">
+                          <td className="whitespace-nowrap p-2">{dateTime(event.recordedAt)}</td>
+                          <td className="p-2">{kinds[event.kind]}</td>
+                          <td className="p-2">
+                            {event.kind === "reserve" ? event.market.symbol : eventId(event)}
+                          </td>
+                          <td className="p-2 tabular-nums">
+                            {event.kind !== "release" ? event.quantityBase : "—"}
+                          </td>
+                          <td className="p-2 tabular-nums">
+                            {event.kind === "fill_buy" || event.kind === "fill_sell"
+                              ? event.executedPriceQuote
+                              : "—"}
+                          </td>
+                          <td className="p-2 tabular-nums">
+                            {event.kind === "fill_buy" || event.kind === "fill_sell"
+                              ? event.feeQuote
+                              : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
                   </table>
                 </div>
               )}
               {cursor !== null && (
-                <button type="button" onClick={() => void loadMore()} disabled={morePending}
-                  className="mt-4 rounded-xl border border-border px-4 py-2 text-sm hover:bg-muted">
+                <button
+                  type="button"
+                  onClick={() => void loadMore()}
+                  disabled={morePending}
+                  className="mt-4 rounded-xl border border-border px-4 py-2 text-sm hover:bg-muted"
+                >
                   {morePending ? "Загрузка…" : "Показать более ранние записи"}
                 </button>
               )}
