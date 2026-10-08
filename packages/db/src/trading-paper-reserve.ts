@@ -11,6 +11,7 @@ import {
   auditTradingPaperLifecycleInTransaction,
   PaperLifecycleAuditError,
 } from "./trading-paper-lifecycle-audit.js";
+import { lockAndVerifyTradingPaperEntrySessionInTransaction } from "./trading-paper-entry-session.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
 import {
   evaluateTradingPaperReservationInTransaction,
@@ -61,6 +62,7 @@ type ReserveDenyReason =
   | "paper_capability_unapproved"
   | "paper_worker_signal_unapproved"
   | "paper_resolved_research_unapproved"
+  | "paper_entry_session_inactive"
   | "price_not_tick_aligned"
   | "capacity_unrepresentable"
   | "capacity_no_capacity"
@@ -359,6 +361,7 @@ export async function reserveApprovedTradingPaperSignal(
   evidenceId: string,
   workerSignalAuthority?: TradingPaperWorkerSignalReserveAuthority,
   resolvedResearch?: TradingPaperResolvedResearchReserveAuthority,
+  expectedSessionRevision?: number,
 ): Promise<TradingPaperReserveResult> {
   const parsed = TradingSignalSchema.safeParse(proposedSignal);
   const proposal = parsed.success && parsed.data.kind === "proposal" ? parsed.data : null;
@@ -372,6 +375,21 @@ export async function reserveApprovedTradingPaperSignal(
         await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         const currentPolicy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         const decisionNow = Date.now();
+        if (expectedSessionRevision !== undefined) {
+          const session = await lockAndVerifyTradingPaperEntrySessionInTransaction(
+            tx,
+            owner,
+            ledgerId,
+            expectedSessionRevision,
+          );
+          if (session.status !== "ready") {
+            const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
+            return deny(
+              { ledgerRevision: recovered.row.version, policyRevision: currentPolicy.revision },
+              "paper_entry_session_inactive",
+            );
+          }
+        }
         if (workerSignalAuthority && resolvedResearch) {
           throw new PaperReservationDecisionIntegrityError(
             "A PAPER reserve cannot use legacy and resolved-research authorities together",
@@ -675,6 +693,7 @@ export async function reserveApprovedResolvedTradingPaperSignal(
   envelope: TradingResolvedResearchEnvelope,
   evidenceId: string,
   authority: TradingPaperResolvedResearchAuthority,
+  expectedSessionRevision?: number,
 ): Promise<TradingPaperReserveResult> {
   return reserveApprovedTradingPaperSignal(
     prisma,
@@ -684,5 +703,6 @@ export async function reserveApprovedResolvedTradingPaperSignal(
     evidenceId,
     undefined,
     { envelope, authority },
+    expectedSessionRevision,
   );
 }
