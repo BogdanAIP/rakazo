@@ -583,11 +583,15 @@ export function createMarketService(
             name: implementation.name,
             kind: implementation.kind,
             reference: implementation.reference,
+            skillReference: implementation.skillReference ?? null,
             priority: implementation.priority,
             readOnly: implementation.readOnly === true,
             constraints: implementation.constraints,
             ...(implementation.notes ? { notes: implementation.notes } : {}),
-            skill: resolveMarketSkillLink(implementation.reference, skillRows),
+            skill: resolveMarketSkillLink(
+              implementation.skillReference ?? implementation.reference,
+              skillRows,
+            ),
           }),
         )
         .sort(
