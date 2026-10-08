@@ -148,6 +148,12 @@ known in Market != installed != assigned != authorized != selected for this task
 - inconsistent `preferred` versus candidate order is treated as plan-integrity failure.
 
 The selector does not install or invoke a Skill and grants no PAPER or live execution authority.
+The Resolver seed must reference real Market Skill entries, not individual subcommands hidden inside a
+broader write-capable Skill. For example, OKX `security token-scan` currently belongs to the
+`okx-agentic-wallet` Skill, whose surface also includes signing and broadcasting. It is therefore
+not exposed as a `market.risk` fallback until a separately bounded read-only Skill/wrapper exists;
+the read-only Binance token-audit Skill remains the current token-risk route.
+
 `market/select` exposes the same selector as a read-only RPC: it internally resolves the candidate
 plan, applies the fail-closed selection rules and returns either one pinned research route or an
 explicit `no_eligible_read_only_implementation` denial. For Trading, this selected/pinned provenance
