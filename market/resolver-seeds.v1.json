@@ -278,6 +278,7 @@
             "name": "CCXT MCP market tier",
             "kind": "mcp",
             "reference": "ccxt/ccxt",
+            "skillReference": "market:ccxt/ccxt:ccxt-mcp",
             "priority": 1,
             "readOnly": true,
             "constraints": [
@@ -514,16 +515,6 @@
             "constraints": [
               "Public token-audit endpoint only; treat risk output as one feature, not a safety guarantee or trade authorization"
             ]
-          },
-          {
-            "name": "OKX OnchainOS token security scan",
-            "kind": "cli",
-            "reference": "market:okx/onchainos-skills:security-token-scan",
-            "priority": 2,
-            "readOnly": true,
-            "constraints": [
-              "Read-only security scan only; do not expose wallet signing, swap or broadcast capabilities to PAPER project"
-            ]
           }
         ]
       }
@@ -697,6 +688,7 @@
             "name": "CCXT public derivatives market data",
             "kind": "api",
             "reference": "ccxt/ccxt",
+            "skillReference": "market:ccxt/ccxt:ccxt-mcp",
             "priority": 4,
             "readOnly": true,
             "constraints": ["Public endpoints only; exchange support and fields vary"]

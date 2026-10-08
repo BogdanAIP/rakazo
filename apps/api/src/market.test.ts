@@ -68,6 +68,9 @@ function setup() {
         if (Array.isArray(rowValue) && Array.isArray(filter.hasSome)) {
           return filter.hasSome.some((item) => rowValue.includes(String(item)));
         }
+        if (Array.isArray(rowValue) && typeof filter.has === "string") {
+          return rowValue.includes(filter.has);
+        }
       }
       return rowValue === value;
     });
@@ -261,6 +264,554 @@ describe("Market Skills + Market Resolver service", () => {
 
     expect(entry.tags).toContain("browser.semantic");
     expect(entry.originalContent).toBe(resolver);
+  });
+
+  it("resolves a semantic Market route into a deterministic read-only candidate plan", async () => {
+    const { service } = setup();
+    const resolver = await service.importEntry(actor, {
+      kind: "resolver",
+      key: "market.data@" + sourceRef,
+      name: "Market data resolver",
+      description: "Ranked implementations for market data.",
+      tags: ["trading", "market-data"],
+      content: JSON.stringify({
+        semanticKey: "market.data",
+        implementations: [
+          {
+            name: "Private trading API",
+            kind: "api",
+            reference: "market:private-trading",
+            priority: 1,
+            readOnly: false,
+            constraints: ["private account required"],
+          },
+          {
+            name: "CCXT public market",
+            kind: "mcp",
+            reference: "ccxt/ccxt",
+            priority: 2,
+            readOnly: true,
+            constraints: ["market tier only"],
+          },
+          {
+            name: "Public fallback",
+            kind: "api",
+            reference: "market:public-fallback",
+            priority: 3,
+            readOnly: true,
+            constraints: ["public data only"],
+          },
+        ],
+      }),
+      sourceUrl:
+        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
+      repository: "BogdanAIP/rakazo",
+      sourcePath: "market/resolver-seeds.v1.json",
+      sourceRef,
+      license: "repository license",
+      trust: "curated",
+      metadata: {},
+    });
+
+    await expect(
+      service.resolve(actor, {
+        semanticKey: "market.data",
+        expectedDigest: resolver.digest,
+        requireReadOnly: true,
+        allowedKinds: ["mcp", "api"],
+        limit: 2,
+      }),
+    ).resolves.toEqual({
+      resolver: {
+        entryId: resolver.id,
+        key: resolver.key,
+        digest: resolver.digest,
+        semanticKey: "market.data",
+      },
+      preferred: {
+        name: "CCXT public market",
+        kind: "mcp",
+        reference: "ccxt/ccxt",
+        skillReference: null,
+        priority: 2,
+        readOnly: true,
+        constraints: ["market tier only"],
+        skill: null,
+      },
+      candidates: [
+        {
+          name: "CCXT public market",
+          kind: "mcp",
+          reference: "ccxt/ccxt",
+          skillReference: null,
+          priority: 2,
+          readOnly: true,
+          constraints: ["market tier only"],
+          skill: null,
+        },
+        {
+          name: "Public fallback",
+          kind: "api",
+          reference: "market:public-fallback",
+          skillReference: null,
+          priority: 3,
+          readOnly: true,
+          constraints: ["public data only"],
+          skill: null,
+        },
+      ],
+    });
+
+    await expect(
+      service.resolve(actor, {
+        semanticKey: "market.data",
+        expectedDigest: "0".repeat(64),
+        requireReadOnly: true,
+        limit: 32,
+      }),
+    ).rejects.toThrow("digest changed");
+  });
+
+  it("links market: Resolver references to exact owned Skill provenance", async () => {
+    const { service } = setup();
+    const skill = await service.importEntry(actor, {
+      kind: "skill",
+      key: "okx/agent-trade-kit:skills/okx-cex-market/SKILL.md@" + sourceRef,
+      tags: ["trading", "research-ready", "market-data"],
+      content: originalSkill("okx-cex-market"),
+      sourceUrl:
+        "https://github.com/okx/agent-trade-kit/blob/" +
+        sourceRef +
+        "/skills/okx-cex-market/SKILL.md",
+      repository: "okx/agent-trade-kit",
+      sourcePath: "skills/okx-cex-market/SKILL.md",
+      sourceRef,
+      license: "MIT",
+      trust: "curated",
+      metadata: {},
+    });
+    const resolver = await service.importEntry(actor, {
+      kind: "resolver",
+      key: "market.data@" + sourceRef,
+      name: "Market data resolver",
+      description: "Resolver with one Market Skill implementation.",
+      tags: ["market.data"],
+      content: JSON.stringify({
+        semanticKey: "market.data",
+        implementations: [
+          {
+            name: "OKX CEX Market Skill",
+            kind: "api",
+            reference: "market:okx/agent-trade-kit:okx-cex-market",
+            priority: 1,
+            readOnly: true,
+            constraints: ["read-only market data"],
+          },
+        ],
+      }),
+      sourceUrl:
+        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
+      repository: "BogdanAIP/rakazo",
+      sourcePath: "market/resolver-seeds.v1.json",
+      sourceRef,
+      license: "repository license",
+      trust: "curated",
+      metadata: {},
+    });
+
+    await expect(
+      service.resolve(actor, {
+        semanticKey: "market.data",
+        expectedDigest: resolver.digest,
+        requireReadOnly: true,
+        limit: 32,
+      }),
+    ).resolves.toMatchObject({
+      preferred: {
+        reference: "market:okx/agent-trade-kit:okx-cex-market",
+        skillReference: null,
+        skill: {
+          status: "resolved",
+          entryId: skill.id,
+          key: skill.key,
+          name: "okx-cex-market",
+          repository: "okx/agent-trade-kit",
+          digest: skill.digest,
+          variant: "original",
+          tags: ["trading", "research-ready", "market-data"],
+        },
+      },
+    });
+  });
+
+  it("resolves a separate Skill recipe pinned by an MCP Resolver implementation", async () => {
+    const { service } = setup();
+    const skill = await service.importEntry(actor, {
+      kind: "skill",
+      key: "ccxt/ccxt:.claude/skills/ccxt-mcp/SKILL.md@" + sourceRef,
+      tags: ["trading", "adapt-to-paper", "mcp", "market-data"],
+      content: originalSkill("ccxt-mcp"),
+      sourceUrl:
+        "https://github.com/ccxt/ccxt/blob/" + sourceRef + "/.claude/skills/ccxt-mcp/SKILL.md",
+      repository: "ccxt/ccxt",
+      sourcePath: ".claude/skills/ccxt-mcp/SKILL.md",
+      sourceRef,
+      license: "MIT",
+      trust: "curated",
+      metadata: {},
+    });
+    const resolver = await service.importEntry(actor, {
+      kind: "resolver",
+      key: "market.data@" + sourceRef,
+      name: "Market data resolver",
+      description: "Resolver with an MCP implementation and a separate usage Skill.",
+      tags: ["market.data"],
+      content: JSON.stringify({
+        semanticKey: "market.data",
+        implementations: [
+          {
+            name: "CCXT MCP market tier",
+            kind: "mcp",
+            reference: "ccxt/ccxt",
+            skillReference: "market:ccxt/ccxt:ccxt-mcp",
+            priority: 1,
+            readOnly: true,
+            constraints: ["market tier only"],
+          },
+        ],
+      }),
+      sourceUrl:
+        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
+      repository: "BogdanAIP/rakazo",
+      sourcePath: "market/resolver-seeds.v1.json",
+      sourceRef,
+      license: "repository license",
+      trust: "curated",
+      metadata: {},
+    });
+
+    await expect(
+      service.resolve(actor, {
+        semanticKey: "market.data",
+        expectedDigest: resolver.digest,
+        requireReadOnly: true,
+        limit: 32,
+      }),
+    ).resolves.toMatchObject({
+      preferred: {
+        reference: "ccxt/ccxt",
+        skillReference: "market:ccxt/ccxt:ccxt-mcp",
+        skill: {
+          status: "resolved",
+          entryId: skill.id,
+          key: skill.key,
+          name: "ccxt-mcp",
+          repository: "ccxt/ccxt",
+          digest: skill.digest,
+          variant: "original",
+        },
+      },
+    });
+  });
+
+  it("selects the first read-only Resolver route with exact Market Skill provenance", async () => {
+    const { service } = setup();
+    const skill = await service.importEntry(actor, {
+      kind: "skill",
+      key: "ccxt/ccxt:.claude/skills/ccxt-mcp/SKILL.md@" + sourceRef,
+      tags: ["trading", "adapt-to-paper", "mcp", "market-data"],
+      content: originalSkill("ccxt-mcp"),
+      sourceUrl:
+        "https://github.com/ccxt/ccxt/blob/" + sourceRef + "/.claude/skills/ccxt-mcp/SKILL.md",
+      repository: "ccxt/ccxt",
+      sourcePath: ".claude/skills/ccxt-mcp/SKILL.md",
+      sourceRef,
+      license: "MIT",
+      trust: "curated",
+      metadata: {},
+    });
+    const resolver = await service.importEntry(actor, {
+      kind: "resolver",
+      key: "market.data@" + sourceRef,
+      name: "Market data resolver",
+      description: "Resolver selection fallback fixture.",
+      tags: ["market.data"],
+      content: JSON.stringify({
+        semanticKey: "market.data",
+        implementations: [
+          {
+            name: "Missing Market Skill",
+            kind: "api",
+            reference: "market:okx/agent-trade-kit:missing-skill",
+            priority: 1,
+            readOnly: true,
+            constraints: ["read-only"],
+          },
+          {
+            name: "CCXT MCP market tier",
+            kind: "mcp",
+            reference: "ccxt/ccxt",
+            skillReference: "market:ccxt/ccxt:ccxt-mcp",
+            priority: 2,
+            readOnly: true,
+            constraints: ["market tier only"],
+          },
+        ],
+      }),
+      sourceUrl:
+        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
+      repository: "BogdanAIP/rakazo",
+      sourcePath: "market/resolver-seeds.v1.json",
+      sourceRef,
+      license: "repository license",
+      trust: "curated",
+      metadata: {},
+    });
+
+    await expect(
+      service.select(actor, {
+        semanticKey: "market.data",
+        expectedDigest: resolver.digest,
+        limit: 32,
+      }),
+    ).resolves.toMatchObject({
+      status: "ready",
+      resolver: {
+        entryId: resolver.id,
+        key: resolver.key,
+        digest: resolver.digest,
+        semanticKey: "market.data",
+      },
+      implementation: {
+        name: "CCXT MCP market tier",
+        kind: "mcp",
+        reference: "ccxt/ccxt",
+        skillReference: "market:ccxt/ccxt:ccxt-mcp",
+        priority: 2,
+        readOnly: true,
+      },
+      skill: {
+        status: "resolved",
+        entryId: skill.id,
+        key: skill.key,
+        digest: skill.digest,
+        variant: "original",
+      },
+      skipped: [
+        {
+          name: "Missing Market Skill",
+          reference: "market:okx/agent-trade-kit:missing-skill",
+          priority: 1,
+          reason: "market_skill_missing",
+        },
+      ],
+    });
+  });
+
+  it("prepares exact Resolver provenance and selected Skill content without installing it", async () => {
+    const { service } = setup();
+    const skillContent = originalSkill("ccxt-mcp");
+    const skill = await service.importEntry(actor, {
+      kind: "skill",
+      key: "ccxt/ccxt:.claude/skills/ccxt-mcp/SKILL.md@" + sourceRef,
+      tags: ["trading", "adapt-to-paper", "mcp", "market-data"],
+      content: skillContent,
+      sourceUrl:
+        "https://github.com/ccxt/ccxt/blob/" + sourceRef + "/.claude/skills/ccxt-mcp/SKILL.md",
+      repository: "ccxt/ccxt",
+      sourcePath: ".claude/skills/ccxt-mcp/SKILL.md",
+      sourceRef,
+      license: "MIT",
+      trust: "curated",
+      metadata: {},
+    });
+    const resolver = await service.importEntry(actor, {
+      kind: "resolver",
+      key: "market.data@" + sourceRef,
+      name: "Market data resolver",
+      description: "Prepared research fixture.",
+      tags: ["market.data"],
+      content: JSON.stringify({
+        semanticKey: "market.data",
+        implementations: [
+          {
+            name: "CCXT MCP market tier",
+            kind: "mcp",
+            reference: "ccxt/ccxt",
+            skillReference: "market:ccxt/ccxt:ccxt-mcp",
+            priority: 1,
+            readOnly: true,
+            constraints: ["market tier only"],
+          },
+        ],
+      }),
+      sourceUrl:
+        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
+      repository: "BogdanAIP/rakazo",
+      sourcePath: "market/resolver-seeds.v1.json",
+      sourceRef,
+      license: "repository license",
+      trust: "curated",
+      metadata: {},
+    });
+
+    const prepared = await service.prepare(actor, {
+      semanticKey: "market.data",
+      expectedDigest: resolver.digest,
+      limit: 32,
+    });
+    expect(prepared.selection).toMatchObject({
+      status: "ready",
+      resolver: {
+        entryId: resolver.id,
+        key: resolver.key,
+        digest: resolver.digest,
+        semanticKey: "market.data",
+      },
+      implementation: {
+        name: "CCXT MCP market tier",
+        reference: "ccxt/ccxt",
+        readOnly: true,
+      },
+      skill: {
+        status: "resolved",
+        entryId: skill.id,
+        key: skill.key,
+        digest: skill.digest,
+        variant: "original",
+      },
+    });
+    expect(prepared.provenance).toMatchObject({
+      semanticKey: "market.data",
+      resolverKey: resolver.key,
+      resolverDigest: resolver.digest,
+      implementation: {
+        name: "CCXT MCP market tier",
+        kind: "mcp",
+        reference: "ccxt/ccxt",
+        priority: 1,
+        readOnly: true,
+      },
+      skill: {
+        marketEntryId: skill.id,
+        marketKey: skill.key,
+        sourceDigest: skill.digest,
+        variant: "original",
+      },
+    });
+    expect(Date.parse(prepared.provenance?.resolvedAt ?? "")).not.toBeNaN();
+    expect(prepared.skillContent).toBe(skillContent);
+
+    const rcclInstructions = buildRcclSkillTemplate({
+      name: "CCXT Market Research",
+      description: "Research public exchange data through authorized read-only capabilities.",
+      capabilityRequirements: ["market.data"],
+    });
+    await service.adapt(actor, {
+      entryId: skill.id,
+      expectedDigest: skill.digest,
+      mode: "rccl",
+      content: rcclInstructions,
+    });
+
+    // Writing an RCCL adaptation does not silently replace the original.
+    const beforeEvaluation = await service.prepare(actor, {
+      semanticKey: "market.data",
+      expectedDigest: resolver.digest,
+      limit: 32,
+    });
+    expect(beforeEvaluation.skillContent).toBe(skillContent);
+    expect(beforeEvaluation.provenance?.skill?.variant).toBe("original");
+
+    await service.evaluate(actor, {
+      entryId: skill.id,
+      expectedDigest: skill.digest,
+      preferredVariant: "rccl",
+      metrics: { comparisonType: "test_fixture", toolExecution: "not_run" },
+      note: "Synthetic adapter-selection test, not a trading performance evaluation.",
+    });
+    const preparedRccl = await service.prepare(actor, {
+      semanticKey: "market.data",
+      expectedDigest: resolver.digest,
+      limit: 32,
+    });
+    expect(preparedRccl.skillContent).toBe(rcclInstructions);
+    expect(preparedRccl.skillContent).not.toBe(skillContent);
+    expect(preparedRccl.provenance?.skill).toMatchObject({
+      marketEntryId: skill.id,
+      marketKey: skill.key,
+      sourceDigest: skill.digest,
+      variant: "rccl",
+    });
+  });
+
+  it("fails closed on ambiguous semantic resolvers unless the caller pins a resolver key", async () => {
+    const { service } = setup();
+    const shared = {
+      name: "Market data resolver",
+      description: "Resolver revision.",
+      tags: ["market.data"],
+      repository: "BogdanAIP/rakazo",
+      sourcePath: "market/resolver-seeds.v1.json",
+      sourceRef,
+      license: "repository license",
+      trust: "curated" as const,
+      metadata: {},
+    };
+    const content = JSON.stringify({
+      semanticKey: "market.data",
+      implementations: [
+        {
+          name: "Public market",
+          kind: "api",
+          reference: "market:public",
+          priority: 1,
+          readOnly: true,
+          constraints: [],
+        },
+      ],
+    });
+    const first = await service.importEntry(actor, {
+      kind: "resolver",
+      key: "market.data@one-" + sourceRef,
+      content,
+      sourceUrl:
+        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
+      ...shared,
+    });
+    await service.importEntry(actor, {
+      kind: "resolver",
+      key: "market.data@two-" + sourceRef,
+      content,
+      sourceUrl:
+        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
+      ...shared,
+    });
+
+    await expect(
+      service.resolve(actor, {
+        semanticKey: "market.data",
+        requireReadOnly: true,
+        limit: 32,
+      }),
+    ).rejects.toThrow("Multiple Market Resolvers");
+
+    await expect(
+      service.resolve(actor, {
+        semanticKey: "market.data",
+        resolverKey: first.key,
+        requireReadOnly: true,
+        limit: 32,
+      }),
+    ).resolves.toMatchObject({
+      resolver: { entryId: first.id, key: first.key, semanticKey: "market.data" },
+      preferred: {
+        reference: "market:public",
+        skillReference: null,
+        readOnly: true,
+        skill: null,
+      },
+    });
   });
 
   it("keeps the original while storing and evaluating an RCCL adaptation", async () => {

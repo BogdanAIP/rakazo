@@ -8,8 +8,20 @@ import {
   type MarketEntryKind,
   type MarketPreferredVariant,
   MarketResolverContentSchema,
+  type MarketResolverImplementation,
+  type MarketResolverPlan,
+  type MarketResolverPreparedResearch,
+  type MarketResolverReadOnlySelection,
 } from "@rakazo/contracts";
-import { analyzeRcclSkillMd, buildSkillMd, parseSkillMd } from "@rakazo/core";
+import {
+  analyzeRcclSkillMd,
+  buildSkillMd,
+  MarketResolverPlanResolutionError,
+  parseSkillMd,
+  prepareMarketResolverResearch,
+  resolveMarketResolverPlanFromEntries,
+  selectMarketResolverReadOnlyImplementation,
+} from "@rakazo/core";
 import { IsolationError, type Prisma, type PrismaClient } from "@rakazo/db";
 
 const MARKET_CONTENT_LIMIT = 200_000;
@@ -459,6 +471,99 @@ export function createMarketService(
           });
       if (!row) throw new IsolationError();
       return mapMarketEntry(row);
+    },
+
+    async resolve(
+      actor: Actor,
+      input: {
+        semanticKey: string;
+        resolverKey?: string;
+        expectedDigest?: string;
+        requireReadOnly: boolean;
+        allowedKinds?: Array<MarketResolverImplementation["kind"]>;
+        limit: number;
+      },
+    ): Promise<MarketResolverPlan> {
+      const [resolverRows, skillRows] = await Promise.all([
+        prisma.marketEntry.findMany({
+          where: {
+            spaceId: actor.spaceId,
+            userId: actor.userId,
+            kind: "resolver",
+            tags: { has: input.semanticKey },
+          },
+          orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+          take: 100,
+        }),
+        prisma.marketEntry.findMany({
+          where: {
+            spaceId: actor.spaceId,
+            userId: actor.userId,
+            kind: "skill",
+          },
+          orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+          take: 2_000,
+        }),
+      ]);
+
+      try {
+        return resolveMarketResolverPlanFromEntries(
+          resolverRows.map(mapMarketEntry),
+          skillRows.map(mapMarketEntry),
+          input,
+        );
+      } catch (error) {
+        if (!(error instanceof MarketResolverPlanResolutionError)) throw error;
+        if (error.code === "resolver_not_found") {
+          throw new ORPCError("NOT_FOUND", {
+            message: "No owned Market Resolver matches the requested semantic key.",
+          });
+        }
+        if (error.code === "resolver_ambiguous") {
+          throw new ORPCError("CONFLICT", {
+            message:
+              "Multiple Market Resolvers match this semantic key; pin resolverKey before resolving.",
+          });
+        }
+        throw new ORPCError("CONFLICT", {
+          message: "Market Resolver digest changed; reload and pin the current resolver revision.",
+        });
+      }
+    },
+
+    async select(
+      actor: Actor,
+      input: {
+        semanticKey: string;
+        resolverKey?: string;
+        expectedDigest?: string;
+        allowedKinds?: Array<MarketResolverImplementation["kind"]>;
+        limit: number;
+      },
+    ): Promise<MarketResolverReadOnlySelection> {
+      const plan = await this.resolve(actor, {
+        ...input,
+        requireReadOnly: false,
+      });
+      return selectMarketResolverReadOnlyImplementation(plan);
+    },
+
+    async prepare(
+      actor: Actor,
+      input: {
+        semanticKey: string;
+        resolverKey?: string;
+        expectedDigest?: string;
+        allowedKinds?: Array<MarketResolverImplementation["kind"]>;
+        limit: number;
+      },
+    ): Promise<MarketResolverPreparedResearch> {
+      const selection = await this.select(actor, input);
+      const entry =
+        selection.status === "ready" && selection.skill
+          ? mapMarketEntry(await owned(prisma, actor, selection.skill.entryId))
+          : undefined;
+      return prepareMarketResolverResearch(selection, entry, new Date().toISOString());
     },
 
     async importGithub(

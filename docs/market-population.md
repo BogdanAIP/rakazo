@@ -134,12 +134,51 @@ The distinction remains:
 known in Market != installed != assigned != authorized != selected for this task
 ```
 
+## Runtime Resolver selection
+
+`market.resolve` produces a deterministic data-only candidate plan. A separate core adapter,
+`selectMarketResolverReadOnlyImplementation`, converts that plan into a research-safe selection:
+
+- it independently requires `readOnly = true`;
+- it follows Resolver priority/name/reference ordering deterministically;
+- a `market:` implementation or `skillReference` is eligible only when the plan carries one
+  exact owned Market Skill entry id/key/source digest/preferred variant;
+- missing or ambiguous Skill links are skipped explicitly rather than guessed;
+- direct non-Market routes cannot smuggle unrelated Market Skill provenance;
+- inconsistent `preferred` versus candidate order is treated as plan-integrity failure.
+
+The selector does not install or invoke a Skill and grants no PAPER or live execution authority.
+The Resolver seed must reference real Market Skill entries, not individual subcommands hidden inside a
+broader write-capable Skill. For example, OKX `security token-scan` currently belongs to the
+`okx-agentic-wallet` Skill, whose surface also includes signing and broadcasting. It is therefore
+not exposed as a `market.risk` fallback until a separately bounded read-only Skill/wrapper exists;
+the read-only Binance token-audit Skill remains the current token-risk route.
+
+`market/select` exposes the same selector as a read-only RPC: it internally resolves the candidate
+plan, applies the fail-closed selection rules and returns either one pinned research route or an
+explicit `no_eligible_read_only_implementation` denial.
+
+`market/prepare` is the next read-only boundary for real reuse. It pins the selected Resolver
+key/digest, exact implementation and optional Market Skill id/key/source digest/preferred variant
+with a server timestamp. When a Market Skill is selected it returns only that exact pinned Skill
+content for the current research invocation, after rechecking the entry and selected variant. It
+does **not** copy the Skill into the owner-wide Agent Skill catalog, invoke it, or grant PAPER/live
+execution authority. This lets Trading and other Projects consume one selected Skill on demand
+instead of globally installing dozens of Market Skills.
+
+For Trading, the pinned provenance returned by this preparation boundary is the object that should
+be mapped into the research-only Trading Resolver envelope once the Market and Trading lines share
+an integration base.
+
 ## RPC surface
 
 Read:
 
 - `market/search`
 - `market/get`
+- `market/resolve`
+- `market/select`
+- `market/prepare`
 
 Write:
 
