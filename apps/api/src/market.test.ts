@@ -444,6 +444,78 @@ describe("Market Skills + Market Resolver service", () => {
     });
   });
 
+  it("resolves a separate Skill recipe pinned by an MCP Resolver implementation", async () => {
+    const { service } = setup();
+    const skill = await service.importEntry(actor, {
+      kind: "skill",
+      key: "ccxt/ccxt:.claude/skills/ccxt-mcp/SKILL.md@" + sourceRef,
+      tags: ["trading", "adapt-to-paper", "mcp", "market-data"],
+      content: originalSkill("ccxt-mcp"),
+      sourceUrl:
+        "https://github.com/ccxt/ccxt/blob/" +
+        sourceRef +
+        "/.claude/skills/ccxt-mcp/SKILL.md",
+      repository: "ccxt/ccxt",
+      sourcePath: ".claude/skills/ccxt-mcp/SKILL.md",
+      sourceRef,
+      license: "MIT",
+      trust: "curated",
+      metadata: {},
+    });
+    const resolver = await service.importEntry(actor, {
+      kind: "resolver",
+      key: "market.data@" + sourceRef,
+      name: "Market data resolver",
+      description: "Resolver with an MCP implementation and a separate usage Skill.",
+      tags: ["market.data"],
+      content: JSON.stringify({
+        semanticKey: "market.data",
+        implementations: [
+          {
+            name: "CCXT MCP market tier",
+            kind: "mcp",
+            reference: "ccxt/ccxt",
+            skillReference: "market:ccxt/ccxt:ccxt-mcp",
+            priority: 1,
+            readOnly: true,
+            constraints: ["market tier only"],
+          },
+        ],
+      }),
+      sourceUrl:
+        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
+      repository: "BogdanAIP/rakazo",
+      sourcePath: "market/resolver-seeds.v1.json",
+      sourceRef,
+      license: "repository license",
+      trust: "curated",
+      metadata: {},
+    });
+
+    await expect(
+      service.resolve(actor, {
+        semanticKey: "market.data",
+        expectedDigest: resolver.digest,
+        requireReadOnly: true,
+        limit: 32,
+      }),
+    ).resolves.toMatchObject({
+      preferred: {
+        reference: "ccxt/ccxt",
+        skillReference: "market:ccxt/ccxt:ccxt-mcp",
+        skill: {
+          status: "resolved",
+          entryId: skill.id,
+          key: skill.key,
+          name: "ccxt-mcp",
+          repository: "ccxt/ccxt",
+          digest: skill.digest,
+          variant: "original",
+        },
+      },
+    });
+  });
+
   it("fails closed on ambiguous semantic resolvers unless the caller pins a resolver key", async () => {
     const { service } = setup();
     const shared = {
