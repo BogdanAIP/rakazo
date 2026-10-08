@@ -2,6 +2,7 @@ import type { TradingResolvedResearchEnvelope } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import {
   assessResolvedTradingResearch,
+  buildTradingResolvedResearchEnvelope,
   resolvedTradingResearchApprovalScope,
 } from "./trading-resolved-research.js";
 
@@ -65,6 +66,40 @@ function proposal(expiresAt = "2026-10-07T21:00:00.000Z"): TradingResolvedResear
     },
   };
 }
+
+describe("Market pinned provenance bridge", () => {
+  it("maps the exact read-only Market provenance into a research-only Trading envelope", () => {
+    const signal = proposal().signal;
+    const built = buildTradingResolvedResearchEnvelope(provenance, signal);
+
+    expect(built).toEqual({
+      schemaVersion: "trading-resolved-research-v1",
+      mode: "research_only",
+      executionAuthority: "none",
+      provenance,
+      signal,
+    });
+  });
+
+  it("fails closed instead of truncating wider Market keys or accepting write-capable routes", () => {
+    expect(() =>
+      buildTradingResolvedResearchEnvelope(
+        { ...provenance, resolverKey: "r".repeat(201) },
+        proposal().signal,
+      ),
+    ).toThrow();
+
+    expect(() =>
+      buildTradingResolvedResearchEnvelope(
+        {
+          ...provenance,
+          implementation: { ...provenance.implementation, readOnly: false },
+        },
+        proposal().signal,
+      ),
+    ).toThrow();
+  });
+});
 
 describe("resolved trading research boundary", () => {
   it("pins Resolver, Skill and strategy identity without signal price levels", () => {
