@@ -4,7 +4,10 @@ import {
   createPreparedMarketResearchProvider,
   type PaperWorkerPreparedMarketResearch,
 } from "./paper-worker-market-prepared-provider.js";
-import { createSelectedMarketSkillResearchRunner } from "./paper-worker-market-selected-skill-runner.js";
+import {
+  createSelectedMarketSkillResearchRunner,
+  type SelectedMarketSkillResearchRequest,
+} from "./paper-worker-market-selected-skill-runner.js";
 import type { PaperWorkerResolvedResearchProvider } from "./paper-worker-resolved-research-flow.js";
 
 const now = new Date("2026-10-08T16:30:00.000Z");
@@ -68,7 +71,7 @@ describe("RCCL and adapted Market Skill research runner", () => {
     async (variant) => {
       const instructions = `# ${variant} instructions\nPAPER research only.`;
       const prepared = preparedFor(variant, instructions);
-      const invoke = vi.fn(async () => noTrade);
+      const invoke = vi.fn(async (_request: SelectedMarketSkillResearchRequest) => noTrade);
       const provider = createPreparedMarketResearchProvider(
         async () => prepared,
         createSelectedMarketSkillResearchRunner(invoke),
@@ -94,7 +97,7 @@ describe("RCCL and adapted Market Skill research runner", () => {
 
   it("never silently falls back to original instructions when RCCL is missing", async () => {
     const prepared = preparedFor("rccl", "");
-    const invoke = vi.fn(async () => noTrade);
+    const invoke = vi.fn(async (_request: SelectedMarketSkillResearchRequest) => noTrade);
     const provider = createPreparedMarketResearchProvider(
       async () => prepared,
       createSelectedMarketSkillResearchRunner(invoke),
@@ -109,7 +112,7 @@ describe("RCCL and adapted Market Skill research runner", () => {
       throw new Error("Invalid test fixture");
     }
     prepared.selection.skill.variant = "original";
-    const invoke = vi.fn(async () => noTrade);
+    const invoke = vi.fn(async (_request: SelectedMarketSkillResearchRequest) => noTrade);
     const provider = createPreparedMarketResearchProvider(
       async () => prepared,
       createSelectedMarketSkillResearchRunner(invoke),
@@ -126,7 +129,7 @@ describe("RCCL and adapted Market Skill research runner", () => {
     prepared.selection.skill = null;
     prepared.provenance = { ...(prepared.provenance as object), skill: null };
     prepared.skillContent = null;
-    const invoke = vi.fn(async () => noTrade);
+    const invoke = vi.fn(async (_request: SelectedMarketSkillResearchRequest) => noTrade);
     const provider = createPreparedMarketResearchProvider(
       async () => prepared,
       createSelectedMarketSkillResearchRunner(invoke),
