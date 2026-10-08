@@ -183,7 +183,9 @@ export const appContract = {
     sweep: oc.input(TradingSweepRequestSchema).output(TradingSweepOutputSchema),
     /** Authenticated owner-only, verified read-only PAPER journal dashboard. */
     journalList: oc.input(z.object({})).output(TradingPaperJournalListOutputSchema),
-    journalRead: oc.input(TradingPaperJournalReadInputSchema).output(TradingPaperJournalReadOutputSchema),
+    journalRead: oc
+      .input(TradingPaperJournalReadInputSchema)
+      .output(TradingPaperJournalReadOutputSchema),
     /** Public derivative context only; no collateral, leverage or order controls. */
     perpContext: oc.input(TradingPerpContextInputSchema).output(TradingPerpContextSchema),
   },
