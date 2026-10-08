@@ -23,7 +23,13 @@ export interface AuthEnv {
   email?: TransactionalEmailProvider;
   onEmailError?: (error: unknown) => void;
   beforeDeleteUser?: (userId: string) => Promise<void>;
+  /** Runs when a session row is deleted. Delivery also drops a token whose session is missing or expired. */
+  afterDeleteSession?: (session: AuthSession) => Promise<void>;
+  /** Runs when a password change replaces the caller's own session instead of ending it. */
+  afterReplaceSession?: (previous: AuthSession, session: AuthSession) => Promise<void>;
 }
+
+type AuthSession = { id: string; userId: string };
 
 export async function resolveSignupPolicy(
   prisma: Pick<PrismaClient, "deploymentSettings">,
@@ -204,12 +210,25 @@ async function claimUnverifiedFirstAccount(prisma: PrismaClient, userId: string)
   });
 }
 
+const CREDENTIAL_PATHS = ["/sign-in/email", "/sign-up/email", "/request-password-reset"] as const;
+
+/** Shared across API processes. Off outside production so tests can sign in freely. */
+export function authRateLimitOptions(nodeEnv = process.env.NODE_ENV) {
+  const rule = { window: 15 * 60, max: 10 };
+  return {
+    enabled: nodeEnv === "production",
+    storage: "database" as const,
+    customRules: Object.fromEntries(CREDENTIAL_PATHS.map((path) => [path, rule])),
+  };
+}
+
 export function createAuth(prisma: PrismaClient, env: AuthEnv) {
   return betterAuth({
     appName: "Rakazo",
     secret: env.secret,
     baseURL: env.baseURL,
     trustedOrigins: buildTrustedOrigins(env),
+    rateLimit: authRateLimitOptions(),
     database: prismaAdapter(prisma, { provider: "postgresql" }),
     emailAndPassword: {
       enabled: true,
@@ -402,6 +421,15 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
               await bootstrapUserSpace(prisma, user, env);
             }
           },
+          after: async (session, ctx) => {
+            const previous = replacedSession(ctx);
+            if (previous) await env.afterReplaceSession?.(previous, session);
+          },
+        },
+        delete: {
+          after: async (session, ctx) => {
+            if (replacedSession(ctx)?.id !== session.id) await env.afterDeleteSession?.(session);
+          },
         },
       },
       user: {
@@ -466,6 +494,16 @@ function escapeHtml(value: string): string {
 export type Auth = ReturnType<typeof createAuth>;
 
 /**
+ * Changing the password with revokeOtherSessions deletes every session, then signs the
+ * caller in again, so the caller's device stays signed in under a new session.
+ */
+function replacedSession(
+  ctx: { path?: string; context: { session?: { session: AuthSession } | null } } | null,
+): AuthSession | undefined {
+  return ctx?.path === "/change-password" ? ctx.context.session?.session : undefined;
+}
+
+/**
  * A session token is a bearer credential. Session reads describe sessions
  * without handing any of them out; sign-in and sign-up still return the token
  * they just issued. Returns the redacted body, or undefined to keep it.
@@ -509,7 +547,7 @@ function isLoopbackHost(host: string): boolean {
 }
 
 /** Same-scheme/port localhost and 127.0.0.1 variants when `origin` is loopback. */
-function loopbackTwinOrigins(origin: string): string[] {
+export function loopbackTwinOrigins(origin: string): string[] {
   try {
     const url = new URL(origin);
     if (!isLoopbackHost(url.hostname)) return [];

@@ -134,7 +134,8 @@ export type ComputerAction =
   | { kind: "scroll"; direction: "up" | "down"; amount?: number }
   | { kind: "wait"; ms: number }
   | { kind: "open"; path: string }
-  | { kind: "launch"; application: string; uri?: string };
+  | { kind: "launch"; application: string; uri?: string }
+  | { kind: "focus"; application: string; uri?: string };
 
 export interface ComputerObservation {
   frameId: string;
@@ -174,6 +175,17 @@ export interface AgentToolExecutionResult {
   kind: "agent_tool_result";
   content: AgentToolResultContent[];
   details: unknown;
+}
+
+/** Hooks for a tool call that can report output before it returns. */
+export interface AgentToolExecutionObserver {
+  /**
+   * A shell command has already produced output and is still running.
+   * Resolves with the final redacted result when the process exits.
+   */
+  onShellStillRunning?: (
+    completion: Promise<{ stdout: string; stderr: string; code: number }>,
+  ) => void;
 }
 
 /** Ephemeral completion data for audit hooks; result contents must be redacted before persistence. */
@@ -237,7 +249,7 @@ export interface ConnectorCall {
 export type ConnectorEvent =
   | { type: "log"; message: string }
   | { type: "result"; data: unknown }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string; logIds?: string[] };
 
 export interface ConnectorCapabilities {
   discover: boolean;
@@ -275,11 +287,17 @@ export interface MemorySearchResult {
   score: number;
 }
 
+/** A full-document save lost the race to another writer. The caller should read again. */
+export const MEMORY_REVISION_CONFLICT_ERROR =
+  "Shared memory changed since it was read. Read the latest version and save again.";
+
 export interface MemoryCommitRequest {
   scope: "bot" | "user";
   botId?: string;
   path: string;
   content: string;
+  /** When set, commit fails if the live document revision is no longer this value. */
+  expectedRevision?: number;
   sourceRunId?: string;
   sourceThreadId?: string;
 }
@@ -380,6 +398,10 @@ export interface AgentRunModel {
   provider: string;
   id: string;
   apiKey?: string;
+  /** Cloudflare account id stored with a gateway BYOK credential. */
+  accountId?: string;
+  /** Cloudflare AI Gateway id stored with a gateway BYOK credential. */
+  gatewayId?: string;
   baseUrl?: string;
   /** Whether this custom connection accepts standard reasoning_effort. */
   reasoning?: boolean;
@@ -439,6 +461,7 @@ export interface AgentRunRequest {
     args: Record<string, unknown>,
     executionId: string,
     route?: ConnectorRoute,
+    observer?: AgentToolExecutionObserver,
   ) => Promise<unknown>;
   /** Called after a tool returns; implementations must not persist raw result contents. */
   onToolCompleted?: (completion: AgentToolCompletion) => Promise<void> | void;
@@ -586,6 +609,8 @@ export interface NotificationMessage {
   body: string;
   botId: string;
   threadId: string;
+  /** Group chat that owns threadId, so a tap does not open the bot's direct thread. */
+  groupId?: string;
 }
 
 /** A product-authored transactional email, independent of its delivery vendor. */

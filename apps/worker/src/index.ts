@@ -54,6 +54,7 @@ import {
   createThreadEvents,
   isTooManyDatabaseConnections,
   parsePositiveInteger,
+  pushSessionExpiresAt,
 } from "@rakazo/db";
 import { SERVICE_NAMES } from "@rakazo/logging";
 import { createRootLogger } from "@rakazo/logging/axiom";
@@ -183,6 +184,10 @@ async function main() {
     });
   // One provider instance so emulator launches and polls share the same Map.
   const cloudAgent = createCloudAgentConnection();
+  // Shared with the reconciler so a stuck wait uses the same push path as a finish notice.
+  const notifications = new ExpoPushProvider(dataDir, (sessionId) =>
+    pushSessionExpiresAt(prisma, sessionId),
+  );
   const executor = createRunExecutor({
     prisma,
     runtime,
@@ -216,7 +221,7 @@ async function main() {
     mcpAllowPrivateEndpoint: process.env.MCP_ALLOW_PRIVATE_ENDPOINT === "true",
     deploymentModelKey,
     dataDir,
-    notifications: new ExpoPushProvider(dataDir),
+    notifications,
     jobs,
     events,
     messaging: messaging ? createMessagingContextLoader(prisma) : undefined,
@@ -262,6 +267,7 @@ async function main() {
     prisma,
     jobs,
     events,
+    notifications,
     leadership: createPostgresReconciliationLeadership(pool),
     reconcileCloudAgents: () => reconcileCloudAgents({ prisma, jobs, cloudAgent }),
     reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),

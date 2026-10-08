@@ -22,6 +22,18 @@ msgstr " (unread)"
 msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {# model} other {# models}}"
 
+#. placeholder {0}: Math.ceil(oauth.expiresInSeconds / 60)
+#: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/Onboarding.tsx
+msgid "{0, plural, one {Waiting for sign-in — the code expires in about # minute.} other {Waiting for sign-in — the code expires in about # minutes.}}"
+msgstr "{0, plural, one {Waiting for sign-in — the code expires in about # minute.} other {Waiting for sign-in — the code expires in about # minutes.}}"
+
+#. placeholder {0}: Math.ceil(oauth.expiresInSeconds / 60)
+#: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/Onboarding.tsx
+msgid "{0, plural, one {Waiting for sign-in — the link expires in about # minute.} other {Waiting for sign-in — the link expires in about # minutes.}}"
+msgstr "{0, plural, one {Waiting for sign-in — the link expires in about # minute.} other {Waiting for sign-in — the link expires in about # minutes.}}"
+
 #. placeholder {0}: file.name
 #: src/pages/Shell.tsx
 msgid "{0} (max {ATTACHMENT_MAX_COUNT} attachments)"
@@ -92,6 +104,10 @@ msgstr "{botName}’s computer"
 msgid "{days}d ago"
 msgstr "{days}d ago"
 
+#: src/components/ToolActivityDisclosure.tsx
+msgid "{hidden, plural, one {+# earlier step} other {+# earlier steps}}"
+msgstr "{hidden, plural, one {+# earlier step} other {+# earlier steps}}"
+
 #: src/lib/relative-time.ts
 #: src/pages/ActivityList.tsx
 msgid "{hours}h ago"
@@ -125,6 +141,14 @@ msgstr "{remaining} left · bot is watching, not acting"
 msgid "{size} B"
 msgstr "{size} B"
 
+#: src/components/ToolActivityDisclosure.tsx
+msgid "{stepCount, plural, one {Done · # tool} other {Done · # tools}}"
+msgstr "{stepCount, plural, one {Done · # tool} other {Done · # tools}}"
+
+#: src/components/ToolActivityDisclosure.tsx
+msgid "{stepCount, plural, one {Working… · # tool} other {Working… · # tools}}"
+msgstr "{stepCount, plural, one {Working… · # tool} other {Working… · # tools}}"
+
 #: src/pages/ActivityList.tsx
 msgid "{title}, {label}"
 msgstr "{title}, {label}"
@@ -145,6 +169,12 @@ msgstr "@{0}"
 #: src/pages/shell/message-cards.tsx
 msgid "A bit of everything"
 msgstr "A bit of everything"
+
+#. placeholder {0}: oauth.verificationUri.replace(/^https:\/\//, "")
+#: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/Onboarding.tsx
+msgid "A sign-in tab opened at <0>{0}</0>. Enter this code there — this window keeps waiting:"
+msgstr "A sign-in tab opened at <0>{0}</0>. Enter this code there — this window keeps waiting:"
 
 #: src/pages/shell/bot-picker.tsx
 msgid "About groups"
@@ -169,6 +199,11 @@ msgstr "Account"
 #: src/pages/shell/bot-panel.tsx
 msgid "Account default"
 msgstr "Account default"
+
+#: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/Onboarding.tsx
+msgid "Account ID"
+msgstr "Account ID"
 
 #: src/pages/PluginsOverlay.tsx
 msgid "Account label"
@@ -332,6 +367,10 @@ msgstr "Agents:"
 msgid "All bots"
 msgstr "All bots"
 
+#: src/pages/ModelSettingsOverlay.tsx
+msgid "All providers"
+msgstr "All providers"
+
 #: src/pages/Artifacts.tsx
 msgid "All time"
 msgstr "All time"
@@ -394,6 +433,98 @@ msgstr "Answer"
 #: src/components/AskCard.tsx
 msgid "Answered"
 msgstr "Answered"
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Add credential"
+msgstr "Add credential"
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Basic auth"
+msgstr "Basic auth"
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Basic auth ({username})"
+msgstr "Basic auth ({username})"
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Could not load credentials."
+msgstr "Could not load credentials."
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Could not remove the credential"
+msgstr "Could not remove the credential"
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Could not save the credential"
+msgstr "Could not save the credential"
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Credentials"
+msgstr "Credentials"
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Custom header"
+msgstr "Custom header"
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Enter a username and password"
+msgstr "Enter a username and password"
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Header \"{header}\""
+msgstr "Header \"{header}\""
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Keys and passwords this bot can use, each for one site only. Values are encrypted and never shown again."
+msgstr "Keys and passwords this bot can use, each for one site only. Values are encrypted and never shown again."
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Lowercase letters, numbers, hyphens and underscores, starting with a letter."
+msgstr "Lowercase letters, numbers, hyphens and underscores, starting with a letter."
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "No credentials saved for this bot."
+msgstr "No credentials saved for this bot."
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Remove {secretName}? This bot will no longer be able to use it."
+msgstr "Remove {secretName}? This bot will no longer be able to use it."
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Replace value"
+msgstr "Replace value"
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Save credential"
+msgstr "Save credential"
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Save new value"
+msgstr "Save new value"
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Site"
+msgstr "Site"
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "These saved settings can't be read. Remove it and add it again."
+msgstr "These saved settings can't be read. Remove it and add it again."
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Type"
+msgstr "Type"
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Updated {updated}"
+msgstr "Updated {updated}"
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Value"
+msgstr "Value"
+
+#: src/pages/shell/bot-credentials.tsx
+msgid "Website login"
+msgstr "Website login"
 
 #. placeholder {0}: selectedAskActionLabel(answer, actions)
 #: src/components/AskCard.tsx
@@ -615,10 +746,6 @@ msgstr "Bot to link"
 msgid "Bots"
 msgstr "Bots"
 
-#: src/components/ApprovalRulesSettings.tsx
-msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
-msgstr "Bots act without asking by default. Add an exception only when you want to review a type of action first."
-
 #: src/pages/Shell.tsx
 msgid "Bots are working"
 msgstr "Bots are working"
@@ -645,6 +772,8 @@ msgstr "Can't reach the server."
 #: src/components/teach/TeachComputerOverlay.tsx
 #: src/pages/Artifacts.tsx
 #: src/pages/KnowledgeSection.tsx
+#: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/Onboarding.tsx
 #: src/pages/PluginsOverlay.tsx
 #: src/pages/shell/dialogs.tsx
 msgid "Cancel"
@@ -1025,6 +1154,13 @@ msgstr "Continue in Background"
 msgid "Continue with email"
 msgstr "Continue with email"
 
+#: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/Onboarding.tsx
+msgid "Copied"
+msgstr "Copied"
+
+#: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/Onboarding.tsx
 #: src/pages/Shell.tsx
 msgid "Copy"
 msgstr "Copy"
@@ -1156,6 +1292,10 @@ msgstr "Could not disconnect memory provider"
 msgid "Could not disconnect OAuth"
 msgstr "Could not disconnect OAuth"
 
+#: src/pages/ModelSettingsOverlay.tsx
+msgid "Could not disconnect this provider"
+msgstr "Could not disconnect this provider"
+
 #: src/pages/VoiceSettingsOverlay.tsx
 msgid "Could not disconnect this voice provider"
 msgstr "Could not disconnect this voice provider"
@@ -1221,6 +1361,10 @@ msgstr "Could not load MCP servers"
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Could not load model settings"
 msgstr "Could not load model settings"
+
+#: src/pages/RoutineRunHistory.tsx
+msgid "Could not load run history"
+msgstr "Could not load run history"
 
 #: src/pages/KnowledgeSection.tsx
 msgid "Could not load skill"
@@ -1535,7 +1679,15 @@ msgstr "Decline"
 msgid "Default"
 msgstr "Default"
 
+#. js-lingui-explicit-id
+#. placeholder {0}: thinkingLevelLabel("medium")
+#: src/pages/ModelSettingsOverlay.tsx
+msgid "Default ({0})"
+msgstr "Default ({0})"
+
+#. placeholder {0}: thinkingLevelLabel("medium")
 #. placeholder {0}: thinkingLevelLabel(defaultThinkingLevel)
+#: src/pages/Onboarding.tsx
 #: src/pages/shell/bot-panel.tsx
 msgid "Default ({0})"
 msgstr "Default ({0})"
@@ -1629,11 +1781,22 @@ msgstr "Direct MCP"
 
 #: src/pages/McpServersOverlay.tsx
 #: src/pages/MemorySettingsOverlay.tsx
+#: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/VoiceSettingsOverlay.tsx
 msgid "Disconnect"
 msgstr "Disconnect"
 
+#: src/pages/ModelSettingsOverlay.tsx
+msgid "Disconnect {disconnectName}?"
+msgstr "Disconnect {disconnectName}?"
+
+#. placeholder {0}: selected.providerName ?? selected.provider
+#: src/pages/ModelSettingsOverlay.tsx
+msgid "Disconnected {0}."
+msgstr "Disconnected {0}."
+
 #: src/pages/MemorySettingsOverlay.tsx
+#: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/VoiceSettingsOverlay.tsx
 msgid "Disconnecting…"
 msgstr "Disconnecting…"
@@ -1752,12 +1915,6 @@ msgstr "Enter a whole number from 1 to {MAX_MODEL_MAX_TOKENS} for maximum output
 msgid "Enter a whole number from 1 to 1000 for the image limit."
 msgstr "Enter a whole number from 1 to 1000 for the image limit."
 
-#. placeholder {0}: oauth.verificationUri.replace(/^https:\/\//, "")
-#: src/pages/ModelSettingsOverlay.tsx
-#: src/pages/Onboarding.tsx
-msgid "Enter this code at <0>{0}</0>"
-msgstr "Enter this code at <0>{0}</0>"
-
 #: src/pages/ExternalConversationSettings.tsx
 #: src/pages/RoutineSchedule.tsx
 msgid "Every"
@@ -1818,9 +1975,13 @@ msgstr "Export this week's list from the CRM and drop it in the shared folder"
 msgid "External conversation"
 msgstr "External conversation"
 
+#. js-lingui-explicit-id
+#: src/lib/model-catalog.ts
+msgid "Extra high"
+msgstr "Extra high"
+
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
-#: src/pages/shell/bot-panel.tsx
 msgid "Extra high"
 msgstr "Extra high"
 
@@ -1910,6 +2071,11 @@ msgstr "Free"
 msgid "Fullscreen"
 msgstr "Fullscreen"
 
+#: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/Onboarding.tsx
+msgid "Gateway ID"
+msgstr "Gateway ID"
+
 #: src/pages/SettingsOverlay.tsx
 msgid "General"
 msgstr "General"
@@ -1992,9 +2158,13 @@ msgstr "Hide password"
 msgid "Hide transcript"
 msgstr "Hide transcript"
 
+#. js-lingui-explicit-id
+#: src/lib/model-catalog.ts
+msgid "High"
+msgstr "High"
+
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
-#: src/pages/shell/bot-panel.tsx
 msgid "High"
 msgstr "High"
 
@@ -2177,6 +2347,14 @@ msgstr "Load earlier messages"
 msgid "Load more"
 msgstr "Load more"
 
+#: src/pages/RoutineRunHistory.tsx
+msgid "Load older runs"
+msgstr "Load older runs"
+
+#: src/pages/AccountSettingsOverlay.tsx
+msgid "Load web images automatically"
+msgstr "Load web images automatically"
+
 #: src/pages/ActivityList.tsx
 msgid "Loading activity…"
 msgstr "Loading activity…"
@@ -2214,6 +2392,7 @@ msgstr "Loading voice providers…"
 #: src/pages/IntegrationSetup.tsx
 #: src/pages/Onboarding.tsx
 #: src/pages/PeerMessagesOverlay.tsx
+#: src/pages/RoutineRunHistory.tsx
 #: src/pages/Shell.tsx
 msgid "Loading…"
 msgstr "Loading…"
@@ -2234,9 +2413,13 @@ msgstr "Local Server Settings"
 msgid "Log out"
 msgstr "Log out"
 
+#. js-lingui-explicit-id
+#: src/lib/model-catalog.ts
+msgid "Low"
+msgstr "Low"
+
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
-#: src/pages/shell/bot-panel.tsx
 msgid "Low"
 msgstr "Low"
 
@@ -2272,9 +2455,13 @@ msgstr "Mark as Read"
 msgid "Mark as Unread"
 msgstr "Mark as Unread"
 
+#. js-lingui-explicit-id
+#: src/lib/model-catalog.ts
+msgid "Max"
+msgstr "Max"
+
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
-#: src/pages/shell/bot-panel.tsx
 msgid "Max"
 msgstr "Max"
 
@@ -2300,9 +2487,13 @@ msgstr "MCP endpoint"
 msgid "MCP servers"
 msgstr "MCP servers"
 
+#. js-lingui-explicit-id
+#: src/lib/model-catalog.ts
+msgid "Medium"
+msgstr "Medium"
+
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
-#: src/pages/shell/bot-panel.tsx
 msgid "Medium"
 msgstr "Medium"
 
@@ -2374,9 +2565,13 @@ msgstr "Messaging"
 msgid "Microphone failed"
 msgstr "Microphone failed"
 
+#. js-lingui-explicit-id
+#: src/lib/model-catalog.ts
+msgid "Minimal"
+msgstr "Minimal"
+
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
-#: src/pages/shell/bot-panel.tsx
 msgid "Minimal"
 msgstr "Minimal"
 
@@ -2557,10 +2752,6 @@ msgstr "No bots match"
 msgid "No chat apps linked yet."
 msgstr "No chat apps linked yet."
 
-#: src/components/ApprovalRulesSettings.tsx
-msgid "No exceptions. Actions run automatically."
-msgstr "No exceptions. Actions run automatically."
-
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "No group chats yet."
 msgstr "No group chats yet."
@@ -2610,7 +2801,7 @@ msgstr "No remote MCP servers found"
 msgid "No results"
 msgstr "No results"
 
-#: src/pages/RoutineEditor.tsx
+#: src/pages/RoutineRunHistory.tsx
 msgid "No runs yet"
 msgstr "No runs yet"
 
@@ -2633,10 +2824,6 @@ msgstr "No trigger"
 #: src/pages/ScratchpadSection.tsx
 msgid "None yet"
 msgstr "None yet"
-
-#: src/pages/ModelSettingsOverlay.tsx
-msgid "Not connected"
-msgstr "Not connected"
 
 #: src/pages/PluginsOverlay.tsx
 msgid "Not in the plugin catalog"
@@ -2711,6 +2898,18 @@ msgstr "Open"
 msgid "Open {0}"
 msgstr "Open {0}"
 
+#. placeholder {0}: oauth.verificationUri.replace(/^https:\/\//, "")
+#: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/Onboarding.tsx
+msgid "Open <0>{0}</0> and enter this code:"
+msgstr "Open <0>{0}</0> and enter this code:"
+
+#. placeholder {0}: new URL(oauth.verificationUri).hostname
+#: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/Onboarding.tsx
+msgid "Open <0>{0}</0> to finish signing in."
+msgstr "Open <0>{0}</0> to finish signing in."
+
 #: src/pages/Shell.tsx
 msgid "Open in full window"
 msgstr "Open in full window"
@@ -2753,10 +2952,6 @@ msgstr "Opening your Space…"
 #: src/pages/VoiceSettingsOverlay.tsx
 msgid "Optional"
 msgstr "Optional"
-
-#: src/pages/AccountSettingsOverlay.tsx
-msgid "Optional controls most people never need"
-msgstr "Optional controls most people never need"
 
 #: src/pages/McpServersOverlay.tsx
 msgid "Optional header value"
@@ -2826,10 +3021,6 @@ msgstr "Paste your API key"
 #: src/pages/RoutineEditor.tsx
 msgid "Paused"
 msgstr "Paused"
-
-#: src/pages/ModelSettingsOverlay.tsx
-msgid "Personal credential"
-msgstr "Personal credential"
 
 #: src/pages/BotContextMenu.tsx
 msgid "Pin"
@@ -2903,8 +3094,12 @@ msgid "Read replies aloud"
 msgstr "Read replies aloud"
 
 #: src/pages/KnowledgeSection.tsx
-msgid "read-only"
-msgstr "read-only"
+msgid "Built-in"
+msgstr "Built-in"
+
+#: src/pages/KnowledgeSection.tsx
+msgid "Plugin"
+msgstr "Plugin"
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -2978,6 +3173,10 @@ msgstr "Recovery restores the last saved workspace. Unsaved work may be lost."
 #: src/components/ComputerUpdateProgress.tsx
 msgid "Recreating the computer"
 msgstr "Recreating the computer"
+
+#: src/pages/RoutineRunHistory.tsx
+msgid "Refresh"
+msgstr "Refresh"
 
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Refresh view"
@@ -3179,7 +3378,7 @@ msgstr "Routines"
 msgid "Run at"
 msgstr "Run at"
 
-#: src/pages/RoutineEditor.tsx
+#: src/pages/RoutineRunHistory.tsx
 msgid "Run history"
 msgstr "Run history"
 
@@ -3218,6 +3417,10 @@ msgstr "Runs when this bot receives a verified message from this provider."
 #: src/pages/shell/dialogs.tsx
 msgid "Save"
 msgstr "Save"
+
+#: src/pages/ModelSettingsOverlay.tsx
+msgid "Save limits"
+msgstr "Save limits"
 
 #: src/components/AskCard.tsx
 #: src/components/teach/SkillDraftCard.tsx
@@ -3418,6 +3621,10 @@ msgstr "Show password"
 msgid "Show settings"
 msgstr "Show settings"
 
+#: src/pages/AccountSettingsOverlay.tsx
+msgid "Show tool activity"
+msgstr "Show tool activity"
+
 #: src/components/call/VoiceChatCard.tsx
 msgid "Show transcript"
 msgstr "Show transcript"
@@ -3426,8 +3633,13 @@ msgstr "Show transcript"
 #: src/pages/Auth.tsx
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
+#: src/pages/Welcome.tsx
 msgid "Sign in"
 msgstr "Sign in"
+
+#: src/pages/ModelSettingsOverlay.tsx
+msgid "Sign in again"
+msgstr "Sign in again"
 
 #: src/pages/Auth.tsx
 msgid "Sign in to Rakazo"
@@ -3444,8 +3656,8 @@ msgid "Skill {0}"
 msgstr "Skill {0}"
 
 #: src/pages/KnowledgeSection.tsx
-msgid "Skills"
-msgstr "Skills"
+msgid "Shared skills"
+msgstr "Shared skills"
 
 #: src/components/integrations/IntegrationSetup.tsx
 #: src/pages/Shell.tsx
@@ -3510,6 +3722,7 @@ msgid "Starting"
 msgstr "Starting"
 
 #: src/components/teach/TeachComputerOverlay.tsx
+#: src/lib/roster-status.ts
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
 msgid "Starting…"
@@ -3627,9 +3840,15 @@ msgstr "The API did not come back. Refresh this page."
 msgid "The selected memory provider is not available in this build."
 msgstr "The selected memory provider is not available in this build."
 
+#: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/Onboarding.tsx
 #: src/pages/shell/bot-panel.tsx
 msgid "Thinking"
 msgstr "Thinking"
+
+#: src/pages/ModelSettingsOverlay.tsx
+msgid "Thinking: {activeThinkingLabel}"
+msgstr "Thinking: {activeThinkingLabel}"
 
 #: src/pages/Shell.tsx
 msgid "This bot runs on this computer, not a Linux desktop. Shell and files use your home folder."
@@ -3671,6 +3890,10 @@ msgstr "This month"
 #: src/pages/shell/dialogs.tsx
 msgid "This permanently removes every message and stops current work. The chat remains available."
 msgstr "This permanently removes every message and stops current work. The chat remains available."
+
+#: src/pages/ModelSettingsOverlay.tsx
+msgid "This removes the connection from every space."
+msgstr "This removes the connection from every space."
 
 #: src/pages/Auth.tsx
 msgid "This reset link is invalid or expired"
@@ -3873,6 +4096,10 @@ msgstr "Verifying…"
 msgid "Version"
 msgstr "Version"
 
+#: src/pages/RoutineRunHistory.tsx
+msgid "View chat"
+msgstr "View chat"
+
 #: src/pages/SettingsOverlay.tsx
 #: src/pages/Shell.tsx
 #: src/pages/shell/bot-panel.tsx
@@ -3884,14 +4111,13 @@ msgstr "Voice"
 msgid "Voice chat"
 msgstr "Voice chat"
 
-#: src/pages/ModelSettingsOverlay.tsx
-#: src/pages/Onboarding.tsx
-msgid "Waiting for sign-in…"
-msgstr "Waiting for sign-in…"
-
 #: src/components/SoftwareUpdateSection.tsx
 msgid "Waiting for the API to come back…"
 msgstr "Waiting for the API to come back…"
+
+#: src/lib/roster-status.ts
+msgid "Waiting in line…"
+msgstr "Waiting in line…"
 
 #: src/pages/shell/message-cards.tsx
 msgid "Waiting…"
@@ -3946,6 +4172,7 @@ msgstr "When to use"
 msgid "Where should bots run?"
 msgstr "Where should bots run?"
 
+#: src/lib/roster-status.ts
 #: src/pages/Auth.tsx
 msgid "Working…"
 msgstr "Working…"
@@ -3985,3 +4212,7 @@ msgstr "Your name"
 #: src/pages/Welcome.tsx
 msgid "Your team of always-on agents<0/>that you can give real work to."
 msgstr "Your team of always-on agents<0/>that you can give real work to."
+
+#: src/pages/ResizableSidePanel.tsx
+msgid "Resize panel"
+msgstr "Resize panel"

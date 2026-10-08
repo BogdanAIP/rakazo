@@ -61,6 +61,8 @@ import {
   displayBotWorkspacePath,
   enqueueTakeoverContinuation,
   expireComputerControl,
+  forgetBotSecret,
+  getBotSecretMetadata,
   hasActiveComputerControl,
   isAutoReviewCheckerConfigured,
   isComputerScreenUnavailable,
@@ -68,12 +70,15 @@ import {
   isScratchpadStatus,
   kickModelCredentialRefresh,
   listAvailablePiCatalog,
+  listBotSecretMetadata,
   listPiCatalog,
   listScratchpadItems,
   McpOAuthBroker,
   mapScratchpadItem,
   modelCredentialAuthKindsForSpace,
   modelCredentialDto,
+  normalizeSecretDestination,
+  PushSessionEndedError,
   parseModelSecret,
   pickReusableConnection,
   planLiveConnectionSync,
@@ -98,6 +103,7 @@ import {
   scriptedCatalogEntry,
   selectDefaultCredentialId,
   serializeModelSecret,
+  storeBotSecret,
   takeoverLeaseMs,
   toComputerRef,
   touchRunningComputer,
@@ -110,6 +116,7 @@ import type { Auth } from "@rakazo/auth";
 import type {
   Actor,
   Bot,
+  BotSecretMetadata,
   ComputerReleaseReason,
   ComputerStatus,
   McpServer,
@@ -120,6 +127,7 @@ import type {
 import {
   ATTACHMENT_MAX_BYTES,
   appContract,
+  BotSecretAuth,
   ComputerCommandSchema,
   foldComputerCommands,
   IntegrationProviderIdSchema,
@@ -132,6 +140,7 @@ import {
   AttachmentValidationError,
   CALL_CLIENT_NONCE_PREFIX,
   callClientNonce,
+  clampCatalogThinkingLevel,
   containsSecret,
   expandSkillReferencesInPrompt,
   hasMixedOneShotSchedule,
@@ -170,6 +179,7 @@ import {
   newestVoiceCredentialOrder,
   Prisma,
   parseComputerMode,
+  pushSessionExpiresAt,
   releaseSpaceDeletionClaim,
   renewSpaceDeletionClaim,
   restoreBotUnderComputerQuota,
@@ -225,6 +235,7 @@ import {
   promptFocus,
   startOnboarding,
 } from "./onboarding.js";
+import { listRoutineRuns } from "./routine-runs.js";
 import { listSpaceRuns } from "./runs.js";
 import { addScreenProxyCapability } from "./screen-proxy.js";
 import { querySpaceSearch } from "./search.js";
@@ -271,6 +282,8 @@ const COMPUTER_COMMAND_HISTORY_EVENTS = 200;
 const THREAD_MESSAGE_PAGE_SIZE = 100;
 /** Silence longer than this on a thread stream is indistinguishable from a dead socket. */
 export const HEARTBEAT_MS = 20_000;
+/** A thread stream re-checks its session at least this often while it delivers. */
+export const SESSION_RECHECK_MS = 10_000;
 const EXPORT_MESSAGE_PAGE_SIZE = 500;
 
 async function reconcilePendingConnections(
@@ -349,14 +362,14 @@ function isRemoteRevokePreDeleteFailure(error: unknown): boolean {
 }
 
 function shouldRestoreLocalAfterRemoteRevokeFailure(error: unknown): boolean {
-  // Pre-delete list/network failures never reached DELETE Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†РІР‚С›РЎС›Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р РЋРІвЂћСћР В Р’В Р В Р вЂ№Р В Р Р‹Р РЋРІвЂћСћ always keep retry state.
+  // Pre-delete list/network failures never reached DELETE — always keep retry state.
   // Post-delete timeouts stay ambiguous and leave the row revoked.
   return isRemoteRevokePreDeleteFailure(error) || !isAmbiguousRemoteRevokeFailure(error);
 }
 
 /**
  * Concrete account ids still referenced by active local rows. When any row still
- * only has the provider slug (or no ref), orphan cleanup must not run Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†РІР‚С›РЎС›Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р РЋРІвЂћСћР В Р’В Р В Р вЂ№Р В Р Р‹Р РЋРІвЂћСћ a sibling
+ * only has the provider slug (or no ref), orphan cleanup must not run — a sibling
  * may have created its remote account before persisting the concrete id.
  */
 function concreteKeepAccountIds(
@@ -696,7 +709,7 @@ export interface RouterDeps {
   /** Live Codex catalog seam; defaults to the shared per-process cache. */
   codexCatalog?: CodexLiveCatalog;
   /**
-   * Detached refresh for a stored credential whose bearer expired Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†РІР‚С›РЎС›Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р РЋРІвЂћСћР В Р’В Р В Р вЂ№Р В Р Р‹Р РЋРІвЂћСћ the live
+   * Detached refresh for a stored credential whose bearer expired — the live
    * catalog path calls it instead of refreshing inline. Defaults to the
    * runtime's locked `kickModelCredentialRefresh`; injectable for tests so a
    * catalog read never reaches the real OAuth refresh endpoint.
@@ -767,6 +780,63 @@ function mapSpaceLifecycleError(error: unknown): unknown {
   return error;
 }
 
+const BOT_SECRET_INPUT_ERRORS = [
+  "Invalid credential destination",
+  "Invalid credential length",
+  "Credential cannot be used with this authentication method",
+  "Remove the existing credential before changing its destination",
+  "Credential limit reached",
+];
+
+/** Map credential validation failures to a bad request without echoing the submitted value. */
+function mapBotSecretStoreError(error: unknown): unknown {
+  if (error instanceof ORPCError) return error;
+  if (
+    error instanceof Error &&
+    BOT_SECRET_INPUT_ERRORS.some((prefix) => error.message.startsWith(prefix))
+  ) {
+    return new ORPCError("BAD_REQUEST", { message: error.message });
+  }
+  // Login decoding failures: a JSON parse message can quote the submitted value, so never forward it.
+  if (error instanceof SyntaxError || (error instanceof Error && error.name === "ZodError")) {
+    return new ORPCError("BAD_REQUEST", {
+      message: "A website login needs a username and password",
+    });
+  }
+  return error;
+}
+
+function botSecretScope(actor: Actor, botId: string) {
+  return { userId: actor.userId, spaceId: actor.spaceId, botId };
+}
+
+function botSecretMetadataDto(row: {
+  name: string;
+  origin: string;
+  auth: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}): BotSecretMetadata {
+  // Unreadable or no-longer-storable destinations become auth:null so the owner UI stays remove-only.
+  const parsed = BotSecretAuth.safeParse(row.auth);
+  let auth: BotSecretMetadata["auth"] = null;
+  if (parsed.success) {
+    try {
+      normalizeSecretDestination({ name: row.name, origin: row.origin, auth: parsed.data });
+      auth = parsed.data;
+    } catch {
+      auth = null;
+    }
+  }
+  return {
+    name: row.name,
+    origin: row.origin,
+    auth,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
 const BOT_INTRO_PROMPT =
   "You were just created. In one reply, say what you understood your role to be from your title, description and instructions, and ask for anything you need to get started.";
 
@@ -813,7 +883,14 @@ export async function enqueueBotIntroRun(deps: RouterDeps, actor: Actor, bot: Bo
 }
 
 export function createRouter(deps: RouterDeps) {
-  const os = implement(appContract).$context<{ actor: Actor | null; signal?: AbortSignal }>();
+  const os = implement(appContract).$context<{
+    actor: Actor | null;
+    /** The signed-in session, so a push token ends with the session that registered it. */
+    sessionId?: string;
+    signal?: AbortSignal;
+    /** Re-runs the request's auth so a long-lived stream notices sign-out and revocation. */
+    stillAuthorized?: () => Promise<boolean>;
+  }>();
   const repos = createRepos(deps.prisma);
   const onboardingDeps = { prisma: deps.prisma, events: deps.events, connectors: deps.connectors };
   const mcpOAuth = deps.mcpOAuth ?? new McpOAuthBroker(deps.prisma, deps.secrets);
@@ -1181,10 +1258,10 @@ export function createRouter(deps: RouterDeps) {
               refreshExpiredCredential(context.actor, secretId, CHATGPT_OAUTH_PROVIDER),
           },
         );
-        return [
-          ...(live.size > 0 ? applyCodexLiveCatalog(available, auth, live) : available),
-          scriptedCatalogEntry,
-        ];
+        const catalog = live.size > 0 ? applyCodexLiveCatalog(available, auth, live) : available;
+        // The scripted fixture only exists to drive the scripted runtime; a real
+        // runtime cannot execute it, so it stays out of the user-facing catalog.
+        return deps.env.agentRuntime === "scripted" ? [...catalog, scriptedCatalogEntry] : catalog;
       }),
       credentials: authed.models.credentials.handler(async ({ context }) => {
         const rows = await deps.prisma.userModelCredential.findMany({
@@ -1213,6 +1290,7 @@ export function createRouter(deps: RouterDeps) {
             ...row,
             isDefault: preference?.isDefault ?? false,
             defaultModel: preference?.modelId ?? null,
+            thinkingLevel: preference?.thinkingLevel ?? null,
           };
           const ciphertext = ciphertextById.get(row.secretId);
           if (!ciphertext) return modelCredentialDto(selected);
@@ -1266,6 +1344,10 @@ export function createRouter(deps: RouterDeps) {
             plaintext,
             label: input.label,
             modelId: input.modelId,
+            // openai-compatible keeps its effort inside the stored endpoint
+            // secret; catalog providers store it on the space preference.
+            thinkingLevel:
+              input.provider === OPENAI_COMPATIBLE_PROVIDER_ID ? undefined : input.thinkingLevel,
             supportsImages: input.supportsImages,
             signal: context.signal,
           },
@@ -1290,6 +1372,7 @@ export function createRouter(deps: RouterDeps) {
           spaceId: context.actor.spaceId,
           provider: input.provider,
           modelId: input.modelId,
+          thinkingLevel: input.thinkingLevel,
           label: input.label,
           signal: context.signal,
         });
@@ -1320,6 +1403,7 @@ export function createRouter(deps: RouterDeps) {
                   login.label ??
                   listPiCatalog().find((entry) => entry.provider === login.provider)?.providerName,
                 modelId: login.modelId,
+                thinkingLevel: login.thinkingLevel,
                 signal: login.signal,
               },
               codexCatalog,
@@ -1367,7 +1451,7 @@ export function createRouter(deps: RouterDeps) {
         };
         await withSerializableRetry(async () => {
           // Warm each candidate's live catalog before opening the serializable
-          // transaction Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†РІР‚С›РЎС›Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р РЋРІвЂћСћР В Р’В Р В Р вЂ№Р В Р Р‹Р РЋРІвЂћСћ the in-transaction reads use waitMs 0 so the tx never
+          // transaction — the in-transaction reads use waitMs 0 so the tx never
           // waits on network. The warm also kicks a detached credential refresh
           // for expired bearers so a retried call sees the rotated token.
           const warm = await loadSpaceModelState(deps.prisma).catch(() => undefined);
@@ -1439,11 +1523,76 @@ export function createRouter(deps: RouterDeps) {
                   message: authFailure ?? UNAVAILABLE_MODEL_FOR_AUTH_MESSAGE,
                 });
               }
-              await selectSpaceModelPreference(tx, context.actor, credentialId, input.modelId);
+              let thinkingLevel: string | null | undefined = input.thinkingLevel;
+              if (thinkingLevel === undefined) {
+                // The level belongs to the preference's modelId — keep it only when the
+                // stored choice already names this model.
+                const existing = preferences.find(
+                  (preference) => preference.credential.id === credentialId,
+                );
+                thinkingLevel =
+                  existing?.modelId === usableModelId(input.modelId)
+                    ? existing.thinkingLevel
+                    : null;
+              }
+              if (thinkingLevel) {
+                const allowed = await allowedThinkingLevels(
+                  deps,
+                  context.actor,
+                  input.provider,
+                  input.modelId,
+                );
+                thinkingLevel = clampCatalogThinkingLevel(thinkingLevel, allowed);
+              }
+              await selectSpaceModelPreference(
+                tx,
+                context.actor,
+                credentialId,
+                input.modelId,
+                thinkingLevel,
+              );
             },
             { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
           );
         });
+        return { ok: true as const };
+      }),
+      disconnect: authed.models.disconnect.handler(async ({ context, input }) => {
+        // Retire pending sign-ins in every space first — the credentials are
+        // account-wide, so a finishing OAuth session anywhere could otherwise
+        // re-persist a credential the delete below just removed.
+        await deps.oauthLogins.cancelProvider({
+          userId: context.actor.userId,
+          provider: input.provider,
+        });
+        await withSerializableRetry(() =>
+          deps.prisma.$transaction(
+            async (tx) => {
+              const existing = await tx.userModelCredential.findMany({
+                where: { userId: context.actor.userId, provider: input.provider },
+              });
+              if (existing.length === 0) return;
+              const ids = existing.map((row) => row.id);
+              // Credentials belong to the account, not the space — disconnecting
+              // removes them everywhere, matching voice.disconnect. Linked
+              // preferences in other spaces go with their credential.
+              await tx.spaceModelPreference.deleteMany({
+                where: { userId: context.actor.userId, credentialId: { in: ids } },
+              });
+              await tx.userModelCredential.deleteMany({
+                where: { userId: context.actor.userId, id: { in: ids } },
+              });
+              for (const row of existing) {
+                await deleteUnreferencedCredentialSecret(tx, {
+                  credentialKind: "model",
+                  credentialId: row.id,
+                  secretId: row.secretId,
+                });
+              }
+            },
+            { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+          ),
+        );
         return { ok: true as const };
       }),
     },
@@ -1980,6 +2129,14 @@ export function createRouter(deps: RouterDeps) {
         // A half-open stream looks identical to an idle one, so punctuate silence:
         // the client treats any frame as liveness and reconnects once they stop.
         let pending: Promise<IteratorResult<ProductEvent>> | undefined;
+        // Auth ran once when the stream opened. Re-check before delivering more, so a signed-out
+        // or revoked session stops within SESSION_RECHECK_MS, or at the next heartbeat when idle.
+        let authorizedAt = Date.now();
+        const assertStillAuthorized = async () => {
+          if (!context.stillAuthorized || Date.now() - authorizedAt < SESSION_RECHECK_MS) return;
+          if (!(await context.stillAuthorized())) throw new ORPCError("UNAUTHORIZED");
+          authorizedAt = Date.now();
+        };
         try {
           while (!context.signal?.aborted) {
             pending ??= follow.next();
@@ -1991,6 +2148,7 @@ export function createRouter(deps: RouterDeps) {
               }),
             ]).finally(() => clearTimeout(timer));
             if (next === "silent") {
+              await assertStillAuthorized();
               // Keep `pending` so the in-flight read stays the next event in order.
               yield {
                 id: "heartbeat",
@@ -2008,6 +2166,8 @@ export function createRouter(deps: RouterDeps) {
             pending = undefined;
             if (next.done) return;
             const event = next.value;
+            // Filtered peer events also restart the heartbeat, so check before skipping them.
+            await assertStillAuthorized();
             if (await isPeerRun(deps.prisma, event.runId, peerRunCache)) {
               if (!shouldForwardPeerThreadEvent(event)) continue;
             }
@@ -2071,7 +2231,7 @@ export function createRouter(deps: RouterDeps) {
         // generation also covers a compaction job that began just after the clear committed.
         if (configuredMemory && target.kind === "bot") {
           // Best effort: the conversation rows are already deleted, so failing the clear here
-          // would help nothing Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†РІР‚С›РЎС›Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р РЋРІвЂћСћР В Р’В Р В Р вЂ№Р В Р Р‹Р РЋРІвЂћСћ a failed purge only leaves stale summaries recallable.
+          // would help nothing — a failed purge only leaves stale summaries recallable.
           try {
             const purged = await configuredMemory.provider.purgeHistory(
               {
@@ -3210,6 +3370,9 @@ export function createRouter(deps: RouterDeps) {
       ),
     },
     routines: {
+      history: authed.routines.history.handler(async ({ context, input }) =>
+        listRoutineRuns(deps.prisma, context.actor, input.routineId, input.before),
+      ),
       list: authed.routines.list.handler(async ({ context, input }) => {
         await repos.getBot(context.actor, input.botId);
         return listRoutinesDto(deps, context.actor, input.botId);
@@ -3462,7 +3625,7 @@ export function createRouter(deps: RouterDeps) {
           throw error;
         }
         // Keep enqueue outside the nonce-collision catch. The queued run is durable;
-        // log enqueue failures and still return success Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†РІР‚С›РЎС›Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р РЋРІвЂћСћР В Р’В Р В Р вЂ№Р В Р Р‹Р РЋРІвЂћСћ the reconciler repairs a missed wake.
+        // log enqueue failures and still return success — the reconciler repairs a missed wake.
         await deps.jobs.enqueue(runContinueJob(run.id)).catch((error) => {
           getLogger().error("routine testRun enqueue", error);
         });
@@ -4755,7 +4918,7 @@ export function createRouter(deps: RouterDeps) {
                         kept.map((entry) => entry.providerRef),
                         input.provider,
                       );
-                      // Skip while any sibling still lacks a concrete account id Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†РІР‚С›РЎС›Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р РЋРІвЂћСћР В Р’В Р В Р вЂ№Р В Р Р‹Р РЋРІвЂћСћ
+                      // Skip while any sibling still lacks a concrete account id —
                       // otherwise slug-only pending refs are dropped from keepIds and
                       // revokeUnreferencedAccounts deletes that sibling's remote auth.
                       if (!canRevokeUnreferenced) return;
@@ -4831,7 +4994,7 @@ export function createRouter(deps: RouterDeps) {
                   context.signal,
                 );
                 const restoreRevokedForRetry = async () => {
-                  // Cleanup failed while the row is already revoked Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†РІР‚С›РЎС›Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р РЋРІвЂћСћР В Р’В Р В Р вЂ№Р В Р Р‹Р РЋРІвЂћСћ restore pending
+                  // Cleanup failed while the row is already revoked — restore pending
                   // so the UI can retry removal instead of leaving an orphan remote.
                   // Use the root client (not tx): throwing IsolationError aborts this
                   // transaction and would otherwise roll back a tx-scoped restore.
@@ -5033,7 +5196,7 @@ export function createRouter(deps: RouterDeps) {
 
               // When a resolver exists and providerRef is still a request-scoped
               // id (not the provider slug), require a concrete account id before
-              // marking connected Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†РІР‚С›РЎС›Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р РЋРІвЂћСћР В Р’В Р В Р вЂ№Р В Р Р‹Р РЋРІвЂћСћ otherwise revoke would delete the wrong ref.
+              // marking connected — otherwise revoke would delete the wrong ref.
               if (
                 resolveAccountId &&
                 current.providerRef &&
@@ -5058,7 +5221,7 @@ export function createRouter(deps: RouterDeps) {
                   select: { id: true },
                 });
                 if (taken) {
-                  // Do not mark connected with a request-scoped or shared ref Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†РІР‚С›РЎС›Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р РЋРІвЂћСћР В Р’В Р В Р вЂ№Р В Р Р‹Р РЋРІвЂћСћ
+                  // Do not mark connected with a request-scoped or shared ref —
                   // leave pending so a later complete can re-resolve an unused id.
                   return current;
                 }
@@ -5249,7 +5412,7 @@ export function createRouter(deps: RouterDeps) {
             );
           } catch (error) {
             // Restore when DELETE clearly did not run (including pre-delete list
-            // timeouts). Post-delete timeouts stay ambiguous Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†РІР‚С›РЎС›Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р РЋРІвЂћСћР В Р’В Р В Р вЂ№Р В Р Р‹Р РЋРІвЂћСћ leave revoked.
+            // timeouts). Post-delete timeouts stay ambiguous — leave revoked.
             if (shouldRestoreLocalAfterRemoteRevokeFailure(error)) {
               await restoreLocalStatus();
             } else {
@@ -5490,7 +5653,7 @@ export function createRouter(deps: RouterDeps) {
           if (!connection) throw new ORPCError("NOT_FOUND");
           const { updated, notifyRequester } = await deps.prisma.$transaction(async (tx) => {
             // The claim holds the connection row lock through commit, so a
-            // revoke either beats it or waits Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†РІР‚С›РЎС›Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р РЋРІвЂћСћР В Р’В Р В Р вЂ№Р В Р Р‹Р РЋРІвЂћСћ it can never interleave with
+            // revoke either beats it or waits — it can never interleave with
             // the confirmation write below.
             const { count } = await tx.agentConnection.updateMany({
               where: { id: connection.id, status: "pending" },
@@ -5548,7 +5711,7 @@ export function createRouter(deps: RouterDeps) {
           // Claim + invite cancel in one transaction. The status update holds
           // the connection row lock through commit, so a concurrent reconnect
           // (FOR UPDATE) waits until both the revoke and the invite delete
-          // finish Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р вЂ™Р’В Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р Р‹Р Р†РІР‚С›РЎС›Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р РЋРІвЂћСћР В Р’В Р В Р вЂ№Р В Р Р‹Р РЋРІвЂћСћ otherwise it could reopen and create a fresh invite that
+          // finish — otherwise it could reopen and create a fresh invite that
           // a post-commit deleteMany would then wipe while leaving the row
           // pending with no approval prompt.
           await deps.prisma.$transaction(async (tx) => {
@@ -5600,6 +5763,42 @@ export function createRouter(deps: RouterDeps) {
       remove: authed.agentSecrets.remove.handler(async ({ context, input }) =>
         deleteAgentSecret({ prisma: deps.prisma, secrets: deps.secrets }, context.actor, input.id),
       ),
+    },
+    botSecrets: {
+      list: authed.botSecrets.list.handler(async ({ context, input }) => {
+        const bot = await repos.getBot(context.actor, input.botId);
+        const rows = await listBotSecretMetadata(
+          deps.prisma,
+          botSecretScope(context.actor, bot.id),
+        );
+        return rows.map(botSecretMetadataDto);
+      }),
+      put: authed.botSecrets.put.handler(async ({ context, input }) => {
+        const bot = await repos.getBot(context.actor, input.botId);
+        const scope = botSecretScope(context.actor, bot.id);
+        let row: Awaited<ReturnType<typeof getBotSecretMetadata>>;
+        try {
+          row = await deps.prisma.$transaction(async (tx) => {
+            await storeBotSecret({
+              tx,
+              secretStore: deps.secrets,
+              scope,
+              destination: input.destination,
+              plaintext: input.value,
+            });
+            return getBotSecretMetadata(tx, scope, input.destination.name);
+          });
+        } catch (error) {
+          throw mapBotSecretStoreError(error);
+        }
+        if (!row) throw new ORPCError("CONFLICT", { message: "Credential was not saved" });
+        return botSecretMetadataDto(row);
+      }),
+      remove: authed.botSecrets.remove.handler(async ({ context, input }) => {
+        const bot = await repos.getBot(context.actor, input.botId);
+        await forgetBotSecret(deps.prisma, botSecretScope(context.actor, bot.id), input.name);
+        return { ok: true as const };
+      }),
     },
     approvalRules: {
       list: authed.approvalRules.list.handler(async ({ context }) => {
@@ -5845,7 +6044,19 @@ export function createRouter(deps: RouterDeps) {
     },
     notifications: {
       registerPush: authed.notifications.registerPush.handler(async ({ context, input }) => {
-        await savePushToken(deps.dataDir, context.actor.userId, input.token);
+        const sessionId = context.sessionId;
+        if (!sessionId) throw new ORPCError("UNAUTHORIZED");
+        try {
+          await savePushToken(deps.dataDir, context.actor.userId, input.token, sessionId, {
+            sessionActive: async () => {
+              const expiresAt = await pushSessionExpiresAt(deps.prisma, sessionId);
+              return expiresAt !== null && expiresAt.getTime() > Date.now();
+            },
+          });
+        } catch (error) {
+          if (error instanceof PushSessionEndedError) throw new ORPCError("UNAUTHORIZED");
+          throw error;
+        }
         return { ok: true as const };
       }),
       unregisterPush: authed.notifications.unregisterPush.handler(async ({ context }) => {
@@ -6181,6 +6392,41 @@ async function modelSetup(deps: RouterDeps, actor: Actor) {
   };
 }
 
+/**
+ * Thinking levels a caller may set for a provider/model. Catalog models answer from
+ * `thinkingLevels`; unknown catalog ids return undefined (no check). OpenAI-compatible
+ * connections only advertise levels when the stored endpoint's saved model matches.
+ */
+async function allowedThinkingLevels(
+  deps: RouterDeps,
+  actor: Actor,
+  provider: string,
+  modelId: string,
+): Promise<string[] | undefined> {
+  if (provider !== OPENAI_COMPATIBLE_PROVIDER_ID) {
+    return listPiCatalog().find((item) => item.provider === provider && item.id === modelId)
+      ?.thinkingLevels;
+  }
+  let allowed: string[] | undefined = ["off"];
+  const credential = await findModelCredential(deps.prisma, actor, provider);
+  if (credential && credential.defaultModel === modelId) {
+    const secret = await deps.prisma.secret.findFirst({
+      where: { id: credential.secretId, userId: actor.userId, spaceId: null },
+      select: { ciphertext: true },
+    });
+    if (secret) {
+      try {
+        allowed =
+          modelCredentialDto(credential, deps.secrets.load(secret.ciphertext, credential.secretId))
+            .thinkingLevels ?? allowed;
+      } catch {
+        // Unreadable connections must not advertise reasoning support.
+      }
+    }
+  }
+  return allowed;
+}
+
 async function computerStatus(
   deps: RouterDeps,
   actor: Actor,
@@ -6449,6 +6695,7 @@ async function persistModelCredential(
     plaintext: string;
     label?: string;
     modelId?: string;
+    thinkingLevel?: string | null;
     supportsImages?: boolean;
     signal?: AbortSignal;
   },
@@ -6473,6 +6720,13 @@ async function persistModelCredential(
   ) {
     throw new ORPCError("BAD_REQUEST", { message: authError });
   }
+  const defaultModel =
+    requestedModelId ??
+    defaultCatalogModelId(input.provider, input.plaintext) ??
+    usableModelId(deps.env.defaultModel);
+  const allowedThinking = defaultModel
+    ? await allowedThinkingLevels(deps, actor, input.provider, defaultModel)
+    : undefined;
   const stored = await deps.secrets.put(input.plaintext, {
     operationId: "cred",
     traceId: "cred",
@@ -6521,11 +6775,26 @@ async function persistModelCredential(
               },
             });
         throwIfAborted(input.signal);
-        const defaultModel =
-          requestedModelId ??
-          defaultCatalogModelId(input.provider, input.plaintext) ??
-          usableModelId(deps.env.defaultModel);
-        await selectSpaceModelPreference(tx, actor, credential.id, defaultModel);
+        let thinkingLevel = input.thinkingLevel;
+        if (thinkingLevel === undefined) {
+          // A stored effort only carries over while it still names this model.
+          const previous = await tx.spaceModelPreference.findFirst({
+            where: {
+              spaceId: actor.spaceId,
+              userId: actor.userId,
+              credentialId: credential.id,
+            },
+            select: { modelId: true, thinkingLevel: true },
+          });
+          thinkingLevel =
+            previous?.modelId === usableModelId(defaultModel) ? previous.thinkingLevel : null;
+        }
+        // Connect and limit saves can still carry an effort chosen for the previous
+        // model. Keep it only when this model supports it; otherwise clamp or clear.
+        thinkingLevel = defaultModel
+          ? clampCatalogThinkingLevel(thinkingLevel, allowedThinking)
+          : null;
+        await selectSpaceModelPreference(tx, actor, credential.id, defaultModel, thinkingLevel);
         throwIfAborted(input.signal);
         if (existing) {
           await deleteUnreferencedCredentialSecret(tx, {

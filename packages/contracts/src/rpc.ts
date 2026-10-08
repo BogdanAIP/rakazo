@@ -7,6 +7,7 @@ import {
   ATTACHMENT_MAX_BASE64_LENGTH,
   ATTACHMENT_MAX_COUNT,
 } from "./attachments.js";
+import { BotSecretMetadata, BotSecretPutInput, StoredBotSecretName } from "./bot-secrets.js";
 import {
   ActionApprovalRuleSchema,
   ActionAutoReviewSettingsSchema,
@@ -81,6 +82,7 @@ import {
   SpaceSchema,
   TaughtSkillSchema,
   TeachRecordingEventSchema,
+  ThinkingLevelSchema,
   ThreadMessagePageSchema,
   ThreadSnapshotSchema,
   UpdateAgentSkillInput,
@@ -100,7 +102,7 @@ import {
   IntegrationSetupStateSchema,
 } from "./integration-settings.js";
 import { MessageReactionSchema } from "./reactions.js";
-import { RunsListOutputSchema } from "./runs.js";
+import { RoutineHistorySchema, RoutineRunCursorSchema, RunsListOutputSchema } from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
 import {
   WindowsHostBrowserRequestSchema,
@@ -305,6 +307,7 @@ export const appContract = {
           provider: z.string(),
           label: z.string().optional(),
           modelId: z.string().optional(),
+          thinkingLevel: ThinkingLevelSchema.nullable().optional(),
         }),
       )
       .output(ModelOAuthBeginSchema),
@@ -325,7 +328,16 @@ export const appContract = {
       .input(z.object({ loginId: z.string() }))
       .output(z.object({ ok: z.literal(true) })),
     setDefault: oc
-      .input(z.object({ provider: z.string(), modelId: z.string() }))
+      .input(
+        z.object({
+          provider: z.string(),
+          modelId: z.string(),
+          thinkingLevel: ThinkingLevelSchema.nullable().optional(),
+        }),
+      )
+      .output(z.object({ ok: z.literal(true) })),
+    disconnect: oc
+      .input(z.object({ provider: z.string().trim().min(1) }))
       .output(z.object({ ok: z.literal(true) })),
   },
   bots: {
@@ -564,6 +576,9 @@ export const appContract = {
   },
   routines: {
     list: oc.input(botId).output(z.array(RoutineSchema)),
+    history: oc
+      .input(z.object({ routineId: Id, before: RoutineRunCursorSchema.optional() }))
+      .output(RoutineHistorySchema),
     create: oc.input(CreateRoutineInput).output(RoutineSchema),
     update: oc
       .input(
@@ -1111,7 +1126,8 @@ export const appContract = {
   },
   notifications: {
     registerPush: oc
-      .input(z.object({ token: z.string().min(8).max(512) }))
+      // No whitespace: the token store keeps the registering session on the next line.
+      .input(z.object({ token: z.string().min(8).max(512).regex(/^\S+$/) }))
       .output(z.object({ ok: z.literal(true) })),
     unregisterPush: oc.output(z.object({ ok: z.literal(true) })),
   },
@@ -1166,6 +1182,13 @@ export const appContract = {
     list: oc.output(z.array(AgentSecretSchema)),
     put: oc.input(AgentSecretInputSchema).output(AgentSecretSchema),
     remove: oc.input(z.object({ id: Id })).output(z.object({ ok: z.literal(true) })),
+  },
+  botSecrets: {
+    list: oc.input(z.object({ botId: Id })).output(z.array(BotSecretMetadata)),
+    put: oc.input(BotSecretPutInput).output(BotSecretMetadata),
+    remove: oc
+      .input(z.object({ botId: Id, name: StoredBotSecretName }))
+      .output(z.object({ ok: z.literal(true) })),
   },
 };
 
