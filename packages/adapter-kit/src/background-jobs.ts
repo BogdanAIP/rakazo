@@ -162,6 +162,7 @@ export function paperWorkerPreflightJob(input: {
   spaceId: string;
   userId: string;
   gateRevision: number;
+  sessionRevision?: number;
   scheduledFor: Date;
 }): BackgroundJob {
   return {
@@ -171,6 +172,7 @@ export function paperWorkerPreflightJob(input: {
       spaceId: input.spaceId,
       userId: input.userId,
       gateRevision: input.gateRevision,
+      ...(input.sessionRevision ? { sessionRevision: input.sessionRevision } : {}),
       scheduledFor: input.scheduledFor.toISOString(),
     },
     availableAt: input.scheduledFor,
