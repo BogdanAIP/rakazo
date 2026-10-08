@@ -321,7 +321,8 @@ export async function lockAndVerifyTradingPaperEntrySessionInTransaction(
   ledgerId: string,
   expectedSessionRevision?: number,
 ): Promise<
-  PaperEntrySessionEntryPreflight | { status: "legacy_absent"; mode: "paper_only"; ledgerId: string }
+  | PaperEntrySessionEntryPreflight
+  | { status: "legacy_absent"; mode: "paper_only"; ledgerId: string }
 > {
   if (
     expectedSessionRevision !== undefined &&
@@ -351,12 +352,7 @@ export async function lockAndVerifyTradingPaperEntrySessionInTransaction(
         }
       : { status: "legacy_absent" as const, mode: "paper_only" as const, ledgerId };
   }
-  return assessTradingPaperEntrySessionInTransaction(
-    tx,
-    owner,
-    ledgerId,
-    expectedSessionRevision,
-  );
+  return assessTradingPaperEntrySessionInTransaction(tx, owner, ledgerId, expectedSessionRevision);
 }
 
 /** H1 permission writer: ALL calls require a claimed, owner-approved effect.
