@@ -58,6 +58,20 @@ execution authority. `assessResolvedTradingResearch` is a pure read-only helper 
 derives that scope and returns only `proposal`, `no_trade` or `expired`. It performs no ledger
 write and grants no PAPER authority.
 
+## G0.2 — direct Market pinned-provenance intake
+
+The Trading-side helper `buildTradingResolvedResearchEnvelope` now accepts the immutable,
+data-only provenance produced by the Market Resolver preparation boundary plus one
+`TradingSignal`, and validates the complete `TradingResolvedResearchEnvelope`.
+
+This is intentionally a validation/mapping step only. It does not know how Market stores Resolvers
+or Skills, does not install or invoke a Skill, and grants no PAPER/live authority. Market-native
+keys that exceed Trading's narrower contract, write-capable implementations, malformed source
+digests or non-research signals fail closed rather than being truncated or coerced.
+
+Once the Market and Trading lines share an integration base, the intended handoff is therefore:
+`market/prepare.provenance -> buildTradingResolvedResearchEnvelope(...) -> G1`.
+
 ## G1 — explicit generic PAPER research-source approval
 
 G1 adds a separate persisted permission boundary for Resolver-produced research. It does **not**
