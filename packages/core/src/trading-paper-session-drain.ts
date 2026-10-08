@@ -1,7 +1,4 @@
-import {
-  type TradingPaperLedgerState,
-  TradingPaperLedgerStateSchema,
-} from "@rakazo/contracts";
+import { type TradingPaperLedgerState, TradingPaperLedgerStateSchema } from "@rakazo/contracts";
 
 /**
  * H0: a fail-closed, READ-ONLY assessment for ending a manually started
