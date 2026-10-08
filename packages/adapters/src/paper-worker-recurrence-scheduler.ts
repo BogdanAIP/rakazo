@@ -70,6 +70,7 @@ export async function enqueueAuthorizedPaperWorkerSuccessor(
       spaceId: payload.spaceId,
       userId: payload.userId,
       gateRevision: intent.gateRevision,
+      ...(payload.sessionRevision ? { sessionRevision: payload.sessionRevision } : {}),
       scheduledFor,
     }),
   );
