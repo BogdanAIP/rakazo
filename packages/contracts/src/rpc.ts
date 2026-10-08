@@ -83,11 +83,6 @@ import {
 import { ComputerCommandSchema, ProductEventSchema } from "./events.js";
 import { Id, IsoDate } from "./ids.js";
 import {
-  TradingPaperJournalListOutputSchema,
-  TradingPaperJournalReadInputSchema,
-  TradingPaperJournalReadOutputSchema,
-} from "./trading-paper-journal.js";
-import {
   IntegrationProviderConfigSchema,
   IntegrationSetupStateSchema,
 } from "./integration-settings.js";
@@ -105,6 +100,11 @@ import {
   TradingSweepOutputSchema,
   TradingSweepRequestSchema,
 } from "./trading.js";
+import {
+  TradingPaperJournalListOutputSchema,
+  TradingPaperJournalReadInputSchema,
+  TradingPaperJournalReadOutputSchema,
+} from "./trading-paper-journal.js";
 import {
   WindowsHostBrowserRequestSchema,
   WindowsHostBrowserResultSchema,
