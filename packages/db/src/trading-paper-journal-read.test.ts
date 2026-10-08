@@ -1,6 +1,9 @@
-import type { PrismaClient } from "./client.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { listOwnedTradingPaperJournals, readOwnedTradingPaperJournal } from "./trading-paper-journal-read.js";
+import type { PrismaClient } from "./client.js";
+import {
+  listOwnedTradingPaperJournals,
+  readOwnedTradingPaperJournal,
+} from "./trading-paper-journal-read.js";
 
 const owner = { spaceId: "space-1", userId: "user-1" };
 
@@ -46,10 +49,12 @@ describe("read-only owner-scoped PAPER journal viewer", () => {
   it("returns NOT FOUND internally for a cross-owner journal without reading events", async () => {
     const findFirst = vi.fn(async () => null);
     const tx = { tradingPaperLedger: { findFirst } };
-    const transaction = vi.fn(async (work: (tx: typeof tx) => Promise<unknown>) => work(tx));
+    const transaction = vi.fn(async (work: (client: typeof tx) => Promise<unknown>) => work(tx));
     const prisma = { $transaction: transaction } as unknown as PrismaClient;
 
-    await expect(readOwnedTradingPaperJournal(prisma, owner, "someone-elses-ledger")).resolves.toBeNull();
+    await expect(
+      readOwnedTradingPaperJournal(prisma, owner, "someone-elses-ledger"),
+    ).resolves.toBeNull();
     expect(findFirst).toHaveBeenCalledWith({
       where: { id: "someone-elses-ledger", spaceId: "space-1", ownerUserId: "user-1" },
       select: { id: true, openedAt: true, updatedAt: true },
@@ -60,7 +65,9 @@ describe("read-only owner-scoped PAPER journal viewer", () => {
   it("rejects an invalid clock before starting a DB transaction", async () => {
     const transaction = vi.fn();
     const prisma = { $transaction: transaction } as unknown as PrismaClient;
-    await expect(readOwnedTradingPaperJournal(prisma, owner, "paper-one", undefined, new Date("bad"))).rejects.toThrow("clock");
+    await expect(
+      readOwnedTradingPaperJournal(prisma, owner, "paper-one", undefined, new Date("bad")),
+    ).rejects.toThrow("clock");
     expect(transaction).not.toHaveBeenCalled();
   });
 });
