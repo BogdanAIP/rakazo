@@ -1,5 +1,7 @@
 import {
   type MarketResolverImplementation,
+  type MarketResolverPinnedResearchProvenance,
+  MarketResolverPinnedResearchProvenanceSchema,
   MarketResolverPlanSchema,
   type MarketResolverReadOnlySelection,
   MarketResolverReadOnlySelectionSchema,
@@ -130,5 +132,45 @@ export function selectMarketResolverReadOnlyImplementation(
     resolver: plan.resolver,
     reason: "no_eligible_read_only_implementation",
     skipped,
+  });
+}
+
+
+/**
+ * Pins one already-selected read-only Resolver route into the minimal immutable
+ * research provenance later consumed by domain-specific research adapters.
+ * This never invokes the implementation or Skill and grants no PAPER/live
+ * execution authority.
+ */
+export function pinMarketResolverResearchProvenance(
+  input: unknown,
+  resolvedAt: string,
+): MarketResolverPinnedResearchProvenance {
+  const selection = MarketResolverReadOnlySelectionSchema.parse(input);
+  if (selection.status !== "ready") {
+    throw new MarketResolverSelectionIntegrityError(
+      "Denied Resolver selection cannot produce research provenance",
+    );
+  }
+  return MarketResolverPinnedResearchProvenanceSchema.parse({
+    semanticKey: selection.resolver.semanticKey,
+    resolverKey: selection.resolver.key,
+    resolverDigest: selection.resolver.digest,
+    implementation: {
+      name: selection.implementation.name,
+      kind: selection.implementation.kind,
+      reference: selection.implementation.reference,
+      priority: selection.implementation.priority,
+      readOnly: true,
+    },
+    skill: selection.skill
+      ? {
+          marketEntryId: selection.skill.entryId,
+          marketKey: selection.skill.key,
+          sourceDigest: selection.skill.digest,
+          variant: selection.skill.variant,
+        }
+      : null,
+    resolvedAt,
   });
 }
