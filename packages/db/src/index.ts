@@ -28,6 +28,7 @@ export {
   recordIdempotentPublicAdapterPaperQuoteEvidence,
   recordPublicAdapterPaperQuoteEvidence,
 } from "./trading-paper-quote-evidence.js";
+export * from "./trading-paper-journal-read.js";
 export * from "./trading-paper-reservation-preflight.js";
 export {
   PaperReservationConflictError,
