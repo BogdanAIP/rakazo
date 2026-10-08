@@ -39,6 +39,7 @@ export {
 export {
   applyApprovedTradingPaperResolvedResearchControl,
   assessTradingPaperResolvedResearchPreflightInTransaction,
+  assessTradingPaperResolvedResearchScopeAuthorityInTransaction,
   type HistoricalTradingPaperResolvedResearchReserveScope,
   type PaperResolvedResearchControlResult,
   PaperResolvedResearchGateIntegrityError,
@@ -48,10 +49,23 @@ export {
   type TradingPaperResolvedResearchAuthority,
   type TradingPaperResolvedResearchGateStatus,
   type TradingPaperResolvedResearchPreflight,
+  type TradingPaperResolvedResearchScopeAuthority,
   verifyHistoricalTradingPaperResolvedResearchReserveApprovalInTransaction,
   verifyTradingPaperResolvedResearchAuthorityInTransaction,
   verifyTradingPaperResolvedResearchReserveUseInTransaction,
 } from "./trading-paper-resolved-research-gate.js";
+export {
+  applyApprovedTradingPaperResolvedResearchFillControl,
+  assessTradingPaperResolvedResearchFillPreflightInTransaction,
+  type PaperResolvedResearchFillControlResult,
+  PaperResolvedResearchFillGateIntegrityError,
+  readTradingPaperResolvedResearchFillPreflight,
+  readVerifiedTradingPaperResolvedResearchFillGate,
+  type TradingPaperResolvedResearchFillAuthority,
+  type TradingPaperResolvedResearchFillGateStatus,
+  type TradingPaperResolvedResearchFillPreflight,
+  verifyTradingPaperResolvedResearchFillAuthorityInTransaction,
+} from "./trading-paper-resolved-research-fill-gate.js";
 export {
   applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,
