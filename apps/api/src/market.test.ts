@@ -332,6 +332,7 @@ describe("Market Skills + Market Resolver service", () => {
         name: "CCXT public market",
         kind: "mcp",
         reference: "ccxt/ccxt",
+        skillReference: null,
         priority: 2,
         readOnly: true,
         constraints: ["market tier only"],
@@ -342,6 +343,7 @@ describe("Market Skills + Market Resolver service", () => {
           name: "CCXT public market",
           kind: "mcp",
           reference: "ccxt/ccxt",
+          skillReference: null,
           priority: 2,
           readOnly: true,
           constraints: ["market tier only"],
@@ -351,6 +353,7 @@ describe("Market Skills + Market Resolver service", () => {
           name: "Public fallback",
           kind: "api",
           reference: "market:public-fallback",
+          skillReference: null,
           priority: 3,
           readOnly: true,
           constraints: ["public data only"],
@@ -426,6 +429,7 @@ describe("Market Skills + Market Resolver service", () => {
     ).resolves.toMatchObject({
       preferred: {
         reference: "market:okx/agent-trade-kit:okx-cex-market",
+        skillReference: null,
         skill: {
           status: "resolved",
           entryId: skill.id,
@@ -500,7 +504,12 @@ describe("Market Skills + Market Resolver service", () => {
       }),
     ).resolves.toMatchObject({
       resolver: { entryId: first.id, key: first.key, semanticKey: "market.data" },
-      preferred: { reference: "market:public", readOnly: true, skill: null },
+      preferred: {
+        reference: "market:public",
+        skillReference: null,
+        readOnly: true,
+        skill: null,
+      },
     });
   });
 
