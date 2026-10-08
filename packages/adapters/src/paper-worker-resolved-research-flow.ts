@@ -126,13 +126,7 @@ export async function handlePreparedPaperWorkerResolvedResearch(
 
   const researchAuthority = await (
     services.readResearchPreflight ?? readTradingPaperResolvedResearchPreflight
-  )(
-    prisma,
-    owner,
-    payload.ledgerId,
-    envelope,
-    now,
-  );
+  )(prisma, owner, payload.ledgerId, envelope, now);
   if (researchAuthority.status !== "ready") {
     return {
       status: "stop",
@@ -157,14 +151,7 @@ export async function handlePreparedPaperWorkerResolvedResearch(
 
   const reservation = await (
     services.reserveResolvedSignal ?? reserveApprovedResolvedTradingPaperSignal
-  )(
-    prisma,
-    owner,
-    payload.ledgerId,
-    envelope,
-    reserveEvidenceId,
-    researchAuthority,
-  );
+  )(prisma, owner, payload.ledgerId, envelope, reserveEvidenceId, researchAuthority);
   if (reservation.status === "deny") {
     return {
       status: "stop",
@@ -177,12 +164,7 @@ export async function handlePreparedPaperWorkerResolvedResearch(
 
   const fillAuthority = await (
     services.readFillPreflight ?? readTradingPaperResolvedResearchFillPreflight
-  )(
-    prisma,
-    owner,
-    payload.ledgerId,
-    now,
-  );
+  )(prisma, owner, payload.ledgerId, now);
   if (fillAuthority.status !== "ready") {
     if (fillAuthority.reason === "resolved_fill_gate_disabled") {
       return {
@@ -216,14 +198,7 @@ export async function handlePreparedPaperWorkerResolvedResearch(
 
   const fill = await (
     services.fillResolvedReservation ?? fillApprovedResolvedTradingPaperReservation
-  )(
-    prisma,
-    owner,
-    payload.ledgerId,
-    reservation.reservationId,
-    fillEvidenceId,
-    fillAuthority,
-  );
+  )(prisma, owner, payload.ledgerId, reservation.reservationId, fillEvidenceId, fillAuthority);
   if (fill.status === "deny") {
     return {
       status: "stop",
