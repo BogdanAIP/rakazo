@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 export const WINDOWS_BROWSER_BACKEND_MODES = [
@@ -16,7 +17,19 @@ export interface PlaywrightCliConfiguration {
   mode: WindowsBrowserBackendMode;
   entry: string | null;
   browserChannel: PlaywrightCliBrowserChannel | null;
+  cdpEndpoint: string | null;
   userDataDir: string | null;
+  headed?: boolean;
+}
+
+const require = createRequire(import.meta.url);
+
+function bundledPlaywrightCliEntry(): string | null {
+  try {
+    return require.resolve("@playwright/cli/playwright-cli.js");
+  } catch {
+    return null;
+  }
 }
 
 export interface PlaywrightCliProbe {
@@ -24,12 +37,13 @@ export interface PlaywrightCliProbe {
   ready: boolean;
   entryAvailable: boolean;
   browserChannel: PlaywrightCliBrowserChannel | null;
+  cdpEndpointConfigured: boolean;
   userDataDirConfigured: boolean;
   reason: string | null;
 }
 
 function parseMode(value: string | undefined): WindowsBrowserBackendMode {
-  const mode = value?.trim() || "opencli";
+  const mode = value?.trim() || "auto";
   if ((WINDOWS_BROWSER_BACKEND_MODES as readonly string[]).includes(mode)) {
     return mode as WindowsBrowserBackendMode;
   }
@@ -55,15 +69,39 @@ function optionalBrowserChannel(value: string | undefined): PlaywrightCliBrowser
   throw new Error("RAKAZO_PLAYWRIGHT_BROWSER_CHANNEL must be chrome or msedge");
 }
 
+function optionalCdpEndpoint(value: string | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw new Error("RAKAZO_PLAYWRIGHT_CDP_ENDPOINT must be a valid URL");
+  }
+  if (!["http:", "https:", "ws:", "wss:"].includes(url.protocol)) {
+    throw new Error("RAKAZO_PLAYWRIGHT_CDP_ENDPOINT must use http(s) or ws(s)");
+  }
+  return url.href;
+}
+
 export function loadPlaywrightCliConfiguration(
   env: NodeJS.ProcessEnv = process.env,
 ): PlaywrightCliConfiguration {
+  const defaultUserDataDir = env.USERPROFILE?.trim()
+    ? path.win32.join(env.USERPROFILE.trim(), "RakazoData", "playwright-profile")
+    : undefined;
+
   return {
     mode: parseMode(env.RAKAZO_BROWSER_BACKEND),
-    entry: optionalAbsolutePath(env.RAKAZO_PLAYWRIGHT_CLI_ENTRY, "RAKAZO_PLAYWRIGHT_CLI_ENTRY"),
+    entry: optionalAbsolutePath(
+      env.RAKAZO_PLAYWRIGHT_CLI_ENTRY ?? bundledPlaywrightCliEntry() ?? undefined,
+      "RAKAZO_PLAYWRIGHT_CLI_ENTRY",
+    ),
     browserChannel: optionalBrowserChannel(env.RAKAZO_PLAYWRIGHT_BROWSER_CHANNEL),
+    cdpEndpoint: optionalCdpEndpoint(env.RAKAZO_PLAYWRIGHT_CDP_ENDPOINT),
+    headed: ["1", "true", "yes"].includes(env.RAKAZO_PLAYWRIGHT_HEADED?.trim().toLowerCase() ?? ""),
     userDataDir: optionalAbsolutePath(
-      env.RAKAZO_PLAYWRIGHT_USER_DATA_DIR,
+      env.RAKAZO_PLAYWRIGHT_USER_DATA_DIR ?? defaultUserDataDir,
       "RAKAZO_PLAYWRIGHT_USER_DATA_DIR",
     ),
   };
@@ -74,6 +112,7 @@ export function probePlaywrightCli(
   fileExists: (path: string) => boolean = existsSync,
 ): PlaywrightCliProbe {
   const entryAvailable = Boolean(config.entry && fileExists(config.entry));
+  const cdpEndpointConfigured = Boolean(config.cdpEndpoint);
   const userDataDirConfigured = Boolean(config.userDataDir);
 
   let ready = false;
@@ -85,7 +124,8 @@ export function probePlaywrightCli(
       break;
     case "playwright-cli-cdp":
       if (!entryAvailable) reason = "Pinned Playwright CLI entry is unavailable.";
-      else if (!config.browserChannel) reason = "Explicit browser channel is required.";
+      else if (!config.cdpEndpoint && !config.browserChannel)
+        reason = "Explicit CDP endpoint or browser channel is required.";
       else ready = true;
       break;
     case "playwright-cli-extension":
@@ -100,8 +140,10 @@ export function probePlaywrightCli(
       else ready = true;
       break;
     case "auto":
-      reason =
-        "Auto routing is intentionally not active yet; configure an explicit backend for Browser v2.";
+      ready = true;
+      if (!entryAvailable) {
+        reason = "Playwright CLI is unavailable; auto routing will fall back to OpenCLI.";
+      }
       break;
   }
 
@@ -110,6 +152,7 @@ export function probePlaywrightCli(
     ready,
     entryAvailable,
     browserChannel: config.browserChannel,
+    cdpEndpointConfigured,
     userDataDirConfigured,
     reason,
   };

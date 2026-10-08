@@ -2,7 +2,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $script = Join-Path $PSScriptRoot 'Rakazo.ps1'
-foreach ($name in @('Rakazo.ps1', 'Tunnel.Diagnostics.ps1', 'Tunnel.Control.ps1', 'Check-ExistingR.ps1', 'Install-Shortcut.ps1', 'Native.Update.ps1', 'Native.TrayUpdates.ps1', 'Native.PostgresEvidence.ps1', 'Refresh-PluginR.ps1')) {
+foreach ($name in @('Rakazo.ps1', 'Launch-Rakazo-Gui.ps1', 'Tunnel.Diagnostics.ps1', 'Tunnel.Control.ps1', 'Check-ExistingR.ps1', 'Install-Shortcut.ps1', 'Native.Update.ps1', 'Native.TrayUpdates.ps1', 'Native.PostgresEvidence.ps1', 'Refresh-PluginR.ps1')) {
     $file = Join-Path $PSScriptRoot $name
     $tokens = $null
     $parseErrors = $null
@@ -16,20 +16,22 @@ foreach ($name in @('Rakazo.ps1', 'Tunnel.Diagnostics.ps1', 'Tunnel.Control.ps1'
         throw 'Manual launcher PowerShell parsing failed.'
     }
 }
-# The desktop shortcut must launch through the GUI Windows Script Host. Its only
-# action is a hidden, nonblocking invocation of this same guarded Rakazo.ps1.
+# The desktop shortcut stays console-free: WScript starts a hidden PowerShell host
+# which shows only the dedicated startup-status WinForms window.
 $guiPath = Join-Path $PSScriptRoot 'Launch-Rakazo.vbs'
-if (-not (Test-Path -LiteralPath $guiPath -PathType Leaf)) {
-    throw 'Console-free manual GUI launcher is missing.'
+$guiStatusPath = Join-Path $PSScriptRoot 'Launch-Rakazo-Gui.ps1'
+foreach ($neededFile in @($guiPath, $guiStatusPath)) {
+    if (-not (Test-Path -LiteralPath $neededFile -PathType Leaf)) {
+        throw 'Console-free Rakazo GUI launcher is missing.'
+    }
 }
 $guiText = [IO.File]::ReadAllText($guiPath)
 foreach ($needed in @(
     'Option Explicit',
     'WScript.ScriptFullName',
-    'fs.BuildPath(root, "Rakazo.ps1")',
+    'fs.BuildPath(root, "Launch-Rakazo-Gui.ps1")',
     'controllerExit = shell.Run(commandLine, 0, True)',
-    ' -WindowStyle Hidden',
-    ' -Action Run'
+    ' -WindowStyle Hidden'
 )) {
     if (-not $guiText.Contains($needed)) {
         throw "Console-free GUI entry guard absent: $needed"
@@ -38,10 +40,30 @@ foreach ($needed in @(
 foreach ($forbidden in @('runtimes connect', 'runtimes stop', 'schtasks', 'Register-ScheduledTask', 'powershell -EncodedCommand')) {
     if ($guiText.Contains($forbidden)) { throw "Forbidden GUI entry action present: $forbidden" }
 }
+$guiStatusText = [IO.File]::ReadAllText($guiStatusPath)
+foreach ($needed in @(
+    'Join-Path $PSScriptRoot ''Rakazo.ps1''',
+    'RedirectStandardOutput = $controllerStdout',
+    'RedirectStandardError = $controllerStderr',
+    'launcher-stage.log',
+    'gui-controller.stderr.log',
+    'if ($stage -ceq ''tray active'')',
+    '[System.Windows.Forms.Application]::Run($form)',
+    'Get-RelevantErrorText',
+    'Rakazo ещё запускается'
+)) {
+    if (-not $guiStatusText.Contains($needed)) {
+        throw "Startup-status GUI guard absent: $needed"
+    }
+}
+foreach ($forbidden in @('runtimes connect', 'runtimes stop', 'Register-ScheduledTask', 'New-ScheduledTask', 'windowsHosts/createPairing')) {
+    if ($guiStatusText.Contains($forbidden)) { throw "Forbidden startup-status GUI action present: $forbidden" }
+}
 $installerText = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Install-Shortcut.ps1'))
 foreach ($needed in @(
-    'System32\wscript.exe', 'Launch-Rakazo.vbs', '$oldCanonical',
-    '$legacyArgs', 'if (-not $oldCanonical)', '$link.TargetPath = $guiTarget'
+    'System32\wscript.exe', 'Launch-Rakazo.vbs', 'Launch-Rakazo-Gui.ps1',
+    '$oldGuiCanonical', '$oldGuiLauncher', '$interactiveCanonical',
+    '$link.TargetPath = $guiTarget'
 )) {
     if (-not $installerText.Contains($needed)) {
         throw "Canonical shortcut migration guard absent: $needed"

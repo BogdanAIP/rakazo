@@ -2,21 +2,34 @@ import { describe, expect, it } from "vitest";
 import { loadPlaywrightCliConfiguration, probePlaywrightCli } from "./playwright-cli-config.js";
 
 describe("Playwright CLI configuration", () => {
-  it("keeps OpenCLI as the default browser backend", () => {
-    const config = loadPlaywrightCliConfiguration({});
-    expect(config).toEqual({
-      mode: "opencli",
-      entry: null,
-      browserChannel: null,
-      userDataDir: null,
+  it("defaults to non-interactive auto routing with a dedicated Playwright profile", () => {
+    const config = loadPlaywrightCliConfiguration({
+      USERPROFILE: "C:\\Users\\test",
     });
-    expect(probePlaywrightCli(config)).toMatchObject({
-      mode: "opencli",
-      ready: false,
-      reason: "Playwright CLI is not selected.",
+    expect(config).toMatchObject({
+      mode: "auto",
+      browserChannel: null,
+      cdpEndpoint: null,
+      userDataDir: "C:\\Users\\test\\RakazoData\\playwright-profile",
+    });
+    expect(config.entry).toContain("@playwright");
+    expect(config.entry).toMatch(/playwright-cli\.js$/u);
+    expect(probePlaywrightCli(config, () => true)).toMatchObject({
+      mode: "auto",
+      ready: true,
+      reason: null,
     });
   });
 
+  it("enables visible Persistent login only with explicit opt-in", () => {
+    expect(loadPlaywrightCliConfiguration({ USERPROFILE: "C:\\Users\\test" }).headed).toBe(false);
+    expect(
+      loadPlaywrightCliConfiguration({
+        USERPROFILE: "C:\\Users\\test",
+        RAKAZO_PLAYWRIGHT_HEADED: "true",
+      }).headed,
+    ).toBe(true);
+  });
   it("requires explicit entry and browser for CDP attach", () => {
     const config = loadPlaywrightCliConfiguration({
       RAKAZO_BROWSER_BACKEND: "playwright-cli-cdp",
@@ -29,9 +42,26 @@ describe("Playwright CLI configuration", () => {
       ready: true,
       entryAvailable: true,
       browserChannel: "chrome",
+      cdpEndpointConfigured: false,
       userDataDirConfigured: false,
       reason: null,
     });
+  });
+
+  it("accepts an explicit CDP endpoint without channel discovery", () => {
+    const config = loadPlaywrightCliConfiguration({
+      RAKAZO_BROWSER_BACKEND: "playwright-cli-cdp",
+      RAKAZO_PLAYWRIGHT_CLI_ENTRY: "C:\\Rakazo\\playwright-cli\\playwright-cli.js",
+      RAKAZO_PLAYWRIGHT_CDP_ENDPOINT: "http://127.0.0.1:9222",
+    });
+
+    expect(probePlaywrightCli(config, () => true)).toMatchObject({
+      ready: true,
+      browserChannel: null,
+      cdpEndpointConfigured: true,
+      reason: null,
+    });
+    expect(config.cdpEndpoint).toBe("http://127.0.0.1:9222/");
   });
 
   it("requires explicit entry and browser for extension attach", () => {
@@ -46,6 +76,7 @@ describe("Playwright CLI configuration", () => {
       ready: true,
       entryAvailable: true,
       browserChannel: "chrome",
+      cdpEndpointConfigured: false,
       userDataDirConfigured: false,
       reason: null,
     });
@@ -78,7 +109,7 @@ describe("Playwright CLI configuration", () => {
     });
   });
 
-  it("rejects ambiguous browser and unsafe path configuration", () => {
+  it("rejects ambiguous browser, unsafe path and invalid CDP endpoint configuration", () => {
     expect(() =>
       loadPlaywrightCliConfiguration({
         RAKAZO_BROWSER_BACKEND: "playwright-cli-extension",
@@ -92,6 +123,13 @@ describe("Playwright CLI configuration", () => {
         RAKAZO_PLAYWRIGHT_CLI_ENTRY: "relative\\playwright-cli.js",
       }),
     ).toThrow("absolute path");
+
+    expect(() =>
+      loadPlaywrightCliConfiguration({
+        RAKAZO_BROWSER_BACKEND: "playwright-cli-cdp",
+        RAKAZO_PLAYWRIGHT_CDP_ENDPOINT: "file:///C:/Chrome",
+      }),
+    ).toThrow("http(s) or ws(s)");
 
     expect(() =>
       loadPlaywrightCliConfiguration({
@@ -109,8 +147,19 @@ describe("Playwright CLI configuration", () => {
 
     expect(probePlaywrightCli(config, () => true)).toMatchObject({
       mode: "auto",
-      ready: false,
-      reason: expect.stringContaining("intentionally not active"),
+      ready: true,
+      reason: null,
+    });
+  });
+});
+
+describe("Playwright auto fallback probe", () => {
+  it("remains ready when Playwright CLI is unavailable because OpenCLI is the fallback", () => {
+    const config = loadPlaywrightCliConfiguration({ USERPROFILE: "C:\\Users\\test" });
+    expect(probePlaywrightCli(config, () => false)).toMatchObject({
+      mode: "auto",
+      ready: true,
+      reason: expect.stringContaining("fall back to OpenCLI"),
     });
   });
 });

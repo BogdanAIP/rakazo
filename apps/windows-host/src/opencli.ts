@@ -497,6 +497,12 @@ export class WindowsOpenCliBackend implements WindowsBrowserBackend {
     if (request.command === "snapshot") {
       return { ok: true, ...(await observe()) };
     }
+    if (request.command === "playwright") {
+      return {
+        ok: false,
+        error: "Raw Playwright CLI commands require a Playwright browser backend",
+      };
+    }
 
     if (request.actions.length > MAX_ACTIONS) {
       throw new Error("At most four browser actions may be executed per command");

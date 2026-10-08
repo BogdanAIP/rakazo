@@ -96,28 +96,68 @@ computer/browser
 
 Playwright/OpenCLI translate those semantics internally.
 
-### Backend priority target
+### Browser mode target
 
 Target steady state:
 
 ```text
 browser.semantic
     |
-    +-- Playwright CLI existing-browser backend
-    |     CDP attach when browser-side Remote Debugging is explicitly enabled
-    |     extension attach + browser confirmation as alternate path
-    |     authenticated sessions / SSO / 2FA
+    +-- Playwright CLI extension mode
+    |     existing user's Chrome/Edge
+    |     existing tabs + authenticated sessions + SSO/2FA + installed extensions
+    |     explicit browser-side approval
     |
-    +-- Playwright CLI persistent backend
+    +-- Playwright CLI CDP mode
+    |     existing user's Chrome/Edge
+    |     browser-side Remote Debugging explicitly enabled
+    |     direct DevTools-level attach to the current browser instance
+    |
+    +-- Playwright CLI persistent mode
     |     dedicated Rakazo automation profile
+    |     long-lived autonomous login/session state
     |
-    +-- OpenCLI backend
-    |     bounded fallback / alternate path
+    +-- OpenCLI
+    |     proven structured alternate backend
     |
-    +-- screenshot + Windows GUI/UIA fallback
+    +-- screenshot + Windows GUI/UIA
+          visual/non-DOM fallback
 ```
 
-Backend selection must be policy/config driven and observable. It must never silently weaken browser ownership.
+All three Playwright modes are first-class. Rakazo must not hard-code one universal winner before physical acceptance and benchmark evidence.
+
+Backend/mode selection must be policy/config driven and observable. It must never silently weaken browser ownership or reduce the user's available browser operations.
+
+### Playwright mode selection matrix
+
+| Mode | Use when | Strengths | Trade-offs |
+| --- | --- | --- | --- |
+| Extension | An explicit user-requested fallback needs the Playwright extension and browser-confirmed handoff | Reuses real browser state, SSO/2FA, cookies and installed extensions | Requires a browser confirmation/approval flow and is therefore never selected by automatic routing |
+| CDP | Work should happen in the currently running real browser and DevTools-level attachment is acceptable | Direct attach to the current browser instance, no separate automation profile, easy detach without closing Chrome, no per-session Extension confirmation | Requires browser-side Remote Debugging to be explicitly enabled; grants powerful browser control while enabled |
+| Persistent | Autonomous/repeatable work should not depend on the user's everyday browser session | Dedicated long-lived automation profile, deterministic state, suitable for bots/background workflows | Separate login/session state from the user's everyday Chrome; profile lifecycle/locking must be managed |
+
+Mode choice is per task/session, not a permanent global decision. A project or bot may express a preferred mode, but the effective mode must remain visible and overridable.
+
+Current draft routing policy is conservative and non-interactive:
+- if the user explicitly selects a mode, use that mode if available;
+- when no mode is supplied, Rakazo uses `auto`;
+- Extension is explicit-only because its attach flow intentionally asks for browser confirmation;
+- `auto` never invokes Extension and tries CDP first, then OpenCLI, then Persistent;
+- an unsuccessful CDP open falls through to the next non-interactive backend rather than surfacing an Extension approval prompt;
+- if a task is autonomous/repeatable and does not require the user's daily browser state, Persistent remains available explicitly;
+- BV2-07 benchmark data determines whether the `auto` order should be changed before production activation.
+
+### No-regression capability policy
+
+Browser v2 is additive. Existing Rakazo browser capabilities must not disappear merely because a new backend exists.
+
+- Browser v2 defaults to non-interactive `auto` routing after physical parity acceptance; `auto` prefers CDP, falls back to OpenCLI, then Persistent, and never invokes Extension.
+- A partially implemented Playwright backend may exist in a draft branch or tests, but it must not become the active production backend.
+- Playwright activation requires, at minimum, working `navigate`, `snapshot`, `find`, `wait`, `extract`, `scroll`, `screenshot`, `tabNew`, `tabSelect`, `tabClose`, `act`, `recover` and `close/detach` semantics compatible with the stable `computer/browser` contract.
+- If an upstream Playwright feature is intentionally not exposed (for example raw `eval`), the omission must be recorded in the capability matrix with the reason. It must never be silently omitted.
+- Backend-specific capabilities beyond the common contract (console, network, tracing, storage, downloads, etc.) must be tracked explicitly as available / gated / unsupported.
+- A backend may not be selected automatically if doing so would reduce capabilities relative to the currently active backend.
+
 
 ## Security invariants
 
@@ -127,9 +167,10 @@ Backend selection must be policy/config driven and observable. It must never sil
 - Preserve server-minted Rakazo `sessionToken`.
 - Preserve per-task owned-tab tracking.
 - Existing user tabs may only be attached through an explicit Playwright extension/CDP handoff.
-- Never expose `eval`, `run-code`, raw WebMCP calls, cookie/storage mutation or unrestricted file upload merely because upstream CLI supports them. Rakazo must translate only a reviewed allowlist into its stable browser contract.
-- Disable WebMCP collection by default (`webmcp: false` / `PLAYWRIGHT_MCP_WEBMCP=false`). Page-registered tools are untrusted dynamic input and must not silently become Rakazo capabilities.
-- Network interception, cookies/storage mutation, downloads/uploads, tracing and devtools-style capabilities must be separately gated.
+- Playwright sessions expose the full installed CLI through `computer/browser { command: "playwright", argv: [...] }`; Rakazo does not maintain a second allowlist for Playwright commands.
+- WebMCP collection/calls are enabled for Playwright sessions. Page-registered tools, descriptions, schemas and results remain untrusted page data.
+- Unrestricted Playwright file access is enabled for the dedicated browser profile, so upload/download/run-code workflows may use absolute local paths.
+- Console/network inspection and routing, cookies/storage mutation, downloads/uploads, tracing, video/PDF, `eval`, `run-code`, WebMCP and future CLI commands are available through the raw Playwright command surface.
 - An unavailable Playwright backend must fail closed or use an explicitly configured fallback; it must not attach to an arbitrary browser profile.
 
 ## Why Playwright is useful in addition to OpenCLI
@@ -149,6 +190,16 @@ Playwright provides a richer semantic browser model:
 OpenCLI remains useful because it is already integrated, small, bounded, and proven with Rakazo's ownership model.
 
 The decision is therefore **Playwright + OpenCLI**, not Playwright replacing OpenCLI on day one.
+
+### Full Playwright CLI surface
+
+The Playwright backend additionally exposes a session-bound raw CLI escape hatch:
+
+```json
+{ "command": "playwright", "sessionToken": "...", "argv": ["console"] }
+```
+
+The same command can invoke any command supported by the pinned `@playwright/cli`, including network routing, state/cookies/storage, uploads, `eval`, `run-code`, tracing, video/PDF, WebMCP and future CLI additions. The raw call remains bound to the Rakazo-minted browser session token; it does not make OpenCLI support those commands.
 
 ## Implementation slices
 
@@ -170,64 +221,84 @@ Add config-only discovery, no browser mutation:
 - detect a pinned, reviewed `@playwright/cli` entry without downloading `@latest` at execution time;
 - CDP and extension attach both require an explicit browser channel;
 - CDP attach requires the owner to enable the browser's own Remote Debugging control (for Chrome, `chrome://inspect/#remote-debugging`);
-- extension attach is an alternate path authorized through Playwright's browser confirmation page; Rakazo does not invent or persist a second extension token;
+- extension attach is an explicit-only alternate path authorized through Playwright's browser confirmation page; automatic routing never invokes it and Rakazo does not invent or persist a second extension token;
 - dedicated persistent profile path is explicit;
 - probe reports readiness without reading cookies/storage.
 
-Acceptance: OpenCLI remains default; Playwright CLI cannot become active accidentally.
+Acceptance: default routing is non-interactive `auto`; Playwright Extension cannot become active accidentally or trigger a browser approval prompt.
 
-### BV2-03 — Playwright CLI existing-browser backend, read-only semantic path
+### BV2-03 — Playwright CLI backend implementation (draft-only until parity)
 
-Implement a bounded CLI runner:
+Implement the bounded runner and read/observe path without activating it as the production backend:
 
 - server-minted Rakazo token maps to a generated Playwright CLI named session;
-- prefer `attach --cdp=chrome` when the owner explicitly enabled browser Remote Debugging;
-- allow `attach --extension=chrome` as an alternate browser-confirmed handoff;
-- `snapshot`, `find`, bounded text extraction, screenshot and `detach`;
+- implement all three first-class modes: Extension, CDP and Persistent;
+- implement `snapshot`, `find`, bounded text extraction, screenshot and correct `detach/close`;
 - map Playwright semantic references to Rakazo observation-local refs;
 - preserve Rakazo session/token ownership and do not expose raw session enumeration.
 
-No `eval`, `run-code`, storage mutation, network routing, WebMCP or downloads.
+This implementation remains draft/non-activated until BV2-04 completes required operational parity.
 
-### BV2-04 — navigation, action and owned tabs
+### BV2-04 — navigation, actions, owned tabs and parity gate
 
 Add:
 
 - `navigate`;
-- bounded click/fill/type;
+- `scroll`;
+- bounded click/fill/type and the existing `act` semantics;
 - `tabNew/tabSelect/tabClose`;
 - stale-observation guards;
-- uncertain-action handling and ownership revocation matching the OpenCLI path.
+- uncertain-action handling and ownership revocation matching the OpenCLI path;
+- capability-matrix tests proving that selecting Playwright does not silently reduce the stable browser contract.
 
-### BV2-05 — dedicated persistent Playwright CLI profile
+Only after this gate may Playwright become selectable as a production backend.
 
-For autonomous Rakazo tasks that should not use the human profile:
+Raw `eval`, `run-code`, WebMCP, unrestricted storage mutation, network routing or arbitrary downloads/uploads are not part of the stable Rakazo browser contract. Any future exposure is an explicit separately gated capability, not a hidden removal.
 
-- dedicated user-data-dir under Rakazo-controlled local state;
-- one-writer profile lock handling;
-- project/task isolation policy;
-- optional explicit storage-state import/export with credential treatment.
 
-### BV2-06 — backend routing and fallback
+### BV2-05 — mode-complete profile/session lifecycle
 
-Measure and define routing:
+Complete lifecycle handling for all three Playwright modes:
 
-- Playwright primary for semantic browser work;
-- OpenCLI fallback/alternate;
-- screenshot/UIA/coordinate fallback for visual/non-DOM surfaces;
-- no automatic fallback after an uncertain mutation unless reconciliation proves safety.
+- Extension: browser approval/handoff lifecycle and reconnect semantics;
+- CDP: browser-side Remote Debugging readiness/probe and safe detach semantics;
+- Persistent: dedicated user-data-dir under Rakazo-controlled local state, one-writer profile lock handling and project/task isolation policy;
+- optional explicit storage-state import/export with credential treatment;
+- expose the effective mode in status/diagnostics so it is never hidden from the user/operator.
+
+### BV2-06 — mode/backend routing and fallback
+
+Measure and define routing across Extension, CDP, Persistent, OpenCLI and visual fallback:
+
+- choose Playwright mode per task/session instead of globally;
+- allow explicit user/project/bot preference without making it irreversible;
+- keep OpenCLI as an alternate/fallback backend;
+- use screenshot/UIA/coordinate fallback for visual/non-DOM surfaces;
+- no automatic fallback after an uncertain mutation unless reconciliation proves safety;
+- surface the selected mode/backend in diagnostics and task evidence.
 
 ### BV2-07 — physical Windows acceptance and benchmark
 
-Run the same harmless tasks through both backends:
+Run the same harmless tasks through both backends.
 
-- authenticated existing-profile page;
-- SSO/2FA-preserved page;
-- form interaction;
+The reproducible benchmark uses a deterministic HTTP server bound to `127.0.0.1`; it does not depend on `example.com` or another mutable external page. Run it on the physical Windows host with:
+
+```powershell
+pnpm --filter @rakazo/windows-host benchmark:browser-v2 -- --iterations=5
+```
+
+The default comparison is OpenCLI versus Playwright CDP. Extension acceptance remains a separate explicit test because its upstream attach flow requires browser confirmation and must not distort the normal non-interactive benchmark or automatic-routing UX.
+
+Benchmark tasks cover:
+
+- semantic link navigation;
+- form interaction and postcondition verification;
 - multi-tab isolation;
-- browser restart/recovery;
+- browser-session recovery from a fresh backend instance;
 - DOM-heavy app;
-- canvas/non-semantic fallback.
+- canvas/non-semantic screenshot fallback.
+
+Authenticated existing-profile and SSO/2FA preservation remain physical acceptance cases against the owner's browser rather than synthetic benchmark pages.
 
 Measure:
 
@@ -246,3 +317,15 @@ Only after this acceptance should Browser v2 be considered complete.
 The separate task **Market Original vs WRAPPED/RCCL/HYBRID evaluation** remains open and deferred.
 
 Browser/debug Skill adaptation should start only after BV2 acceptance so adaptation is driven by the final browser capability surface and real benchmark evidence.
+
+### Persistent browser for manual sign-in (BV2 follow-up)
+
+- Rakazo keeps Persistent automation data in a separate directory from the user's daily Chrome profile. The default is headless for non-interactive automated work.
+- Set RAKAZO_PLAYWRIGHT_HEADED=1 in the Windows Host process environment before startup to opt in to a visible Persistent browser for interactive sign-in. The flag is specific to Persistent launches. Do not turn it on in unattended auto-routing without considering visible windows and profile ownership.
+- The user enters passwords and completes SSO/2FA directly in the headed browser. Rakazo does not copy credentials into project files, Git or screenshots. Login state survives browser restarts in the dedicated profile, subject to each website's session lifetime.
+- Rakazo translates Playwright frame-prefixed snapshot references to observation-local, contract-compatible element references and translates them back before a CLI click or fill. The stale-reference checks compare source refs to avoid cross-frame or changed-element confusion.
+- Headed mode does not change the network egress IP. Troubleshoot site-specific browser errors separately from DNS, provider blocks and proxy routing.
+
+### Repeatable isolated Persistent smoke
+
+Run pnpm exec tsx apps/windows-host/scripts/browser-v2-isolated-acceptance.ts on the physical Windows Host from a checkout with dependencies installed. The smoke creates a disposable localhost test site and temporary Chromium profile outside the user's actual Playwright and daily Chrome profiles. It verifies auto selects Persistent, navigates, discovers an input inside an iframe, fills that input using the public eN reference, observes the changed value, then closes the session and cleans up. Expect PHYSICAL_PASS and CLOSE true. This is a manual, isolated acceptance check; it does not log in to real services or replace checks for CDP, Extension, OpenCLI or a supervised Windows Host deployment.

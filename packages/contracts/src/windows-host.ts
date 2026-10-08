@@ -92,12 +92,25 @@ export const WindowsHostBrowserActionSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
+export const WindowsHostBrowserModeSchema = z.enum([
+  "auto",
+  "opencli",
+  "playwright-cli-extension",
+  "playwright-cli-cdp",
+  "playwright-cli-persistent",
+]);
+
+export type WindowsHostBrowserMode = z.infer<typeof WindowsHostBrowserModeSchema>;
+
 // A server-minted bearer capability. It is never derived from botId or a guessed
 // ChatGPT conversation identity, which the current stdio MCP transport does not expose.
 export const WindowsHostBrowserSessionTokenSchema = z.string().uuid();
 
 export const WindowsHostBrowserRequestSchema = z.discriminatedUnion("command", [
-  z.object({ command: z.literal("open") }),
+  z.object({
+    command: z.literal("open"),
+    mode: WindowsHostBrowserModeSchema.optional(),
+  }),
   z.object({ command: z.literal("recover"), sessionToken: WindowsHostBrowserSessionTokenSchema }),
   z.object({
     command: z.literal("navigate"),
@@ -154,6 +167,12 @@ export const WindowsHostBrowserRequestSchema = z.discriminatedUnion("command", [
   }),
   z.object({ command: z.literal("close"), sessionToken: WindowsHostBrowserSessionTokenSchema }),
   z.object({
+    command: z.literal("playwright"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    argv: z.array(z.string().min(1).max(100_000)).min(1).max(64),
+    timeoutMs: z.number().int().min(100).max(600_000).optional(),
+  }),
+  z.object({
     command: z.literal("act"),
     sessionToken: WindowsHostBrowserSessionTokenSchema,
     actions: z.array(WindowsHostBrowserActionSchema).min(1).max(4),
@@ -164,6 +183,7 @@ export type WindowsHostBrowserRequest = z.infer<typeof WindowsHostBrowserRequest
 
 export const WindowsHostBrowserResultSchema = z.object({
   ok: z.boolean(),
+  backendMode: WindowsHostBrowserModeSchema.optional(),
   sessionToken: WindowsHostBrowserSessionTokenSchema.optional(),
   completed: z.number().int().min(0).max(4).optional(),
   uncertain: z.boolean().optional(),
