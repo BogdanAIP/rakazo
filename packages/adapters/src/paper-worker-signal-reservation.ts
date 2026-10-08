@@ -188,6 +188,8 @@ export async function reservePersistedPaperWorkerProposal(
     signal,
     research.record.quoteEvidenceId,
     confirmedGate,
+    undefined,
+    payload.sessionRevision,
   );
   return {
     status: "reserve_result",
