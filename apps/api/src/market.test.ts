@@ -701,6 +701,48 @@ describe("Market Skills + Market Resolver service", () => {
     });
     expect(Date.parse(prepared.provenance?.resolvedAt ?? "")).not.toBeNaN();
     expect(prepared.skillContent).toBe(skillContent);
+
+    const rcclInstructions = buildRcclSkillTemplate({
+      name: "CCXT Market Research",
+      description: "Research public exchange data through authorized read-only capabilities.",
+      capabilityRequirements: ["market.data"],
+    });
+    await service.adapt(actor, {
+      entryId: skill.id,
+      expectedDigest: skill.digest,
+      mode: "rccl",
+      content: rcclInstructions,
+    });
+
+    // Writing an RCCL adaptation does not silently replace the original.
+    const beforeEvaluation = await service.prepare(actor, {
+      semanticKey: "market.data",
+      expectedDigest: resolver.digest,
+      limit: 32,
+    });
+    expect(beforeEvaluation.skillContent).toBe(skillContent);
+    expect(beforeEvaluation.provenance?.skill?.variant).toBe("original");
+
+    await service.evaluate(actor, {
+      entryId: skill.id,
+      expectedDigest: skill.digest,
+      preferredVariant: "rccl",
+      metrics: { comparisonType: "test_fixture", toolExecution: "not_run" },
+      note: "Synthetic adapter-selection test, not a trading performance evaluation.",
+    });
+    const preparedRccl = await service.prepare(actor, {
+      semanticKey: "market.data",
+      expectedDigest: resolver.digest,
+      limit: 32,
+    });
+    expect(preparedRccl.skillContent).toBe(rcclInstructions);
+    expect(preparedRccl.skillContent).not.toBe(skillContent);
+    expect(preparedRccl.provenance?.skill).toMatchObject({
+      marketEntryId: skill.id,
+      marketKey: skill.key,
+      sourceDigest: skill.digest,
+      variant: "rccl",
+    });
   });
 
   it("fails closed on ambiguous semantic resolvers unless the caller pins a resolver key", async () => {
