@@ -599,11 +599,7 @@ describePostgres("resolved research PAPER gate PostgreSQL authorization", () => 
       },
     );
     await expect(
-      applyApprovedTradingPaperResolvedResearchFillControl(
-        second.prisma,
-        owner,
-        fillApproval.id,
-      ),
+      applyApprovedTradingPaperResolvedResearchFillControl(second.prisma, owner, fillApproval.id),
     ).resolves.toMatchObject({
       ok: true,
       enabled: true,
