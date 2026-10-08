@@ -611,6 +611,60 @@ export const MarketResolverPlanSchema = z.object({
 });
 export type MarketResolverPlan = z.infer<typeof MarketResolverPlanSchema>;
 
+export const MarketResolverSelectionSkipReasonSchema = z.enum([
+  "implementation_not_read_only",
+  "market_skill_missing",
+  "market_skill_ambiguous",
+]);
+export type MarketResolverSelectionSkipReason = z.infer<
+  typeof MarketResolverSelectionSkipReasonSchema
+>;
+
+export const MarketResolverSelectionSkipSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  reference: z.string().trim().min(1).max(500),
+  priority: z.number().int().min(1).max(100),
+  reason: MarketResolverSelectionSkipReasonSchema,
+  matches: z.number().int().min(2).max(2_000).optional(),
+});
+export type MarketResolverSelectionSkip = z.infer<typeof MarketResolverSelectionSkipSchema>;
+
+const MarketResolverSelectedImplementationSchema = MarketResolverImplementationSchema.omit({
+  skill: true,
+}).extend({
+  readOnly: z.literal(true),
+});
+
+const MarketResolverResolvedSkillSelectionSchema = z.object({
+  status: z.literal("resolved"),
+  entryId: Id,
+  key: z.string().min(1).max(500),
+  name: z.string().min(1).max(120),
+  repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
+  digest: z.string().regex(/^[0-9a-f]{64}$/),
+  variant: MarketPreferredVariantSchema,
+  tags: z.array(z.string().min(1).max(80)).max(50),
+});
+
+export const MarketResolverReadOnlySelectionSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("ready"),
+    resolver: MarketResolverPlanSchema.shape.resolver,
+    implementation: MarketResolverSelectedImplementationSchema,
+    skill: MarketResolverResolvedSkillSelectionSchema.nullable(),
+    skipped: z.array(MarketResolverSelectionSkipSchema).max(32),
+  }),
+  z.object({
+    status: z.literal("deny"),
+    resolver: MarketResolverPlanSchema.shape.resolver,
+    reason: z.literal("no_eligible_read_only_implementation"),
+    skipped: z.array(MarketResolverSelectionSkipSchema).max(32),
+  }),
+]);
+export type MarketResolverReadOnlySelection = z.infer<
+  typeof MarketResolverReadOnlySelectionSchema
+>;
+
 export const MarketEntrySchema = z.object({
   id: Id,
   kind: MarketEntryKindSchema,
