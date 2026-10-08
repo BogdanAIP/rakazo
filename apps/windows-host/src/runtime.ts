@@ -326,6 +326,25 @@ export async function executeWindowsHostCommand(
         result: { kind: "screen", observation: result.observation },
       };
     }
+    case "screen.semanticAct": {
+      const result = await guiBackend.execute({
+        command: "semanticAct",
+        semantic: command.request.semantic,
+        observe: command.request.observe,
+        settleMs: command.request.settleMs,
+      });
+      if (result.kind !== "actions")
+        throw new Error("Unexpected Windows GUI semantic action result");
+      return {
+        id: command.id,
+        ok: true,
+        result: {
+          kind: "actions",
+          completed: result.completed,
+          ...(result.observation ? { observation: result.observation } : {}),
+        },
+      };
+    }
     case "screen.act": {
       const result = await guiBackend.execute({
         command: "act",

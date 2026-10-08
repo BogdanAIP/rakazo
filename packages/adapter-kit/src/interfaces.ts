@@ -30,6 +30,7 @@ import type {
   ComputerInput,
   ComputerObservation,
   ComputerRef,
+  ComputerSemanticActionRequest,
   ConnectorCall,
   ConnectorCapabilities,
   ConnectorCatalogItem,
@@ -144,6 +145,11 @@ export interface SandboxProvider {
   act(
     computer: ComputerRef,
     request: ComputerActionRequest,
+    context: AdapterContext,
+  ): Promise<ComputerActionResult>;
+  semanticAct?(
+    computer: ComputerRef,
+    request: ComputerSemanticActionRequest,
     context: AdapterContext,
   ): Promise<ComputerActionResult>;
   listFiles(

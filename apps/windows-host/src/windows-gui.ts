@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   type WindowsHostGuiRequest,
@@ -11,6 +13,12 @@ import {
 const GUI_SCRIPT = fileURLToPath(new URL("../scripts/windows-gui.ps1", import.meta.url));
 const MAX_GUI_BYTES = 8 * 1024 * 1024;
 const GUI_TIMEOUT_MS = 22_000;
+const SEMANTIC_RECOVERY_FLAG = path.join(
+  process.env.LOCALAPPDATA?.trim() || path.join(homedir(), "AppData", "Local"),
+  "Rakazo",
+  "windows-host",
+  "semantic-action-recovery.flag",
+);
 
 /** The executor is a fixed, checked-in script, not a general PowerShell API. */
 export type WindowsGuiRunner = (request: WindowsHostGuiRequest) => Promise<WindowsHostGuiResult>;
@@ -90,6 +98,8 @@ export async function runWindowsGui(request: WindowsHostGuiRequest): Promise<Win
 }
 
 export class WindowsGuiBackend {
+  private semanticRecoveryRequired = false;
+
   constructor(
     private readonly runner: WindowsGuiRunner = runWindowsGui,
     private readonly isAvailable: () => boolean = windowsGuiAvailable,
@@ -99,10 +109,42 @@ export class WindowsGuiBackend {
     return this.isAvailable();
   }
 
+  private recoveryRequired(): boolean {
+    return (
+      this.semanticRecoveryRequired ||
+      (process.platform === "win32" && existsSync(SEMANTIC_RECOVERY_FLAG))
+    );
+  }
+
+  private markSemanticPending(): void {
+    this.semanticRecoveryRequired = true;
+    if (process.platform !== "win32") return;
+    mkdirSync(path.dirname(SEMANTIC_RECOVERY_FLAG), { recursive: true });
+    writeFileSync(SEMANTIC_RECOVERY_FLAG, "fresh-observation-required\n", {
+      encoding: "utf8",
+      flag: "w",
+    });
+  }
+
+  private clearSemanticPending(): void {
+    this.semanticRecoveryRequired = false;
+    if (process.platform === "win32") rmSync(SEMANTIC_RECOVERY_FLAG, { force: true });
+  }
+
   async execute(request: WindowsHostGuiRequest): Promise<WindowsHostGuiResult> {
     if (!this.available()) throw new Error("Physical Windows GUI is not enabled");
-    return WindowsHostGuiResultSchema.parse(
-      await this.runner(WindowsHostGuiRequestSchema.parse(request)),
-    );
+    const parsed = WindowsHostGuiRequestSchema.parse(request);
+    if (parsed.command === "semanticAct" && this.recoveryRequired()) {
+      throw new Error("Fresh Windows observation required after an uncertain semantic action");
+    }
+
+    if (parsed.command === "semanticAct") this.markSemanticPending();
+    // The durable latch is deliberately left in place if the runner throws:
+    // the semantic mutation may have happened before transport/process failure.
+    const result = WindowsHostGuiResultSchema.parse(await this.runner(parsed));
+    if (parsed.command === "observe" || parsed.command === "semanticAct") {
+      this.clearSemanticPending();
+    }
+    return result;
   }
 }

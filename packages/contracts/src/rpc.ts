@@ -108,10 +108,24 @@ import {
   WindowsHostBrowserResultSchema,
   WindowsHostCapabilitySchema,
   WindowsHostProcessResultSchema,
+  WindowsHostUiaActionSchema,
+  WindowsHostUiaSnapshotSchema,
 } from "./windows-host.js";
 
 const botId = z.object({ botId: Id });
 const groupId = z.object({ groupId: Id });
+
+const computerObservationOutputSchema = z.object({
+  frameId: z.string(),
+  capturedAt: z.string(),
+  mimeType: z.enum(["image/png", "image/jpeg"]),
+  imageBase64: z.string(),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  cursor: z.object({ x: z.number().nonnegative(), y: z.number().nonnegative() }).optional(),
+  activeWindow: z.object({ id: z.string(), title: z.string().optional() }).optional(),
+  uia: WindowsHostUiaSnapshotSchema.optional(),
+});
 
 const threadTarget = z
   .object({
@@ -508,18 +522,22 @@ export const appContract = {
         }),
       )
       .output(WindowsHostBrowserResultSchema),
-    observe: oc.input(botId).output(
-      z.object({
-        frameId: z.string(),
-        capturedAt: z.string(),
-        mimeType: z.enum(["image/png", "image/jpeg"]),
-        imageBase64: z.string(),
-        width: z.number().int().positive(),
-        height: z.number().int().positive(),
-        cursor: z.object({ x: z.number().nonnegative(), y: z.number().nonnegative() }).optional(),
-        activeWindow: z.object({ id: z.string(), title: z.string().optional() }).optional(),
-      }),
-    ),
+    observe: oc.input(botId).output(computerObservationOutputSchema),
+    uiaAct: oc
+      .input(
+        z.object({
+          botId: Id,
+          semantic: WindowsHostUiaActionSchema,
+          observe: z.boolean().default(true),
+          settleMs: z.number().int().min(0).max(5_000).optional(),
+        }),
+      )
+      .output(
+        z.object({
+          completed: z.literal(1),
+          observation: computerObservationOutputSchema.optional(),
+        }),
+      ),
     downloadFile: oc
       .input(z.object({ botId: Id, path: z.string().min(1) }))
       .output(z.object({ path: z.string(), contentBase64: z.string() })),

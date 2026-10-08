@@ -23,6 +23,7 @@ import {
 import type { ProcedureMode } from "./chatgpt-rakazo.js";
 import {
   actRakazoComputer,
+  actRakazoUia,
   callRakazoRpc,
   collectThreadEvents,
   describeProcedure,
@@ -138,6 +139,7 @@ function computerObservationResult(
     height: observation.height,
     cursor: observation.cursor,
     activeWindow: observation.activeWindow,
+    uia: observation.uia,
     unchanged,
   };
   return {
@@ -672,6 +674,42 @@ server.registerTool(
       "Rakazo computer observed",
       previousFrameId,
     ),
+);
+
+server.registerTool(
+  "rakazo_computer_uia_act",
+  {
+    title: "Act on a Windows UIA control",
+    description:
+      "Perform one narrowly typed Windows UI Automation action (focus, invoke, or guarded rectangle click) using the exact observationId, active window id and UIA ref from a fresh rakazo_computer_observe result. The Windows Host rechecks the semantic tree before acting and requires a fresh observation after an uncertain semantic action.",
+    inputSchema: z.object({
+      botId: z.string().min(1),
+      observationId: z.string().regex(/^[a-f0-9]{64}$/u),
+      windowId: z.string().min(1).max(100),
+      ref: z.string().regex(/^u\d{1,4}$/u),
+      action: z.enum(["focus", "invoke", "click"]),
+      observe: z.boolean().default(true),
+      settleMs: z.number().int().min(0).max(5_000).optional(),
+    }),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ botId, observationId, windowId, ref, action, observe, settleMs }) => {
+    const result = await actRakazoUia(
+      botId,
+      { observationId, windowId, ref, action },
+      { observe, ...(settleMs === undefined ? {} : { settleMs }) },
+    );
+    if (!result.observation) return textResult(result);
+    return computerObservationResult(
+      result.observation,
+      `UIA ${action} completed for ${ref}. Re-observe before any further semantic action if the UI changed.`,
+    );
+  },
 );
 
 server.registerTool(

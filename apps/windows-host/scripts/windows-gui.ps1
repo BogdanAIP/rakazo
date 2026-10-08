@@ -36,6 +36,61 @@ function Limit-UiaText([string]$value, [int]$maxLength) {
     return $value.Substring(0, $maxLength)
 }
 
+function Get-UiaObservationId($window, $elements) {
+    $json = ConvertTo-Json -InputObject @($elements) -Depth 5 -Compress
+    $payload = $window.ToInt64().ToString() + [Environment]::NewLine + $json
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = $sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($payload))
+        return ([BitConverter]::ToString($hash)).Replace("-", "").ToLowerInvariant()
+    }
+    finally {
+        $sha.Dispose()
+    }
+}
+
+function Get-UiaElementByRef($window, [string]$ref) {
+    if (-not $script:UiaAvailable -or $window -eq [IntPtr]::Zero) { return $null }
+    if ($ref -notmatch '^u([1-9][0-9]{0,3})$') { throw "Invalid UIA reference" }
+    $target = [int]$Matches[1]
+    if ($target -gt 256) { throw "UIA reference exceeds the bounded snapshot" }
+
+    $root = [System.Windows.Automation.AutomationElement]::FromHandle($window)
+    if ($null -eq $root) { return $null }
+    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+    $queue = [System.Collections.Queue]::new()
+    $queue.Enqueue([pscustomobject]@{ Element = $root; Depth = 0 })
+    $count = 0
+    $maxDepth = 8
+
+    while ($queue.Count -gt 0 -and $count -lt 256) {
+        $item = $queue.Dequeue()
+        $element = $item.Element
+        try {
+            $null = $element.Current
+            $count++
+            if ($count -eq $target) { return $element }
+        }
+        catch {
+            # Keep traversal consistent with snapshot enumeration when a node disappears.
+        }
+
+        if ([int]$item.Depth -lt $maxDepth) {
+            try {
+                $child = $walker.GetFirstChild($element)
+                while ($null -ne $child) {
+                    $queue.Enqueue([pscustomobject]@{ Element = $child; Depth = ([int]$item.Depth + 1) })
+                    $child = $walker.GetNextSibling($child)
+                }
+            }
+            catch {
+                # Continue with other queued controls.
+            }
+        }
+    }
+    return $null
+}
+
 function Get-UiAutomationSnapshot($window, $screen) {
     if (-not $script:UiaAvailable -or $window -eq [IntPtr]::Zero) { return $null }
 
@@ -116,6 +171,7 @@ function Get-UiAutomationSnapshot($window, $screen) {
 
         return @{
             source = "uia"
+            observationId = Get-UiaObservationId $window $elements
             truncated = $queue.Count -gt 0
             elements = @($elements)
         }
@@ -203,6 +259,71 @@ function Set-DesktopKey($action) {
     }
 }
 
+function Invoke-UiaSemanticAction($semantic) {
+    if (-not $script:UiaAvailable) { throw "Windows UI Automation is unavailable" }
+    $screen = [System.Windows.Forms.SystemInformation]::VirtualScreen
+    $window = [RakazoWin32]::GetForegroundWindow()
+    if ($window -eq [IntPtr]::Zero) { throw "No foreground window is available" }
+    $windowId = $window.ToInt64().ToString()
+    if ($windowId -ne [string]$semantic.windowId) {
+        throw "Stale UIA observation: foreground window changed"
+    }
+
+    $snapshot = Get-UiAutomationSnapshot $window $screen
+    if ($null -eq $snapshot -or [string]$snapshot.observationId -ne [string]$semantic.observationId) {
+        throw "Stale UIA observation: semantic tree changed"
+    }
+
+    $element = Get-UiaElementByRef $window ([string]$semantic.ref)
+    if ($null -eq $element) { throw "Stale UIA observation: referenced control is unavailable" }
+
+    $currentWindow = [RakazoWin32]::GetForegroundWindow()
+    if ($currentWindow.ToInt64().ToString() -ne [string]$semantic.windowId) {
+        throw "Stale UIA observation: foreground window changed"
+    }
+    $verify = Get-UiAutomationSnapshot $currentWindow $screen
+    if ($null -eq $verify -or [string]$verify.observationId -ne [string]$semantic.observationId) {
+        throw "Stale UIA observation: semantic tree changed"
+    }
+
+    $current = $element.Current
+    if (-not [bool]$current.IsEnabled) { throw "UIA control is disabled" }
+
+    switch ([string]$semantic.action) {
+        "focus" {
+            $element.SetFocus()
+        }
+        "invoke" {
+            $pattern = $null
+            if (-not $element.TryGetCurrentPattern(
+                [System.Windows.Automation.InvokePattern]::Pattern,
+                [ref]$pattern
+            )) {
+                throw "UIA control does not support InvokePattern"
+            }
+            ([System.Windows.Automation.InvokePattern]$pattern).Invoke()
+        }
+        "click" {
+            $rect = $current.BoundingRectangle
+            if ($rect.IsEmpty -or
+                [double]::IsNaN($rect.Left) -or [double]::IsInfinity($rect.Left) -or
+                [double]::IsNaN($rect.Top) -or [double]::IsInfinity($rect.Top)) {
+                throw "UIA control has no clickable rectangle"
+            }
+            $x = [int][Math]::Floor($rect.Left + ($rect.Width / 2))
+            $y = [int][Math]::Floor($rect.Top + ($rect.Height / 2))
+            if ($x -lt $screen.Left -or $y -lt $screen.Top -or
+                $x -ge $screen.Right -or $y -ge $screen.Bottom) {
+                throw "UIA control center is outside the Windows virtual screen"
+            }
+            [void][RakazoWin32]::SetCursorPos($x, $y)
+            [RakazoWin32]::mouse_event([uint32]2, 0, 0, 0, [UIntPtr]::Zero)
+            [RakazoWin32]::mouse_event([uint32]4, 0, 0, 0, [UIntPtr]::Zero)
+        }
+        default { throw "Unsupported UIA semantic action" }
+    }
+}
+
 function Invoke-DesktopAction($action) {
     switch ([string]$action.kind) {
         "key" { Set-DesktopKey $action }
@@ -253,6 +374,16 @@ $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
 switch ([string]$request.command) {
     "observe" {
         $result = @{ kind = "observation"; observation = Get-DesktopSnapshot }
+    }
+    "semanticAct" {
+        Invoke-UiaSemanticAction $request.semantic
+        if ($request.settleMs) {
+            Start-Sleep -Milliseconds ([Math]::Min([Math]::Max([int]$request.settleMs, 0), 5000))
+        }
+        $result = @{ kind = "actions"; completed = 1 }
+        if ($request.observe -ne $false) {
+            $result.observation = Get-DesktopSnapshot
+        }
     }
     "act" {
         if ($request.actions.Count -gt 24) { throw "Too many Windows desktop actions" }
