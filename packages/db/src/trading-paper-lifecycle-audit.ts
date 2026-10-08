@@ -308,7 +308,9 @@ export async function auditTradingPaperLifecycleInTransaction(
         record.eventId === event.eventId &&
         record.releasedAt.toISOString() === event.recordedAt &&
         record.releasedQuote === reserve.maxSpendQuote &&
-        (record.reason === "expired" || record.reason === "kill_switch") &&
+        (record.reason === "expired" ||
+          record.reason === "kill_switch" ||
+          record.reason === "session_end") &&
         !byFill.has(event.reservationId) &&
         !byClose.has(event.reservationId),
       "Release audit disagrees with terminal reservation state",
