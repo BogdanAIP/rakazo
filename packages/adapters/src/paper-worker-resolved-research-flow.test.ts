@@ -1,5 +1,5 @@
 import type { BackgroundJobPayloads } from "@rakazo/adapter-kit";
-import type { TradingResolvedResearchEnvelope } from "@rakazo/contracts";
+import type { TradingInstrument, TradingResolvedResearchEnvelope } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import { handlePreparedPaperWorkerResolvedResearch } from "./paper-worker-resolved-research-flow.js";
@@ -218,9 +218,7 @@ describe("handlePreparedPaperWorkerResolvedResearch", () => {
         _prisma: PrismaClient,
         _owner: typeof owner,
         _ledgerId: string,
-        _market: typeof proposalEnvelope.signal extends { kind: "proposal"; market: infer M }
-          ? M
-          : never,
+        _market: TradingInstrument,
         evidenceId: string,
       ) => ({ id: evidenceId, source: "public_adapter_observation" as const }),
     );
@@ -265,9 +263,7 @@ describe("handlePreparedPaperWorkerResolvedResearch", () => {
         _prisma: PrismaClient,
         _owner: typeof owner,
         _ledgerId: string,
-        _market: typeof proposalEnvelope.signal extends { kind: "proposal"; market: infer M }
-          ? M
-          : never,
+        _market: TradingInstrument,
         evidenceId: string,
       ) => ({ id: evidenceId, source: "public_adapter_observation" as const }),
     );
