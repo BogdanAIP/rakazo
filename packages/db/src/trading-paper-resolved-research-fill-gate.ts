@@ -670,6 +670,25 @@ function normalizeFillUse(row: {
   return value;
 }
 
+export async function readTradingPaperResolvedResearchFillUseInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  ledgerId: string,
+  reservationId: string,
+) {
+  await requireOwnedLedger(tx, owner, ledgerId);
+  const row = await tx.tradingPaperResolvedResearchFillUse.findUnique({
+    where: { ledgerId_reservationId: { ledgerId, reservationId } },
+  });
+  if (!row) return null;
+  if (row.spaceId !== owner.spaceId || row.userId !== owner.userId) {
+    throw new PaperResolvedResearchFillGateIntegrityError(
+      "Resolved research fill provenance owner mismatch",
+    );
+  }
+  return normalizeFillUse(row);
+}
+
 export async function recordTradingPaperResolvedResearchFillUseInTransaction(
   tx: Prisma.TransactionClient,
   owner: Owner,
