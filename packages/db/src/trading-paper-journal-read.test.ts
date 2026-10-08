@@ -8,7 +8,7 @@ describe("read-only owner-scoped PAPER journal viewer", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("lists metadata only within the authenticated user's space and owner scope", async () => {
-    const findMany = vi.fn(async () => [{
+    const findMany = vi.fn(async (_query: unknown) => [{
       id: "paper-one",
       openedAt: new Date("2026-10-08T08:00:00Z"),
       updatedAt: new Date("2026-10-08T09:00:00Z"),
