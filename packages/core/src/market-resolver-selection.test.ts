@@ -6,6 +6,7 @@ import type {
 import { describe, expect, it } from "vitest";
 import {
   MarketResolverSelectionIntegrityError,
+  pinMarketResolverResearchProvenance,
   selectMarketResolverReadOnlyImplementation,
 } from "./market-resolver-selection.js";
 
@@ -183,5 +184,73 @@ describe("selectMarketResolverReadOnlyImplementation", () => {
     expect(() => selectMarketResolverReadOnlyImplementation(plan([candidate]))).toThrow(
       "unexpectedly carries Market Skill provenance",
     );
+  });
+});
+
+
+describe("pinMarketResolverResearchProvenance", () => {
+  it("pins exact Resolver and Market Skill provenance without carrying invocation data", () => {
+    const candidate = implementation({
+      name: "OKX CEX Market Skill",
+      kind: "api",
+      reference: "market:okx/agent-trade-kit:okx-cex-market",
+      skillReference: "market:okx/agent-trade-kit:okx-cex-market",
+      priority: 3,
+      constraints: ["public data only", "spot only"],
+      notes: "research",
+      skill: resolvedSkill(),
+    });
+    const selection = selectMarketResolverReadOnlyImplementation(plan([candidate]));
+    const resolvedAt = "2026-10-08T08:00:00.000Z";
+
+    expect(pinMarketResolverResearchProvenance(selection, resolvedAt)).toEqual({
+      semanticKey: "market.data",
+      resolverKey: "market.data@abc",
+      resolverDigest: digest("a"),
+      implementation: {
+        name: "OKX CEX Market Skill",
+        kind: "api",
+        reference: "market:okx/agent-trade-kit:okx-cex-market",
+        priority: 3,
+        readOnly: true,
+      },
+      skill: {
+        marketEntryId: "market-skill-1",
+        marketKey: "okx/agent-trade-kit:skills/okx-cex-market/SKILL.md@abc",
+        sourceDigest: digest("b"),
+        variant: "original",
+      },
+      resolvedAt,
+    });
+  });
+
+  it("pins a direct read-only route without inventing Skill provenance", () => {
+    const selection = selectMarketResolverReadOnlyImplementation(plan([implementation()]));
+
+    expect(
+      pinMarketResolverResearchProvenance(selection, "2026-10-08T08:00:00.000Z"),
+    ).toMatchObject({
+      semanticKey: "market.data",
+      implementation: {
+        reference: "vendor:public-api",
+        readOnly: true,
+      },
+      skill: null,
+    });
+  });
+
+  it("rejects denied Resolver selections and invalid resolution timestamps", () => {
+    const missing = implementation({
+      reference: "market:ccxt/ccxt:ccxt-mcp",
+      skill: { status: "missing" },
+    });
+    const denied = selectMarketResolverReadOnlyImplementation(plan([missing]));
+
+    expect(() =>
+      pinMarketResolverResearchProvenance(denied, "2026-10-08T08:00:00.000Z"),
+    ).toThrow("Denied Resolver selection cannot produce research provenance");
+
+    const ready = selectMarketResolverReadOnlyImplementation(plan([implementation()]));
+    expect(() => pinMarketResolverResearchProvenance(ready, "not-a-date")).toThrow();
   });
 });
