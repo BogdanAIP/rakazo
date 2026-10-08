@@ -4,6 +4,7 @@ import { createDb, type Prisma } from "./client.js";
 import {
   applyApprovedTradingPaperEntrySessionControl,
   assessTradingPaperEntrySessionInTransaction,
+  lockAndVerifyTradingPaperEntrySessionInTransaction,
   readVerifiedTradingPaperEntrySession,
 } from "./trading-paper-entry-session.js";
 import {
@@ -207,6 +208,18 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
     );
     expect(active).toMatchObject({ status: "ready", sessionRevision: 1 });
 
+    const tokenless = await first.prisma.$transaction((tx) =>
+      lockAndVerifyTradingPaperEntrySessionInTransaction(tx, owner, ledgerId),
+    );
+    expect(tokenless).toMatchObject({
+      status: "deny",
+      reason: "session_revision_missing",
+    });
+    const correctlyFenced = await second.prisma.$transaction((tx) =>
+      lockAndVerifyTradingPaperEntrySessionInTransaction(tx, owner, ledgerId, 1),
+    );
+    expect(correctlyFenced).toMatchObject({ status: "ready", sessionRevision: 1 });
+
     const duplicate = await effect("paper_session_control", {
       action: "start",
       ledger_id: ledgerId,
@@ -234,6 +247,11 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
       assessTradingPaperEntrySessionInTransaction(tx, owner, ledgerId, 1),
     );
     expect(paused).toMatchObject({ status: "deny", reason: "session_paused_or_ended" });
+
+    const afterPause = await second.prisma.$transaction((tx) =>
+      lockAndVerifyTradingPaperEntrySessionInTransaction(tx, owner, ledgerId, 1),
+    );
+    expect(afterPause).toMatchObject({ status: "deny", reason: "session_paused_or_ended" });
 
     const staleEnd = await effect("paper_session_control", {
       action: "end",
@@ -272,6 +290,15 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
       assessTradingPaperEntrySessionInTransaction(tx, owner, ledgerId, 1),
     );
     expect(staleWake).toMatchObject({ status: "deny", reason: "worker_gate_changed" });
+
+    const staleMoney = await first.prisma.$transaction((tx) =>
+      lockAndVerifyTradingPaperEntrySessionInTransaction(tx, owner, ledgerId, 1),
+    );
+    expect(staleMoney).toMatchObject({ status: "deny", reason: "worker_gate_changed" });
+    const newMoney = await second.prisma.$transaction((tx) =>
+      lockAndVerifyTradingPaperEntrySessionInTransaction(tx, owner, ledgerId, 4),
+    );
+    expect(newMoney).toMatchObject({ status: "ready", sessionRevision: 4 });
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(0);
     expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(0);
   });
