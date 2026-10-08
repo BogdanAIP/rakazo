@@ -375,14 +375,14 @@ export async function reserveApprovedTradingPaperSignal(
         await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         const currentPolicy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         const decisionNow = Date.now();
-        if (expectedSessionRevision !== undefined) {
+        if (workerSignalAuthority || resolvedResearch || expectedSessionRevision !== undefined) {
           const session = await lockAndVerifyTradingPaperEntrySessionInTransaction(
             tx,
             owner,
             ledgerId,
             expectedSessionRevision,
           );
-          if (session.status !== "ready") {
+          if (session.status !== "ready" && session.status !== "legacy_absent") {
             const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
             return deny(
               { ledgerRevision: recovered.row.version, policyRevision: currentPolicy.revision },
