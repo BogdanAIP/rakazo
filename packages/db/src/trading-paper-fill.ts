@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { lockAndVerifyTradingPaperEntrySessionInTransaction } from "./trading-paper-entry-session.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
 import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
@@ -87,6 +88,7 @@ export type TradingPaperFillResult =
         | "paper_worker_target_unapproved"
         | "paper_resolved_fill_unapproved"
         | "paper_resolved_reserve_unapproved"
+        | "paper_entry_session_inactive"
         | "trusted_market_snapshot_unavailable"
         | "market_snapshot_stale"
         | "market_snapshot_mismatch"
@@ -391,6 +393,7 @@ export async function fillApprovedTradingPaperReservation(
   workerFillAuthority?: TradingPaperWorkerFillAuthority,
   workerTargetAuthority?: TradingPaperWorkerMarketTargetAuthority,
   resolvedFillAuthority?: TradingPaperResolvedResearchFillAuthority,
+  expectedSessionRevision?: number,
 ): Promise<TradingPaperFillResult> {
   const operation = async (): Promise<TradingPaperFillResult> =>
     prisma.$transaction(
@@ -399,6 +402,18 @@ export async function fillApprovedTradingPaperReservation(
         await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         const prior = await readExistingFill(tx, owner, ledgerId, reservationId, evidenceId);
         if (prior) return prior;
+
+        if (expectedSessionRevision !== undefined) {
+          const session = await lockAndVerifyTradingPaperEntrySessionInTransaction(
+            tx,
+            owner,
+            ledgerId,
+            expectedSessionRevision,
+          );
+          if (session.status !== "ready") {
+            return { status: "deny", mode: "paper_only", reason: "paper_entry_session_inactive" };
+          }
+        }
 
         if (
           resolvedFillAuthority &&
@@ -738,6 +753,7 @@ export async function fillApprovedResolvedTradingPaperReservation(
   reservationId: string,
   evidenceId: string,
   authority: TradingPaperResolvedResearchFillAuthority,
+  expectedSessionRevision?: number,
 ): Promise<TradingPaperFillResult> {
   return fillApprovedTradingPaperReservation(
     prisma,
@@ -748,5 +764,6 @@ export async function fillApprovedResolvedTradingPaperReservation(
     undefined,
     undefined,
     authority,
+    expectedSessionRevision,
   );
 }
