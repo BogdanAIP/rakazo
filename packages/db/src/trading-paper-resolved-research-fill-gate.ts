@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  type TradingInstrument,
   type TradingResolvedResearchApprovalScope,
   TradingResolvedResearchApprovalScopeSchema,
 } from "@rakazo/contracts";
@@ -8,7 +9,9 @@ import { Prisma } from "./client.js";
 import {
   assessTradingPaperResolvedResearchScopeAuthorityInTransaction,
   type TradingPaperResolvedResearchScopeAuthority,
+  verifyTradingPaperResolvedResearchReserveUseScopeInTransaction,
 } from "./trading-paper-resolved-research-gate.js";
+import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 type Owner = { spaceId: string; userId: string };
@@ -530,6 +533,330 @@ export async function verifyTradingPaperResolvedResearchFillAuthorityInTransacti
     now,
   );
   return current.status === "ready" && sameFillAuthority(expected, current) ? current : null;
+}
+
+type ResolvedResearchFillUseInput = {
+  reservationId: string;
+  signalId: string;
+  reserveEvidenceId: string;
+  evidenceId: string;
+  reserveEventSequence: number;
+  fillEventSequence: number;
+  actedAt: string;
+};
+
+function fillUseDigest(value: {
+  ledgerId: string;
+  reservationId: string;
+  spaceId: string;
+  userId: string;
+  signalId: string;
+  fillApprovalEffectId: string;
+  researchApprovalEffectId: string;
+  scope: TradingResolvedResearchApprovalScope;
+  policyRevision: number;
+  gateRevision: number;
+  researchRevision: number;
+  fillRevision: number;
+  reserveEvidenceId: string;
+  evidenceId: string;
+  reserveEventSequence: number;
+  fillEventSequence: number;
+  actedAt: string;
+}): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        value.ledgerId,
+        value.reservationId,
+        value.spaceId,
+        value.userId,
+        value.signalId,
+        value.fillApprovalEffectId,
+        value.researchApprovalEffectId,
+        value.scope,
+        value.policyRevision,
+        value.gateRevision,
+        value.researchRevision,
+        value.fillRevision,
+        value.reserveEvidenceId,
+        value.evidenceId,
+        value.reserveEventSequence,
+        value.fillEventSequence,
+        value.actedAt,
+      ]),
+      "utf8",
+    )
+    .digest("hex");
+}
+
+function normalizeFillUse(row: {
+  ledgerId: string;
+  reservationId: string;
+  spaceId: string;
+  userId: string;
+  signalId: string;
+  fillApprovalEffectId: string;
+  researchApprovalEffectId: string;
+  scope: Prisma.JsonValue;
+  policyRevision: number;
+  gateRevision: number;
+  researchRevision: number;
+  fillRevision: number;
+  reserveEvidenceId: string;
+  evidenceId: string;
+  reserveEventSequence: number;
+  fillEventSequence: number;
+  actedAt: Date;
+  useSha256: string;
+}) {
+  let scope: TradingResolvedResearchApprovalScope;
+  try {
+    scope = canonicalScope(row.scope);
+  } catch {
+    throw new PaperResolvedResearchFillGateIntegrityError(
+      "Stored resolved research fill provenance scope invalid",
+    );
+  }
+  if (
+    !row.reservationId ||
+    row.reservationId.length > 128 ||
+    !row.signalId ||
+    row.signalId.length > 128 ||
+    !row.reserveEvidenceId ||
+    row.reserveEvidenceId.length > 128 ||
+    !row.evidenceId ||
+    row.evidenceId.length > 128 ||
+    !Number.isSafeInteger(row.policyRevision) ||
+    row.policyRevision < 0 ||
+    !Number.isSafeInteger(row.gateRevision) ||
+    row.gateRevision < 0 ||
+    !Number.isSafeInteger(row.researchRevision) ||
+    row.researchRevision < 1 ||
+    !Number.isSafeInteger(row.fillRevision) ||
+    row.fillRevision < 1 ||
+    !Number.isSafeInteger(row.reserveEventSequence) ||
+    row.reserveEventSequence < 1 ||
+    !Number.isSafeInteger(row.fillEventSequence) ||
+    row.fillEventSequence <= row.reserveEventSequence
+  ) {
+    throw new PaperResolvedResearchFillGateIntegrityError(
+      "Resolved research fill provenance is invalid",
+    );
+  }
+  const value = {
+    ledgerId: row.ledgerId,
+    reservationId: row.reservationId,
+    spaceId: row.spaceId,
+    userId: row.userId,
+    signalId: row.signalId,
+    fillApprovalEffectId: row.fillApprovalEffectId,
+    researchApprovalEffectId: row.researchApprovalEffectId,
+    scope,
+    policyRevision: row.policyRevision,
+    gateRevision: row.gateRevision,
+    researchRevision: row.researchRevision,
+    fillRevision: row.fillRevision,
+    reserveEvidenceId: row.reserveEvidenceId,
+    evidenceId: row.evidenceId,
+    reserveEventSequence: row.reserveEventSequence,
+    fillEventSequence: row.fillEventSequence,
+    actedAt: row.actedAt.toISOString(),
+  };
+  if (row.useSha256 !== fillUseDigest(value)) {
+    throw new PaperResolvedResearchFillGateIntegrityError(
+      "Resolved research fill provenance digest mismatch",
+    );
+  }
+  return value;
+}
+
+export async function recordTradingPaperResolvedResearchFillUseInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  authority: TradingPaperResolvedResearchFillAuthority,
+  input: ResolvedResearchFillUseInput,
+): Promise<void> {
+  await requireOwnedLedger(tx, owner, authority.ledgerId);
+  const actedAt = new Date(input.actedAt);
+  if (
+    !Number.isFinite(actedAt.getTime()) ||
+    !input.reservationId ||
+    input.reservationId.length > 128 ||
+    !input.signalId ||
+    input.signalId.length > 128 ||
+    !input.reserveEvidenceId ||
+    input.reserveEvidenceId.length > 128 ||
+    !input.evidenceId ||
+    input.evidenceId.length > 128 ||
+    !Number.isSafeInteger(input.reserveEventSequence) ||
+    input.reserveEventSequence < 1 ||
+    !Number.isSafeInteger(input.fillEventSequence) ||
+    input.fillEventSequence <= input.reserveEventSequence
+  ) {
+    throw new PaperResolvedResearchFillGateIntegrityError(
+      "Invalid resolved research fill provenance scope",
+    );
+  }
+  const value = {
+    ledgerId: authority.ledgerId,
+    reservationId: input.reservationId,
+    spaceId: owner.spaceId,
+    userId: owner.userId,
+    signalId: input.signalId,
+    fillApprovalEffectId: authority.fillApprovalEffectId,
+    researchApprovalEffectId: authority.researchApprovalEffectId,
+    scope: authority.scope,
+    policyRevision: authority.policyRevision,
+    gateRevision: authority.gateRevision,
+    researchRevision: authority.researchRevision,
+    fillRevision: authority.fillRevision,
+    reserveEvidenceId: input.reserveEvidenceId,
+    evidenceId: input.evidenceId,
+    reserveEventSequence: input.reserveEventSequence,
+    fillEventSequence: input.fillEventSequence,
+    actedAt: actedAt.toISOString(),
+  };
+  await tx.tradingPaperResolvedResearchFillUse.create({
+    data: {
+      ...value,
+      scope: asInputJson(value.scope),
+      actedAt,
+      useSha256: fillUseDigest(value),
+    },
+  });
+}
+
+export type HistoricalTradingPaperResolvedResearchFillScope = {
+  ledgerId: string;
+  reservationId: string;
+  signalId: string;
+  policyRevision: number;
+  reserveEvidenceId: string;
+  evidenceId: string;
+  reserveEventSequence: number;
+  fillEventSequence: number;
+  actedAt: string;
+  market: TradingInstrument;
+};
+
+export async function verifyHistoricalTradingPaperResolvedResearchFillApprovalInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  effectId: string,
+  expected: HistoricalTradingPaperResolvedResearchFillScope,
+): Promise<boolean> {
+  await requireOwnedLedger(tx, owner, expected.ledgerId);
+  const row = await tx.tradingPaperResolvedResearchFillUse.findUnique({
+    where: {
+      ledgerId_reservationId: {
+        ledgerId: expected.ledgerId,
+        reservationId: expected.reservationId,
+      },
+    },
+  });
+  if (!row) return false;
+  if (row.spaceId !== owner.spaceId || row.userId !== owner.userId) {
+    throw new PaperResolvedResearchFillGateIntegrityError(
+      "Resolved research fill provenance owner mismatch",
+    );
+  }
+  const use = normalizeFillUse(row);
+  if (use.fillApprovalEffectId !== effectId) return false;
+
+  const effect = await tx.externalEffect.findUnique({
+    where: { id: effectId },
+    include: { run: { select: { spaceId: true, userId: true } } },
+  });
+  if (
+    effect?.status !== "completed" ||
+    effect.kind !== "paper_resolved_research_fill_control" ||
+    effect.spaceId !== owner.spaceId ||
+    effect.run.spaceId !== owner.spaceId ||
+    effect.run.userId !== owner.userId
+  ) {
+    throw new PaperResolvedResearchFillGateIntegrityError(
+      "Historical resolved research fill lacks explicit G3 approval provenance",
+    );
+  }
+  const request = parseRequest(effect.request);
+  const result = objectResult(effect.result);
+  let resultScope: TradingResolvedResearchApprovalScope | null = null;
+  try {
+    resultScope = result?.scope ? canonicalScope(result.scope) : null;
+  } catch {
+    throw new PaperResolvedResearchFillGateIntegrityError(
+      "Historical resolved research fill approval result scope invalid",
+    );
+  }
+  const reserveApproved =
+    await verifyTradingPaperResolvedResearchReserveUseScopeInTransaction(
+      tx,
+      owner,
+      {
+        ledgerId: use.ledgerId,
+        scope: use.scope,
+        policyRevision: use.policyRevision,
+        gateRevision: use.gateRevision,
+        researchRevision: use.researchRevision,
+        researchApprovalEffectId: use.researchApprovalEffectId,
+      },
+      {
+        reservationId: use.reservationId,
+        signalId: use.signalId,
+        evidenceId: use.reserveEvidenceId,
+        reserveEventSequence: use.reserveEventSequence,
+      },
+    );
+  if (!reserveApproved) {
+    throw new PaperResolvedResearchFillGateIntegrityError(
+      "Historical resolved research fill lacks matching G2 reserve provenance",
+    );
+  }
+  const evidence = await verifyPublicPaperQuoteEvidenceInTransaction(
+    tx,
+    owner,
+    use.ledgerId,
+    use.evidenceId,
+  );
+  if (!evidence || JSON.stringify(evidence.market) !== JSON.stringify(expected.market)) {
+    throw new PaperResolvedResearchFillGateIntegrityError(
+      "Historical resolved research fill evidence disagrees with reservation market",
+    );
+  }
+  if (
+    request.action !== "enable" ||
+    request.ledgerId !== use.ledgerId ||
+    request.expectedGateRevision !== use.gateRevision ||
+    request.expectedResearchRevision !== use.researchRevision ||
+    !sameScope(request.scope, use.scope) ||
+    result?.ok !== true ||
+    result.mode !== "paper_only" ||
+    result.action !== "enable" ||
+    result.ledgerId !== use.ledgerId ||
+    result.enabled !== true ||
+    !resultScope ||
+    !sameScope(resultScope, use.scope) ||
+    result.policyRevision !== use.policyRevision ||
+    result.gateRevision !== use.gateRevision ||
+    result.researchRevision !== use.researchRevision ||
+    result.fillRevision !== use.fillRevision
+  ) {
+    throw new PaperResolvedResearchFillGateIntegrityError(
+      "Historical resolved research fill approval disagrees with persisted provenance",
+    );
+  }
+  return (
+    expected.ledgerId === use.ledgerId &&
+    expected.reservationId === use.reservationId &&
+    expected.signalId === use.signalId &&
+    expected.policyRevision === use.policyRevision &&
+    expected.reserveEvidenceId === use.reserveEvidenceId &&
+    expected.evidenceId === use.evidenceId &&
+    expected.reserveEventSequence === use.reserveEventSequence &&
+    expected.fillEventSequence === use.fillEventSequence &&
+    expected.actedAt === use.actedAt
+  );
 }
 
 export async function applyApprovedTradingPaperResolvedResearchFillControl(
