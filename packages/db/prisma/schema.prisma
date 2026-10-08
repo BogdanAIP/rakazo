@@ -1400,6 +1400,7 @@ model TradingPaperLedger {
   closeDecisions        TradingPaperCloseDecision[]
   protectiveExitAuthorities TradingPaperProtectiveExitAuthority[]
   workerGate            TradingPaperWorkerGate?
+  entrySession          TradingPaperEntrySession?
   workerRecurrence      TradingPaperWorkerRecurrence?
   workerSuccessorIntents TradingPaperWorkerSuccessorIntent[]
   workerMarketTarget     TradingPaperWorkerMarketTarget?
@@ -1623,6 +1624,30 @@ model TradingPaperWorkerGate {
 
   @@index([spaceId, userId])
   @@map("trading_paper_worker_gates")
+}
+
+/**
+ * H1 — separately approved finite PAPER entry-session lease.
+ * No default row = no entry-session authority; no queue or orders.
+ * Revocation is revision-fenced and does not disable protective stops.
+ */
+model TradingPaperEntrySession {
+  ledgerId           String             @id
+  ledger             TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId            String
+  userId             String
+  status             String
+  revision           Int                @default(0)
+  workerGateRevision Int
+  startedAt          DateTime
+  expiresAt          DateTime
+  approvalEffectId   String
+  sessionSha256      String
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([spaceId, userId])
+  @@map("trading_paper_entry_sessions")
 }
 
 /** Explicit owner-approved permission for recurring read-only PAPER preflights.
