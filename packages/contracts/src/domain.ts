@@ -6,7 +6,7 @@ import {
   isCloudflareAiGatewayProvider,
 } from "./cloudflare-ai-gateway.js";
 import { ThreadMessageSchema } from "./events.js";
-import { Id, MemoryScope, RunStatus, SandboxKind } from "./ids.js";
+import { Id, IsoDate, MemoryScope, RunStatus, SandboxKind } from "./ids.js";
 import { McpHeadersSchema, McpRemoteEndpointSchema, McpTransportSchema } from "./mcp.js";
 
 export const ComputerModeSchema = z.enum(["team", "dedicated"]);
@@ -662,6 +662,43 @@ export const MarketResolverReadOnlySelectionSchema = z.discriminatedUnion("statu
   }),
 ]);
 export type MarketResolverReadOnlySelection = z.infer<typeof MarketResolverReadOnlySelectionSchema>;
+
+
+/**
+ * Minimal immutable provenance emitted from one ready read-only Resolver
+ * selection. This is intentionally research-only metadata: it contains no
+ * tool arguments, credentials, order fields, PAPER authority or execution
+ * capability. Trading can consume this shape without copying Market storage.
+ */
+export const MarketResolverPinnedResearchProvenanceSchema = z.object({
+  semanticKey: z
+    .string()
+    .trim()
+    .min(3)
+    .max(80)
+    .regex(/^[a-z][a-z0-9._-]*$/),
+  resolverKey: z.string().trim().min(1).max(500),
+  resolverDigest: z.string().regex(/^[0-9a-f]{64}$/),
+  implementation: z.object({
+    name: z.string().trim().min(1).max(120),
+    kind: z.enum(["mcp", "api", "cli", "native", "computer", "browser"]),
+    reference: z.string().trim().min(1).max(500),
+    priority: z.number().int().min(1).max(100),
+    readOnly: z.literal(true),
+  }),
+  skill: z
+    .object({
+      marketEntryId: Id,
+      marketKey: z.string().min(1).max(500),
+      sourceDigest: z.string().regex(/^[0-9a-f]{64}$/),
+      variant: MarketPreferredVariantSchema,
+    })
+    .nullable(),
+  resolvedAt: IsoDate,
+});
+export type MarketResolverPinnedResearchProvenance = z.infer<
+  typeof MarketResolverPinnedResearchProvenanceSchema
+>;
 
 export const MarketEntrySchema = z.object({
   id: Id,
