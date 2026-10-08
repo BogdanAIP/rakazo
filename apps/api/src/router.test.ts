@@ -1125,6 +1125,7 @@ describe("computer terminal and file transfer", () => {
       }),
       readFile: vi.fn().mockResolvedValue(new TextEncoder().encode("hello")),
       writeFile: vi.fn().mockResolvedValue(undefined),
+      desktopBrowserSession: vi.fn(),
     };
     const prisma = {
       bot: {
@@ -1177,6 +1178,32 @@ describe("computer terminal and file transfer", () => {
     };
     return { sandbox, prisma, call };
   }
+
+  it("preserves browser backend diagnostics and page metadata through the API contract", async () => {
+    const { sandbox, call } = setup({ ...controlled, kind: "desktop" });
+    const result = {
+      ok: true,
+      backendMode: "playwright-cli-persistent",
+      sessionToken: "8eb5799b-7bf8-446f-b334-51e9c28e797e",
+      pageId: "tab-123",
+      pageIds: ["tab-123"],
+      completed: 1,
+      content: "Browser diagnostics",
+    };
+    sandbox.desktopBrowserSession.mockResolvedValue(result);
+
+    const { status, body } = await call("browser", {
+      request: { command: "open", mode: "auto" },
+    });
+
+    expect(status).toBe(200);
+    expect(body).toEqual({ json: result });
+    expect(sandbox.desktopBrowserSession).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "sandbox-ref-1", kind: "desktop" }),
+      { command: "open", mode: "auto" },
+      expect.anything(),
+    );
+  });
 
   it("opens a terminal only for the user holding this bot's control lease", async () => {
     const released = setup();
