@@ -115,7 +115,7 @@ export function createPreparedMarketResearchProvider(
         throw new Error("Market Skill identity changed after research preparation");
       }
     }
-    if (skill && (!prepared.skillContent || !prepared.skillContent.trim())) {
+    if (skill && !prepared.skillContent?.trim()) {
       throw new Error("Pinned Market Skill content is missing");
     }
     if (!skill && prepared.skillContent !== null) {
