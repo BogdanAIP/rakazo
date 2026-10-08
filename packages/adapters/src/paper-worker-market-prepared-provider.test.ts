@@ -1,9 +1,9 @@
-import type { PaperWorkerResolvedResearchProvider } from "./paper-worker-resolved-research-flow.js";
 import { describe, expect, it, vi } from "vitest";
 import {
   createPreparedMarketResearchProvider,
   type PaperWorkerPreparedMarketResearch,
 } from "./paper-worker-market-prepared-provider.js";
+import type { PaperWorkerResolvedResearchProvider } from "./paper-worker-resolved-research-flow.js";
 
 const now = new Date("2026-10-08T09:00:00.000Z");
 const payload = {} as Parameters<PaperWorkerResolvedResearchProvider>[0];
@@ -176,19 +176,25 @@ describe("Market prepare -> Trading G6 research-only provider", () => {
   });
 
   it("rejects execution-capable signals, invalid clocks and runner failures", async () => {
-    const unsafe = createPreparedMarketResearchProvider(async () => prepared, async () => ({
-      ...signal,
-      executionStatus: "live",
-    }));
+    const unsafe = createPreparedMarketResearchProvider(
+      async () => prepared,
+      async () => ({
+        ...signal,
+        executionStatus: "live",
+      }),
+    );
     await expect(unsafe(payload, now)).rejects.toThrow();
 
     const { provider, runner } = providerFor(prepared);
     await expect(provider(payload, new Date("bad-clock"))).rejects.toThrow("clock");
     expect(runner).not.toHaveBeenCalled();
 
-    const failed = createPreparedMarketResearchProvider(async () => prepared, async () => {
-      throw new Error("public read-only capability unavailable");
-    });
+    const failed = createPreparedMarketResearchProvider(
+      async () => prepared,
+      async () => {
+        throw new Error("public read-only capability unavailable");
+      },
+    );
     await expect(failed(payload, now)).rejects.toThrow("capability unavailable");
   });
 });
