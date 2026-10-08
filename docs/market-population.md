@@ -148,8 +148,11 @@ known in Market != installed != assigned != authorized != selected for this task
 - inconsistent `preferred` versus candidate order is treated as plan-integrity failure.
 
 The selector does not install or invoke a Skill and grants no PAPER or live execution authority.
-For Trading, this selected/pinned provenance is the object that should later be mapped into the
-research-only Trading Resolver envelope once the Market and Trading lines share an integration base.
+`market/select` exposes the same selector as a read-only RPC: it internally resolves the candidate
+plan, applies the fail-closed selection rules and returns either one pinned research route or an
+explicit `no_eligible_read_only_implementation` denial. For Trading, this selected/pinned provenance
+is the object that should later be mapped into the research-only Trading Resolver envelope once the
+Market and Trading lines share an integration base.
 
 ## RPC surface
 
@@ -157,6 +160,8 @@ Read:
 
 - `market/search`
 - `market/get`
+- `market/resolve`
+- `market/select`
 
 Write:
 
