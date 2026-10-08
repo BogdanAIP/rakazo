@@ -245,8 +245,8 @@ export async function handleVerifiedPaperWorkerAutomaticStops(
     }
     const evidenceId =
       entry.provenance === "worker_f3"
-        ? stopEvidenceId(payload, candidate)
-        : resolvedStopEvidenceId(payload, candidate);
+        ? stopEvidenceId(payload, entry.candidate)
+        : resolvedStopEvidenceId(payload, entry.candidate);
     const target: PublicPaperSpotTarget = {
       venue: candidate.venue,
       symbol: candidate.symbol,
@@ -278,15 +278,15 @@ export async function handleVerifiedPaperWorkerAutomaticStops(
       entry.provenance === "worker_f3"
         ? (() => {
             const confirmed = confirmedWorkerCandidates.positions.find(
-              (item) => item.positionId === candidate.positionId,
+              (item) => item.positionId === entry.candidate.positionId,
             );
-            return confirmed ? sameCandidate(candidate, confirmed) : false;
+            return confirmed ? sameCandidate(entry.candidate, confirmed) : false;
           })()
         : (() => {
             const confirmed = confirmedResolvedCandidates.positions.find(
-              (item) => item.positionId === candidate.positionId,
+              (item) => item.positionId === entry.candidate.positionId,
             );
-            return confirmed ? sameResolvedCandidate(candidate, confirmed) : false;
+            return confirmed ? sameResolvedCandidate(entry.candidate, confirmed) : false;
           })();
     if (!candidateMatches) {
       return {
