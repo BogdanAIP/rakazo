@@ -46,18 +46,24 @@ export function PaperJournalPage() {
 
   useEffect(() => {
     let active = true;
-    void rpc.trading.journalList({}).then((result) => {
-      if (!active) return;
-      setList(result);
-      setLedgerId((current) =>
-        current && result.ledgers.some((entry) => entry.ledgerId === current)
-          ? current
-          : (result.ledgers[0]?.ledgerId ?? null),
-      );
-    }).catch(() => {
-      if (active) setError("Не удалось получить список журналов. Проверьте подключение к Rakazo.");
-    });
-    return () => { active = false; };
+    void rpc.trading
+      .journalList({})
+      .then((result) => {
+        if (!active) return;
+        setList(result);
+        setLedgerId((current) =>
+          current && result.ledgers.some((entry) => entry.ledgerId === current)
+            ? current
+            : (result.ledgers[0]?.ledgerId ?? null),
+        );
+      })
+      .catch(() => {
+        if (active)
+          setError("Не удалось получить список журналов. Проверьте подключение к Rakazo.");
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -73,19 +79,25 @@ export function PaperJournalPage() {
     setJournal(null);
     setEvents([]);
     setCursor(null);
-    void rpc.trading.journalRead({ ledgerId }).then((result) => {
-      if (!active) return;
-      setJournal(result);
-      if (result.status === "verified") {
-        setEvents(result.events);
-        setCursor(result.nextBeforeSequence);
-      }
-    }).catch(() => {
-      if (active) setError("Не удалось проверить журнал. Повторите попытку.");
-    }).finally(() => {
-      if (active) setPending(false);
-    });
-    return () => { active = false; };
+    void rpc.trading
+      .journalRead({ ledgerId })
+      .then((result) => {
+        if (!active) return;
+        setJournal(result);
+        if (result.status === "verified") {
+          setEvents(result.events);
+          setCursor(result.nextBeforeSequence);
+        }
+      })
+      .catch(() => {
+        if (active) setError("Не удалось проверить журнал. Повторите попытку.");
+      })
+      .finally(() => {
+        if (active) setPending(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [ledgerId]);
 
   async function loadMore() {
@@ -117,7 +129,9 @@ export function PaperJournalPage() {
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <Link to="/app" className="text-sm text-muted-foreground underline">← Rakazo</Link>
+            <Link to="/app" className="text-sm text-muted-foreground underline">
+              ← Rakazo
+            </Link>
             <h1 className="mt-2 text-2xl font-semibold">Журнал PAPER-сделок</h1>
             <p className="mt-2 text-sm text-muted-foreground">
               Только просмотр · виртуальные средства · без доступа к реальным ордерам
@@ -157,12 +171,16 @@ export function PaperJournalPage() {
           </p>
         </section>
 
-        {error && <p role="alert" className="rounded-xl border border-destructive/50 p-4 text-sm">{error}</p>}
+        {error && (
+          <p role="alert" className="rounded-xl border border-destructive/50 p-4 text-sm">
+            {error}
+          </p>
+        )}
         {pending && <p className="text-muted-foreground">Проверка журнала…</p>}
         {journal?.status === "integrity_blocked" && (
           <p role="alert" className="rounded-xl border border-destructive p-5">
-            Проверка целостности журнала не пройдена. Баланс, позиции и история скрыты.
-            Никаких исправлений или сделок не выполнялось.
+            Проверка целостности журнала не пройдена. Баланс, позиции и история скрыты. Никаких
+            исправлений или сделок не выполнялось.
           </p>
         )}
         {verified && (
@@ -183,9 +201,9 @@ export function PaperJournalPage() {
               ))}
             </section>
             <p className="text-xs text-muted-foreground">
-              Открытых позиций: {verified.state.positions.length}. Событий: {verified.state.acceptedEvents}.
-              Баланс по учётной стоимости, без переоценки открытых позиций по рынку.
-              Последнее обновление: {dateTime(verified.updatedAt)}.
+              Открытых позиций: {verified.state.positions.length}. Событий:{" "}
+              {verified.state.acceptedEvents}. Баланс по учётной стоимости, без переоценки открытых
+              позиций по рынку. Последнее обновление: {dateTime(verified.updatedAt)}.
             </p>
             <section className="rounded-2xl border border-border bg-card p-5">
               <h2 className="mb-4 text-lg font-semibold">Открытые позиции</h2>
@@ -194,28 +212,37 @@ export function PaperJournalPage() {
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
-                    <thead><tr className="border-b border-border">
-                      <th className="p-2">Инструмент</th><th className="p-2">Количество</th>
-                      <th className="p-2">Стоимость входа</th><th className="p-2">ID позиции</th>
-                    </tr></thead>
-                    <tbody>{verified.state.positions.map((position) => (
-                      <tr key={position.positionId} className="border-b border-border/60">
-                        <td className="p-2">{position.symbol}</td>
-                        <td className="p-2 tabular-nums">{position.quantityBase}</td>
-                        <td className="p-2 tabular-nums">{position.entryCostBasisQuote} {verified.state.quoteCurrency}</td>
-                        <td className="p-2 font-mono text-xs">{position.positionId}</td>
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="p-2">Инструмент</th>
+                        <th className="p-2">Количество</th>
+                        <th className="p-2">Стоимость входа</th>
+                        <th className="p-2">ID позиции</th>
                       </tr>
-                    ))}</tbody>
+                    </thead>
+                    <tbody>
+                      {verified.state.positions.map((position) => (
+                        <tr key={position.positionId} className="border-b border-border/60">
+                          <td className="p-2">{position.symbol}</td>
+                          <td className="p-2 tabular-nums">{position.quantityBase}</td>
+                          <td className="p-2 tabular-nums">
+                            {position.entryCostBasisQuote} {verified.state.quoteCurrency}
+                          </td>
+                          <td className="p-2 font-mono text-xs">{position.positionId}</td>
+                        </tr>
+                      ))}
+                    </tbody>
                   </table>
                 </div>
               )}
             </section>
             <section className="rounded-2xl border border-border bg-card p-5">
               <h2 className="mb-4 text-lg font-semibold">История операций</h2>
-              {events.length === 0 ? <p className="text-sm text-muted-foreground">Операций нет.</p> : (
+              {events.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Операций нет.</p>
+              ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
-                    <thead><tr className="border-b border-border">
                       <th className="p-2">Дата</th><th className="p-2">Операция</th>
                       <th className="p-2">Инструмент / ID</th><th className="p-2">Количество</th>
                       <th className="p-2">Цена</th><th className="p-2">Комиссия</th>
