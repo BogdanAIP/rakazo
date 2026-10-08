@@ -48,6 +48,7 @@ const READ_ACTIONS = new Set([
   "readFile",
   "search",
   "screenUrl",
+  "select",
   "snapshot",
   "status",
   "summary",
