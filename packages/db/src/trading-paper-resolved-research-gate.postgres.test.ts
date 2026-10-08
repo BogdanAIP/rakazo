@@ -17,6 +17,7 @@ import {
   readTradingPaperResolvedResearchPreflight,
   readVerifiedTradingPaperResolvedResearchGate,
 } from "./trading-paper-resolved-research-gate.js";
+import { readVerifiedTradingPaperResolvedResearchAutomaticStopCandidates } from "./trading-paper-resolved-research-stop-preflight.js";
 import {
   applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,
@@ -861,6 +862,38 @@ describePostgres("resolved research PAPER gate PostgreSQL authorization", () => 
       reservationDecisions: 1,
       fillDecisions: 1,
       openPositions: 1,
+    });
+
+    await expect(
+      readVerifiedTradingPaperResolvedResearchAutomaticStopCandidates(
+        first.prisma,
+        owner,
+        ledgerId,
+      ),
+    ).resolves.toEqual({
+      status: "ready",
+      mode: "paper_only",
+      ledgerId,
+      positions: [
+        {
+          mode: "paper_only",
+          ledgerId,
+          positionId: reserved.reservationId,
+          signalId: research.signal.signalId,
+          venue: "okx",
+          symbol: "SOL-USDT",
+          quantityBase: filled.quantityBase,
+          stopPriceQuote: filled.stopPriceQuote,
+          scope,
+          policyRevision: 1,
+          gateRevision: 1,
+          researchRevision: 1,
+          fillRevision: 1,
+          fillApprovalEffectId: fillApproval.id,
+          researchApprovalEffectId: researchApproval.id,
+          fillEventSequence: filled.fillEventSequence,
+        },
+      ],
     });
 
     await expect(
