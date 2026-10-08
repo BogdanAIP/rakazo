@@ -16,6 +16,7 @@ export * from "./scope.js";
 export * from "./spaces.js";
 export { closeTradingPaperPositionOnStop } from "./trading-paper-close.js";
 export {
+  fillApprovedResolvedTradingPaperReservation,
   fillApprovedTradingPaperReservation,
   type TradingPaperFillResult,
 } from "./trading-paper-fill.js";
@@ -39,13 +40,16 @@ export {
 export {
   applyApprovedTradingPaperResolvedResearchFillControl,
   assessTradingPaperResolvedResearchFillPreflightInTransaction,
+  type HistoricalTradingPaperResolvedResearchFillScope,
   type PaperResolvedResearchFillControlResult,
   PaperResolvedResearchFillGateIntegrityError,
   readTradingPaperResolvedResearchFillPreflight,
   readVerifiedTradingPaperResolvedResearchFillGate,
+  recordTradingPaperResolvedResearchFillUseInTransaction,
   type TradingPaperResolvedResearchFillAuthority,
   type TradingPaperResolvedResearchFillGateStatus,
   type TradingPaperResolvedResearchFillPreflight,
+  verifyHistoricalTradingPaperResolvedResearchFillApprovalInTransaction,
   verifyTradingPaperResolvedResearchFillAuthorityInTransaction,
 } from "./trading-paper-resolved-research-fill-gate.js";
 export {
@@ -62,9 +66,11 @@ export {
   type TradingPaperResolvedResearchGateStatus,
   type TradingPaperResolvedResearchPreflight,
   type TradingPaperResolvedResearchScopeAuthority,
+  type TradingPaperResolvedResearchScopeIdentity,
   verifyHistoricalTradingPaperResolvedResearchReserveApprovalInTransaction,
   verifyTradingPaperResolvedResearchAuthorityInTransaction,
   verifyTradingPaperResolvedResearchReserveUseInTransaction,
+  verifyTradingPaperResolvedResearchReserveUseScopeInTransaction,
 } from "./trading-paper-resolved-research-gate.js";
 export {
   applyApprovedTradingPaperControl,
