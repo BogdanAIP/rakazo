@@ -6,8 +6,10 @@ import type {
 } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import {
+  MarketResolverPlanResolutionError,
   MarketResolverSelectionIntegrityError,
   pinMarketResolverResearchProvenance,
+  resolveMarketResolverPlanFromEntries,
   readPinnedMarketResolverSkillContent,
   selectMarketResolverReadOnlyImplementation,
 } from "./market-resolver-selection.js";
@@ -56,6 +58,62 @@ const plan = (
   candidates,
 });
 
+const resolverEntry = (
+  semanticKey = "market.data",
+  overrides: Partial<MarketEntry> = {},
+): MarketEntry => ({
+  id: "market-resolver-1",
+  kind: "resolver",
+  key: semanticKey,
+  name: "Market data resolver",
+  description: "Deterministic public market data route.",
+  tags: [semanticKey],
+  originalContent: JSON.stringify({
+    semanticKey,
+    implementations: [
+      {
+        name: "Private first",
+        kind: "api",
+        reference: "vendor:private",
+        priority: 1,
+        readOnly: false,
+        constraints: ["private"],
+      },
+      {
+        name: "OKX Skill",
+        kind: "api",
+        reference: "market:okx/agent-trade-kit:okx-cex-market",
+        priority: 2,
+        readOnly: true,
+        constraints: ["public data only"],
+      },
+      {
+        name: "Direct public fallback",
+        kind: "api",
+        reference: "vendor:public",
+        priority: 3,
+        readOnly: true,
+        constraints: ["public data only"],
+      },
+    ],
+  }),
+  adaptedContent: null,
+  adaptationMode: null,
+  preferredVariant: "original",
+  sourceUrl: "https://github.com/BogdanAIP/rakazo/blob/" + "d".repeat(40) + "/resolver.json",
+  repository: "BogdanAIP/rakazo",
+  sourcePath: "resolver.json",
+  sourceRef: "d".repeat(40),
+  license: "repository license",
+  digest: digest("a"),
+  trust: "curated",
+  metrics: {},
+  metadata: {},
+  createdAt: "2026-10-08T07:00:00.000Z",
+  updatedAt: "2026-10-08T07:00:00.000Z",
+  ...overrides,
+});
+
 const marketSkillEntry = (overrides: Partial<MarketEntry> = {}): MarketEntry => ({
   id: "market-skill-1",
   kind: "skill",
@@ -79,6 +137,113 @@ const marketSkillEntry = (overrides: Partial<MarketEntry> = {}): MarketEntry => 
   createdAt: "2026-10-08T07:00:00.000Z",
   updatedAt: "2026-10-08T07:00:00.000Z",
   ...overrides,
+});
+
+describe("resolveMarketResolverPlanFromEntries", () => {
+  it("builds one deterministic owner-scoped plan with exact Market Skill provenance", () => {
+    const result = resolveMarketResolverPlanFromEntries(
+      [resolverEntry()],
+      [marketSkillEntry()],
+      {
+        semanticKey: "market.data",
+        requireReadOnly: false,
+        limit: 32,
+      },
+    );
+
+    expect(result.resolver).toEqual({
+      entryId: "market-resolver-1",
+      key: "market.data",
+      digest: digest("a"),
+      semanticKey: "market.data",
+    });
+    expect(result.candidates.map((candidate) => candidate.reference)).toEqual([
+      "vendor:private",
+      "market:okx/agent-trade-kit:okx-cex-market",
+      "vendor:public",
+    ]);
+    expect(result.candidates[1]?.skill).toEqual(resolvedSkill());
+    expect(result.preferred?.reference).toBe("vendor:private");
+  });
+
+  it("filters read-only and allowed implementation kinds before deterministic ranking", () => {
+    const result = resolveMarketResolverPlanFromEntries(
+      [resolverEntry()],
+      [marketSkillEntry()],
+      {
+        semanticKey: "market.data",
+        requireReadOnly: true,
+        allowedKinds: ["api"],
+        limit: 1,
+      },
+    );
+
+    expect(result.candidates).toHaveLength(1);
+    expect(result.preferred).toMatchObject({
+      reference: "market:okx/agent-trade-kit:okx-cex-market",
+      readOnly: true,
+      priority: 2,
+    });
+  });
+
+  it("fails closed for missing, ambiguous and stale Resolver identity", () => {
+    expect(() =>
+      resolveMarketResolverPlanFromEntries([], [], {
+        semanticKey: "market.data",
+        requireReadOnly: true,
+        limit: 32,
+      }),
+    ).toThrowError(
+      expect.objectContaining<Partial<MarketResolverPlanResolutionError>>({
+        code: "resolver_not_found",
+      }),
+    );
+
+    const other = resolverEntry("market.data", {
+      id: "market-resolver-2",
+      key: "market.data.v2",
+      digest: digest("c"),
+    });
+    const first = resolverEntry("market.data", { key: "market.data.v1" });
+    expect(() =>
+      resolveMarketResolverPlanFromEntries([first, other], [], {
+        semanticKey: "market.data",
+        requireReadOnly: true,
+        limit: 32,
+      }),
+    ).toThrowError(
+      expect.objectContaining<Partial<MarketResolverPlanResolutionError>>({
+        code: "resolver_ambiguous",
+      }),
+    );
+
+    expect(() =>
+      resolveMarketResolverPlanFromEntries([resolverEntry()], [], {
+        semanticKey: "market.data",
+        resolverKey: "market.data",
+        expectedDigest: digest("f"),
+        requireReadOnly: true,
+        limit: 32,
+      }),
+    ).toThrowError(
+      expect.objectContaining<Partial<MarketResolverPlanResolutionError>>({
+        code: "resolver_digest_changed",
+      }),
+    );
+  });
+
+  it("marks an unresolved Market Skill link missing instead of guessing", () => {
+    const result = resolveMarketResolverPlanFromEntries([resolverEntry()], [], {
+      semanticKey: "market.data",
+      requireReadOnly: true,
+      limit: 32,
+    });
+
+    expect(result.candidates[0]).toMatchObject({
+      reference: "market:okx/agent-trade-kit:okx-cex-market",
+      skill: { status: "missing" },
+    });
+  });
 });
 
 describe("selectMarketResolverReadOnlyImplementation", () => {
