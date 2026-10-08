@@ -151,7 +151,15 @@ export async function handlePreparedPaperWorkerResolvedResearch(
 
   const reservation = await (
     services.reserveResolvedSignal ?? reserveApprovedResolvedTradingPaperSignal
-  )(prisma, owner, payload.ledgerId, envelope, reserveEvidenceId, researchAuthority);
+  )(
+    prisma,
+    owner,
+    payload.ledgerId,
+    envelope,
+    reserveEvidenceId,
+    researchAuthority,
+    payload.sessionRevision,
+  );
   if (reservation.status === "deny") {
     return {
       status: "stop",
