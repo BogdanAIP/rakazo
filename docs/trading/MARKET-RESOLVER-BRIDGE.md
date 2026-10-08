@@ -156,6 +156,29 @@ Inside the same serializable fill transaction G4:
 G4 adds no close authority and contains no exchange account, private endpoint, signing function,
 wallet action or live-order payload. Generic automatic stop handling remains a separate future gate.
 
+## G5 — generic G4 protective-stop monitoring
+
+G5 extends the existing F4/F5 automatic protective-stop safety path to positions opened through the
+generic Resolver/Skill G4 fill bridge. It does **not** add a new close authority.
+
+The read-only G5 preflight runs the strict lifecycle audit and returns only currently open positions
+with verified immutable G4 fill provenance. It cross-checks the open fill, quantity, persisted stop,
+market and G1/G3 scope lineage before exposing a candidate.
+
+The recurring protective-stop handler now combines F3 and G4 candidates in fill-sequence order.
+Before any synthetic C2 close it still requires current D2 worker authority, obtains fresh trusted
+keyless public spot evidence for the position's own historical venue/symbol, then rereads the worker
+and exact candidate provenance. C2 remains the money boundary and independently rechecks the enabled
+PAPER policy, kill switch, evidence freshness/spread and persisted stop trigger.
+
+The current trusted public stop-capture adapter supports only OKX and BingX spot. A G4 position on
+any other venue therefore fails closed before network access and blocks new same-wake exposure
+instead of substituting a quote source. Expanding that capture coverage belongs in the Market
+Resolver/Skills integration rather than another hard-coded trading-worker venue path.
+
+G5 closes at most one position per wake and retains the existing no-same-wake-reentry behavior.
+It adds no private exchange API, credential, wallet action, broker dispatcher or live-order path.
+
 ## Why G0 is separate from Market storage
 
 The Market/Capability Profile line and the stacked Trading PR line currently diverge from a common
