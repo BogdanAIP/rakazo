@@ -21,6 +21,7 @@ export type AuthorizedPaperWorkerSuccessorScheduleResult =
       ledgerId: string;
       reason: SuccessorIntentStop["reason"];
       recurrenceReason?: string;
+      sessionReason?: string;
       currentGateRevision?: number;
     };
 
@@ -44,6 +45,7 @@ export async function enqueueAuthorizedPaperWorkerSuccessor(
       ledgerId: payload.ledgerId,
       sourceScheduledFor: payload.scheduledFor,
       gateRevision: payload.gateRevision,
+      ...(payload.sessionRevision ? { sessionRevision: payload.sessionRevision } : {}),
       now,
     },
   );
@@ -53,6 +55,7 @@ export async function enqueueAuthorizedPaperWorkerSuccessor(
       ledgerId: intent.ledgerId,
       reason: intent.reason,
       ...(intent.recurrenceReason ? { recurrenceReason: intent.recurrenceReason } : {}),
+      ...(intent.sessionReason ? { sessionReason: intent.sessionReason } : {}),
       ...(intent.currentGateRevision !== undefined
         ? { currentGateRevision: intent.currentGateRevision }
         : {}),
