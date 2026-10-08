@@ -3922,6 +3922,9 @@ export function createRouter(deps: RouterDeps) {
         market.search(context.actor, input),
       ),
       get: authed.market.get.handler(({ context, input }) => market.get(context.actor, input)),
+      resolve: authed.market.resolve.handler(({ context, input }) =>
+        market.resolve(context.actor, input),
+      ),
       importGithub: authed.market.importGithub.handler(({ context, input }) =>
         market.importGithub(context.actor, input, context.signal),
       ),
