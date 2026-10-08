@@ -53,9 +53,7 @@ describe("read-only owner-scoped PAPER journal viewer", () => {
   it("returns NOT FOUND internally for a cross-owner journal without reading events", async () => {
     const findFirst = vi.fn(async () => null);
     const tx = { tradingPaperLedger: { findFirst } };
-    const transaction = vi.fn(async (work: (client: typeof tx) => Promise<unknown>) =>
-      work(tx),
-    );
+    const transaction = vi.fn(async (work: (client: typeof tx) => Promise<unknown>) => work(tx));
     const prisma = { $transaction: transaction } as unknown as PrismaClient;
 
     await expect(
@@ -76,13 +74,7 @@ describe("read-only owner-scoped PAPER journal viewer", () => {
     const transaction = vi.fn();
     const prisma = { $transaction: transaction } as unknown as PrismaClient;
     await expect(
-      readOwnedTradingPaperJournal(
-        prisma,
-        owner,
-        "paper-one",
-        undefined,
-        new Date("bad"),
-      ),
+      readOwnedTradingPaperJournal(prisma, owner, "paper-one", undefined, new Date("bad")),
     ).rejects.toThrow("clock");
     expect(transaction).not.toHaveBeenCalled();
   });
