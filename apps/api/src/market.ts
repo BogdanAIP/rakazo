@@ -7,6 +7,8 @@ import {
   type MarketEntry,
   type MarketEntryKind,
   type MarketPreferredVariant,
+  type MarketResolverImplementation,
+  type MarketResolverPlan,
   MarketResolverContentSchema,
 } from "@rakazo/contracts";
 import { analyzeRcclSkillMd, buildSkillMd, parseSkillMd } from "@rakazo/core";
@@ -459,6 +461,102 @@ export function createMarketService(
           });
       if (!row) throw new IsolationError();
       return mapMarketEntry(row);
+    },
+
+    async resolve(
+      actor: Actor,
+      input: {
+        semanticKey: string;
+        resolverKey?: string;
+        expectedDigest?: string;
+        requireReadOnly: boolean;
+        allowedKinds?: Array<MarketResolverImplementation["kind"]>;
+        limit: number;
+      },
+    ): Promise<MarketResolverPlan> {
+      const rows = await prisma.marketEntry.findMany({
+        where: {
+          spaceId: actor.spaceId,
+          userId: actor.userId,
+          kind: "resolver",
+          tags: { has: input.semanticKey },
+        },
+        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+        take: 100,
+      });
+      const matches = rows.flatMap((row) => {
+        const parsed = MarketResolverContentSchema.safeParse(
+          (() => {
+            try {
+              return JSON.parse(row.originalContent);
+            } catch {
+              return null;
+            }
+          })(),
+        );
+        return parsed.success && parsed.data.semanticKey === input.semanticKey
+          ? [{ row, content: parsed.data }]
+          : [];
+      });
+      const pinned = input.resolverKey
+        ? matches.filter(({ row }) => row.key === input.resolverKey)
+        : matches;
+      if (pinned.length === 0) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "No owned Market Resolver matches the requested semantic key.",
+        });
+      }
+
+      let selected = pinned[0]!;
+      if (!input.resolverKey && pinned.length > 1) {
+        const exact = pinned.filter(({ row }) => row.key === input.semanticKey);
+        if (exact.length !== 1) {
+          throw new ORPCError("CONFLICT", {
+            message:
+              "Multiple Market Resolvers match this semantic key; pin resolverKey before resolving.",
+          });
+        }
+        selected = exact[0]!;
+      }
+      if (input.expectedDigest && selected.row.digest !== input.expectedDigest) {
+        throw new ORPCError("CONFLICT", {
+          message: "Market Resolver digest changed; reload and pin the current resolver revision.",
+        });
+      }
+
+      const allowedKinds = input.allowedKinds ? new Set(input.allowedKinds) : null;
+      const candidates = selected.content.implementations
+        .filter((implementation) => !input.requireReadOnly || implementation.readOnly === true)
+        .filter((implementation) => !allowedKinds || allowedKinds.has(implementation.kind))
+        .map(
+          (implementation): MarketResolverImplementation => ({
+            name: implementation.name,
+            kind: implementation.kind,
+            reference: implementation.reference,
+            priority: implementation.priority,
+            readOnly: implementation.readOnly === true,
+            constraints: implementation.constraints,
+            ...(implementation.notes ? { notes: implementation.notes } : {}),
+          }),
+        )
+        .sort(
+          (left, right) =>
+            left.priority - right.priority ||
+            left.name.localeCompare(right.name) ||
+            left.reference.localeCompare(right.reference),
+        )
+        .slice(0, input.limit);
+
+      return {
+        resolver: {
+          entryId: selected.row.id,
+          key: selected.row.key,
+          digest: selected.row.digest,
+          semanticKey: selected.content.semanticKey,
+        },
+        preferred: candidates[0] ?? null,
+        candidates,
+      };
     },
 
     async importGithub(
