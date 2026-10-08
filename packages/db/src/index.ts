@@ -38,6 +38,12 @@ export {
   type TradingPaperWorkerSignalReserveAuthority,
 } from "./trading-paper-reserve.js";
 export {
+  PaperResolvedResearchAutomaticStopPreflightIntegrityError,
+  readVerifiedTradingPaperResolvedResearchAutomaticStopCandidates,
+  type TradingPaperResolvedResearchAutomaticStopCandidate,
+  type TradingPaperResolvedResearchAutomaticStopPreflight,
+} from "./trading-paper-resolved-research-stop-preflight.js";
+export {
   applyApprovedTradingPaperResolvedResearchFillControl,
   assessTradingPaperResolvedResearchFillPreflightInTransaction,
   type HistoricalTradingPaperResolvedResearchFillScope,
