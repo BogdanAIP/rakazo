@@ -562,7 +562,7 @@ export function createMarketService(
 
       const allowedKinds = input.allowedKinds ? new Set(input.allowedKinds) : null;
       const needsSkillLinks = selected.content.implementations.some((implementation) =>
-        implementation.reference.startsWith("market:"),
+        (implementation.skillReference ?? implementation.reference).startsWith("market:"),
       );
       const skillRows = needsSkillLinks
         ? await prisma.marketEntry.findMany({
