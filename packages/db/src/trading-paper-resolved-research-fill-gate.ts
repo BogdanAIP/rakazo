@@ -29,11 +29,6 @@ type ResolvedResearchFillGateRequest =
       expectedResearchRevision: number;
     };
 
-type ReadyResearchScopeAuthority = Extract<
-  TradingPaperResolvedResearchScopeAuthority,
-  { status: "ready" }
->;
-
 export class PaperResolvedResearchFillGateIntegrityError extends Error {
   constructor(message = "Resolved research PAPER fill gate integrity mismatch") {
     super(message);
@@ -145,13 +140,7 @@ function parseRequest(value: unknown): ResolvedResearchFillGateRequest {
   const action = row.action;
   const expectedKeys =
     action === "enable"
-      ? [
-          "action",
-          "expected_gate_revision",
-          "expected_research_revision",
-          "ledger_id",
-          "scope",
-        ]
+      ? ["action", "expected_gate_revision", "expected_research_revision", "ledger_id", "scope"]
       : ["action", "expected_gate_revision", "expected_research_revision", "ledger_id"];
   if (
     (action !== "enable" && action !== "disable") ||
@@ -595,8 +584,7 @@ export async function applyApprovedTradingPaperResolvedResearchFillControl(
 
         let policyRevision = previous?.policyRevision ?? 0;
         let gateRevision = previous?.gateRevision ?? request.expectedGateRevision;
-        let researchRevision =
-          previous?.researchRevision ?? request.expectedResearchRevision;
+        let researchRevision = previous?.researchRevision ?? request.expectedResearchRevision;
         let scope: TradingResolvedResearchApprovalScope | null =
           previous?.scope === null || previous?.scope === undefined
             ? null
