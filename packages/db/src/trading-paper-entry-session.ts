@@ -65,7 +65,12 @@ export type PaperEntrySessionControlResult =
       mode: "paper_only";
       action: Action;
       ledgerId: string;
-      reason: "stale_revision" | "already_active" | "not_active" | "worker_denied" | "pending_reservations";
+      reason:
+        | "stale_revision"
+        | "already_active"
+        | "not_active"
+        | "worker_denied"
+        | "pending_reservations";
       currentRevision: number;
     };
 
@@ -83,7 +88,11 @@ export type PaperEntrySessionEntryPreflight =
       status: "deny";
       mode: "paper_only";
       ledgerId: string;
-      reason: "session_absent" | "session_paused_or_ended" | "session_expired" | "worker_gate_changed";
+      reason:
+        | "session_absent"
+        | "session_paused_or_ended"
+        | "session_expired"
+        | "worker_gate_changed";
     };
 
 function parseRequest(value: unknown): Request {
@@ -96,9 +105,10 @@ function parseRequest(value: unknown): Request {
     throw new PaperEntrySessionIntegrityError("Invalid session action");
   }
   const keys = Object.keys(row).sort();
-  const expected = action === "start"
-    ? ["action", "duration_minutes", "expected_revision", "ledger_id"]
-    : ["action", "expected_revision", "ledger_id"];
+  const expected =
+    action === "start"
+      ? ["action", "duration_minutes", "expected_revision", "ledger_id"]
+      : ["action", "expected_revision", "ledger_id"];
   if (JSON.stringify(keys) !== JSON.stringify(expected)) {
     throw new PaperEntrySessionIntegrityError("Unexpected session approval fields");
   }
@@ -130,8 +140,14 @@ function sha(row: Omit<Persisted, "sessionSha256">): string {
   return createHash("sha256")
     .update(
       JSON.stringify([
-        row.ledgerId, row.spaceId, row.userId, row.status, row.revision,
-        row.workerGateRevision, row.startedAt.toISOString(), row.expiresAt.toISOString(),
+        row.ledgerId,
+        row.spaceId,
+        row.userId,
+        row.status,
+        row.revision,
+        row.workerGateRevision,
+        row.startedAt.toISOString(),
+        row.expiresAt.toISOString(),
         row.approvalEffectId,
       ]),
       "utf8",
@@ -145,8 +161,10 @@ function checked(row: Persisted, owner: Owner, ledgerId: string): Persisted & { 
     row.spaceId !== owner.spaceId ||
     row.userId !== owner.userId ||
     (row.status !== "active" && row.status !== "paused" && row.status !== "ended") ||
-    !Number.isSafeInteger(row.revision) || row.revision < 1 ||
-    !Number.isSafeInteger(row.workerGateRevision) || row.workerGateRevision < 0 ||
+    !Number.isSafeInteger(row.revision) ||
+    row.revision < 1 ||
+    !Number.isSafeInteger(row.workerGateRevision) ||
+    row.workerGateRevision < 0 ||
     !Number.isFinite(row.startedAt.getTime()) ||
     !Number.isFinite(row.expiresAt.getTime()) ||
     row.expiresAt <= row.startedAt ||
@@ -203,7 +221,8 @@ async function readInTransaction(
     throw new PaperEntrySessionIntegrityError("Session approval result missing");
   }
   const approved = result as Record<string, unknown>;
-  const expectedAction = row.status === "active" ? "start" : row.status === "paused" ? "pause" : "end";
+  const expectedAction =
+    row.status === "active" ? "start" : row.status === "paused" ? "pause" : "end";
   if (
     request.action !== expectedAction ||
     request.ledgerId !== ledgerId ||
@@ -257,8 +276,9 @@ export async function assessTradingPaperEntrySessionInTransaction(
   expectedSessionRevision?: number,
 ): Promise<PaperEntrySessionEntryPreflight> {
   const status = await readInTransaction(tx, owner, ledgerId, await databaseNow(tx));
-  const deny = (reason: Extract<PaperEntrySessionEntryPreflight, { status: "deny" }>["reason"]) =>
-    ({ status: "deny" as const, mode: "paper_only" as const, ledgerId, reason });
+  const deny = (
+    reason: Extract<PaperEntrySessionEntryPreflight, { status: "deny" }>["reason"],
+  ) => ({ status: "deny" as const, mode: "paper_only" as const, ledgerId, reason });
   if (status.status === "absent") return deny("session_absent");
   if (status.status === "expired") return deny("session_expired");
   if (status.status !== "active") return deny("session_paused_or_ended");
@@ -266,7 +286,10 @@ export async function assessTradingPaperEntrySessionInTransaction(
     return deny("worker_gate_changed");
   }
   const worker = await assessTradingPaperWorkerWakePreflightInTransaction(
-    tx, owner, ledgerId, await databaseNow(tx),
+    tx,
+    owner,
+    ledgerId,
+    await databaseNow(tx),
   );
   if (worker.status !== "ready" || worker.gateRevision !== status.workerGateRevision) {
     return deny("worker_gate_changed");
@@ -318,33 +341,53 @@ export async function applyApprovedTradingPaperEntrySessionControl(
                      WHERE "id" = ${request.ledgerId} AND "spaceId" = ${owner.spaceId}
                        AND "ownerUserId" = ${owner.userId} FOR UPDATE`,
         );
-        if (locked.length !== 1) throw new PaperEntrySessionIntegrityError("Ledger lock unavailable");
+        if (locked.length !== 1)
+          throw new PaperEntrySessionIntegrityError("Ledger lock unavailable");
         const now = await databaseNow(tx);
         const previous = await readInTransaction(tx, owner, request.ledgerId, now);
         const complete = async (result: PaperEntrySessionControlResult) => {
           const updated = await tx.externalEffect.updateMany({
             where: { id: effectId, status: "executing" },
-            data: { status: "completed", result: JSON.parse(JSON.stringify(result)) as Prisma.InputJsonValue },
+            data: {
+              status: "completed",
+              result: JSON.parse(JSON.stringify(result)) as Prisma.InputJsonValue,
+            },
           });
-          if (updated.count !== 1) throw new PaperEntrySessionIntegrityError("Approval effect CAS failed");
+          if (updated.count !== 1)
+            throw new PaperEntrySessionIntegrityError("Approval effect CAS failed");
           return result;
         };
         if (previous.revision !== request.expectedRevision) {
           return complete({
-            ok: false, mode: "paper_only", action: request.action,
-            ledgerId: request.ledgerId, reason: "stale_revision", currentRevision: previous.revision,
+            ok: false,
+            mode: "paper_only",
+            action: request.action,
+            ledgerId: request.ledgerId,
+            reason: "stale_revision",
+            currentRevision: previous.revision,
           });
         }
         if (request.action === "start" && previous.status === "active") {
           return complete({
-            ok: false, mode: "paper_only", action: request.action,
-            ledgerId: request.ledgerId, reason: "already_active", currentRevision: previous.revision,
+            ok: false,
+            mode: "paper_only",
+            action: request.action,
+            ledgerId: request.ledgerId,
+            reason: "already_active",
+            currentRevision: previous.revision,
           });
         }
-        if (request.action !== "start" && (previous.status === "absent" || previous.status === "ended")) {
+        if (
+          request.action !== "start" &&
+          (previous.status === "absent" || previous.status === "ended")
+        ) {
           return complete({
-            ok: false, mode: "paper_only", action: request.action,
-            ledgerId: request.ledgerId, reason: "not_active", currentRevision: previous.revision,
+            ok: false,
+            mode: "paper_only",
+            action: request.action,
+            ledgerId: request.ledgerId,
+            reason: "not_active",
+            currentRevision: previous.revision,
           });
         }
         let workerGateRevision = previous.status === "absent" ? 0 : previous.workerGateRevision;
@@ -352,7 +395,10 @@ export async function applyApprovedTradingPaperEntrySessionControl(
         let expiry = previous.status === "absent" ? now : new Date(previous.expiresAt);
         if (request.action === "start") {
           const wake = await assessTradingPaperWorkerWakePreflightInTransaction(
-            tx, owner, request.ledgerId, now,
+            tx,
+            owner,
+            request.ledgerId,
+            now,
           );
           if (wake.status !== "ready") {
             return complete({
