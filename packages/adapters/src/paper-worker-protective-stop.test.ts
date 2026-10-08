@@ -364,7 +364,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
       .fn()
       .mockResolvedValueOnce(resolvedCandidatePreflight)
       .mockResolvedValueOnce(resolvedCandidatePreflight);
-    const capture = vi.fn(async () => ({
+    const capture = vi.fn(async (..._args: Parameters<typeof capturePublicPaperSpotEvidence>) => ({
       id: `paper-worker:${"f".repeat(64)}`,
       source: "public_adapter_observation" as const,
     }));
