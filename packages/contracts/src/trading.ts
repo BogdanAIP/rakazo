@@ -150,7 +150,10 @@ export const TradingResolvedResearchSkillProvenanceSchema = z.object({
   /** SHA-256 of the exact selected instruction TEXT, not of the Market source revision.
    * Optional only for archived pre-G9 research envelopes. The G7 Market bridge
    * always adds it. Adapted variants cannot receive v1 PAPER approvals. */
-  contentSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  contentSha256: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
 });
 
 export const TradingResolvedResearchProvenanceSchema = z.object({
