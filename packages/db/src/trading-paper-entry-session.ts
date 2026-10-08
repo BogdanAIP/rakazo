@@ -92,7 +92,8 @@ export type PaperEntrySessionEntryPreflight =
         | "session_absent"
         | "session_paused_or_ended"
         | "session_expired"
-        | "worker_gate_changed";
+        | "worker_gate_changed"
+        | "session_revision_missing";
     };
 
 function parseRequest(value: unknown): Request {
@@ -318,9 +319,14 @@ export async function lockAndVerifyTradingPaperEntrySessionInTransaction(
   tx: Prisma.TransactionClient,
   owner: Owner,
   ledgerId: string,
-  expectedSessionRevision: number,
-): Promise<PaperEntrySessionEntryPreflight> {
-  if (!Number.isSafeInteger(expectedSessionRevision) || expectedSessionRevision < 1) {
+  expectedSessionRevision?: number,
+): Promise<
+  PaperEntrySessionEntryPreflight | { status: "legacy_absent"; mode: "paper_only"; ledgerId: string }
+> {
+  if (
+    expectedSessionRevision !== undefined &&
+    (!Number.isSafeInteger(expectedSessionRevision) || expectedSessionRevision < 1)
+  ) {
     throw new PaperEntrySessionIntegrityError("Invalid expected PAPER entry-session revision");
   }
   const locked = await tx.$queryRaw<Array<{ id: string }>>(
@@ -330,6 +336,20 @@ export async function lockAndVerifyTradingPaperEntrySessionInTransaction(
   );
   if (locked.length !== 1 || locked[0]?.id !== ledgerId) {
     throw new PaperEntrySessionIntegrityError("PAPER entry session ledger lock unavailable");
+  }
+  if (expectedSessionRevision === undefined) {
+    const existing = await tx.tradingPaperEntrySession.findUnique({
+      where: { ledgerId },
+      select: { ledgerId: true },
+    });
+    return existing
+      ? {
+          status: "deny" as const,
+          mode: "paper_only" as const,
+          ledgerId,
+          reason: "session_revision_missing" as const,
+        }
+      : { status: "legacy_absent" as const, mode: "paper_only" as const, ledgerId };
   }
   return assessTradingPaperEntrySessionInTransaction(
     tx,
