@@ -400,13 +400,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
       evidenceId,
     );
     expect(evidenceId).toMatch(/^paper-worker:[0-9a-f]{64}$/u);
-    expect(close).toHaveBeenCalledWith(
-      prisma,
-      owner,
-      "paper-1",
-      "resolved-position-1",
-      evidenceId,
-    );
+    expect(close).toHaveBeenCalledWith(prisma, owner, "paper-1", "resolved-position-1", evidenceId);
   });
 
   it("fails closed before public capture for a G4 venue without a trusted stop adapter", async () => {
