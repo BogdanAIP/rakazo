@@ -310,3 +310,40 @@ Market prepare implementation and a genuinely read-only runner into this seam,
 then opt in the G6 handler and verify a complete PostgreSQL PAPER lifecycle.
 This G7 change is a contract/validation boundary, **not** a running market-data
 feed or a deployed worker.
+
+
+## G8 — exact selected RCCL / WRAPPED / HYBRID Skill invocation
+
+`createSelectedMarketSkillResearchRunner` in
+`packages/adapters/src/paper-worker-market-selected-skill-runner.ts`
+takes the pinned `market/prepare` output already validated by G7 and
+passes its **actual selected instructions** to one *injected*, authorized
+read-only research invoker.
+
+It preserves `original`, `rccl`, `wrapped` and `hybrid` variants
+without auto-fallback to the original. Every invocation includes the
+original immutable Market entry's `sourceDigest`, the chosen `variant`,
+and a separately computed SHA-256 of the *actual selected instruction
+text* (`contentSha256`). The output is validated against the existing
+research-only `TradingSignalSchema`; `NO_TRADE` stays an abstention.
+
+No Skill text is executed as a program or installed globally, no MCP
+authorization is widened, and the runner is not enabled by default.
+The injected invoker MUST enforce read-only scopes independently, treat
+Skill instructions as lower-trust instructions than trading policy, and
+decline trading/private-account tool calls regardless of Skill wording.
+
+**Critical remaining approval work:** the current G1/G3
+`TradingResolvedResearchApprovalScope` binds the original Skill
+`sourceDigest` but does **not** bind the selected variant or its actual
+instruction-content digest. The runtime integration MUST bind both to the
+versioned, owner-approved PAPER scope and immutable transaction/audit
+provenance *before adapted-Skill proposals can be allowed to reserve or
+fill*. G8 by itself is **research-only** and must not be wired as an
+automatically paper-trading default until that separate gate is updated
+and tested.
+
+In particular, an existing approval for `original` must never silently
+authorize `rccl`, `wrapped` or `hybrid` following a preference change.
+The Market catalogue's general `market/evaluate` preferred-variant
+change is not PAPER trading owner consent.
