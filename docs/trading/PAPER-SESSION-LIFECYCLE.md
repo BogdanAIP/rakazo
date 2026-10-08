@@ -162,3 +162,41 @@ lease exists. No fake release/cancel operation is currently exposed.
 
 **H0 alone is not a safe entry-session controller; do not enable automated
 trading based on this classifier.**
+
+
+## H1a — persisted finite entry lease (2026-10-08)
+
+Added `TradingPaperEntrySession` on the **existing** PAPER ledger in
+Prisma + SQL migration `20261008230000_trading_paper_entry_session`.
+
+The DB-only functions `applyApprovedTradingPaperEntrySessionControl`,
+`readVerifiedTradingPaperEntrySession` and
+`assessTradingPaperEntrySessionInTransaction` provide:
+
+- **no row = no trading session approval** (default deny);
+- Start only after a fresh, owner-scoped claimed
+  `paper_session_control` approval effect with a finite 5–240 minute
+  duration and current D2/PAPER worker preflight;
+- Pause/End as separately confirmed effects incrementing a monotonically
+  increasing revision and invalidating old *session* revision tokens;
+- expiry derived from the trusted PostgreSQL clock, not client time;
+- a SHA-256 integrity-bound session row, exact owner/effect provenance,
+  a strictly checked state/approval-result pair, serializable transactions
+  and ledger-row locking for concurrent commands;
+- no new entry authority from a stale revision, expired session or a
+  changed/disabled D2 worker gate.
+
+**Not yet integrated:** `paper_session_control` is NOT registered as a
+user-exposed tool, there is no scheduling or auto-start, and the existing
+PAPER reserve/fill/recurrence transactions do NOT YET consume the H1
+session revision. Therefore H1a alone must not be advertised as a
+functional Start/Pause control or as protection for an already-running
+legacy Worker. Full H1b/H2 still needs the session proof enforced in
+the *same transaction* as B7/G2 reserve, F2/G4 fill, and D11/D12
+successor enqueue/intent, plus no-exposure protection-only handling
+and normal audited releases.
+
+The first PostgreSQL test covers owner isolation, default denial,
+approved Start/Pause/End, stale approvals/revisions, and absence of
+new PAPER ledger or outbox events. Separate real restart/transaction
+race tests remain required before a deployment.
