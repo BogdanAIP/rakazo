@@ -146,9 +146,7 @@ describe("Market prepare -> Trading G6 research-only provider", () => {
 
     const first = await providerFor(original).provider(payload, now);
     const second = await providerFor(rccl).provider(payload, now);
-    expect(first.provenance.skill?.contentSha256).not.toBe(
-      second.provenance.skill?.contentSha256,
-    );
+    expect(first.provenance.skill?.contentSha256).not.toBe(second.provenance.skill?.contentSha256);
     expect(second.provenance.skill?.variant).toBe("rccl");
   });
 
