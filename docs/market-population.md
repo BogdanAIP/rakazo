@@ -156,9 +156,19 @@ the read-only Binance token-audit Skill remains the current token-risk route.
 
 `market/select` exposes the same selector as a read-only RPC: it internally resolves the candidate
 plan, applies the fail-closed selection rules and returns either one pinned research route or an
-explicit `no_eligible_read_only_implementation` denial. For Trading, this selected/pinned provenance
-is the object that should later be mapped into the research-only Trading Resolver envelope once the
-Market and Trading lines share an integration base.
+explicit `no_eligible_read_only_implementation` denial.
+
+`market/prepare` is the next read-only boundary for real reuse. It pins the selected Resolver
+key/digest, exact implementation and optional Market Skill id/key/source digest/preferred variant
+with a server timestamp. When a Market Skill is selected it returns only that exact pinned Skill
+content for the current research invocation, after rechecking the entry and selected variant. It
+does **not** copy the Skill into the owner-wide Agent Skill catalog, invoke it, or grant PAPER/live
+execution authority. This lets Trading and other Projects consume one selected Skill on demand
+instead of globally installing dozens of Market Skills.
+
+For Trading, the pinned provenance returned by this preparation boundary is the object that should
+be mapped into the research-only Trading Resolver envelope once the Market and Trading lines share
+an integration base.
 
 ## RPC surface
 
@@ -168,6 +178,7 @@ Read:
 - `market/get`
 - `market/resolve`
 - `market/select`
+- `market/prepare`
 
 Write:
 
