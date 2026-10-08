@@ -86,6 +86,30 @@ disable requires a fresh owner confirmation and is excluded from Auto Review/per
 Connecting a G1-ready proposal to the existing PAPER reserve writer remains a later separately
 reviewed step.
 
+## G2 — transactional Resolver proposal -> PAPER reserve bridge
+
+G2 connects one **already G1-approved** Resolver proposal to the existing B7 PAPER reserve/risk
+writer. It is deliberately limited to the reserve stage.
+
+The public entry point accepts the original `TradingResolvedResearchEnvelope`, the trusted public
+quote evidence id and the exact G1 preflight authority. Inside the same serializable B7 transaction
+it:
+
+- rejects mixing legacy F0 authority with G1 authority;
+- requires the proposed signal to be byte-for-byte the envelope signal;
+- revalidates the current G1 authority against the same envelope and current D2 worker state;
+- runs the unchanged PAPER risk, quote freshness/spread/deviation, capacity, policy and kill-switch
+  checks before any virtual hold is created;
+- records the G1 approval effect on the reserve decision plus a separate immutable
+  `TradingPaperResolvedResearchReserveUse` row binding scope, revisions, evidence, signal and
+  reserve sequence;
+- verifies that provenance on duplicate/idempotent replay and in strict lifecycle audit.
+
+G2 still cannot fill or close a position, call a private exchange endpoint, sign anything or submit
+an order. In particular, a G2 reserve does **not** inherit the legacy F2
+`breakout_20_1h_v1` automatic-fill authority. A future generic fill stage needs its own explicit
+approval boundary and its own historical provenance.
+
 ## Why G0 is separate from Market storage
 
 The Market/Capability Profile line and the stacked Trading PR line currently diverge from a common
