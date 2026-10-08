@@ -56,7 +56,6 @@ const plan = (
   candidates,
 });
 
-
 const marketSkillEntry = (overrides: Partial<MarketEntry> = {}): MarketEntry => ({
   id: "market-skill-1",
   kind: "skill",
@@ -215,7 +214,6 @@ describe("selectMarketResolverReadOnlyImplementation", () => {
   });
 });
 
-
 describe("readPinnedMarketResolverSkillContent", () => {
   it("reads exactly the selected original Skill without installing it", () => {
     const skill = resolvedSkill();
@@ -264,10 +262,7 @@ describe("readPinnedMarketResolverSkillContent", () => {
     const selection = selectMarketResolverReadOnlyImplementation(plan([candidate]));
 
     expect(() =>
-      readPinnedMarketResolverSkillContent(
-        selection,
-        marketSkillEntry({ digest: digest("d") }),
-      ),
+      readPinnedMarketResolverSkillContent(selection, marketSkillEntry({ digest: digest("d") })),
     ).toThrow("Market Skill entry changed after Resolver selection");
     expect(() =>
       readPinnedMarketResolverSkillContent(
@@ -283,9 +278,9 @@ describe("readPinnedMarketResolverSkillContent", () => {
 
   it("rejects direct Resolver routes because no Market Skill was pinned", () => {
     const selection = selectMarketResolverReadOnlyImplementation(plan([implementation()]));
-    expect(() =>
-      readPinnedMarketResolverSkillContent(selection, marketSkillEntry()),
-    ).toThrow("Resolver selection does not pin a Market Skill");
+    expect(() => readPinnedMarketResolverSkillContent(selection, marketSkillEntry())).toThrow(
+      "Resolver selection does not pin a Market Skill",
+    );
   });
 });
 
@@ -347,9 +342,9 @@ describe("pinMarketResolverResearchProvenance", () => {
     });
     const denied = selectMarketResolverReadOnlyImplementation(plan([missing]));
 
-    expect(() =>
-      pinMarketResolverResearchProvenance(denied, "2026-10-08T08:00:00.000Z"),
-    ).toThrow("Denied Resolver selection cannot produce research provenance");
+    expect(() => pinMarketResolverResearchProvenance(denied, "2026-10-08T08:00:00.000Z")).toThrow(
+      "Denied Resolver selection cannot produce research provenance",
+    );
 
     const ready = selectMarketResolverReadOnlyImplementation(plan([implementation()]));
     expect(() => pinMarketResolverResearchProvenance(ready, "not-a-date")).toThrow();
