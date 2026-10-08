@@ -2,6 +2,7 @@ import {
   type MarketEntry,
   MarketEntrySchema,
   type MarketResolverImplementation,
+  MarketResolverContentSchema,
   type MarketResolverPinnedResearchProvenance,
   MarketResolverPinnedResearchProvenanceSchema,
   MarketResolverPlanSchema,
@@ -23,6 +24,160 @@ export class MarketResolverSelectionIntegrityError extends Error {
     super(message);
     this.name = "MarketResolverSelectionIntegrityError";
   }
+}
+export type MarketResolverPlanResolutionErrorCode =
+  | "resolver_not_found"
+  | "resolver_ambiguous"
+  | "resolver_digest_changed";
+
+export class MarketResolverPlanResolutionError extends Error {
+  constructor(
+    readonly code: MarketResolverPlanResolutionErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "MarketResolverPlanResolutionError";
+  }
+}
+
+export type MarketResolverPlanRequest = {
+  semanticKey: string;
+  resolverKey?: string;
+  expectedDigest?: string;
+  requireReadOnly: boolean;
+  allowedKinds?: Array<MarketResolverImplementation["kind"]>;
+  limit: number;
+};
+
+function parseMarketSkillReference(
+  reference: string,
+): { repository: string; name: string } | null {
+  if (!reference.startsWith("market:")) return null;
+  const body = reference.slice("market:".length);
+  const separator = body.lastIndexOf(":");
+  if (separator <= 0 || separator === body.length - 1) return null;
+  const repository = body.slice(0, separator);
+  const name = body.slice(separator + 1);
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)
+    ? { repository, name }
+    : null;
+}
+
+function resolveMarketSkillLinkFromEntries(
+  reference: string,
+  skillEntries: MarketEntry[],
+) {
+  const target = parseMarketSkillReference(reference);
+  if (!target) return null;
+  const matches = skillEntries.filter(
+    (entry) =>
+      entry.kind === "skill" &&
+      entry.repository === target.repository &&
+      entry.name === target.name,
+  );
+  if (matches.length === 0) return { status: "missing" as const };
+  if (matches.length > 1) {
+    return { status: "ambiguous" as const, matches: matches.length };
+  }
+  const entry = matches[0]!;
+  return {
+    status: "resolved" as const,
+    entryId: entry.id,
+    key: entry.key,
+    name: entry.name,
+    repository: entry.repository,
+    digest: entry.digest,
+    variant: entry.preferredVariant,
+    tags: entry.tags,
+  };
+}
+
+/**
+ * Builds the deterministic Resolver plan from already owner-scoped Market
+ * entries. Storage/auth stay outside this pure function so API, workers and
+ * future Project runtimes can share exactly one planning implementation.
+ */
+export function resolveMarketResolverPlanFromEntries(
+  resolverEntriesInput: unknown[],
+  skillEntriesInput: unknown[],
+  input: MarketResolverPlanRequest,
+) {
+  const resolverEntries = resolverEntriesInput.map((entry) => MarketEntrySchema.parse(entry));
+  const skillEntries = skillEntriesInput.map((entry) => MarketEntrySchema.parse(entry));
+  const matches = resolverEntries.flatMap((entry) => {
+    if (entry.kind !== "resolver") return [];
+    let raw: unknown;
+    try {
+      raw = JSON.parse(entry.originalContent);
+    } catch {
+      return [];
+    }
+    const parsed = MarketResolverContentSchema.safeParse(raw);
+    return parsed.success && parsed.data.semanticKey === input.semanticKey
+      ? [{ entry, content: parsed.data }]
+      : [];
+  });
+  const pinned = input.resolverKey
+    ? matches.filter(({ entry }) => entry.key === input.resolverKey)
+    : matches;
+  if (pinned.length === 0) {
+    throw new MarketResolverPlanResolutionError(
+      "resolver_not_found",
+      "No Market Resolver matches the requested semantic key.",
+    );
+  }
+
+  let selected = pinned[0]!;
+  if (!input.resolverKey && pinned.length > 1) {
+    const exact = pinned.filter(({ entry }) => entry.key === input.semanticKey);
+    if (exact.length !== 1) {
+      throw new MarketResolverPlanResolutionError(
+        "resolver_ambiguous",
+        "Multiple Market Resolvers match this semantic key; pin resolverKey.",
+      );
+    }
+    selected = exact[0]!;
+  }
+  if (input.expectedDigest && selected.entry.digest !== input.expectedDigest) {
+    throw new MarketResolverPlanResolutionError(
+      "resolver_digest_changed",
+      "Market Resolver digest changed.",
+    );
+  }
+
+  const allowedKinds = input.allowedKinds ? new Set(input.allowedKinds) : null;
+  const candidates = selected.content.implementations
+    .filter((implementation) => !input.requireReadOnly || implementation.readOnly === true)
+    .filter((implementation) => !allowedKinds || allowedKinds.has(implementation.kind))
+    .map(
+      (implementation): MarketResolverImplementation => ({
+        name: implementation.name,
+        kind: implementation.kind,
+        reference: implementation.reference,
+        skillReference: implementation.skillReference ?? null,
+        priority: implementation.priority,
+        readOnly: implementation.readOnly === true,
+        constraints: implementation.constraints,
+        ...(implementation.notes ? { notes: implementation.notes } : {}),
+        skill: resolveMarketSkillLinkFromEntries(
+          implementation.skillReference ?? implementation.reference,
+          skillEntries,
+        ),
+      }),
+    )
+    .sort(compareImplementations)
+    .slice(0, input.limit);
+
+  return MarketResolverPlanSchema.parse({
+    resolver: {
+      entryId: selected.entry.id,
+      key: selected.entry.key,
+      digest: selected.entry.digest,
+      semanticKey: selected.content.semanticKey,
+    },
+    preferred: candidates[0] ?? null,
+    candidates,
+  });
 }
 
 function compareImplementations(
