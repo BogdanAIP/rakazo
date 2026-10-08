@@ -6,6 +6,27 @@ import {
   type TradingSignal,
 } from "@rakazo/contracts";
 
+/**
+ * Trading-side half of the Market Resolver bridge.
+ *
+ * Accepts only data-only pinned provenance plus a research signal and validates
+ * the complete Trading envelope. Market-native keys that exceed Trading's
+ * narrower contract, non-read-only implementations, malformed Skill digests or
+ * executable signals fail closed instead of being truncated or coerced.
+ */
+export function buildTradingResolvedResearchEnvelope(
+  provenance: unknown,
+  signal: unknown,
+): TradingResolvedResearchEnvelope {
+  return TradingResolvedResearchEnvelopeSchema.parse({
+    schemaVersion: "trading-resolved-research-v1",
+    mode: "research_only",
+    executionAuthority: "none",
+    provenance,
+    signal,
+  });
+}
+
 export type ResolvedTradingResearchAssessment =
   | {
       status: "no_trade";
