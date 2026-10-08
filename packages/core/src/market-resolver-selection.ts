@@ -1,4 +1,6 @@
 import {
+  type MarketEntry,
+  MarketEntrySchema,
   type MarketResolverImplementation,
   type MarketResolverPinnedResearchProvenance,
   MarketResolverPinnedResearchProvenanceSchema,
@@ -142,6 +144,60 @@ export function selectMarketResolverReadOnlyImplementation(
  * This never invokes the implementation or Skill and grants no PAPER/live
  * execution authority.
  */
+export type MarketResolverPinnedSkillContent = {
+  entry: MarketEntry;
+  content: string;
+  variant: "original" | "rccl" | "wrapped" | "hybrid";
+};
+
+/**
+ * Reads the exact Market Skill content pinned by one ready Resolver selection
+ * without installing it into the owner-wide Agent Skill catalog.
+ *
+ * This is a pure provenance check. It neither invokes the Skill nor grants
+ * PAPER/live execution authority. A stale entry id/key/digest/name/repository
+ * or changed preferred variant fails closed.
+ */
+export function readPinnedMarketResolverSkillContent(
+  selectionInput: unknown,
+  entryInput: unknown,
+): MarketResolverPinnedSkillContent {
+  const selection = MarketResolverReadOnlySelectionSchema.parse(selectionInput);
+  if (selection.status !== "ready" || !selection.skill) {
+    throw new MarketResolverSelectionIntegrityError(
+      "Resolver selection does not pin a Market Skill",
+    );
+  }
+  const entry = MarketEntrySchema.parse(entryInput);
+  const selected = selection.skill;
+  if (
+    entry.kind !== "skill" ||
+    entry.id !== selected.entryId ||
+    entry.key !== selected.key ||
+    entry.name !== selected.name ||
+    entry.repository !== selected.repository ||
+    entry.digest !== selected.digest ||
+    entry.preferredVariant !== selected.variant
+  ) {
+    throw new MarketResolverSelectionIntegrityError(
+      "Market Skill entry changed after Resolver selection",
+    );
+  }
+
+  const content =
+    selected.variant === "original"
+      ? entry.originalContent
+      : entry.adaptationMode === selected.variant
+        ? entry.adaptedContent
+        : null;
+  if (!content) {
+    throw new MarketResolverSelectionIntegrityError(
+      "Pinned Market Skill variant content is unavailable",
+    );
+  }
+  return { entry, content, variant: selected.variant };
+}
+
 export function pinMarketResolverResearchProvenance(
   input: unknown,
   resolvedAt: string,
