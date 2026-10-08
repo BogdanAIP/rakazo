@@ -6,11 +6,11 @@ import type {
 } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import {
-  MarketResolverPlanResolutionError,
+  type MarketResolverPlanResolutionError,
   MarketResolverSelectionIntegrityError,
   pinMarketResolverResearchProvenance,
-  resolveMarketResolverPlanFromEntries,
   readPinnedMarketResolverSkillContent,
+  resolveMarketResolverPlanFromEntries,
   selectMarketResolverReadOnlyImplementation,
 } from "./market-resolver-selection.js";
 
@@ -125,7 +125,7 @@ const marketSkillEntry = (overrides: Partial<MarketEntry> = {}): MarketEntry => 
   adaptedContent: null,
   adaptationMode: null,
   preferredVariant: "original",
-  sourceUrl: "https://github.com/okx/agent-trade-kit/blob/" + "c".repeat(40) + "/SKILL.md",
+  sourceUrl: `https://github.com/okx/agent-trade-kit/blob/${"c".repeat(40)}/SKILL.md`,
   repository: "okx/agent-trade-kit",
   sourcePath: "skills/okx-cex-market/SKILL.md",
   sourceRef: "c".repeat(40),
@@ -141,15 +141,11 @@ const marketSkillEntry = (overrides: Partial<MarketEntry> = {}): MarketEntry => 
 
 describe("resolveMarketResolverPlanFromEntries", () => {
   it("builds one deterministic owner-scoped plan with exact Market Skill provenance", () => {
-    const result = resolveMarketResolverPlanFromEntries(
-      [resolverEntry()],
-      [marketSkillEntry()],
-      {
-        semanticKey: "market.data",
-        requireReadOnly: false,
-        limit: 32,
-      },
-    );
+    const result = resolveMarketResolverPlanFromEntries([resolverEntry()], [marketSkillEntry()], {
+      semanticKey: "market.data",
+      requireReadOnly: false,
+      limit: 32,
+    });
 
     expect(result.resolver).toEqual({
       entryId: "market-resolver-1",
@@ -167,16 +163,12 @@ describe("resolveMarketResolverPlanFromEntries", () => {
   });
 
   it("filters read-only and allowed implementation kinds before deterministic ranking", () => {
-    const result = resolveMarketResolverPlanFromEntries(
-      [resolverEntry()],
-      [marketSkillEntry()],
-      {
-        semanticKey: "market.data",
-        requireReadOnly: true,
-        allowedKinds: ["api"],
-        limit: 1,
-      },
-    );
+    const result = resolveMarketResolverPlanFromEntries([resolverEntry()], [marketSkillEntry()], {
+      semanticKey: "market.data",
+      requireReadOnly: true,
+      allowedKinds: ["api"],
+      limit: 1,
+    });
 
     expect(result.candidates).toHaveLength(1);
     expect(result.preferred).toMatchObject({
