@@ -11,6 +11,7 @@ CREATE TABLE "trading_paper_resolved_research_fill_uses" (
     "gateRevision" INTEGER NOT NULL,
     "researchRevision" INTEGER NOT NULL,
     "fillRevision" INTEGER NOT NULL,
+    "reserveEvidenceId" TEXT NOT NULL,
     "evidenceId" TEXT NOT NULL,
     "reserveEventSequence" INTEGER NOT NULL,
     "fillEventSequence" INTEGER NOT NULL,
@@ -30,6 +31,9 @@ ON "trading_paper_resolved_research_fill_uses"("fillApprovalEffectId");
 
 CREATE INDEX "trading_paper_resolved_research_fill_uses_researchApprovalEffectId_idx"
 ON "trading_paper_resolved_research_fill_uses"("researchApprovalEffectId");
+
+CREATE INDEX "trading_paper_resolved_research_fill_uses_reserveEvidenceId_idx"
+ON "trading_paper_resolved_research_fill_uses"("reserveEvidenceId");
 
 CREATE INDEX "trading_paper_resolved_research_fill_uses_evidenceId_idx"
 ON "trading_paper_resolved_research_fill_uses"("evidenceId");
