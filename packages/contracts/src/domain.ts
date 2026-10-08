@@ -661,9 +661,7 @@ export const MarketResolverReadOnlySelectionSchema = z.discriminatedUnion("statu
     skipped: z.array(MarketResolverSelectionSkipSchema).max(32),
   }),
 ]);
-export type MarketResolverReadOnlySelection = z.infer<
-  typeof MarketResolverReadOnlySelectionSchema
->;
+export type MarketResolverReadOnlySelection = z.infer<typeof MarketResolverReadOnlySelectionSchema>;
 
 export const MarketEntrySchema = z.object({
   id: Id,
