@@ -325,3 +325,7 @@ Browser/debug Skill adaptation should start only after BV2 acceptance so adaptat
 - The user enters passwords and completes SSO/2FA directly in the headed browser. Rakazo does not copy credentials into project files, Git or screenshots. Login state survives browser restarts in the dedicated profile, subject to each website's session lifetime.
 - Rakazo translates Playwright frame-prefixed snapshot references to observation-local, contract-compatible element references and translates them back before a CLI click or fill. The stale-reference checks compare source refs to avoid cross-frame or changed-element confusion.
 - Headed mode does not change the network egress IP. Troubleshoot site-specific browser errors separately from DNS, provider blocks and proxy routing.
+
+### Repeatable isolated Persistent smoke
+
+Run pnpm exec tsx apps/windows-host/scripts/browser-v2-isolated-acceptance.ts on the physical Windows Host from a checkout with dependencies installed. The smoke creates a disposable localhost test site and temporary Chromium profile outside the user's actual Playwright and daily Chrome profiles. It verifies auto selects Persistent, navigates, discovers an input inside an iframe, fills that input using the public eN reference, observes the changed value, then closes the session and cleans up. Expect PHYSICAL_PASS and CLOSE true. This is a manual, isolated acceptance check; it does not log in to real services or replace checks for CDP, Extension, OpenCLI or a supervised Windows Host deployment.
