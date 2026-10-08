@@ -1769,6 +1769,7 @@ model TradingPaperResolvedResearchFillUse {
   gateRevision             Int
   researchRevision         Int
   fillRevision             Int
+  reserveEvidenceId        String
   evidenceId               String
   reserveEventSequence     Int
   fillEventSequence        Int
@@ -1780,6 +1781,7 @@ model TradingPaperResolvedResearchFillUse {
   @@unique([ledgerId, fillEventSequence])
   @@index([fillApprovalEffectId])
   @@index([researchApprovalEffectId])
+  @@index([reserveEvidenceId])
   @@index([evidenceId])
   @@map("trading_paper_resolved_research_fill_uses")
 }
