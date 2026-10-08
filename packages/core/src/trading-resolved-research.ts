@@ -51,13 +51,26 @@ export function resolvedTradingResearchApprovalScope(
   input: TradingResolvedResearchEnvelope,
 ): TradingResolvedResearchApprovalScope {
   const envelope = TradingResolvedResearchEnvelopeSchema.parse(input);
+  const skill = envelope.provenance.skill;
+  // V1 remains recognizable only for historical original-Skill/tool-only research.
+  // Adapted Skills without a verified selected-text digest cannot reach G1/G3.
+  if (skill && skill.variant !== "original" && !skill.contentSha256) {
+    throw new Error("Adapted Market Skill lacks pinned instruction content digest");
+  }
+  const boundSkill = skill?.contentSha256
+    ? {
+        schemaVersion: "trading-resolved-research-scope-v2" as const,
+        skillVariant: skill.variant,
+        skillContentSha256: skill.contentSha256,
+      }
+    : { schemaVersion: "trading-resolved-research-scope-v1" as const };
   return TradingResolvedResearchApprovalScopeSchema.parse({
-    schemaVersion: "trading-resolved-research-scope-v1",
+    ...boundSkill,
     semanticKey: envelope.provenance.semanticKey,
     resolverKey: envelope.provenance.resolverKey,
     resolverDigest: envelope.provenance.resolverDigest,
     implementationReference: envelope.provenance.implementation.reference,
-    skillSourceDigest: envelope.provenance.skill?.sourceDigest ?? null,
+    skillSourceDigest: skill?.sourceDigest ?? null,
     strategyId: envelope.signal.strategyId,
     strategyVersion: envelope.signal.strategyVersion,
     venue: envelope.signal.kind === "proposal" ? envelope.signal.market.venue : null,
