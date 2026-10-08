@@ -68,6 +68,9 @@ function setup() {
         if (Array.isArray(rowValue) && Array.isArray(filter.hasSome)) {
           return filter.hasSome.some((item) => rowValue.includes(String(item)));
         }
+        if (Array.isArray(rowValue) && typeof filter.has === "string") {
+          return rowValue.includes(filter.has);
+        }
       }
       return rowValue === value;
     });
@@ -261,6 +264,176 @@ describe("Market Skills + Market Resolver service", () => {
 
     expect(entry.tags).toContain("browser.semantic");
     expect(entry.originalContent).toBe(resolver);
+  });
+
+  it("resolves a semantic Market route into a deterministic read-only candidate plan", async () => {
+    const { service } = setup();
+    const resolver = await service.importEntry(actor, {
+      kind: "resolver",
+      key: "market.data@" + sourceRef,
+      name: "Market data resolver",
+      description: "Ranked implementations for market data.",
+      tags: ["trading", "market-data"],
+      content: JSON.stringify({
+        semanticKey: "market.data",
+        implementations: [
+          {
+            name: "Private trading API",
+            kind: "api",
+            reference: "market:private-trading",
+            priority: 1,
+            readOnly: false,
+            constraints: ["private account required"],
+          },
+          {
+            name: "CCXT public market",
+            kind: "mcp",
+            reference: "ccxt/ccxt",
+            priority: 2,
+            readOnly: true,
+            constraints: ["market tier only"],
+          },
+          {
+            name: "Public fallback",
+            kind: "api",
+            reference: "market:public-fallback",
+            priority: 3,
+            readOnly: true,
+            constraints: ["public data only"],
+          },
+        ],
+      }),
+      sourceUrl:
+        "https://github.com/BogdanAIP/rakazo/blob/" +
+        sourceRef +
+        "/market/resolver-seeds.v1.json",
+      repository: "BogdanAIP/rakazo",
+      sourcePath: "market/resolver-seeds.v1.json",
+      sourceRef,
+      license: "repository license",
+      trust: "curated",
+      metadata: {},
+    });
+
+    await expect(
+      service.resolve(actor, {
+        semanticKey: "market.data",
+        expectedDigest: resolver.digest,
+        requireReadOnly: true,
+        allowedKinds: ["mcp", "api"],
+        limit: 2,
+      }),
+    ).resolves.toEqual({
+      resolver: {
+        entryId: resolver.id,
+        key: resolver.key,
+        digest: resolver.digest,
+        semanticKey: "market.data",
+      },
+      preferred: {
+        name: "CCXT public market",
+        kind: "mcp",
+        reference: "ccxt/ccxt",
+        priority: 2,
+        readOnly: true,
+        constraints: ["market tier only"],
+      },
+      candidates: [
+        {
+          name: "CCXT public market",
+          kind: "mcp",
+          reference: "ccxt/ccxt",
+          priority: 2,
+          readOnly: true,
+          constraints: ["market tier only"],
+        },
+        {
+          name: "Public fallback",
+          kind: "api",
+          reference: "market:public-fallback",
+          priority: 3,
+          readOnly: true,
+          constraints: ["public data only"],
+        },
+      ],
+    });
+
+    await expect(
+      service.resolve(actor, {
+        semanticKey: "market.data",
+        expectedDigest: "0".repeat(64),
+        requireReadOnly: true,
+        limit: 32,
+      }),
+    ).rejects.toThrow("digest changed");
+  });
+
+  it("fails closed on ambiguous semantic resolvers unless the caller pins a resolver key", async () => {
+    const { service } = setup();
+    const shared = {
+      name: "Market data resolver",
+      description: "Resolver revision.",
+      tags: ["market.data"],
+      repository: "BogdanAIP/rakazo",
+      sourcePath: "market/resolver-seeds.v1.json",
+      sourceRef,
+      license: "repository license",
+      trust: "curated" as const,
+      metadata: {},
+    };
+    const content = JSON.stringify({
+      semanticKey: "market.data",
+      implementations: [
+        {
+          name: "Public market",
+          kind: "api",
+          reference: "market:public",
+          priority: 1,
+          readOnly: true,
+          constraints: [],
+        },
+      ],
+    });
+    const first = await service.importEntry(actor, {
+      kind: "resolver",
+      key: "market.data@one-" + sourceRef,
+      content,
+      sourceUrl:
+        "https://github.com/BogdanAIP/rakazo/blob/" +
+        sourceRef +
+        "/market/resolver-seeds.v1.json",
+      ...shared,
+    });
+    await service.importEntry(actor, {
+      kind: "resolver",
+      key: "market.data@two-" + sourceRef,
+      content,
+      sourceUrl:
+        "https://github.com/BogdanAIP/rakazo/blob/" +
+        sourceRef +
+        "/market/resolver-seeds.v1.json",
+      ...shared,
+    });
+
+    await expect(
+      service.resolve(actor, {
+        semanticKey: "market.data",
+        requireReadOnly: true,
+        limit: 32,
+      }),
+    ).rejects.toThrow("Multiple Market Resolvers");
+
+    await expect(
+      service.resolve(actor, {
+        semanticKey: "market.data",
+        resolverKey: first.key,
+        requireReadOnly: true,
+        limit: 32,
+      }),
+    ).resolves.toMatchObject({
+      resolver: { entryId: first.id, key: first.key, semanticKey: "market.data" },
+      preferred: { reference: "market:public", readOnly: true },
+    });
   });
 
   it("keeps the original while storing and evaluating an RCCL adaptation", async () => {
