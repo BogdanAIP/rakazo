@@ -402,17 +402,28 @@ export async function applyApprovedTradingPaperEntrySessionControl(
           );
           if (wake.status !== "ready") {
             return complete({
-              ok: false, mode: "paper_only", action: request.action,
-              ledgerId: request.ledgerId, reason: "worker_denied", currentRevision: previous.revision,
+              ok: false,
+              mode: "paper_only",
+              action: request.action,
+              ledgerId: request.ledgerId,
+              reason: "worker_denied",
+              currentRevision: previous.revision,
             });
           }
           const lifecycle = await auditTradingPaperLifecycleInTransaction(
-            tx, owner, request.ledgerId, now,
+            tx,
+            owner,
+            request.ledgerId,
+            now,
           );
           if (lifecycle.openReservations > 0) {
             return complete({
-              ok: false, mode: "paper_only", action: request.action,
-              ledgerId: request.ledgerId, reason: "pending_reservations", currentRevision: previous.revision,
+              ok: false,
+              mode: "paper_only",
+              action: request.action,
+              ledgerId: request.ledgerId,
+              reason: "pending_reservations",
+              currentRevision: previous.revision,
             });
           }
           workerGateRevision = wake.gateRevision;
@@ -423,7 +434,11 @@ export async function applyApprovedTradingPaperEntrySessionControl(
           ledgerId: request.ledgerId,
           spaceId: owner.spaceId,
           userId: owner.userId,
-          status: (request.action === "start" ? "active" : request.action === "pause" ? "paused" : "ended") as Status,
+          status: (request.action === "start"
+            ? "active"
+            : request.action === "pause"
+              ? "paused"
+              : "ended") as Status,
           revision: previous.revision + 1,
           workerGateRevision,
           startedAt: startTime,
