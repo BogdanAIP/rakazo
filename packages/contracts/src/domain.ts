@@ -700,6 +700,44 @@ export type MarketResolverPinnedResearchProvenance = z.infer<
   typeof MarketResolverPinnedResearchProvenanceSchema
 >;
 
+
+export const MarketResolverPreparedResearchSchema = z
+  .object({
+    selection: MarketResolverReadOnlySelectionSchema,
+    provenance: MarketResolverPinnedResearchProvenanceSchema.nullable(),
+    skillContent: z.string().max(200_000).nullable(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.selection.status === "deny") {
+      if (value.provenance !== null || value.skillContent !== null) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Denied Resolver selection cannot carry prepared research provenance",
+          path: ["provenance"],
+        });
+      }
+      return;
+    }
+    if (value.provenance === null) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Ready Resolver selection requires pinned research provenance",
+        path: ["provenance"],
+      });
+    }
+    const needsSkill = value.selection.skill !== null;
+    if (needsSkill !== (value.skillContent !== null)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Prepared Market Skill content must match the pinned Resolver selection",
+        path: ["skillContent"],
+      });
+    }
+  });
+export type MarketResolverPreparedResearch = z.infer<
+  typeof MarketResolverPreparedResearchSchema
+>;
+
 export const MarketEntrySchema = z.object({
   id: Id,
   kind: MarketEntryKindSchema,
