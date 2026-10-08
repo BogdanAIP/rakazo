@@ -6,12 +6,11 @@ import {
 } from "@rakazo/contracts";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import {
   assessTradingPaperResolvedResearchScopeAuthorityInTransaction,
-  type TradingPaperResolvedResearchScopeAuthority,
   verifyTradingPaperResolvedResearchReserveUseScopeInTransaction,
 } from "./trading-paper-resolved-research-gate.js";
-import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 type Owner = { spaceId: string; userId: string };
@@ -789,25 +788,24 @@ export async function verifyHistoricalTradingPaperResolvedResearchFillApprovalIn
       "Historical resolved research fill approval result scope invalid",
     );
   }
-  const reserveApproved =
-    await verifyTradingPaperResolvedResearchReserveUseScopeInTransaction(
-      tx,
-      owner,
-      {
-        ledgerId: use.ledgerId,
-        scope: use.scope,
-        policyRevision: use.policyRevision,
-        gateRevision: use.gateRevision,
-        researchRevision: use.researchRevision,
-        researchApprovalEffectId: use.researchApprovalEffectId,
-      },
-      {
-        reservationId: use.reservationId,
-        signalId: use.signalId,
-        evidenceId: use.reserveEvidenceId,
-        reserveEventSequence: use.reserveEventSequence,
-      },
-    );
+  const reserveApproved = await verifyTradingPaperResolvedResearchReserveUseScopeInTransaction(
+    tx,
+    owner,
+    {
+      ledgerId: use.ledgerId,
+      scope: use.scope,
+      policyRevision: use.policyRevision,
+      gateRevision: use.gateRevision,
+      researchRevision: use.researchRevision,
+      researchApprovalEffectId: use.researchApprovalEffectId,
+    },
+    {
+      reservationId: use.reservationId,
+      signalId: use.signalId,
+      evidenceId: use.reserveEvidenceId,
+      reserveEventSequence: use.reserveEventSequence,
+    },
+  );
   if (!reserveApproved) {
     throw new PaperResolvedResearchFillGateIntegrityError(
       "Historical resolved research fill lacks matching G2 reserve provenance",
