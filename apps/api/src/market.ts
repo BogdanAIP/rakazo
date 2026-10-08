@@ -12,13 +12,14 @@ import {
   type MarketResolverPlan,
   type MarketResolverPreparedResearch,
   type MarketResolverReadOnlySelection,
-  type MarketResolverSkillLink,
 } from "@rakazo/contracts";
 import {
   analyzeRcclSkillMd,
   buildSkillMd,
   parseSkillMd,
+  MarketResolverPlanResolutionError,
   prepareMarketResolverResearch,
+  resolveMarketResolverPlanFromEntries,
   selectMarketResolverReadOnlyImplementation,
 } from "@rakazo/core";
 import { IsolationError, type Prisma, type PrismaClient } from "@rakazo/db";
@@ -184,41 +185,6 @@ function normalizeTags(values: string[]): string[] {
     0,
     50,
   );
-}
-
-function parseMarketSkillReference(reference: string): { repository: string; name: string } | null {
-  if (!reference.startsWith("market:")) return null;
-  const body = reference.slice("market:".length);
-  const separator = body.lastIndexOf(":");
-  if (separator <= 0 || separator === body.length - 1) return null;
-  const repository = body.slice(0, separator);
-  const name = body.slice(separator + 1);
-  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) ? { repository, name } : null;
-}
-
-function resolveMarketSkillLink(
-  reference: string,
-  rows: MarketEntryRow[],
-): MarketResolverSkillLink | null {
-  const target = parseMarketSkillReference(reference);
-  if (!target) return null;
-  const matches = rows.filter(
-    (row) =>
-      row.kind === "skill" && row.repository === target.repository && row.name === target.name,
-  );
-  if (matches.length === 0) return { status: "missing" };
-  if (matches.length > 1) return { status: "ambiguous", matches: matches.length };
-  const row = matches[0]!;
-  return {
-    status: "resolved",
-    entryId: row.id,
-    key: row.key,
-    name: row.name,
-    repository: row.repository,
-    digest: row.digest,
-    variant: asVariant(row.preferredVariant),
-    tags: row.tags,
-  };
 }
 
 function assertCuratedRepository(
@@ -518,108 +484,51 @@ export function createMarketService(
         limit: number;
       },
     ): Promise<MarketResolverPlan> {
-      const rows = await prisma.marketEntry.findMany({
-        where: {
-          spaceId: actor.spaceId,
-          userId: actor.userId,
-          kind: "resolver",
-          tags: { has: input.semanticKey },
-        },
-        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-        take: 100,
-      });
-      const matches = rows.flatMap((row) => {
-        const parsed = MarketResolverContentSchema.safeParse(
-          (() => {
-            try {
-              return JSON.parse(row.originalContent);
-            } catch {
-              return null;
-            }
-          })(),
-        );
-        return parsed.success && parsed.data.semanticKey === input.semanticKey
-          ? [{ row, content: parsed.data }]
-          : [];
-      });
-      const pinned = input.resolverKey
-        ? matches.filter(({ row }) => row.key === input.resolverKey)
-        : matches;
-      if (pinned.length === 0) {
-        throw new ORPCError("NOT_FOUND", {
-          message: "No owned Market Resolver matches the requested semantic key.",
-        });
-      }
+      const [resolverRows, skillRows] = await Promise.all([
+        prisma.marketEntry.findMany({
+          where: {
+            spaceId: actor.spaceId,
+            userId: actor.userId,
+            kind: "resolver",
+            tags: { has: input.semanticKey },
+          },
+          orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+          take: 100,
+        }),
+        prisma.marketEntry.findMany({
+          where: {
+            spaceId: actor.spaceId,
+            userId: actor.userId,
+            kind: "skill",
+          },
+          orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+          take: 2_000,
+        }),
+      ]);
 
-      let selected = pinned[0]!;
-      if (!input.resolverKey && pinned.length > 1) {
-        const exact = pinned.filter(({ row }) => row.key === input.semanticKey);
-        if (exact.length !== 1) {
+      try {
+        return resolveMarketResolverPlanFromEntries(
+          resolverRows.map(mapMarketEntry),
+          skillRows.map(mapMarketEntry),
+          input,
+        );
+      } catch (error) {
+        if (!(error instanceof MarketResolverPlanResolutionError)) throw error;
+        if (error.code === "resolver_not_found") {
+          throw new ORPCError("NOT_FOUND", {
+            message: "No owned Market Resolver matches the requested semantic key.",
+          });
+        }
+        if (error.code === "resolver_ambiguous") {
           throw new ORPCError("CONFLICT", {
             message:
               "Multiple Market Resolvers match this semantic key; pin resolverKey before resolving.",
           });
         }
-        selected = exact[0]!;
-      }
-      if (input.expectedDigest && selected.row.digest !== input.expectedDigest) {
         throw new ORPCError("CONFLICT", {
           message: "Market Resolver digest changed; reload and pin the current resolver revision.",
         });
       }
-
-      const allowedKinds = input.allowedKinds ? new Set(input.allowedKinds) : null;
-      const needsSkillLinks = selected.content.implementations.some((implementation) =>
-        (implementation.skillReference ?? implementation.reference).startsWith("market:"),
-      );
-      const skillRows = needsSkillLinks
-        ? await prisma.marketEntry.findMany({
-            where: {
-              spaceId: actor.spaceId,
-              userId: actor.userId,
-              kind: "skill",
-            },
-            orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-            take: 2_000,
-          })
-        : [];
-      const candidates = selected.content.implementations
-        .filter((implementation) => !input.requireReadOnly || implementation.readOnly === true)
-        .filter((implementation) => !allowedKinds || allowedKinds.has(implementation.kind))
-        .map(
-          (implementation): MarketResolverImplementation => ({
-            name: implementation.name,
-            kind: implementation.kind,
-            reference: implementation.reference,
-            skillReference: implementation.skillReference ?? null,
-            priority: implementation.priority,
-            readOnly: implementation.readOnly === true,
-            constraints: implementation.constraints,
-            ...(implementation.notes ? { notes: implementation.notes } : {}),
-            skill: resolveMarketSkillLink(
-              implementation.skillReference ?? implementation.reference,
-              skillRows,
-            ),
-          }),
-        )
-        .sort(
-          (left, right) =>
-            left.priority - right.priority ||
-            left.name.localeCompare(right.name) ||
-            left.reference.localeCompare(right.reference),
-        )
-        .slice(0, input.limit);
-
-      return {
-        resolver: {
-          entryId: selected.row.id,
-          key: selected.row.key,
-          digest: selected.row.digest,
-          semanticKey: selected.content.semanticKey,
-        },
-        preferred: candidates[0] ?? null,
-        candidates,
-      };
     },
 
     async select(
