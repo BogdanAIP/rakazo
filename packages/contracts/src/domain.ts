@@ -663,7 +663,6 @@ export const MarketResolverReadOnlySelectionSchema = z.discriminatedUnion("statu
 ]);
 export type MarketResolverReadOnlySelection = z.infer<typeof MarketResolverReadOnlySelectionSchema>;
 
-
 /**
  * Minimal immutable provenance emitted from one ready read-only Resolver
  * selection. This is intentionally research-only metadata: it contains no
@@ -700,7 +699,6 @@ export type MarketResolverPinnedResearchProvenance = z.infer<
   typeof MarketResolverPinnedResearchProvenanceSchema
 >;
 
-
 export const MarketResolverPreparedResearchSchema = z
   .object({
     selection: MarketResolverReadOnlySelectionSchema,
@@ -734,9 +732,7 @@ export const MarketResolverPreparedResearchSchema = z
       });
     }
   });
-export type MarketResolverPreparedResearch = z.infer<
-  typeof MarketResolverPreparedResearchSchema
->;
+export type MarketResolverPreparedResearch = z.infer<typeof MarketResolverPreparedResearchSchema>;
 
 export const MarketEntrySchema = z.object({
   id: Id,
