@@ -10,6 +10,7 @@ import {
   MarketResolverContentSchema,
   type MarketResolverImplementation,
   type MarketResolverPlan,
+  type MarketResolverSkillLink,
 } from "@rakazo/contracts";
 import { analyzeRcclSkillMd, buildSkillMd, parseSkillMd } from "@rakazo/core";
 import { IsolationError, type Prisma, type PrismaClient } from "@rakazo/db";
@@ -175,6 +176,47 @@ function normalizeTags(values: string[]): string[] {
     0,
     50,
   );
+}
+
+function parseMarketSkillReference(
+  reference: string,
+): { repository: string; name: string } | null {
+  if (!reference.startsWith("market:")) return null;
+  const body = reference.slice("market:".length);
+  const separator = body.lastIndexOf(":");
+  if (separator <= 0 || separator === body.length - 1) return null;
+  const repository = body.slice(0, separator);
+  const name = body.slice(separator + 1);
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)
+    ? { repository, name }
+    : null;
+}
+
+function resolveMarketSkillLink(
+  reference: string,
+  rows: MarketEntryRow[],
+): MarketResolverSkillLink | null {
+  const target = parseMarketSkillReference(reference);
+  if (!target) return null;
+  const matches = rows.filter(
+    (row) =>
+      row.kind === "skill" &&
+      row.repository === target.repository &&
+      row.name === target.name,
+  );
+  if (matches.length === 0) return { status: "missing" };
+  if (matches.length > 1) return { status: "ambiguous", matches: matches.length };
+  const row = matches[0]!;
+  return {
+    status: "resolved",
+    entryId: row.id,
+    key: row.key,
+    name: row.name,
+    repository: row.repository,
+    digest: row.digest,
+    variant: asVariant(row.preferredVariant),
+    tags: row.tags,
+  };
 }
 
 function assertCuratedRepository(
@@ -525,6 +567,20 @@ export function createMarketService(
       }
 
       const allowedKinds = input.allowedKinds ? new Set(input.allowedKinds) : null;
+      const needsSkillLinks = selected.content.implementations.some((implementation) =>
+        implementation.reference.startsWith("market:"),
+      );
+      const skillRows = needsSkillLinks
+        ? await prisma.marketEntry.findMany({
+            where: {
+              spaceId: actor.spaceId,
+              userId: actor.userId,
+              kind: "skill",
+            },
+            orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+            take: 2_000,
+          })
+        : [];
       const candidates = selected.content.implementations
         .filter((implementation) => !input.requireReadOnly || implementation.readOnly === true)
         .filter((implementation) => !allowedKinds || allowedKinds.has(implementation.kind))
@@ -537,6 +593,7 @@ export function createMarketService(
             readOnly: implementation.readOnly === true,
             constraints: implementation.constraints,
             ...(implementation.notes ? { notes: implementation.notes } : {}),
+            skill: resolveMarketSkillLink(implementation.reference, skillRows),
           }),
         )
         .sort(
