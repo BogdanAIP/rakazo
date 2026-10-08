@@ -464,9 +464,7 @@ describePostgres("resolved research PAPER gate PostgreSQL authorization", () => 
       evidenceId: evidence.id,
       reserveEventSequence: created.eventSequence,
     });
-    expect(
-      await first.prisma.tradingPaperFillDecision.count({ where: { ledgerId } }),
-    ).toBe(0);
+    expect(await first.prisma.tradingPaperFillDecision.count({ where: { ledgerId } })).toBe(0);
 
     await expect(
       reserveApprovedResolvedTradingPaperSignal(
