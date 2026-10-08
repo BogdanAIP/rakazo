@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { BackgroundJobPayloads } from "@rakazo/adapter-kit";
 import {
   type TradingResolvedResearchEnvelope,
@@ -122,8 +123,24 @@ export function createPreparedMarketResearchProvider(
       throw new Error("Unpinned Market Skill content cannot be executed");
     }
 
+    // The Market entry source digest identifies an immutable upstream source,
+    // but its preferred RCCL/wrapped/hybrid instructions may change. Bind
+    // the actual selected TEXT, after G7's provenance checks and before the
+    // trusted read-only research invocation. G1/G3 then pin this exact hash.
+    const researchProvenance =
+      pinnedSkill && prepared.skillContent !== null
+        ? {
+            ...provenance,
+            skill: {
+              ...pinnedSkill,
+              contentSha256: createHash("sha256")
+                .update(prepared.skillContent, "utf8")
+                .digest("hex"),
+            },
+          }
+        : provenance;
     const ready: PaperWorkerReadyMarketResearch = { ...prepared, selection };
     const signal = await runResearch(ready, payload, now);
-    return buildTradingResolvedResearchEnvelope(provenance, signal);
+    return buildTradingResolvedResearchEnvelope(researchProvenance, signal);
   };
 }
