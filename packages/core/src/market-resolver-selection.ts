@@ -1,8 +1,15 @@
 import {
   type MarketResolverImplementation,
-  type MarketResolverPlan,
+  type MarketResolverReadOnlySelection,
+  MarketResolverReadOnlySelectionSchema,
+  type MarketResolverSelectionSkip,
   MarketResolverPlanSchema,
-  type MarketResolverSkillLink,
+} from "@rakazo/contracts";
+
+export type {
+  MarketResolverReadOnlySelection,
+  MarketResolverSelectionSkip,
+  MarketResolverSelectionSkipReason,
 } from "@rakazo/contracts";
 
 export class MarketResolverSelectionIntegrityError extends Error {
@@ -11,34 +18,6 @@ export class MarketResolverSelectionIntegrityError extends Error {
     this.name = "MarketResolverSelectionIntegrityError";
   }
 }
-
-export type MarketResolverSelectionSkipReason =
-  | "implementation_not_read_only"
-  | "market_skill_missing"
-  | "market_skill_ambiguous";
-
-export type MarketResolverSelectionSkip = {
-  name: string;
-  reference: string;
-  priority: number;
-  reason: MarketResolverSelectionSkipReason;
-  matches?: number;
-};
-
-export type MarketResolverReadOnlySelection =
-  | {
-      status: "ready";
-      resolver: MarketResolverPlan["resolver"];
-      implementation: Omit<MarketResolverImplementation, "skill"> & { readOnly: true };
-      skill: Extract<MarketResolverSkillLink, { status: "resolved" }> | null;
-      skipped: MarketResolverSelectionSkip[];
-    }
-  | {
-      status: "deny";
-      resolver: MarketResolverPlan["resolver"];
-      reason: "no_eligible_read_only_implementation";
-      skipped: MarketResolverSelectionSkip[];
-    };
 
 function compareImplementations(
   left: MarketResolverImplementation,
@@ -83,12 +62,12 @@ export function selectMarketResolverReadOnlyImplementation(
         "Resolver plan has a preferred implementation without candidates",
       );
     }
-    return {
+    return MarketResolverReadOnlySelectionSchema.parse({
       status: "deny",
       resolver: plan.resolver,
       reason: "no_eligible_read_only_implementation",
       skipped: [],
-    };
+    });
   }
 
   if (!plan.preferred || !sameImplementation(plan.preferred, candidates[0]!)) {
@@ -137,19 +116,19 @@ export function selectMarketResolverReadOnlyImplementation(
     }
 
     const { skill, ...implementation } = candidate;
-    return {
+    return MarketResolverReadOnlySelectionSchema.parse({
       status: "ready",
       resolver: plan.resolver,
       implementation: { ...implementation, readOnly: true },
       skill: skill?.status === "resolved" ? skill : null,
       skipped,
-    };
+    });
   }
 
-  return {
+  return MarketResolverReadOnlySelectionSchema.parse({
     status: "deny",
     resolver: plan.resolver,
     reason: "no_eligible_read_only_implementation",
     skipped,
-  };
+  });
 }
