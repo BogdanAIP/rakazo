@@ -561,6 +561,25 @@ export const MarketResolverContentSchema = z.object({
 });
 export type MarketResolverContent = z.infer<typeof MarketResolverContentSchema>;
 
+export const MarketResolverSkillLinkSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("resolved"),
+    entryId: Id,
+    key: z.string().min(1).max(500),
+    name: z.string().min(1).max(120),
+    repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
+    digest: z.string().regex(/^[0-9a-f]{64}$/),
+    variant: MarketPreferredVariantSchema,
+    tags: z.array(z.string().min(1).max(80)).max(50),
+  }),
+  z.object({ status: z.literal("missing") }),
+  z.object({
+    status: z.literal("ambiguous"),
+    matches: z.number().int().min(2).max(2_000),
+  }),
+]);
+export type MarketResolverSkillLink = z.infer<typeof MarketResolverSkillLinkSchema>;
+
 export const MarketResolverImplementationSchema = z.object({
   name: z.string().trim().min(1).max(120),
   kind: z.enum(["mcp", "api", "cli", "native", "computer", "browser"]),
@@ -569,6 +588,7 @@ export const MarketResolverImplementationSchema = z.object({
   readOnly: z.boolean(),
   constraints: z.array(z.string().trim().min(1).max(500)).max(20),
   notes: z.string().trim().max(2_000).optional(),
+  skill: MarketResolverSkillLinkSchema.nullable(),
 });
 export type MarketResolverImplementation = z.infer<typeof MarketResolverImplementationSchema>;
 
