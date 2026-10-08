@@ -270,3 +270,43 @@ The active Trading Project capability profile is research-oriented and denies
 owner approvals, kill switch, audit trail, idempotency and fail-closed checks.
 
 No Market Resolver or Market Skill entry may override those controls.
+
+
+## G7 — adapter-neutral prepared Market research provider
+
+`createPreparedMarketResearchProvider` in
+`packages/adapters/src/paper-worker-market-prepared-provider.ts` is the
+**internal, opt-in** connector between Market's existing `prepareMarketResolverResearch`
+output and the already-present G6 `PaperWorkerResolvedResearchProvider`.
+
+Composition remains dependency-injected:
+
+```text
+owner-scoped Market storage -> resolveMarketResolverPlanFromEntries
+  -> selectMarketResolverReadOnlyImplementation
+  -> prepareMarketResolverResearch (pinned Skill content)
+  -> createPreparedMarketResearchProvider(prepare, authorizedReadOnlyRunner)
+  -> buildTradingResolvedResearchEnvelope
+  -> handlePreparedPaperWorkerResolvedResearch (G6 -> G1/G2/G3/G4)
+```
+
+The adapter verifies the complete selected Resolver identity and implementation
+(name/kind/reference/priority/readOnly) against the pinned provenance; it also
+checks the selected Skill entry/key/digest/variant and requires pinned content
+exactly when a Skill is selected. A denial, stale/replaced source, unexpected
+content or execution-capable Trading signal fails closed **before any PAPER
+operation**. `NO_TRADE` stays an abstention.
+
+Neither Skill instructions nor selection metadata grant capability authority.
+The integration caller MUST resolve only within the correct owner scope and
+invoke only explicitly authorized, read-only market/research tools; it must
+never evaluate a Skill file as executable code, escalate a connector assignment,
+or turn on private/account/trading CCXT tools. The adapter does not implement
+those external tool calls and does not enable any default provider.
+
+**Outstanding integration:** PR #38 and Market PR #40 are based on divergent
+code lines. After both features share a reviewed integration base, wire the
+Market prepare implementation and a genuinely read-only runner into this seam,
+then opt in the G6 handler and verify a complete PostgreSQL PAPER lifecycle.
+This G7 change is a contract/validation boundary, **not** a running market-data
+feed or a deployed worker.
