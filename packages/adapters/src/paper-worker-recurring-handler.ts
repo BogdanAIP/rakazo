@@ -16,7 +16,6 @@ import {
   handleVerifiedPaperWorkerAutomaticStops,
   type PaperWorkerAutomaticStopHandlingResult,
 } from "./paper-worker-protective-stop.js";
-import type { PaperWorkerResolvedResearchFlowResult } from "./paper-worker-resolved-research-flow.js";
 import {
   type AuthorizedPaperWorkerSuccessorScheduleResult,
   enqueueAuthorizedPaperWorkerSuccessor,
@@ -25,6 +24,7 @@ import {
   type PaperWorkerResearchResult,
   researchObservedPaperWorkerMarket,
 } from "./paper-worker-research.js";
+import type { PaperWorkerResolvedResearchFlowResult } from "./paper-worker-resolved-research-flow.js";
 import {
   type PaperWorkerSignalReservationResult,
   reservePersistedPaperWorkerProposal,
