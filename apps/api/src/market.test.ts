@@ -335,6 +335,7 @@ describe("Market Skills + Market Resolver service", () => {
         priority: 2,
         readOnly: true,
         constraints: ["market tier only"],
+        skill: null,
       },
       candidates: [
         {
@@ -344,6 +345,7 @@ describe("Market Skills + Market Resolver service", () => {
           priority: 2,
           readOnly: true,
           constraints: ["market tier only"],
+          skill: null,
         },
         {
           name: "Public fallback",
@@ -352,6 +354,7 @@ describe("Market Skills + Market Resolver service", () => {
           priority: 3,
           readOnly: true,
           constraints: ["public data only"],
+          skill: null,
         },
       ],
     });
@@ -364,6 +367,77 @@ describe("Market Skills + Market Resolver service", () => {
         limit: 32,
       }),
     ).rejects.toThrow("digest changed");
+  });
+
+  it("links market: Resolver references to exact owned Skill provenance", async () => {
+    const { service } = setup();
+    const skill = await service.importEntry(actor, {
+      kind: "skill",
+      key: "okx/agent-trade-kit:skills/okx-cex-market/SKILL.md@" + sourceRef,
+      tags: ["trading", "research-ready", "market-data"],
+      content: originalSkill("okx-cex-market"),
+      sourceUrl:
+        "https://github.com/okx/agent-trade-kit/blob/" +
+        sourceRef +
+        "/skills/okx-cex-market/SKILL.md",
+      repository: "okx/agent-trade-kit",
+      sourcePath: "skills/okx-cex-market/SKILL.md",
+      sourceRef,
+      license: "MIT",
+      trust: "curated",
+      metadata: {},
+    });
+    const resolver = await service.importEntry(actor, {
+      kind: "resolver",
+      key: "market.data@" + sourceRef,
+      name: "Market data resolver",
+      description: "Resolver with one Market Skill implementation.",
+      tags: ["market.data"],
+      content: JSON.stringify({
+        semanticKey: "market.data",
+        implementations: [
+          {
+            name: "OKX CEX Market Skill",
+            kind: "api",
+            reference: "market:okx/agent-trade-kit:okx-cex-market",
+            priority: 1,
+            readOnly: true,
+            constraints: ["read-only market data"],
+          },
+        ],
+      }),
+      sourceUrl:
+        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
+      repository: "BogdanAIP/rakazo",
+      sourcePath: "market/resolver-seeds.v1.json",
+      sourceRef,
+      license: "repository license",
+      trust: "curated",
+      metadata: {},
+    });
+
+    await expect(
+      service.resolve(actor, {
+        semanticKey: "market.data",
+        expectedDigest: resolver.digest,
+        requireReadOnly: true,
+        limit: 32,
+      }),
+    ).resolves.toMatchObject({
+      preferred: {
+        reference: "market:okx/agent-trade-kit:okx-cex-market",
+        skill: {
+          status: "resolved",
+          entryId: skill.id,
+          key: skill.key,
+          name: "okx-cex-market",
+          repository: "okx/agent-trade-kit",
+          digest: skill.digest,
+          variant: "original",
+          tags: ["trading", "research-ready", "market-data"],
+        },
+      },
+    });
   });
 
   it("fails closed on ambiguous semantic resolvers unless the caller pins a resolver key", async () => {
@@ -426,7 +500,7 @@ describe("Market Skills + Market Resolver service", () => {
       }),
     ).resolves.toMatchObject({
       resolver: { entryId: first.id, key: first.key, semanticKey: "market.data" },
-      preferred: { reference: "market:public", readOnly: true },
+      preferred: { reference: "market:public", readOnly: true, skill: null },
     });
   });
 
