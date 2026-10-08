@@ -20,6 +20,7 @@ export {
   fillApprovedTradingPaperReservation,
   type TradingPaperFillResult,
 } from "./trading-paper-fill.js";
+export * from "./trading-paper-journal-read.js";
 export { applyApprovedTradingPaperProtectiveExitControl } from "./trading-paper-protective-exit-authority.js";
 export {
   PaperQuoteEvidenceError,
@@ -28,7 +29,6 @@ export {
   recordIdempotentPublicAdapterPaperQuoteEvidence,
   recordPublicAdapterPaperQuoteEvidence,
 } from "./trading-paper-quote-evidence.js";
-export * from "./trading-paper-journal-read.js";
 export * from "./trading-paper-reservation-preflight.js";
 export {
   PaperReservationConflictError,
