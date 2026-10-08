@@ -1,8 +1,8 @@
 import {
   type MarketEntry,
   MarketEntrySchema,
-  type MarketResolverImplementation,
   MarketResolverContentSchema,
+  type MarketResolverImplementation,
   type MarketResolverPinnedResearchProvenance,
   MarketResolverPinnedResearchProvenanceSchema,
   MarketResolverPlanSchema,
@@ -49,24 +49,17 @@ export type MarketResolverPlanRequest = {
   limit: number;
 };
 
-function parseMarketSkillReference(
-  reference: string,
-): { repository: string; name: string } | null {
+function parseMarketSkillReference(reference: string): { repository: string; name: string } | null {
   if (!reference.startsWith("market:")) return null;
   const body = reference.slice("market:".length);
   const separator = body.lastIndexOf(":");
   if (separator <= 0 || separator === body.length - 1) return null;
   const repository = body.slice(0, separator);
   const name = body.slice(separator + 1);
-  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)
-    ? { repository, name }
-    : null;
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) ? { repository, name } : null;
 }
 
-function resolveMarketSkillLinkFromEntries(
-  reference: string,
-  skillEntries: MarketEntry[],
-) {
+function resolveMarketSkillLinkFromEntries(reference: string, skillEntries: MarketEntry[]) {
   const target = parseMarketSkillReference(reference);
   if (!target) return null;
   const matches = skillEntries.filter(
