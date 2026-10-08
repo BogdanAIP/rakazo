@@ -355,6 +355,32 @@ export async function lockAndVerifyTradingPaperEntrySessionInTransaction(
   return assessTradingPaperEntrySessionInTransaction(tx, owner, ledgerId, expectedSessionRevision);
 }
 
+/**
+ * H2a: a trusted, read-only authority check for ending a PAPER session.
+ * This checks the current OWNER-approved Start/Pause/End provenance and
+ * PostgreSQL clock. An expired Start is itself an approved finite deadline.
+ * An active unexpired session or missing row does not authorize releasing
+ * its pending reservations as a normal (non-emergency) stop.
+ */
+export async function verifyTradingPaperSessionSettlingAuthorityInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  ledgerId: string,
+): Promise<{ sessionRevision: number; checkedAt: Date; status: "paused" | "ended" | "expired" }> {
+  const checkedAt = await databaseNow(tx);
+  const session = await readInTransaction(tx, owner, ledgerId, checkedAt);
+  if (
+    session.status !== "paused" &&
+    session.status !== "ended" &&
+    session.status !== "expired"
+  ) {
+    throw new PaperEntrySessionIntegrityError(
+      "An active or absent entry session cannot authorize normal settling releases",
+    );
+  }
+  return { sessionRevision: session.revision, checkedAt, status: session.status };
+}
+
 /** H1 permission writer: ALL calls require a claimed, owner-approved effect.
  * Start issues a finite lease but NEVER schedules or submits a PAPER order.
  * Pause/End fence the entry lease by incrementing the revision; existing
