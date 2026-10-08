@@ -304,9 +304,7 @@ describe("Market Skills + Market Resolver service", () => {
         ],
       }),
       sourceUrl:
-        "https://github.com/BogdanAIP/rakazo/blob/" +
-        sourceRef +
-        "/market/resolver-seeds.v1.json",
+        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
       repository: "BogdanAIP/rakazo",
       sourcePath: "market/resolver-seeds.v1.json",
       sourceRef,
@@ -399,9 +397,7 @@ describe("Market Skills + Market Resolver service", () => {
       key: "market.data@one-" + sourceRef,
       content,
       sourceUrl:
-        "https://github.com/BogdanAIP/rakazo/blob/" +
-        sourceRef +
-        "/market/resolver-seeds.v1.json",
+        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
       ...shared,
     });
     await service.importEntry(actor, {
@@ -409,9 +405,7 @@ describe("Market Skills + Market Resolver service", () => {
       key: "market.data@two-" + sourceRef,
       content,
       sourceUrl:
-        "https://github.com/BogdanAIP/rakazo/blob/" +
-        sourceRef +
-        "/market/resolver-seeds.v1.json",
+        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
       ...shared,
     });
 
