@@ -7,9 +7,9 @@ import {
   type MarketEntry,
   type MarketEntryKind,
   type MarketPreferredVariant,
+  MarketResolverContentSchema,
   type MarketResolverImplementation,
   type MarketResolverPlan,
-  MarketResolverContentSchema,
 } from "@rakazo/contracts";
 import { analyzeRcclSkillMd, buildSkillMd, parseSkillMd } from "@rakazo/core";
 import { IsolationError, type Prisma, type PrismaClient } from "@rakazo/db";
