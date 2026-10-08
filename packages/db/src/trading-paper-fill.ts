@@ -403,14 +403,18 @@ export async function fillApprovedTradingPaperReservation(
         const prior = await readExistingFill(tx, owner, ledgerId, reservationId, evidenceId);
         if (prior) return prior;
 
-        if (expectedSessionRevision !== undefined) {
+        if (
+          workerFillAuthority ||
+          resolvedFillAuthority ||
+          expectedSessionRevision !== undefined
+        ) {
           const session = await lockAndVerifyTradingPaperEntrySessionInTransaction(
             tx,
             owner,
             ledgerId,
             expectedSessionRevision,
           );
-          if (session.status !== "ready") {
+          if (session.status !== "ready" && session.status !== "legacy_absent") {
             return { status: "deny", mode: "paper_only", reason: "paper_entry_session_inactive" };
           }
         }
