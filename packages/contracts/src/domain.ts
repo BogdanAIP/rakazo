@@ -532,28 +532,78 @@ export type MarketPreferredVariant = z.infer<typeof MarketPreferredVariantSchema
 export const MarketAdaptationModeSchema = z.enum(["rccl", "wrapped", "hybrid"]);
 export type MarketAdaptationMode = z.infer<typeof MarketAdaptationModeSchema>;
 
-export const MarketResolverContentSchema = z.object({
-  semanticKey: z
-    .string()
-    .trim()
-    .min(1)
-    .max(120)
-    .regex(/^[a-z][a-z0-9._-]*$/),
-  implementations: z
-    .array(
-      z.object({
-        name: z.string().trim().min(1).max(120),
-        kind: z.enum(["mcp", "api", "cli", "native", "computer", "browser"]),
-        reference: z.string().trim().min(1).max(500),
-        priority: z.number().int().min(1).max(100),
-        readOnly: z.boolean().optional(),
-        constraints: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
-        notes: z.string().trim().max(2_000).optional(),
-      }),
-    )
-    .min(1)
-    .max(32),
-});
+export const MarketResolverBindingSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("appContract"),
+      procedure: z
+        .string()
+        .regex(/^[a-z][a-z0-9._-]*\/[a-z][a-z0-9._-]*$/)
+        .max(120),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("connector"),
+      tool: z.string().min(1).max(300),
+      connectorId: z.string().min(1).max(120),
+      toolName: z.string().min(1).max(200),
+      resourceId: z.string().min(1).max(500).optional(),
+      resourceRevision: z.union([z.string(), z.number()]).optional(),
+      catalogGroup: z.string().max(200).optional(),
+    })
+    .strict(),
+]);
+export type MarketResolverBinding = z.infer<typeof MarketResolverBindingSchema>;
+export const MarketResolverContentSchema = z
+  .object({
+    semanticKey: z
+      .string()
+      .trim()
+      .min(1)
+      .max(120)
+      .regex(/^[a-z][a-z0-9._-]*$/),
+    implementations: z
+      .array(
+        z.object({
+          name: z.string().trim().min(1).max(120),
+          kind: z.enum(["mcp", "api", "cli", "native", "computer", "browser"]),
+          reference: z.string().trim().min(1).max(500),
+          binding: MarketResolverBindingSchema.optional(),
+          priority: z.number().int().min(1).max(100),
+          readOnly: z.boolean().optional(),
+          constraints: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
+          notes: z.string().trim().max(2_000).optional(),
+        }),
+      )
+      .min(1)
+      .max(32),
+  })
+  .superRefine((resolver, context) => {
+    const priorities = new Set<number>();
+    const bindings = new Set<string>();
+    for (const [index, implementation] of resolver.implementations.entries()) {
+      if (priorities.has(implementation.priority)) {
+        context.addIssue({
+          code: "custom",
+          message: "Resolver priorities must be unique",
+          path: ["implementations", index, "priority"],
+        });
+      }
+      priorities.add(implementation.priority);
+      if (implementation.binding) {
+        const key = JSON.stringify(implementation.binding);
+        if (bindings.has(key)) {
+          context.addIssue({
+            code: "custom",
+            message: "Resolver executable bindings must be unique",
+            path: ["implementations", index, "binding"],
+          });
+        }
+        bindings.add(key);
+      }
+    }
+  });
 export type MarketResolverContent = z.infer<typeof MarketResolverContentSchema>;
 
 export const MarketEntrySchema = z.object({
