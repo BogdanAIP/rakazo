@@ -561,6 +561,34 @@ export const MarketResolverContentSchema = z.object({
 });
 export type MarketResolverContent = z.infer<typeof MarketResolverContentSchema>;
 
+export const MarketResolverImplementationSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  kind: z.enum(["mcp", "api", "cli", "native", "computer", "browser"]),
+  reference: z.string().trim().min(1).max(500),
+  priority: z.number().int().min(1).max(100),
+  readOnly: z.boolean(),
+  constraints: z.array(z.string().trim().min(1).max(500)).max(20),
+  notes: z.string().trim().max(2_000).optional(),
+});
+export type MarketResolverImplementation = z.infer<typeof MarketResolverImplementationSchema>;
+
+export const MarketResolverPlanSchema = z.object({
+  resolver: z.object({
+    entryId: Id,
+    key: z.string().min(1).max(500),
+    digest: z.string().regex(/^[0-9a-f]{64}$/),
+    semanticKey: z
+      .string()
+      .trim()
+      .min(1)
+      .max(120)
+      .regex(/^[a-z][a-z0-9._-]*$/),
+  }),
+  preferred: MarketResolverImplementationSchema.nullable(),
+  candidates: z.array(MarketResolverImplementationSchema).max(32),
+});
+export type MarketResolverPlan = z.infer<typeof MarketResolverPlanSchema>;
+
 export const MarketEntrySchema = z.object({
   id: Id,
   kind: MarketEntryKindSchema,
