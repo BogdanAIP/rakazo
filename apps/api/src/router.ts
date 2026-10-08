@@ -206,6 +206,7 @@ import {
 } from "./computer-status.js";
 import { searchIntegrationCatalog } from "./integration-catalog.js";
 import { createMarketService } from "./market.js";
+import { resolveMarketRoute } from "./market-resolver.js";
 import {
   dismissMcpServerApprovals,
   resolveMcpApprovalCards,
@@ -3749,6 +3750,89 @@ export function createRouter(deps: RouterDeps) {
         market.search(context.actor, input),
       ),
       get: authed.market.get.handler(({ context, input }) => market.get(context.actor, input)),
+      resolve: authed.market.resolve.handler(async ({ context, input }) => {
+        if (input.projectId) await ownedProject(deps, context.actor, input.projectId);
+        const candidates = input.resolverEntryId
+          ? [await market.get(context.actor, { entryId: input.resolverEntryId })]
+          : await market.search(context.actor, {
+              query: input.semanticKey,
+              kind: "resolver",
+              limit: 100,
+            });
+        const matching = candidates.filter(
+          (entry) => entry.kind === "resolver" && entry.tags.includes(input.semanticKey),
+        );
+        const empty = {
+          status: "unavailable" as const,
+          semanticKey: input.semanticKey,
+          resolver: null,
+          selected: null,
+          candidates: [],
+          reason: "No exact Resolver semanticKey in the current Market catalog",
+        };
+        if (matching.length === 0) return empty;
+        if (matching.length > 1) {
+          return {
+            ...empty,
+            status: "invalid" as const,
+            reason: "Multiple pinned Resolver revisions; provide resolverEntryId",
+          };
+        }
+        const entry = await market.get(context.actor, { entryId: matching[0]!.id });
+        const adapterContext = await capabilityContextForBot(
+          deps,
+          context.actor,
+          input.botId,
+          "market.resolve",
+          context.signal,
+          input.projectId,
+        );
+        const discovered = await deps.connectors.discoverTools(adapterContext);
+        let bot = await repos.getBot(context.actor, input.botId);
+        if (await expireStaleComputerControl(deps, bot.computer)) {
+          bot = await repos.getBot(context.actor, input.botId);
+        }
+        const computer = bot.computer;
+        const validLease =
+          computer?.providerRef &&
+          computer.state === "running" &&
+          computer.kind === "desktop" &&
+          hasActiveComputerControl(computer) &&
+          computer.controlBotId === bot.id;
+        const nativeRoutes = validLease
+          ? [
+              { procedure: "computer/exec", readOnly: false },
+              ...(deps.sandbox.desktopBrowserSession
+                ? [{ procedure: "computer/browser", readOnly: false }]
+                : []),
+            ]
+          : [];
+        let content: unknown;
+        try {
+          content = JSON.parse(entry.originalContent);
+        } catch {
+          content = null;
+        }
+        const decision = resolveMarketRoute({
+          semanticKey: input.semanticKey,
+          content,
+          access: input.access,
+          nativeRoutes,
+          capabilities: discovered
+            .filter((tool): tool is ConnectorTool & { route: ConnectorRoute } =>
+              Boolean(tool.route),
+            )
+            .map((tool) => ({
+              name: tool.name,
+              readOnly: tool.readOnly === true,
+              route: tool.route,
+            })),
+        });
+        return {
+          ...decision,
+          resolver: { entryId: entry.id, digest: entry.digest, sourceRef: entry.sourceRef },
+        };
+      }),
       importGithub: authed.market.importGithub.handler(({ context, input }) =>
         market.importGithub(context.actor, input, context.signal),
       ),

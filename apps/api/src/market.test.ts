@@ -263,6 +263,60 @@ describe("Market Skills + Market Resolver service", () => {
     expect(entry.originalContent).toBe(resolver);
   });
 
+  it("imports a future Resolver with an explicit binding without changing Engine code", async () => {
+    const { service } = setup();
+    const content = JSON.stringify({
+      semanticKey: "future.docs.query",
+      implementations: [
+        {
+          name: "Existing authorized documentation search",
+          kind: "mcp",
+          reference: "external/docs",
+          priority: 1,
+          readOnly: true,
+          constraints: ["must be authorized"],
+          binding: {
+            type: "connector",
+            tool: "docs_search",
+            connectorId: "mcp",
+            toolName: "search",
+          },
+        },
+      ],
+    });
+    const source = {
+      kind: "resolver" as const,
+      key: "future.docs.query@" + sourceRef,
+      name: "Future documentation resolver",
+      description: "New Resolver imported from pinned source.",
+      tags: ["docs"],
+      content,
+      sourceUrl:
+        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/docs/new-resolver.json",
+      repository: "BogdanAIP/rakazo",
+      sourcePath: "docs/new-resolver.json",
+      sourceRef,
+      license: "AGPL-3.0",
+      trust: "curated" as const,
+      metadata: {},
+    };
+    const added = await service.importEntry(actor, source);
+    expect(added.tags).toContain("future.docs.query");
+    expect(added.originalContent).toBe(content);
+    await expect(
+      service.importEntry(actor, {
+        ...source,
+        key: "future.docs.conflict@" + sourceRef,
+        content: JSON.stringify({
+          semanticKey: "future.docs.conflict",
+          implementations: [
+            { ...JSON.parse(content).implementations[0], priority: 1 },
+            { ...JSON.parse(content).implementations[0], priority: 1 },
+          ],
+        }),
+      }),
+    ).rejects.toThrow();
+  });
   it("keeps the original while storing and evaluating an RCCL adaptation", async () => {
     const { service } = setup();
     const imported = await service.importEntry(actor, {

@@ -13,6 +13,10 @@
             "name": "Rakazo Browser v2 Router",
             "kind": "browser",
             "reference": "rakazo:computer/browser",
+            "binding": {
+              "type": "appContract",
+              "procedure": "computer/browser"
+            },
             "priority": 1,
             "readOnly": false,
             "constraints": [
@@ -184,6 +188,10 @@
             "name": "Rakazo Windows Host bounded exec",
             "kind": "computer",
             "reference": "rakazo:computer/exec",
+            "binding": {
+              "type": "appContract",
+              "procedure": "computer/exec"
+            },
             "priority": 1,
             "readOnly": false,
             "constraints": ["requires linked running desktop Computer and active control lease"]

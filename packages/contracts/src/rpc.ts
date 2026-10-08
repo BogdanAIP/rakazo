@@ -48,6 +48,7 @@ import {
   MarketEntryKindSchema,
   MarketEntrySchema,
   MarketPreferredVariantSchema,
+  MarketResolverBindingSchema,
   MarketTrustSchema,
   McpServerConfigInput,
   McpServerSchema,
@@ -796,6 +797,55 @@ export const appContract = {
           }),
       )
       .output(MarketEntrySchema),
+    resolve: oc
+      .input(
+        z.object({
+          botId: Id,
+          projectId: Id.optional(),
+          semanticKey: z
+            .string()
+            .regex(/^[a-z][a-z0-9._-]*$/)
+            .max(120),
+          access: z.enum(["read", "interactive"]),
+          resolverEntryId: Id.optional(),
+        }),
+      )
+      .output(
+        z.object({
+          status: z.enum(["selected", "unavailable", "invalid"]),
+          semanticKey: z.string(),
+          resolver: z
+            .object({
+              entryId: Id,
+              digest: z.string().regex(/^[0-9a-f]{64}$/),
+              sourceRef: z.string().regex(/^[0-9a-f]{40}$/),
+            })
+            .nullable(),
+          selected: z
+            .object({
+              reference: z.string(),
+              priority: z.number().int(),
+              binding: MarketResolverBindingSchema,
+              readOnly: z.boolean(),
+            })
+            .nullable(),
+          candidates: z.array(
+            z.object({
+              reference: z.string(),
+              priority: z.number().int(),
+              status: z.enum([
+                "eligible",
+                "missing_binding",
+                "not_authorized",
+                "access_denied",
+                "ambiguous",
+              ]),
+              reason: z.string(),
+            }),
+          ),
+          reason: z.string(),
+        }),
+      ),
     importGithub: oc.input(marketGithubImportInput).output(MarketEntrySchema),
     importGithubBatch: oc
       .input(
