@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { resolvedTradingResearchApprovalScope } from "@rakazo/core";
 import { describe, expect, it, vi } from "vitest";
 import {
   createPreparedMarketResearchProvider,
@@ -81,6 +82,12 @@ describe("RCCL and adapted Market Skill research runner", () => {
       expect(result.signal).toMatchObject(noTrade);
       expect(result.executionAuthority).toBe("none");
       expect(result.provenance.skill?.variant).toBe(variant);
+      const actualDigest = createHash("sha256").update(instructions).digest("hex");
+      expect(resolvedTradingResearchApprovalScope(result)).toMatchObject({
+        schemaVersion: "trading-resolved-research-scope-v2",
+        skillVariant: variant,
+        skillContentSha256: actualDigest,
+      });
       expect(invoke).toHaveBeenCalledOnce();
       expect(invoke.mock.calls[0]?.[0]).toMatchObject({
         mode: "research_only",
