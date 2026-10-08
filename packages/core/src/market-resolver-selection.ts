@@ -4,9 +4,9 @@ import {
   type MarketResolverImplementation,
   type MarketResolverPinnedResearchProvenance,
   MarketResolverPinnedResearchProvenanceSchema,
+  MarketResolverPlanSchema,
   type MarketResolverPreparedResearch,
   MarketResolverPreparedResearchSchema,
-  MarketResolverPlanSchema,
   type MarketResolverReadOnlySelection,
   MarketResolverReadOnlySelectionSchema,
   type MarketResolverSelectionSkip,
@@ -138,7 +138,6 @@ export function selectMarketResolverReadOnlyImplementation(
     skipped,
   });
 }
-
 
 /**
  * Pins one already-selected read-only Resolver route into the minimal immutable
