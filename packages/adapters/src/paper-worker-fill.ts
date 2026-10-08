@@ -211,6 +211,8 @@ export async function fillReservedPaperWorkerProposal(
     evidenceId,
     confirmedFill,
     confirmedTarget,
+    undefined,
+    payload.sessionRevision,
   );
   return {
     status: "fill_result",
