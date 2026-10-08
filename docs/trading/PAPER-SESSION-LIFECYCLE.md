@@ -200,3 +200,41 @@ The first PostgreSQL test covers owner isolation, default denial,
 approved Start/Pause/End, stale approvals/revisions, and absence of
 new PAPER ledger or outbox events. Separate real restart/transaction
 race tests remain required before a deployment.
+
+
+## H1b — session revision propagated to PAPER worker and synthetic money boundaries
+
+New **opt-in session-aware** worker wakes carry `sessionRevision`. The
+optional field is validated by the existing typed job parser and retained
+by the one-shot and recurring job constructors. Session-aware preflights
+deny paused/expired/revised sessions; the D11 successor-intent transaction
+also denies any wake that would be scheduled on/after the session expiry.
+
+Both existing synthetic virtual money paths now pass the same revision:
+legacy worker F1/F3 and generic G2/G4 resolved-research reserve/fill.
+Before creating a *new* reserve or fill, the existing serializable B7/C1
+transactions lock the owner-scoped PAPER ledger row (the **same lock**
+taken by H1a Start/Pause/End) and verify the session revision against a
+trusted DB clock, current D2 permission and approval provenance.
+Transactions serialise with explicit Pause/End. A duplicate historical
+fill may still be read idempotently; it does NOT create a new fill.
+
+When a `TradingPaperEntrySession` record exists, any legacy automatic
+writer call without a session revision is now **denied** rather than
+bypassing a Pause. Previously existing deployments with no session row
+retain a legacy compatibility path: this is *not* safe automatic
+session-only mode until legacy standalone recurring starts are explicitly
+removed/disabled and the user-facing session Start path is wired.
+
+Remaining:
+- prohibit every legacy entry without an active finite session when
+  switching to on-demand-only production, with migrations for existing
+  worker tests/deployments;
+- register an explicit authenticated Start/Pause/End control surface
+  and ensure only verified user action creates the job;
+- add full transactional race test Pause vs concurrent G2 reserve/G4 fill,
+  and expiry at the final ledger append;
+- give open positions separate protection-only authority, implement
+  audited normal-stop reservation release and safe status reconciliation.
+
+No automatic worker or private/live exchange order has been enabled.
