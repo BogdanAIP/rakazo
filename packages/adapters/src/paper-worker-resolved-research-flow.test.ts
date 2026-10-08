@@ -305,6 +305,7 @@ describe("handlePreparedPaperWorkerResolvedResearch", () => {
       proposalEnvelope,
       reserveEvidenceId,
       researchAuthority,
+      undefined,
     );
     expect(fillResolvedReservation).toHaveBeenCalledWith(
       prisma,
