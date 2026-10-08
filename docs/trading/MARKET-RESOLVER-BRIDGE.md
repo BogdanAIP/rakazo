@@ -110,6 +110,28 @@ an order. In particular, a G2 reserve does **not** inherit the legacy F2
 `breakout_20_1h_v1` automatic-fill authority. A future generic fill stage needs its own explicit
 approval boundary and its own historical provenance.
 
+## G3 — separate generic PAPER fill permission
+
+G3 adds the next permission boundary but still does **not** perform a fill. It is intentionally
+separate from both G1/G2 and the legacy F2 `breakout_20_1h_v1` fill gate.
+
+The explicit `paper_resolved_research_fill_control` action binds a future generic fill permission
+to:
+
+- one exact normalized Resolver/Skill approval scope;
+- the current PAPER policy and D2 worker-gate revisions;
+- the exact G1 research revision and approval effect;
+- its own monotonically increasing fill-permission revision and approval effect.
+
+Every enable or disable requires a fresh owner confirmation and is excluded from Auto Review and
+permanent allow. Enabling G3 revalidates the current G1 scope authority and fails closed if the
+worker, policy, G1 scope or G1 revision changed.
+
+G3 is permission-only: it creates no reserve, fill, close, ledger event or outbox item and does not
+fetch market data. A later G4 fill bridge must revalidate G3 inside the same serializable fill
+transaction, verify the exact G2 reserve provenance and require fresh trusted public quote evidence
+before delegating to the existing synthetic PAPER fill/risk checks.
+
 ## Why G0 is separate from Market storage
 
 The Market/Capability Profile line and the stacked Trading PR line currently diverge from a common
