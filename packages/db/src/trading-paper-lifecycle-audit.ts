@@ -118,10 +118,7 @@ export async function auditTradingPaperLifecycleInTransaction(
       "Missing or mismatched historical owner-enable approval",
     );
   }
-  async function approvedReserve(
-    record: (typeof reservations)[number],
-    reserve: Reserve,
-  ) {
+  async function approvedReserve(record: (typeof reservations)[number], reserve: Reserve) {
     const enable = byApproval.get(record.policyApprovalEffectId);
     if (enable) {
       approved(record.policyApprovalEffectId, record.policyRevision);
