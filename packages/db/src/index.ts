@@ -37,6 +37,18 @@ export {
   type TradingPaperWorkerSignalReserveAuthority,
 } from "./trading-paper-reserve.js";
 export {
+  applyApprovedTradingPaperResolvedResearchFillControl,
+  assessTradingPaperResolvedResearchFillPreflightInTransaction,
+  type PaperResolvedResearchFillControlResult,
+  PaperResolvedResearchFillGateIntegrityError,
+  readTradingPaperResolvedResearchFillPreflight,
+  readVerifiedTradingPaperResolvedResearchFillGate,
+  type TradingPaperResolvedResearchFillAuthority,
+  type TradingPaperResolvedResearchFillGateStatus,
+  type TradingPaperResolvedResearchFillPreflight,
+  verifyTradingPaperResolvedResearchFillAuthorityInTransaction,
+} from "./trading-paper-resolved-research-fill-gate.js";
+export {
   applyApprovedTradingPaperResolvedResearchControl,
   assessTradingPaperResolvedResearchPreflightInTransaction,
   assessTradingPaperResolvedResearchScopeAuthorityInTransaction,
@@ -54,18 +66,6 @@ export {
   verifyTradingPaperResolvedResearchAuthorityInTransaction,
   verifyTradingPaperResolvedResearchReserveUseInTransaction,
 } from "./trading-paper-resolved-research-gate.js";
-export {
-  applyApprovedTradingPaperResolvedResearchFillControl,
-  assessTradingPaperResolvedResearchFillPreflightInTransaction,
-  type PaperResolvedResearchFillControlResult,
-  PaperResolvedResearchFillGateIntegrityError,
-  readTradingPaperResolvedResearchFillPreflight,
-  readVerifiedTradingPaperResolvedResearchFillGate,
-  type TradingPaperResolvedResearchFillAuthority,
-  type TradingPaperResolvedResearchFillGateStatus,
-  type TradingPaperResolvedResearchFillPreflight,
-  verifyTradingPaperResolvedResearchFillAuthorityInTransaction,
-} from "./trading-paper-resolved-research-fill-gate.js";
 export {
   applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,
