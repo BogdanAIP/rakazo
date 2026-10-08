@@ -6,6 +6,11 @@ import { createDb, type Prisma } from "./client.js";
 import { recordPublicAdapterPaperQuoteEvidence } from "./trading-paper-quote-evidence.js";
 import { reserveApprovedResolvedTradingPaperSignal } from "./trading-paper-reserve.js";
 import {
+  applyApprovedTradingPaperResolvedResearchFillControl,
+  readTradingPaperResolvedResearchFillPreflight,
+  readVerifiedTradingPaperResolvedResearchFillGate,
+} from "./trading-paper-resolved-research-fill-gate.js";
+import {
   applyApprovedTradingPaperResolvedResearchControl,
   readTradingPaperResolvedResearchPreflight,
   readVerifiedTradingPaperResolvedResearchGate,
@@ -483,5 +488,191 @@ describePostgres("resolved research PAPER gate PostgreSQL authorization", () => 
     expect(
       await first.prisma.tradingPaperResolvedResearchReserveUse.count({ where: { ledgerId } }),
     ).toBe(1);
+  });
+  it("keeps generic Resolver fills behind a separate explicit permission-only G3 gate", async () => {
+    const ledgerId = `resolved-fill-gate-ledger-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: new Date(Date.now() - 60_000).toISOString(),
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "500",
+    });
+    await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+      allowedVenues: ["okx", "bingx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "300",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    });
+
+    const paper = await makeEffect("paper_trading_control", "g3-paper-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 0,
+    });
+    await applyApprovedTradingPaperControl(first.prisma, owner, paper.id);
+    const worker = await makeEffect("paper_worker_control", "g3-worker-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 1,
+      cadence_minutes: 15,
+    });
+    await applyApprovedTradingPaperWorkerControl(first.prisma, owner, worker.id);
+
+    const research = envelope({
+      signal: {
+        ...(envelope().signal.kind === "proposal" ? envelope().signal : {}),
+        kind: "proposal",
+        executionStatus: "research_only",
+        signalId: `resolved-g3-proposal-${suffix}`,
+        strategyId: "resolver_signal_v1",
+        strategyVersion: "1",
+        createdAt: new Date(Date.now() - 1_000).toISOString(),
+        expiresAt: new Date(Date.now() + 120_000).toISOString(),
+        evidenceIds: [`resolved-g3-evidence-${suffix}`],
+        market: {
+          venue: "okx",
+          kind: "spot",
+          symbol: "SOL-USDT",
+          base: "SOL",
+          quote: "USDT",
+          status: "active",
+          priceIncrement: "0.01",
+          quantityIncrement: "0.01",
+          minNotional: "5",
+          expiryAt: null,
+        },
+        action: "spot_buy",
+        entryTrigger: "100",
+        stopLoss: "95",
+        takeProfit: ["110"],
+        invalidation: "fixture",
+        rationale: "G3 permission-only fixture",
+        riskBudgetQuote: null,
+        maxSlippageBps: null,
+      },
+    });
+    const scope = resolvedTradingResearchApprovalScope(research);
+    const researchApproval = await makeEffect(
+      "paper_resolved_research_control",
+      "g3-research-enable",
+      {
+        action: "enable",
+        ledger_id: ledgerId,
+        expected_gate_revision: 1,
+        scope,
+      },
+    );
+    await applyApprovedTradingPaperResolvedResearchControl(
+      first.prisma,
+      owner,
+      researchApproval.id,
+    );
+
+    expect(
+      await readVerifiedTradingPaperResolvedResearchFillGate(first.prisma, owner, ledgerId),
+    ).toEqual({
+      configured: false,
+      mode: "paper_only",
+      ledgerId,
+      enabled: false,
+    });
+    const eventsBefore = await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } });
+    const outboxBefore = await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } });
+
+    const fillApproval = await makeEffect(
+      "paper_resolved_research_fill_control",
+      "g3-fill-enable",
+      {
+        action: "enable",
+        ledger_id: ledgerId,
+        expected_gate_revision: 1,
+        expected_research_revision: 1,
+        scope,
+      },
+    );
+    await expect(
+      applyApprovedTradingPaperResolvedResearchFillControl(
+        second.prisma,
+        owner,
+        fillApproval.id,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      enabled: true,
+      scope,
+      policyRevision: 1,
+      gateRevision: 1,
+      researchRevision: 1,
+      fillRevision: 1,
+    });
+    await expect(
+      readTradingPaperResolvedResearchFillPreflight(first.prisma, owner, ledgerId),
+    ).resolves.toMatchObject({
+      status: "ready",
+      scope,
+      gateRevision: 1,
+      researchRevision: 1,
+      fillRevision: 1,
+      fillApprovalEffectId: fillApproval.id,
+      researchApprovalEffectId: researchApproval.id,
+    });
+
+    const disableWorker = await makeEffect("paper_worker_control", "g3-worker-disable", {
+      action: "disable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 1,
+    });
+    await applyApprovedTradingPaperWorkerControl(first.prisma, owner, disableWorker.id);
+    await expect(
+      readTradingPaperResolvedResearchFillPreflight(second.prisma, owner, ledgerId),
+    ).resolves.toMatchObject({
+      status: "deny",
+      reason: "resolved_research_preflight_denied",
+      researchReason: "worker_preflight_denied",
+    });
+
+    const disableFill = await makeEffect(
+      "paper_resolved_research_fill_control",
+      "g3-fill-disable",
+      {
+        action: "disable",
+        ledger_id: ledgerId,
+        expected_gate_revision: 1,
+        expected_research_revision: 1,
+      },
+    );
+    await expect(
+      applyApprovedTradingPaperResolvedResearchFillControl(first.prisma, owner, disableFill.id),
+    ).resolves.toMatchObject({
+      ok: true,
+      enabled: false,
+      scope: null,
+      fillRevision: 2,
+    });
+    await expect(
+      readTradingPaperResolvedResearchFillPreflight(second.prisma, owner, ledgerId),
+    ).resolves.toMatchObject({
+      status: "deny",
+      reason: "resolved_fill_gate_disabled",
+    });
+
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(
+      eventsBefore,
+    );
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+      outboxBefore,
+    );
+    expect(await first.prisma.tradingPaperReservationDecision.count({ where: { ledgerId } })).toBe(
+      0,
+    );
+    expect(await first.prisma.tradingPaperFillDecision.count({ where: { ledgerId } })).toBe(0);
   });
 });
