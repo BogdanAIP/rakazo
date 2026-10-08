@@ -206,7 +206,15 @@ export async function handlePreparedPaperWorkerResolvedResearch(
 
   const fill = await (
     services.fillResolvedReservation ?? fillApprovedResolvedTradingPaperReservation
-  )(prisma, owner, payload.ledgerId, reservation.reservationId, fillEvidenceId, fillAuthority);
+  )(
+    prisma,
+    owner,
+    payload.ledgerId,
+    reservation.reservationId,
+    fillEvidenceId,
+    fillAuthority,
+    payload.sessionRevision,
+  );
   if (fill.status === "deny") {
     return {
       status: "stop",
