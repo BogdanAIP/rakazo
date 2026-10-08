@@ -67,6 +67,33 @@ describe("enqueueAuthorizedPaperWorkerSuccessor", () => {
     );
   });
 
+  it("propagates the original finite-session revision into D11 and the successor job", async () => {
+    const enqueue = vi.fn(async (_job: unknown) => undefined);
+    const prepareIntent = vi.fn(async () => prepared);
+    const deps = {
+      prisma: {} as PrismaClient,
+      jobs: { enqueue } as Pick<JobPublisher, "enqueue">,
+    };
+    const now = new Date("2026-10-05T12:01:00.000Z");
+    const boundPayload = { ...payload, sessionRevision: 42 };
+
+    await enqueueAuthorizedPaperWorkerSuccessor(deps, boundPayload, now, prepareIntent);
+    expect(prepareIntent).toHaveBeenCalledWith(
+      deps.prisma,
+      { spaceId: "space-1", userId: "user-1" },
+      {
+        ledgerId: "paper-1",
+        sourceScheduledFor: payload.scheduledFor,
+        gateRevision: 7,
+        sessionRevision: 42,
+        now,
+      },
+    );
+    expect(enqueue.mock.calls[0]?.[0]).toMatchObject({
+      payload: { ledgerId: "paper-1", sessionRevision: 42 },
+    });
+  });
+
   it("re-enqueues the same stored schedule on an idempotent D11 replay", async () => {
     const enqueue = vi.fn(async (_job: unknown) => undefined);
     const prepareIntent = vi.fn(async () => ({ ...prepared, status: "duplicate" as const }));
