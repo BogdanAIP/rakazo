@@ -116,6 +116,32 @@ describe("paperWorkerPreflightJob", () => {
     expect(target["paper.worker-preflight"]).toHaveBeenCalledWith(job.payload);
   });
 
+  it("pins an explicitly started PAPER session revision to each queued wake", () => {
+    const scheduledFor = new Date("2026-10-08T19:15:00.000Z");
+    const job = paperWorkerPreflightJob({
+      ledgerId: "paper-1",
+      spaceId: "space-1",
+      userId: "user-1",
+      gateRevision: 7,
+      sessionRevision: 12,
+      scheduledFor,
+    });
+    const verified = parseBackgroundJob(job.name, job.payload);
+    expect(verified.payload).toMatchObject({
+      ledgerId: "paper-1",
+      gateRevision: 7,
+      sessionRevision: 12,
+    });
+    for (const invalid of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() =>
+        parseBackgroundJob("paper.worker-preflight", {
+          ...job.payload,
+          sessionRevision: invalid,
+        }),
+      ).toThrow();
+    }
+  });
+
   it("rejects malformed worker scope before dispatch", () => {
     expect(() =>
       parseBackgroundJob("paper.worker-preflight", {
