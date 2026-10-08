@@ -113,3 +113,52 @@ Ledger. **Do not create another ledger or independent trading engine.**
 This document does not activate a worker, place an order, merge a branch,
 deploy a service, change the user's Windows machine or install the
 deferred desktop journal PR #44.
+
+## H0 — first executable drain decision (2026-10-08)
+
+The shared `@rakazo/core` function `assessTradingPaperSessionDrain`
+now contains a **pure read-only fail-closed classifier** over the existing
+`TradingPaperLedgerState`. Tests cover:
+
+- verified, fenced, completely flat ledger -> `finished`;
+- in-flight work, **unreconciled** (not merely undelivered/inert) PAPER outbox
+  data, or reservations -> `settling`;
+- open positions with exact independently verified protective-stop IDs
+  **and** a separate approved protective supervisor -> `protection_only`;
+- missing entry fence, unverified ledger/lifecycle, unknown order states,
+  unfenced queued entry wakes or incomplete stop verification ->
+  `attention_required` (never `finished`).
+
+Outputs always set `allowNewEntries: false`. H0 cannot grant trading
+authority, cancel a reserve, execute a close or enable the Worker. Its
+inputs must ultimately come from *transactionally verified* server-side
+sources, not from UI-supplied counts or arbitrary user-selected IDs.
+Protective supervision is **not yet separated or implemented**; therefore
+a runtime must not claim `protection_only` as active today. The caller
+must first persist the entry fence and obtain a verified lifecycle and
+active protection-only authority, otherwise `attention_required`.
+
+### Existing normal-stop gap found during review
+
+The present `releaseTradingPaperReservationsInTransaction` accepts
+only `expired` and `kill_switch` reasons. It is unsafe to call a
+kill-switch release when merely stopping a normal manual session.
+A dedicated, permissioned, idempotent `session_end` release path and
+immutable audit reason must be implemented *after* the revocation
+lease exists. No fake release/cancel operation is currently exposed.
+
+### H1/H2 work still required
+
+1. Owner-controlled finite entry-session lease (persisted start, expiry,
+   revision, optional virtual trade count/exposure caps) and explicit
+   Pause/End fencing, including process restart invalidation.
+2. Apply a versioned session lease check *inside* each new reserve and
+   synthetic fill transaction and D11/D12 successor scheduling, in
+   addition to D2/G1/G3/kill-switch checks.
+3. Permit separate, narrowly bounded protective monitoring of already
+   open PAPER positions without reopening new-entry permissions.
+4. Session-stop release, transaction/outbox reconciliation and owner UI;
+   verify races, restarts and ledger integrity with PostgreSQL tests.
+
+**H0 alone is not a safe entry-session controller; do not enable automated
+trading based on this classifier.**
