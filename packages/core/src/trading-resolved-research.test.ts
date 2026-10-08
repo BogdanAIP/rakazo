@@ -122,6 +122,64 @@ describe("resolved trading research boundary", () => {
     expect(scope).not.toHaveProperty("executionAuthority");
   });
 
+  it("pins selected RCCL / wrapped / hybrid instructions in a new owner approval scope", () => {
+    const baseline = proposal();
+    const digest = "c".repeat(64);
+    const adapted = {
+      ...baseline,
+      provenance: {
+        ...baseline.provenance,
+        skill: {
+          ...provenance.skill,
+          variant: "rccl" as const,
+          contentSha256: digest,
+        },
+      },
+    };
+    const scope = resolvedTradingResearchApprovalScope(adapted);
+    expect(scope).toMatchObject({
+      schemaVersion: "trading-resolved-research-scope-v2",
+      skillSourceDigest: provenance.skill.sourceDigest,
+      skillVariant: "rccl",
+      skillContentSha256: digest,
+    });
+
+    const wrapped = resolvedTradingResearchApprovalScope({
+      ...adapted,
+      provenance: {
+        ...adapted.provenance,
+        skill: { ...adapted.provenance.skill, variant: "wrapped" },
+      },
+    });
+    const edited = resolvedTradingResearchApprovalScope({
+      ...adapted,
+      provenance: {
+        ...adapted.provenance,
+        skill: { ...adapted.provenance.skill, contentSha256: "d".repeat(64) },
+      },
+    });
+    expect(wrapped).not.toEqual(scope);
+    expect(edited).not.toEqual(scope);
+  });
+
+  it("refuses to downgrade an adapted Skill to an old source-only PAPER approval", () => {
+    const baseline = proposal();
+    expect(() =>
+      resolvedTradingResearchApprovalScope({
+        ...baseline,
+        provenance: {
+          ...baseline.provenance,
+          skill: { ...provenance.skill, variant: "rccl" },
+        },
+      }),
+    ).toThrow("lacks pinned instruction content digest");
+
+    // Legacy original-Skill v1 scopes remain unchanged for historical replay.
+    expect(resolvedTradingResearchApprovalScope(baseline).schemaVersion).toBe(
+      "trading-resolved-research-scope-v1",
+    );
+  });
+
   it("returns a proposal only while the normalized research signal is still fresh", () => {
     expect(
       assessResolvedTradingResearch(proposal(), new Date("2026-10-07T20:30:00.000Z")).status,
