@@ -822,7 +822,10 @@ export const appContract = {
             .max(120)
             .regex(/^[a-z][a-z0-9._-]*$/),
           resolverKey: z.string().trim().min(1).max(500).optional(),
-          expectedDigest: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+          expectedDigest: z
+            .string()
+            .regex(/^[0-9a-f]{64}$/)
+            .optional(),
           requireReadOnly: z.boolean().default(false),
           allowedKinds: z
             .array(z.enum(["mcp", "api", "cli", "native", "computer", "browser"]))
