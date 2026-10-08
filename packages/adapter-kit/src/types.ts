@@ -6,6 +6,8 @@ export interface AdapterContext {
   spaceId: string;
   userId: string;
   botId?: string;
+  /** Selected project for scoped external capability authorization. */
+  projectId?: string;
   runId?: string;
   /** Opaque fence for releasing a graphical screen without tearing down its replacement. */
   screenLeaseId?: string;
@@ -814,6 +816,7 @@ export interface BrowserActResult {
 export type PageBrowserCommand =
   | { command: "navigate"; url: string }
   | { command: "snapshot" }
+  | { command: "close" }
   | { command: "act"; actions: BrowserActStep[] };
 
 export type PageBrowserResult = Partial<BrowserSnapshotResult & BrowserActResult> & { ok: boolean };

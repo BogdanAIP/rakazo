@@ -1,5 +1,6 @@
 export * from "./action-approval.js";
 export * from "./agent-skill.js";
+export * from "./agent-skill-profile.js";
 export * from "./ai-consent.js";
 export * from "./answerable-ask.js";
 export * from "./async.js";
@@ -11,6 +12,7 @@ export * from "./bot-avatar-shapes.js";
 export * from "./bot-messages.js";
 export * from "./bot-sections.js";
 export * from "./call-nonce.js";
+export * from "./capability-profile.js";
 export * from "./cloud-agent.js";
 export * from "./compose-update.js";
 export * from "./composer-mention-picker.js";

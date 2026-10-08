@@ -421,6 +421,7 @@ export type ScratchpadItemStatus = z.infer<typeof ScratchpadItemStatusSchema>;
 export const ScratchpadItemSchema = z.object({
   id: Id,
   botId: Id,
+  projectId: Id.nullable(),
   title: z.string(),
   status: ScratchpadItemStatusSchema,
   notes: z.string(),
@@ -431,6 +432,7 @@ export type ScratchpadItem = z.infer<typeof ScratchpadItemSchema>;
 
 export const CreateScratchpadItemInput = z.object({
   botId: Id,
+  projectId: Id.optional(),
   title: z.string().min(1).max(200),
   status: ScratchpadItemStatusSchema.default("open"),
   notes: z.string().max(4_000).default(""),
@@ -517,6 +519,125 @@ export const AgentSkillCatalogEntrySchema = AgentSkillSchema.pick({
   readOnly: true,
 });
 export type AgentSkillCatalogEntry = z.infer<typeof AgentSkillCatalogEntrySchema>;
+
+export const MarketEntryKindSchema = z.enum(["skill", "resolver"]);
+export type MarketEntryKind = z.infer<typeof MarketEntryKindSchema>;
+
+export const MarketTrustSchema = z.enum(["curated"]);
+export type MarketTrust = z.infer<typeof MarketTrustSchema>;
+
+export const MarketPreferredVariantSchema = z.enum(["original", "rccl", "wrapped", "hybrid"]);
+export type MarketPreferredVariant = z.infer<typeof MarketPreferredVariantSchema>;
+
+export const MarketAdaptationModeSchema = z.enum(["rccl", "wrapped", "hybrid"]);
+export type MarketAdaptationMode = z.infer<typeof MarketAdaptationModeSchema>;
+
+export const MarketResolverBindingSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("appContract"),
+      procedure: z
+        .string()
+        .regex(/^[a-z][a-z0-9._-]*\/[a-z][a-z0-9._-]*$/)
+        .max(120),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("connector"),
+      tool: z.string().min(1).max(300),
+      connectorId: z.string().min(1).max(120),
+      toolName: z.string().min(1).max(200),
+      resourceId: z.string().min(1).max(500).optional(),
+      resourceRevision: z.union([z.string(), z.number()]).optional(),
+      catalogGroup: z.string().max(200).optional(),
+    })
+    .strict(),
+]);
+export type MarketResolverBinding = z.infer<typeof MarketResolverBindingSchema>;
+export const MarketResolverContentSchema = z
+  .object({
+    semanticKey: z
+      .string()
+      .trim()
+      .min(1)
+      .max(120)
+      .regex(/^[a-z][a-z0-9._-]*$/),
+    implementations: z
+      .array(
+        z.object({
+          name: z.string().trim().min(1).max(120),
+          kind: z.enum(["mcp", "api", "cli", "native", "computer", "browser"]),
+          reference: z.string().trim().min(1).max(500),
+          binding: MarketResolverBindingSchema.optional(),
+          priority: z.number().int().min(1).max(100),
+          readOnly: z.boolean().optional(),
+          constraints: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
+          notes: z.string().trim().max(2_000).optional(),
+        }),
+      )
+      .min(1)
+      .max(32),
+  })
+  .superRefine((resolver, context) => {
+    const priorities = new Set<number>();
+    const bindings = new Set<string>();
+    for (const [index, implementation] of resolver.implementations.entries()) {
+      if (priorities.has(implementation.priority)) {
+        context.addIssue({
+          code: "custom",
+          message: "Resolver priorities must be unique",
+          path: ["implementations", index, "priority"],
+        });
+      }
+      priorities.add(implementation.priority);
+      if (implementation.binding) {
+        const key = JSON.stringify(implementation.binding);
+        if (bindings.has(key)) {
+          context.addIssue({
+            code: "custom",
+            message: "Resolver executable bindings must be unique",
+            path: ["implementations", index, "binding"],
+          });
+        }
+        bindings.add(key);
+      }
+    }
+  });
+export type MarketResolverContent = z.infer<typeof MarketResolverContentSchema>;
+
+export const MarketEntrySchema = z.object({
+  id: Id,
+  kind: MarketEntryKindSchema,
+  key: z.string().min(1).max(500),
+  name: z.string().min(1).max(120),
+  description: z.string().max(2_000),
+  tags: z.array(z.string().min(1).max(80)).max(50),
+  originalContent: z.string().max(200_000),
+  adaptedContent: z.string().max(200_000).nullable(),
+  adaptationMode: MarketAdaptationModeSchema.nullable(),
+  preferredVariant: MarketPreferredVariantSchema,
+  sourceUrl: z.string().url().max(2_048),
+  repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
+  sourcePath: z.string().max(2_048).nullable(),
+  sourceRef: z.string().regex(/^[0-9a-f]{40}$/),
+  license: z.string().max(120).nullable(),
+  digest: z.string().regex(/^[0-9a-f]{64}$/),
+  trust: MarketTrustSchema,
+  metrics: z.record(z.string(), z.unknown()),
+  metadata: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type MarketEntry = z.infer<typeof MarketEntrySchema>;
+
+export const MarketCatalogEntrySchema = MarketEntrySchema.omit({
+  originalContent: true,
+  adaptedContent: true,
+  metrics: true,
+  metadata: true,
+});
+export type MarketCatalogEntry = z.infer<typeof MarketCatalogEntrySchema>;
 
 export const CreateAgentSkillInput = z
   .object({
@@ -606,6 +727,67 @@ export const ActionAutoReviewSettingsSchema = z.object({
 });
 export type ActionAutoReviewSettings = z.infer<typeof ActionAutoReviewSettingsSchema>;
 
+export const ProjectSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(/^[a-z0-9][a-z0-9._-]*$/);
+export type ProjectSlug = z.infer<typeof ProjectSlugSchema>;
+
+export const ProjectSummarySchema = z.object({
+  id: Id,
+  slug: ProjectSlugSchema,
+  name: z.string(),
+  description: z.string(),
+  memoryRevision: z.number().int().positive(),
+  archivedAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type ProjectSummary = z.infer<typeof ProjectSummarySchema>;
+
+export const ProjectSchema = ProjectSummarySchema.extend({
+  memory: z.string(),
+});
+export type Project = z.infer<typeof ProjectSchema>;
+
+export const ProjectResourceSchema = z.object({
+  id: Id,
+  projectId: Id,
+  kind: z.string().regex(/^[a-z][a-z0-9._-]{0,79}$/),
+  ref: z.string(),
+  label: z.string(),
+  metadata: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type ProjectResource = z.infer<typeof ProjectResourceSchema>;
+
+export const CapabilityToolRouteSchema = z.object({
+  connectorId: z.string().min(1).max(120),
+  toolName: z.string().min(1).max(200),
+  resourceId: z.string().min(1).max(500).optional(),
+  resourceRevision: z.union([z.string(), z.number()]).optional(),
+  catalogGroup: z.string().max(200).optional(),
+});
+export type CapabilityToolRoute = z.infer<typeof CapabilityToolRouteSchema>;
+
+export const CapabilityToolSchema = z.object({
+  name: z.string().min(1).max(300),
+  description: z.string().max(4_000),
+  inputSchema: z.record(z.string(), z.unknown()),
+  readOnly: z.boolean(),
+  route: CapabilityToolRouteSchema,
+});
+export type CapabilityTool = z.infer<typeof CapabilityToolSchema>;
+
+export const CapabilityInvocationResultSchema = z.object({
+  logs: z.array(z.string().max(2_000)).max(100),
+  result: z.unknown().optional(),
+  error: z.string().max(4_000).nullable(),
+});
+export type CapabilityInvocationResult = z.infer<typeof CapabilityInvocationResultSchema>;
 export const CapabilityInstallSchema = z.object({
   id: Id,
   kind: z.enum(["skill", "plugin", "mcp", "api", "graphql", "connection"]),

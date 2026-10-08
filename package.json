@@ -12,7 +12,7 @@
     "dev": "cross-env COREPACK_ENABLE_DOWNLOAD_PROMPT=0 turbo dev --filter=@rakazo/api --filter=@rakazo/worker --filter=@rakazo/web --filter=@rakazo/sandbox-supervisor",
     "build": "turbo build",
     "check": "turbo check",
-    "lint": "biome check .",
+    "lint": "biome check --max-diagnostics=100 .",
     "format": "biome check --write .",
     "db:generate": "pnpm --filter @rakazo/db generate",
     "db:migrate": "pnpm --filter @rakazo/db migrate",
@@ -31,7 +31,8 @@
     "perf:desktop": "tsx packages/testkit/src/cli/desktop-performance.ts",
     "perf:compare": "tsx packages/testkit/src/cli/compare-performance.ts",
     "compose:up": "docker compose --env-file .env -f infra/compose/docker-compose.yml up --build",
-    "compose:down": "docker compose --env-file .env -f infra/compose/docker-compose.yml down -v"
+    "compose:down": "docker compose --env-file .env -f infra/compose/docker-compose.yml down -v",
+    "chatgpt:mcp": "tsx packages/adapters/src/chatgpt-mcp.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13",
@@ -45,7 +46,9 @@
   "pnpm": {
     "overrides": {
       "react": "19.2.3",
-      "react-dom": "19.2.3"
+      "react-dom": "19.2.3",
+      "playwright": "1.64.0-alpha-2026-10-05",
+      "playwright-core": "1.64.0-alpha-2026-10-05"
     },
     "patchedDependencies": {
       "app-builder-lib@26.15.3": "patches/app-builder-lib@26.15.3.patch"

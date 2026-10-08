@@ -1011,6 +1011,99 @@ describe("computer screen url", () => {
   });
 });
 
+describe("computer observation", () => {
+  const actor = {
+    spaceId: "workspace-1",
+    userId: "user-1",
+    email: "user@rakazo.test",
+    isDeploymentOwner: true,
+  } satisfies Actor;
+
+  it("returns screenshot bytes and frame metadata through the authenticated RPC", async () => {
+    const observe = vi.fn().mockResolvedValue({
+      frameId: "frame-1",
+      capturedAt: "2026-09-28T10:00:00.000Z",
+      mimeType: "image/png",
+      image: new Uint8Array([1, 2, 3]),
+      width: 1280,
+      height: 720,
+      cursor: { x: 42, y: 24 },
+      activeWindow: { id: "window-1", title: "Chromium" },
+    });
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const prisma = {
+      bot: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "bot-1",
+          screenGeneration: 2,
+          thread: { id: "thread-1" },
+          computer: {
+            id: "computer-1",
+            screenGeneration: 3,
+            kind: "docker",
+            scope: "team",
+            state: "running",
+            providerRef: "sandbox-ref-1",
+            homeKey: "home-1",
+            controlHolder: "none",
+            controlLeaseId: null,
+            controlLeaseExpiresAt: null,
+            controlBotId: null,
+            controlRunId: null,
+          },
+        }),
+      },
+      computer: { updateMany },
+      computerExecutionLease: { findUnique: vi.fn().mockResolvedValue(null) },
+    } as unknown as PrismaClient;
+    const deps = {
+      prisma,
+      sandbox: { observe },
+      jobs: { enqueue: vi.fn().mockResolvedValue(undefined) },
+      env: {
+        defaultProvider: "fake",
+        defaultModel: "fake-model",
+        webOrigin: "http://127.0.0.1:5173",
+        screenProxySecret: "fake-test-secret",
+        sandboxProvider: "docker",
+      },
+      dataDir: "/tmp/rakazo-router-test",
+    } as unknown as RouterDeps;
+    const handler = new RPCHandler(createRouter(deps));
+
+    const { response } = await handler.handle(
+      new Request("http://127.0.0.1/rpc/computer/observe", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ json: { botId: "bot-1" } }),
+      }),
+      { prefix: "/rpc", context: { actor } },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      json: {
+        frameId: "frame-1",
+        capturedAt: "2026-09-28T10:00:00.000Z",
+        mimeType: "image/png",
+        imageBase64: "AQID",
+        width: 1280,
+        height: 720,
+        cursor: { x: 42, y: 24 },
+        activeWindow: { id: "window-1", title: "Chromium" },
+      },
+    });
+    expect(observe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "sandbox-ref-1",
+        kind: "docker",
+        providerRef: "sandbox-ref-1",
+      }),
+      expect.objectContaining({ botId: "bot-1", operationId: "observe" }),
+    );
+  });
+});
+
 describe("computer terminal and file transfer", () => {
   const actor = {
     spaceId: "workspace-1",
@@ -1032,6 +1125,7 @@ describe("computer terminal and file transfer", () => {
       }),
       readFile: vi.fn().mockResolvedValue(new TextEncoder().encode("hello")),
       writeFile: vi.fn().mockResolvedValue(undefined),
+      desktopBrowserSession: vi.fn(),
     };
     const prisma = {
       bot: {
@@ -1084,6 +1178,32 @@ describe("computer terminal and file transfer", () => {
     };
     return { sandbox, prisma, call };
   }
+
+  it("preserves browser backend diagnostics and page metadata through the API contract", async () => {
+    const { sandbox, call } = setup({ ...controlled, kind: "desktop" });
+    const result = {
+      ok: true,
+      backendMode: "playwright-cli-persistent",
+      sessionToken: "8eb5799b-7bf8-446f-b334-51e9c28e797e",
+      pageId: "tab-123",
+      pageIds: ["tab-123"],
+      completed: 1,
+      content: "Browser diagnostics",
+    };
+    sandbox.desktopBrowserSession.mockResolvedValue(result);
+
+    const { status, body } = await call("browser", {
+      request: { command: "open", mode: "auto" },
+    });
+
+    expect(status).toBe(200);
+    expect(body).toEqual({ json: result });
+    expect(sandbox.desktopBrowserSession).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "sandbox-ref-1", kind: "desktop" }),
+      { command: "open", mode: "auto" },
+      expect.anything(),
+    );
+  });
 
   it("opens a terminal only for the user holding this bot's control lease", async () => {
     const released = setup();

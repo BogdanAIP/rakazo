@@ -33,7 +33,6 @@ const SYNCHRONIZE = 0x00100000;
 const FILE_SHARE_ALL = 0x00000007;
 const FILE_ATTRIBUTE_NORMAL = 0x00000080;
 const FILE_ATTRIBUTE_DIRECTORY = 0x00000010;
-const O_RDWR_BINARY = 0x8002;
 /** NTSTATUS 0xC0000035 as signed int32 */
 const STATUS_OBJECT_NAME_COLLISION = -1073741771;
 /** NTSTATUS 0xC0000034 as signed int32 */
@@ -48,8 +47,8 @@ function escapeWorkspace(): never {
 type NtFns = {
   NtCreateFile: KoffiFunction;
   RtlInitUnicodeString: KoffiFunction;
-  getOsFhandle: KoffiFunction;
-  openOsFhandle: KoffiFunction;
+  getOsFhandle: (fd: number) => number | bigint;
+  openOsFhandle: (handle: number | bigint) => number;
   CloseHandle: KoffiFunction;
   GetFinalPathNameByHandleW: KoffiFunction;
   objectAttributesSize: number;
@@ -74,7 +73,21 @@ function nt(): NtFns {
   if (cached) return cached;
   const ntdll = koffi.load("ntdll.dll");
   const kernel32 = koffi.load("kernel32.dll");
-  const msvcrt = koffi.load("msvcrt.dll");
+  // Use the libuv exports from the *running Node executable*. An arbitrary
+  // msvcrt/ucrtbase DLL may have a different fd table from Node's CRT; mixing
+  // those tables can reject valid descriptors or crash the process.
+  const nodeModule = kernel32.func("void * __stdcall GetModuleHandleW(void *lpModuleName)")(null);
+  if (!nodeModule) throw new Error("Node executable module unavailable");
+  const getProcAddress = kernel32.func(
+    "void * __stdcall GetProcAddress(void *hModule, str lpProcName)",
+  );
+  const uvGetOsFhandle = getProcAddress(nodeModule, "uv_get_osfhandle");
+  const uvOpenOsFhandle = getProcAddress(nodeModule, "uv_open_osfhandle");
+  if (!uvGetOsFhandle || !uvOpenOsFhandle) {
+    throw new Error("Node libuv descriptor conversion exports unavailable");
+  }
+  const uvGetOsFhandlePrototype = koffi.proto("intptr_t uv_get_osfhandle(int fd)");
+  const uvOpenOsFhandlePrototype = koffi.proto("int uv_open_osfhandle(intptr_t handle)");
 
   koffi.struct("UNICODE_STRING", {
     Length: "uint16_t",
@@ -101,8 +114,13 @@ function nt(): NtFns {
     RtlInitUnicodeString: ntdll.func(
       "void __stdcall RtlInitUnicodeString(_Out_ UNICODE_STRING *DestinationString, void *SourceString)",
     ),
-    getOsFhandle: msvcrt.func("intptr_t __cdecl _get_osfhandle(int fd)"),
-    openOsFhandle: msvcrt.func("int __cdecl _open_osfhandle(intptr_t handle, int flags)"),
+    // uv_get_osfhandle borrows the HANDLE: the original fd remains its owner.
+    getOsFhandle: (fd: number) =>
+      koffi.call(uvGetOsFhandle, uvGetOsFhandlePrototype, fd) as number | bigint,
+    // uv_open_osfhandle transfers ownership of an NT-created HANDLE to Node's
+    // fd table; callers must close only the returned fd after success.
+    openOsFhandle: (handle: number | bigint) =>
+      koffi.call(uvOpenOsFhandle, uvOpenOsFhandlePrototype, handle) as number,
     CloseHandle: kernel32.func("int __stdcall CloseHandle(void *hObject)"),
     GetFinalPathNameByHandleW: kernel32.func(
       "uint32_t __stdcall GetFinalPathNameByHandleW(void *hFile, void *lpszFilePath, uint32_t cchFilePath, uint32_t dwFlags)",
@@ -117,21 +135,28 @@ function nt(): NtFns {
  * After a rename/junction swap of the original pathname, this still returns the
  * path of the held inode.
  */
+function koffiPointer(value: number | bigint): bigint {
+  const pointer = typeof value === "bigint" ? value : BigInt(value);
+  if (pointer === -1n || pointer === 0n) escapeWorkspace();
+  return pointer;
+}
+
 export function pathFromDirectoryFd(fd: number): string {
   return pathFromWindowsHandle(nt().getOsFhandle(fd) as number | bigint);
 }
 
 export function pathFromWindowsHandle(handle: number | bigint): string {
   const api = nt();
-  if (handle === -1n || handle === -1) escapeWorkspace();
+  const pointer = koffiPointer(handle);
 
   const flags = 0; // VOLUME_NAME_DOS
-  const size = api.GetFinalPathNameByHandleW(handle, null, 0, flags) as number;
-  if (size === 0) escapeWorkspace();
-
-  const buf = Buffer.alloc((size + 1) * 2);
-  const written = api.GetFinalPathNameByHandleW(handle, buf, size + 1, flags) as number;
-  if (written === 0) escapeWorkspace();
+  // Some Koffi/Windows combinations do not support the documented null-buffer
+  // size probe reliably. A fixed maximum Win32 path buffer avoids that probe
+  // while still failing closed on truncation.
+  const capacity = 32_768;
+  const buf = Buffer.alloc(capacity * 2);
+  const written = api.GetFinalPathNameByHandleW(pointer, buf, capacity, flags) as number;
+  if (written === 0 || written >= capacity) escapeWorkspace();
 
   let resolved = buf.toString("utf16le", 0, written * 2);
   if (resolved.startsWith("\\\\?\\UNC\\"))
@@ -153,8 +178,7 @@ function ntCreateRelative(
 ): { fd: number; status: number } {
   assertLeafName(name);
   const api = nt();
-  const root = api.getOsFhandle(parentFd) as number | bigint;
-  if (root === -1 || root === -1n) escapeWorkspace();
+  const root = koffiPointer(api.getOsFhandle(parentFd) as number | bigint);
 
   const nameBuf = Buffer.from(`${name}\0`, "utf16le");
   const uni = {};
@@ -188,7 +212,7 @@ function ntCreateRelative(
 
   const handle = handleOut[0];
   if (handle == null) escapeWorkspace();
-  const fd = api.openOsFhandle(handle as number | bigint, O_RDWR_BINARY) as number;
+  const fd = api.openOsFhandle(koffiPointer(handle as number | bigint));
   if (fd < 0) {
     api.CloseHandle(handle as number | bigint);
     escapeWorkspace();

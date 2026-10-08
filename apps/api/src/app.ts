@@ -111,6 +111,9 @@ import {
 } from "./team-chat-startup.js";
 import { mountVoiceHttpRoutes } from "./voice.js";
 import { mountWebhookHttpRoutes } from "./webhook.js";
+import { mountWindowsHostRoutes } from "./windows-host.js";
+import { WindowsHostCommandHub } from "./windows-host-command-hub.js";
+import { WindowsHostSandboxProvider } from "./windows-host-sandbox.js";
 
 /**
  * Native clients always send the app scheme, including in Expo Go, so no
@@ -166,6 +169,17 @@ export async function createApp(
     ...envOverrides
   } = overrides;
   const env = { ...loadEnv(process.env), ...envOverrides };
+  const windowsHostEnabled = process.env.RAKAZO_WINDOWS_HOST_ENABLED === "true";
+  const windowsHostInternalToken = process.env.RAKAZO_WINDOWS_HOST_INTERNAL_TOKEN?.trim();
+  if (
+    windowsHostEnabled &&
+    env.wakeupDriver !== "memory" &&
+    (!windowsHostInternalToken || windowsHostInternalToken.length < 32)
+  ) {
+    throw new Error(
+      "RAKAZO_WINDOWS_HOST_INTERNAL_TOKEN (at least 32 characters) is required for Graphile worker dispatch",
+    );
+  }
   const logger = loggerOverride ?? createServiceLogger({ service: SERVICE_NAMES.api });
   installLogger(logger);
   const created = prismaOverride
@@ -175,6 +189,10 @@ export async function createApp(
         applicationName: "rakazo-api",
       });
   const { prisma } = created;
+  const windowsHostCommandHub = new WindowsHostCommandHub();
+  const windowsHostSandbox = windowsHostEnabled
+    ? new WindowsHostSandboxProvider(prisma, windowsHostCommandHub)
+    : undefined;
   const realtime =
     realtimeOverride ??
     (created.pool
@@ -261,6 +279,7 @@ export async function createApp(
       boxApiUrl: env.boxApiUrl,
       dataDir: env.dataDir,
       prisma,
+      hostProvider: windowsHostSandbox,
     });
   const mcpOAuth = new McpOAuthBroker(
     prisma,
@@ -548,6 +567,25 @@ export async function createApp(
     return auth.handler(c.req.raw);
   });
   mountLocalSettings(app, { token: env.desktopStackToken, prisma, rpc });
+  mountWindowsHostRoutes(app, {
+    prisma,
+    commandHub: windowsHostCommandHub,
+    internalToken: windowsHostEnabled ? windowsHostInternalToken : undefined,
+    resolveOwner: async (request) => {
+      const session = await auth.api.getSession({ headers: sessionHeaders(request) });
+      if (!session?.user) return null;
+      const actor = await requireMembership(
+        prisma,
+        session.user.id,
+        request.headers.get("x-rakazo-space-id") ?? undefined,
+      ).catch(() => null);
+      if (!actor) return null;
+      return {
+        userId: actor.userId,
+        isDeploymentOwner: actor.isDeploymentOwner,
+      };
+    },
+  });
   app.use("/rpc/*", async (c, next) => {
     const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
     const requestedSpaceId = c.req.header("x-rakazo-space-id");
@@ -895,6 +933,7 @@ export async function createApp(
       await jobs.close();
       await realtime.close();
       await connector.stop();
+      windowsHostCommandHub.close();
       await mcp.close();
       await prisma.$disconnect().catch(() => undefined);
       await created.pool?.end().catch(() => undefined);

@@ -1,0 +1,90 @@
+# Project-scoped autonomous GitHub writes
+
+Ordinary ChatGPT sessions can act autonomously in a specific GitHub repository
+through the existing Plugin R -> Rakazo -> official GitHub MCP bridge.
+No second tunnel or model is added.
+
+## Grant
+
+An authenticated Space owner selects an existing, non-archived Project and
+upserts an existing github.repo resource with canonical ref BogdanAIP/rakazo
+(or another explicitly authorized owner/repo). Set metadata fields:
+- githubAccess: autonomous_write
+- githubMcpServerId: ID of the assigned official GitHub MCP server
+
+A github.repo resource without BOTH fields is not a write grant. GitHub MCP
+allowAllTools means tool availability only, NOT autonomous scope.
+
+Each write through capabilities/execute must specify projectId and use the
+live-discovered route plus schema-valid args. Rakazo checks that the selected
+project belongs to the current Space/user. The MCP connector rechecks project,
+Space, user, matching grant and server ID immediately before GitHub's call.
+Direct tools and lazy catalog connectors_execute_tool share the same guard.
+Missing or stale permissions fail closed before a GitHub mutation.
+
+## Scope and limits
+
+Repository-confined writes can proceed autonomously: branches, files, Issues,
+PRs, merge, workflow triggers, repository rulesets and explicitly reviewed
+write tools. GitHub account privileges and branch protection still apply.
+
+Account-/organization-wide, ambiguous, cross-repository and newly discovered
+unreviewed write tools are denied by a repository-scoped grant. Secondary
+cross-repository selectors and inconsistent owner/repo aliases are rejected.
+Read-only tools remain accessible without an autonomous write grant.
+
+This is enforced in the Rakazo backend, not by prompting the model. It does not
+restrict an unrelated direct GitHub integration or effects of a GitHub Actions
+workflow running with its own credentials.
+
+## Deployment
+
+1. Review PR/CI and update native Rakazo normally; preserve original R tunnel,
+   Windows Host and unrelated local modifications.
+2. Confirm capabilities/execute exposes optional projectId and policy tests pass.
+3. Only AFTER updated server policy is live, upsert the two grant metadata keys.
+4. Smoke test an allowed change in a dedicated branch, refusal of a different
+   repository, read-only access and CI.
+5. Revoke by removing grant metadata or archiving the project.
+
+No DB migration and no new GitHub PAT are required for this policy.
+
+
+## Forks and upstream PRs
+
+Project resources may grant a GitHub destination account or organization:
+- kind: github.fork.destination
+- ref: BogdanAIP
+- metadata.githubAccess: allow_fork
+- metadata.githubMcpServerId: ID of the assigned official GitHub MCP server
+
+The fork_repository tool may read/fork a different accessible upstream repository.
+Rakazo checks the selected Project, destination resource and GitHub MCP server.
+For a personal-account destination, the login comes from get_me on the same
+authenticated GitHub MCP session; an optional explicit organization must match
+a destination grant.
+
+After fork_repository succeeds, Rakazo grants no new write access merely from
+the requested tool arguments. The official v1.14.0 MCP implementation calls
+GitHub's CreateFork endpoint for the requested source and returns a minimal
+receipt containing the actual fork ID and GitHub URL. Rakazo requires a positive
+ID and exact github.com destination owner/repository URL from THAT response.
+If a future version returns a full fork object instead, fork=true, full_name,
+owner and the exact upstream parent are all verified. Neither path trusts the
+model's desired output as proof. Only after verification does it create two new
+project resources in one Serializable PostgreSQL transaction; a second-insert
+failure rolls back the first grant:
+- github.repo for the verified fork, with autonomous_write, forkOf and verifiedFork
+- github.pr.upstream for this exact fork/upstream pair, with contribute_via_pr
+
+The second grant permits creating a pull request in the upstream with a qualified
+fork head (owner:branch) but never grants arbitrary file/Issue/merge rights in the
+upstream. No pre-existing resource/grant is silently overwritten. If GitHub omits
+a valid ID/URL receipt (or complete fork provenance) or registration fails, the fork operation
+may have succeeded but Rakazo does NOT claim that it granted the missing rights.
+Verify and register the resource explicitly instead.
+
+Unrelated repositories remain readable when GitHub authorization allows it.
+A fork or upstream PR cannot evade the backend guard through the lazy tool catalog.
+Newly introduced, account-wide, ambiguous or opaque-node-ID mutations stay
+unavailable without a separately reviewed and implemented scope.

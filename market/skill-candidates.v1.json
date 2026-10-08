@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "market-skill-candidates-v1",
+  "sources": [
+    {
+      "repository": "ChromeDevTools/chrome-devtools-mcp",
+      "commit": "cf2eab96d96cad3d47ce769b9638815d1775500f",
+      "license": "Apache-2.0",
+      "skills": [
+        "skills/chrome-devtools/SKILL.md",
+        "skills/troubleshooting/SKILL.md",
+        "skills/a11y-debugging/SKILL.md",
+        "skills/cookie-debugging/SKILL.md",
+        "skills/debug-optimize-lcp/SKILL.md",
+        "skills/memory-leak-debugging/SKILL.md",
+        "skills/chrome-devtools-cli/SKILL.md"
+      ]
+    },
+    {
+      "repository": "anthropics/claude-plugins-official",
+      "commit": "d4226d062928f8d9505dbdeadd10217d23361052",
+      "license": "Apache-2.0",
+      "skills": [
+        "plugins/claude-code-setup/skills/claude-automation-recommender/SKILL.md",
+        "plugins/claude-md-management/skills/claude-md-improver/SKILL.md",
+        "plugins/frontend-design/skills/frontend-design/SKILL.md",
+        "plugins/hookify/skills/writing-rules/SKILL.md",
+        "plugins/mcp-server-dev/skills/build-mcp-app/SKILL.md",
+        "plugins/mcp-server-dev/skills/build-mcp-server/SKILL.md",
+        "plugins/plugin-dev/skills/agent-development/SKILL.md",
+        "plugins/plugin-dev/skills/command-development/SKILL.md",
+        "plugins/plugin-dev/skills/hook-development/SKILL.md",
+        "plugins/plugin-dev/skills/mcp-integration/SKILL.md",
+        "plugins/plugin-dev/skills/plugin-settings/SKILL.md",
+        "plugins/plugin-dev/skills/plugin-structure/SKILL.md",
+        "plugins/plugin-dev/skills/skill-development/SKILL.md",
+        "plugins/project-artifact/skills/project-artifact/SKILL.md",
+        "plugins/session-report/skills/session-report/SKILL.md",
+        "plugins/skill-creator/skills/skill-creator/SKILL.md"
+      ]
+    },
+    {
+      "repository": "openai/openai-cookbook",
+      "commit": "0eac1447d4e24d06e47c459ca5e98f248b9413cf",
+      "license": "MIT",
+      "skills": [
+        ".codex/skills/docs-editor/SKILL.md",
+        "examples/agents_api/apps/document_review/skills/expense-review-policy/SKILL.md",
+        "examples/evals/realtime_evals/skills/bootstrap-realtime-eval/SKILL.md"
+      ]
+    },
+    {
+      "repository": "google-gemini/gemini-cli",
+      "commit": "fb972b2f87fe7d5b06d37eac711490162d98de2c",
+      "license": "Apache-2.0",
+      "skills": [
+        ".gemini/skills/behavioral-evals/SKILL.md",
+        ".gemini/skills/ci/SKILL.md",
+        ".gemini/skills/code-reviewer/SKILL.md",
+        ".gemini/skills/docs-writer/SKILL.md",
+        ".gemini/skills/github-issue-creator/SKILL.md",
+        ".gemini/skills/pr-address-comments/SKILL.md",
+        ".gemini/skills/pr-creator/SKILL.md",
+        ".gemini/skills/review-duplication/SKILL.md"
+      ]
+    },
+    {
+      "repository": "microsoft/skills",
+      "commit": "18eb319b121b92ea19ca911fc3bd4cc53769bb1c",
+      "license": "MIT",
+      "skills": [],
+      "selection": "Search/index all 205 first-party SKILL.md paths; import only task-matched Skills on demand rather than preloading the entire catalog."
+    },
+    {
+      "repository": "tradingview/lightweight-charts",
+      "commit": "786591769fee8ec5672a6d9c9afe9e706fc60299",
+      "license": "Apache-2.0",
+      "skills": [
+        ".github/skills/lightweight-charts/SKILL.md",
+        ".github/skills/lightweight-charts-plugin-authoring/SKILL.md"
+      ]
+    }
+  ]
+}

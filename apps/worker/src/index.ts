@@ -37,6 +37,7 @@ import {
   PipedreamConnector,
   PostgresRealtimeFanout,
   pipedreamConfigFromEnv,
+  RemoteWindowsHostCommandDispatcher,
   reconcileCloudAgents,
   reconcileComputerUpdates,
   resolveDeploymentModel,
@@ -45,6 +46,7 @@ import {
   ScriptedAgentRuntime,
   SpaceMemoryProviderResolver,
   sandboxProviderOptionsFromEnv,
+  WindowsHostSandboxProvider,
 } from "@rakazo/adapters";
 import { resolveEncryptionKey, resolveSupervisorToken } from "@rakazo/core";
 import {
@@ -60,6 +62,17 @@ import { MarkdownMemoryStore } from "@rakazo/memory";
 const logger = createRootLogger(SERVICE_NAMES.worker);
 
 async function main() {
+  const windowsHostEnabled = process.env.RAKAZO_WINDOWS_HOST_ENABLED === "true";
+  const windowsHostApiUrl = process.env.RAKAZO_WINDOWS_HOST_API_INTERNAL_URL?.trim();
+  const windowsHostInternalToken = process.env.RAKAZO_WINDOWS_HOST_INTERNAL_TOKEN?.trim();
+  if (
+    windowsHostEnabled &&
+    (!windowsHostApiUrl || !windowsHostInternalToken || windowsHostInternalToken.length < 32)
+  ) {
+    throw new Error(
+      "RAKAZO_WINDOWS_HOST_API_INTERNAL_URL and a 32+ character RAKAZO_WINDOWS_HOST_INTERNAL_TOKEN are required",
+    );
+  }
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) throw new Error("DATABASE_URL is required");
   // Shared by Prisma, the reconciliation leadership lock, and both graphile-worker
@@ -87,12 +100,20 @@ async function main() {
   // Same resolver the API uses, so both processes agree on provider, model and key.
   const { key: deploymentModelKey } = resolveDeploymentModel();
   const sandboxProvider = resolveSandboxProvider(process.env);
+  const windowsHostProvider =
+    windowsHostEnabled && windowsHostApiUrl && windowsHostInternalToken
+      ? new WindowsHostSandboxProvider(
+          prisma,
+          new RemoteWindowsHostCommandDispatcher(windowsHostApiUrl, windowsHostInternalToken),
+        )
+      : undefined;
   const sandbox = createRunSandbox(sandboxProvider, {
     ...sandboxProviderOptionsFromEnv(process.env),
     supervisorUrl: process.env.SANDBOX_SUPERVISOR_URL ?? "http://127.0.0.1:7091",
     supervisorToken: sandboxProvider === "docker" ? resolveSupervisorToken(process.env) : undefined,
     dataDir,
     prisma,
+    hostProvider: windowsHostProvider,
   });
   const allowPrivateEndpoint = process.env.MCP_ALLOW_PRIVATE_ENDPOINT === "true";
   const mcpOAuth = new McpOAuthBroker(prisma, secrets, {}, allowPrivateEndpoint);

@@ -12,6 +12,13 @@ import { catalogToolPrefix } from "./approval-effect.js";
 import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safety.js";
 import { appendToolCompletionAudit } from "./executor.js";
 import {
+  assertGithubContribution,
+  authorizeGithubFork,
+  githubAuthenticatedLogin,
+  registerGithubFork,
+} from "./github-fork-policy.js";
+import { assertGithubProjectWrite, GithubProjectScopeDenied } from "./github-project-policy.js";
+import {
   CATALOG_EXECUTE,
   catalogEntries,
   DIRECT_TOOL_LIMIT,
@@ -29,6 +36,18 @@ import type { EncryptedSecretStore } from "./secrets.js";
 
 type SessionEntry = { session: McpSession; revision: number; material: OAuthMaterial };
 type PendingSession = { revision: number; promise: Promise<McpSession> };
+
+export function isOfficialGithubMcpServer(
+  server: Pick<McpServer, "slug" | "command" | "endpoint">,
+): boolean {
+  if (server.slug === "github") return true;
+  if (/(?:^|[\\/])github-mcp-server(?:\.exe)?$/i.test(server.command ?? "")) return true;
+  try {
+    return new URL(server.endpoint ?? "").hostname.toLowerCase() === "api.githubcopilot.com";
+  } catch {
+    return false;
+  }
+}
 
 /** Runtime MCP connector. Authorization is re-checked against the bot assignment on every call. */
 /**
@@ -145,6 +164,7 @@ export class McpConnector implements ConnectorProvider {
               name: `mcp__${assignment.server.slug}__${tool.name}`,
               description: tool.description ?? tool.name,
               inputSchema: tool.inputSchema as Record<string, unknown>,
+              readOnly: tool.annotations?.readOnlyHint === true,
               route: {
                 connectorId: "mcp",
                 resourceId: assignment.serverId,
@@ -267,14 +287,70 @@ export class McpConnector implements ConnectorProvider {
     try {
       const session = await this.sessionFor(assignment.server, context);
       material = this.sessions.get(sessionKey)?.material;
+      let forkRequest: { source: string; destination: string } | undefined;
+      if (isOfficialGithubMcpServer(assignment.server)) {
+        const listed = await session.listTools({ signal: context.signal });
+        const authoritative = listed.tools.find((tool) => tool.name === call.route?.toolName);
+        if (!authoritative) throw new Error("GitHub MCP tool is no longer available.");
+        if (authoritative.annotations?.readOnlyHint !== true) {
+          if (authoritative.name === "fork_repository") {
+            const whoami = listed.tools.find(
+              (tool) => tool.name === "get_me" && tool.annotations?.readOnlyHint === true,
+            );
+            if (!whoami) throw new Error("Authenticated GitHub identity tool is unavailable.");
+            const identity = await session.callTool("get_me", {}, { signal: context.signal });
+            forkRequest = await authorizeGithubFork(
+              this.prisma,
+              context,
+              assignment.serverId,
+              call.args,
+              githubAuthenticatedLogin(identity),
+            );
+          } else if (
+            authoritative.name === "create_pull_request" &&
+            typeof call.args.head === "string" &&
+            call.args.head.includes(":")
+          ) {
+            await assertGithubContribution(this.prisma, context, assignment.serverId, call.args);
+          } else {
+            await assertGithubProjectWrite(
+              this.prisma,
+              context,
+              assignment.serverId,
+              authoritative.name,
+              call.args,
+            );
+          }
+        }
+      }
       const result = await session.callTool(call.route.toolName, call.args, {
         signal: context.signal,
       });
+      if (forkRequest && result.isError !== true) {
+        const registered = await registerGithubFork(
+          this.prisma,
+          context,
+          assignment.serverId,
+          forkRequest,
+          result,
+        );
+        if (!registered) {
+          yield {
+            type: "log",
+            message:
+              "Fork response was not verified or resource already exists; no automatic write grant was issued.",
+          };
+        }
+      }
       const secrets = material ? oauthMaterialSecrets(material) : [];
       yield { type: "result", data: redactConnectorPayload(result, secrets) };
     } catch (error) {
       // A thrown call means the transport or auth broke; drop the session so the next call reconnects.
       const secrets = material ? oauthMaterialSecrets(material) : [];
+      if (error instanceof GithubProjectScopeDenied) {
+        yield { type: "error", message: sanitizeConnectorError(error, secrets) };
+        return;
+      }
       await this.evict(sessionKey);
       yield { type: "error", message: sanitizeConnectorError(error, secrets) };
     }
