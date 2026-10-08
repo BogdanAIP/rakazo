@@ -95,6 +95,7 @@ import {
   applyApprovedTradingPaperControl,
   applyApprovedTradingPaperProtectiveExitControl,
   applyApprovedTradingPaperResolvedResearchControl,
+  applyApprovedTradingPaperResolvedResearchFillControl,
   applyApprovedTradingPaperWorkerControl,
   applyApprovedTradingPaperWorkerFillControl,
   applyApprovedTradingPaperWorkerMarketTargetControl,
@@ -3623,6 +3624,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
               );
             }
             return applyApprovedTradingPaperResolvedResearchControl(
+              deps.prisma,
+              { spaceId: run.spaceId, userId: run.userId },
+              applied.effect.id,
+            );
+          }
+          if (name === "paper_resolved_research_fill_control") {
+            if (!applied || !claimedEffect) {
+              throw new Error(
+                "Resolved research PAPER fill control requires a claimed explicit approval.",
+              );
+            }
+            return applyApprovedTradingPaperResolvedResearchFillControl(
               deps.prisma,
               { spaceId: run.spaceId, userId: run.userId },
               applied.effect.id,
