@@ -154,9 +154,9 @@ describe("H0 on-demand PAPER session drain — read-only and default deny", () =
 
   it("rejects negative, fractional and unsafe queue/in-flight counts", () => {
     for (const n of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1]) {
-      expect(() =>
-        assessTradingPaperSessionDrain({ ...base, inFlightEntryOperations: n }),
-      ).toThrow("Invalid PAPER session inFlightEntryOperations count");
+      expect(() => assessTradingPaperSessionDrain({ ...base, inFlightEntryOperations: n })).toThrow(
+        "Invalid PAPER session inFlightEntryOperations count",
+      );
     }
   });
 
