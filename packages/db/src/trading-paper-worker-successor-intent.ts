@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { assessTradingPaperEntrySessionInTransaction } from "./trading-paper-entry-session.js";
 import { assessTradingPaperWorkerRecurrencePreflightInTransaction } from "./trading-paper-worker-recurrence-gate.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
@@ -31,7 +32,7 @@ export type TradingPaperWorkerSuccessorIntentResult =
       status: "stop";
       mode: "paper_only";
       ledgerId: string;
-      reason: "recurrence_denied" | "recurrence_scope_changed";
+      reason: "recurrence_denied" | "recurrence_scope_changed" | "session_denied";
       recurrenceReason?: string;
       currentGateRevision?: number;
     };
@@ -152,6 +153,7 @@ export async function prepareTradingPaperWorkerSuccessorIntent(
     ledgerId: string;
     sourceScheduledFor: string;
     gateRevision: number;
+    sessionRevision?: number;
     now?: Date;
   },
 ): Promise<TradingPaperWorkerSuccessorIntentResult> {
@@ -170,6 +172,24 @@ export async function prepareTradingPaperWorkerSuccessorIntent(
   return withTransactionRetry(() =>
     prisma.$transaction(
       async (tx): Promise<TradingPaperWorkerSuccessorIntentResult> => {
+        const session =
+          input.sessionRevision === undefined
+            ? null
+            : await assessTradingPaperEntrySessionInTransaction(
+                tx,
+                owner,
+                input.ledgerId,
+                input.sessionRevision,
+              );
+        if (session && session.status !== "ready") {
+          return {
+            status: "stop",
+            mode: "paper_only",
+            ledgerId: input.ledgerId,
+            reason: "session_denied",
+            sessionReason: session.reason,
+          };
+        }
         const recurrence = await assessTradingPaperWorkerRecurrencePreflightInTransaction(
           tx,
           owner,
@@ -211,6 +231,15 @@ export async function prepareTradingPaperWorkerSuccessorIntent(
         const successorScheduledFor = new Date(
           sourceScheduledFor.getTime() + intervals * cadenceMs,
         );
+        if (session && successorScheduledFor.getTime() >= Date.parse(session.expiresAt)) {
+          return {
+            status: "stop",
+            mode: "paper_only",
+            ledgerId: input.ledgerId,
+            reason: "session_denied",
+            sessionReason: "successor_after_session_expiry",
+          };
+        }
         const value = {
           ledgerId: input.ledgerId,
           spaceId: owner.spaceId,
