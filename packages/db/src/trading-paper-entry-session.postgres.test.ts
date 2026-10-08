@@ -34,7 +34,12 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
     second = createDb(databaseUrl!, { poolMax: 2, applicationName: "paper-session-h1-b" });
     const createdAt = new Date();
     await first.prisma.user.create({
-      data: { id: owner.userId, name: "PAPER Session Fixture", email: `${owner.userId}@rakazo.test`, emailVerified: false },
+      data: {
+        id: owner.userId,
+        name: "PAPER Session Fixture",
+        email: `${owner.userId}@rakazo.test`,
+        emailVerified: false,
+      },
     });
     await first.prisma.organization.create({
       data: { id: orgId, name: "PAPER Session Fixture", slug: orgId, createdAt },
@@ -108,27 +113,49 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
     const taskId = `paper-session-t${counter}-${suffix}`;
     const runId = `paper-session-r${counter}-${suffix}`;
     await first.prisma.bot.create({
-      data: { id: botId, spaceId: owner.spaceId, userId: owner.userId, name: "Session", color: "#000000" },
+      data: {
+        id: botId,
+        spaceId: owner.spaceId,
+        userId: owner.userId,
+        name: "Session",
+        color: "#000000",
+      },
     });
     await first.prisma.thread.create({
       data: { id: threadId, spaceId: owner.spaceId, botId, userId: owner.userId },
     });
     await first.prisma.task.create({
       data: {
-        id: taskId, spaceId: owner.spaceId, botId, threadId,
-        userId: owner.userId, prompt: "paper session integration", status: "running",
+        id: taskId,
+        spaceId: owner.spaceId,
+        botId,
+        threadId,
+        userId: owner.userId,
+        prompt: "paper session integration",
+        status: "running",
       },
     });
     await first.prisma.run.create({
       data: {
-        id: runId, spaceId: owner.spaceId, botId, threadId, taskId,
-        userId: owner.userId, status: "running", trigger: "user",
+        id: runId,
+        spaceId: owner.spaceId,
+        botId,
+        threadId,
+        taskId,
+        userId: owner.userId,
+        status: "running",
+        trigger: "user",
       },
     });
     return first.prisma.externalEffect.create({
       data: {
-        id, spaceId: owner.spaceId, runId, kind, idempotencyKey: id,
-        status: "executing", request,
+        id,
+        spaceId: owner.spaceId,
+        runId,
+        kind,
+        idempotencyKey: id,
+        status: "executing",
+        request,
       },
     });
   };
@@ -138,11 +165,16 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
     expect(absent).toMatchObject({ status: "absent", revision: 0 });
 
     const policy = await effect("paper_trading_control", {
-      action: "enable", ledger_id: ledgerId, expected_policy_revision: 0,
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 0,
     });
     await applyApprovedTradingPaperControl(first.prisma, owner, policy.id);
     const worker = await effect("paper_worker_control", {
-      action: "enable", ledger_id: ledgerId, expected_policy_revision: 1, cadence_minutes: 15,
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 1,
+      cadence_minutes: 15,
     });
     await applyApprovedTradingPaperWorkerControl(first.prisma, owner, worker.id);
 
@@ -152,15 +184,23 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
     expect(preStart).toMatchObject({ status: "deny", reason: "session_absent" });
 
     const start = await effect("paper_session_control", {
-      action: "start", ledger_id: ledgerId, expected_revision: 0, duration_minutes: 30,
+      action: "start",
+      ledger_id: ledgerId,
+      expected_revision: 0,
+      duration_minutes: 30,
     });
     const started = await applyApprovedTradingPaperEntrySessionControl(
-      second.prisma, owner, start.id,
+      second.prisma,
+      owner,
+      start.id,
     );
     expect(started).toMatchObject({ ok: true, status: "active", revision: 1 });
-    expect(await readVerifiedTradingPaperEntrySession(first.prisma, owner, ledgerId)).toMatchObject({
-      status: "active", revision: 1,
-    });
+    expect(await readVerifiedTradingPaperEntrySession(first.prisma, owner, ledgerId)).toMatchObject(
+      {
+        status: "active",
+        revision: 1,
+      },
+    );
 
     const active = await second.prisma.$transaction((tx) =>
       assessTradingPaperEntrySessionInTransaction(tx, owner, ledgerId, 1),
@@ -168,7 +208,10 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
     expect(active).toMatchObject({ status: "ready", sessionRevision: 1 });
 
     const duplicate = await effect("paper_session_control", {
-      action: "start", ledger_id: ledgerId, expected_revision: 1, duration_minutes: 30,
+      action: "start",
+      ledger_id: ledgerId,
+      expected_revision: 1,
+      duration_minutes: 30,
     });
     expect(
       await applyApprovedTradingPaperEntrySessionControl(first.prisma, owner, duplicate.id),
@@ -180,7 +223,9 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
     ).rejects.toThrow("PAPER ledger unavailable");
 
     const pause = await effect("paper_session_control", {
-      action: "pause", ledger_id: ledgerId, expected_revision: 1,
+      action: "pause",
+      ledger_id: ledgerId,
+      expected_revision: 1,
     });
     expect(
       await applyApprovedTradingPaperEntrySessionControl(first.prisma, owner, pause.id),
@@ -191,21 +236,28 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
     expect(paused).toMatchObject({ status: "deny", reason: "session_paused_or_ended" });
 
     const staleEnd = await effect("paper_session_control", {
-      action: "end", ledger_id: ledgerId, expected_revision: 1,
+      action: "end",
+      ledger_id: ledgerId,
+      expected_revision: 1,
     });
     expect(
       await applyApprovedTradingPaperEntrySessionControl(second.prisma, owner, staleEnd.id),
     ).toMatchObject({ ok: false, reason: "stale_revision", currentRevision: 2 });
 
     const end = await effect("paper_session_control", {
-      action: "end", ledger_id: ledgerId, expected_revision: 2,
+      action: "end",
+      ledger_id: ledgerId,
+      expected_revision: 2,
     });
     expect(
       await applyApprovedTradingPaperEntrySessionControl(second.prisma, owner, end.id),
     ).toMatchObject({ ok: true, status: "ended", revision: 3 });
-    expect(await readVerifiedTradingPaperEntrySession(first.prisma, owner, ledgerId)).toMatchObject({
-      status: "ended", revision: 3,
-    });
+    expect(await readVerifiedTradingPaperEntrySession(first.prisma, owner, ledgerId)).toMatchObject(
+      {
+        status: "ended",
+        revision: 3,
+      },
+    );
 
     const newStart = await effect("paper_session_control", {
       action: "start", ledger_id: ledgerId, expected_revision: 3, duration_minutes: 5,
