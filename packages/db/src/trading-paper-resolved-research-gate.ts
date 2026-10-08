@@ -371,6 +371,119 @@ export async function readVerifiedTradingPaperResolvedResearchGate(
   );
 }
 
+export type TradingPaperResolvedResearchScopeAuthority =
+  | {
+      status: "ready";
+      mode: "paper_only";
+      ledgerId: string;
+      scope: TradingResolvedResearchApprovalScope;
+      policyRevision: number;
+      gateRevision: number;
+      researchRevision: number;
+      researchApprovalEffectId: string;
+      workerApprovalEffectId: string;
+      paperApprovalEffectId: string;
+    }
+  | {
+      status: "deny";
+      mode: "paper_only";
+      ledgerId: string;
+      reason:
+        | "resolved_research_gate_disabled"
+        | "worker_preflight_denied"
+        | "resolved_research_gate_worker_changed"
+        | "resolved_research_scope_mismatch"
+        | "resolved_research_revision_changed";
+      workerReason?: string;
+      currentGateRevision?: number;
+      currentResearchRevision?: number;
+    };
+
+export async function assessTradingPaperResolvedResearchScopeAuthorityInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  ledgerId: string,
+  expectedScope: TradingResolvedResearchApprovalScope,
+  expectedResearchRevision: number,
+  now: Date,
+): Promise<TradingPaperResolvedResearchScopeAuthority> {
+  await requireOwnedLedger(tx, owner, ledgerId);
+  if (!Number.isSafeInteger(expectedResearchRevision) || expectedResearchRevision < 1) {
+    throw new PaperResolvedResearchGateIntegrityError("Invalid resolved research revision");
+  }
+  const row = await tx.tradingPaperResolvedResearchGate.findUnique({ where: { ledgerId } });
+  if (!row) {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "resolved_research_gate_disabled",
+    };
+  }
+  if (row.spaceId !== owner.spaceId || row.userId !== owner.userId) {
+    throw new PaperResolvedResearchGateIntegrityError("Resolved research gate owner mismatch");
+  }
+  const gate = normalize(row);
+  if (!gate.enabled || !gate.scope) {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "resolved_research_gate_disabled",
+    };
+  }
+  await verifyEnabledApproval(tx, owner, gate);
+
+  const worker = await assessTradingPaperWorkerWakePreflightInTransaction(tx, owner, ledgerId, now);
+  if (worker.status !== "ready") {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "worker_preflight_denied",
+      workerReason: worker.reason,
+    };
+  }
+  if (worker.gateRevision !== gate.gateRevision || worker.policyRevision !== gate.policyRevision) {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "resolved_research_gate_worker_changed",
+      currentGateRevision: worker.gateRevision,
+    };
+  }
+  if (!sameScope(gate.scope, expectedScope)) {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "resolved_research_scope_mismatch",
+    };
+  }
+  if (gate.researchRevision !== expectedResearchRevision) {
+    return {
+      status: "deny",
+      mode: "paper_only",
+      ledgerId,
+      reason: "resolved_research_revision_changed",
+      currentResearchRevision: gate.researchRevision,
+    };
+  }
+  return {
+    status: "ready",
+    mode: "paper_only",
+    ledgerId,
+    scope: gate.scope,
+    policyRevision: gate.policyRevision,
+    gateRevision: gate.gateRevision,
+    researchRevision: gate.researchRevision,
+    researchApprovalEffectId: gate.approvalEffectId,
+    workerApprovalEffectId: worker.workerApprovalEffectId,
+    paperApprovalEffectId: worker.paperApprovalEffectId,
+  };
+}
+
 export async function assessTradingPaperResolvedResearchPreflightInTransaction(
   tx: Prisma.TransactionClient,
   owner: Owner,
