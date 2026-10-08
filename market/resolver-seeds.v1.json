@@ -278,6 +278,7 @@
             "name": "CCXT MCP market tier",
             "kind": "mcp",
             "reference": "ccxt/ccxt",
+            "skillReference": "market:ccxt/ccxt:ccxt-mcp",
             "priority": 1,
             "readOnly": true,
             "constraints": [
@@ -697,6 +698,7 @@
             "name": "CCXT public derivatives market data",
             "kind": "api",
             "reference": "ccxt/ccxt",
+            "skillReference": "market:ccxt/ccxt:ccxt-mcp",
             "priority": 4,
             "readOnly": true,
             "constraints": ["Public endpoints only; exchange support and fields vary"]
