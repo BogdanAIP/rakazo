@@ -347,3 +347,42 @@ In particular, an existing approval for `original` must never silently
 authorize `rccl`, `wrapped` or `hybrid` following a preference change.
 The Market catalogue's general `market/evaluate` preferred-variant
 change is not PAPER trading owner consent.
+
+
+## G9 — selected Skill variant + exact instruction digest in PAPER approval
+
+G7 now hashes **the actual selected Market Skill body** (SHA-256 UTF-8) after
+verifying the pinned Resolver / Skill entry and before invoking the read-only
+research runner. The returned Trading envelope records this
+`provenance.skill.contentSha256` alongside the immutable upstream source digest.
+
+The G1/G3 `TradingResolvedResearchApprovalScope` uses two explicitly versioned
+formats:
+
+- `scope-v1` is preserved for historical, already-recorded source-only approvals
+  and tool-only/legacy original-Skill research, so verified old JSON/digest/ledger
+  audit history is not rewritten or silently upgraded.
+- `scope-v2` is derived whenever selected instruction bytes were actually
+  pinned. It includes `skillVariant` (`original`, `rccl`, `wrapped`, `hybrid`)
+  and `skillContentSha256` in addition to the original source digest and
+  existing Resolver/strategy/venue/action scope.
+
+**Non-bypass rule:** an adapted-Skill envelope without a pinned selected-text
+digest is rejected instead of being reduced to the historical `scope-v1`.
+A v1 owner approval **cannot** authorize a v2 execution. A v2 approval for
+RCCL cannot authorize WRAPPED, ORIGINAL, HYBRID or an edited RCCL instruction
+body, even when the Market source digest remains unchanged. Both G1 reserve
+and G3 fill inherit the canonical versioned scope through the existing
+transactional authority verification. Historic G2/G4 immutable approval-use
+records and lifecycle audit continue to compare the complete canonical scope.
+
+The full read-only market-invocation binding and the G9 approval scope are
+code/test changes only, not deployment or authorization. Live credentials and
+order placement remain completely outside this design. No automatic PAPER
+recurrence or order-writing tool is enabled merely by this change.
+
+**Integration remaining:** PR #38 and Market PR #40 must share a reviewed
+integration base; attach a real owner-scoped `market/prepare` and an existing
+authorized read-only research executor, then run the whole synthetic
+PAPER lifecycle with the selected Skill. Existing explicit G1/G3 approvals
+remain required for any reserve or fill.
