@@ -276,7 +276,9 @@ function aliasSnapshotRefs(snapshot: unknown): {
       if (key === "ref" && typeof child === "string" && /^f[0-9]+e[0-9]{1,6}$/u.test(child)) {
         let alias = sourceAliases.get(child);
         if (!alias) {
-          do { alias = "e" + String(next++); } while (reserved.has(alias));
+          do {
+            alias = `e${String(next++)}`;
+          } while (reserved.has(alias));
           reserved.add(alias);
           sourceAliases.set(child, alias);
           sources.set(alias, child);

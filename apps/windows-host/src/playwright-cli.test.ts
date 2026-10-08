@@ -269,17 +269,19 @@ describe("WindowsPlaywrightCliBackend", () => {
       if (command === "snapshot")
         return JSON.stringify({ snapshot: [{ role: "searchbox", name: "Search", ref: "f4e53" }] });
       if (command === "fill") return JSON.stringify({ result: {} });
-      throw new Error("Unexpected command: " + command);
+      throw new Error(`Unexpected command: ${command}`);
     });
     const backend = new WindowsPlaywrightCliBackend(cdpConfig, process.cwd(), runner);
     const opened = await backend.browser("bot-a", { command: "open" });
     const observed = await backend.browser("bot-a", {
-      command: "snapshot", sessionToken: opened.sessionToken!,
+      command: "snapshot",
+      sessionToken: opened.sessionToken!,
     });
     expect(observed.elements).toEqual([{ ref: "e1", role: "searchbox", name: "Search" }]);
     expect(observed.tree).toContain('"ref": "e1"');
     const acted = await backend.browser("bot-a", {
-      command: "act", sessionToken: opened.sessionToken!,
+      command: "act",
+      sessionToken: opened.sessionToken!,
       actions: [{ kind: "fill", ref: "e1", text: "hydrogen" }],
     });
     expect(acted).toMatchObject({ ok: true, completed: 1 });
