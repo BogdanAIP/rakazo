@@ -34,6 +34,7 @@ export type TradingPaperWorkerSuccessorIntentResult =
       ledgerId: string;
       reason: "recurrence_denied" | "recurrence_scope_changed" | "session_denied";
       recurrenceReason?: string;
+      sessionReason?: string;
       currentGateRevision?: number;
     };
 
