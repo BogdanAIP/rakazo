@@ -50,6 +50,7 @@ import {
   MarketEntrySchema,
   MarketPreferredVariantSchema,
   MarketResolverPlanSchema,
+  MarketResolverReadOnlySelectionSchema,
   MarketTrustSchema,
   McpServerConfigInput,
   McpServerSchema,
@@ -835,6 +836,28 @@ export const appContract = {
         }),
       )
       .output(MarketResolverPlanSchema),
+    select: oc
+      .input(
+        z.object({
+          semanticKey: z
+            .string()
+            .trim()
+            .min(1)
+            .max(120)
+            .regex(/^[a-z][a-z0-9._-]*$/),
+          resolverKey: z.string().trim().min(1).max(500).optional(),
+          expectedDigest: z
+            .string()
+            .regex(/^[0-9a-f]{64}$/)
+            .optional(),
+          allowedKinds: z
+            .array(z.enum(["mcp", "api", "cli", "native", "computer", "browser"]))
+            .max(6)
+            .optional(),
+          limit: z.number().int().min(1).max(32).default(32),
+        }),
+      )
+      .output(MarketResolverReadOnlySelectionSchema),
     importGithub: oc.input(marketGithubImportInput).output(MarketEntrySchema),
     importGithubBatch: oc
       .input(
