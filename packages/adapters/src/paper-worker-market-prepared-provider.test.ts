@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import {
   createPreparedMarketResearchProvider,
@@ -98,7 +99,15 @@ describe("Market prepare -> Trading G6 research-only provider", () => {
       schemaVersion: "trading-resolved-research-v1",
       mode: "research_only",
       executionAuthority: "none",
-      provenance,
+      provenance: {
+        ...provenance,
+        skill: {
+          ...provenance.skill,
+          contentSha256: createHash("sha256")
+            .update(prepared.skillContent)
+            .digest("hex"),
+        },
+      },
       signal,
     });
     expect(envelope).not.toHaveProperty("order");
@@ -120,6 +129,29 @@ describe("Market prepare -> Trading G6 research-only provider", () => {
       async () => noTrade,
     );
     expect((await provider(payload, now)).signal).toEqual(noTrade);
+  });
+
+  it("changes the pinned instruction digest when Market switches a Skill variant", async () => {
+    const original = prepared;
+    const rccl = {
+      ...prepared,
+      skillContent: "# RCCL research-only instructions",
+      selection: {
+        ...prepared.selection,
+        skill: { ...prepared.selection.skill, variant: "rccl" },
+      },
+      provenance: {
+        ...provenance,
+        skill: { ...provenance.skill, variant: "rccl" },
+      },
+    } as const;
+
+    const first = await providerFor(original).provider(payload, now);
+    const second = await providerFor(rccl).provider(payload, now);
+    expect(first.provenance.skill?.contentSha256).not.toBe(
+      second.provenance.skill?.contentSha256,
+    );
+    expect(second.provenance.skill?.variant).toBe("rccl");
   });
 
   it("denies before invoking research if Market Resolver preparation is denied", async () => {
