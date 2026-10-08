@@ -13,16 +13,16 @@ import {
 } from "./trading-paper-lifecycle-audit.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
 import {
+  evaluateTradingPaperReservationInTransaction,
+  type TradingPaperReservationDeny,
+  type TradingPaperReservationDenyReason,
+} from "./trading-paper-reservation-evaluation.js";
+import {
   recordTradingPaperResolvedResearchReserveUseInTransaction,
   type TradingPaperResolvedResearchAuthority,
   verifyTradingPaperResolvedResearchAuthorityInTransaction,
   verifyTradingPaperResolvedResearchReserveUseInTransaction,
 } from "./trading-paper-resolved-research-gate.js";
-import {
-  evaluateTradingPaperReservationInTransaction,
-  type TradingPaperReservationDeny,
-  type TradingPaperReservationDenyReason,
-} from "./trading-paper-reservation-evaluation.js";
 import {
   lockTradingPaperRiskPolicyInTransaction,
   verifyCurrentTradingPaperEnableAuditInTransaction,
@@ -387,14 +387,13 @@ export async function reserveApprovedTradingPaperSignal(
               "Resolved research envelope differs from the proposed PAPER signal",
             );
           }
-          currentResolvedAuthority =
-            await verifyTradingPaperResolvedResearchAuthorityInTransaction(
-              tx,
-              owner,
-              resolvedResearch.authority,
-              resolvedResearch.envelope,
-              new Date(decisionNow),
-            );
+          currentResolvedAuthority = await verifyTradingPaperResolvedResearchAuthorityInTransaction(
+            tx,
+            owner,
+            resolvedResearch.authority,
+            resolvedResearch.envelope,
+            new Date(decisionNow),
+          );
           if (!currentResolvedAuthority) {
             const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
             return deny(
@@ -425,18 +424,17 @@ export async function reserveApprovedTradingPaperSignal(
           const existing = await readExistingDecision(tx, owner, ledgerId, proposal, evidenceId);
           if (existing) {
             if (currentResolvedAuthority) {
-              const verifiedUse =
-                await verifyTradingPaperResolvedResearchReserveUseInTransaction(
-                  tx,
-                  owner,
-                  currentResolvedAuthority,
-                  {
-                    reservationId: existing.reservationId,
-                    signalId: existing.signalId,
-                    evidenceId,
-                    reserveEventSequence: existing.eventSequence,
-                  },
-                );
+              const verifiedUse = await verifyTradingPaperResolvedResearchReserveUseInTransaction(
+                tx,
+                owner,
+                currentResolvedAuthority,
+                {
+                  reservationId: existing.reservationId,
+                  signalId: existing.signalId,
+                  evidenceId,
+                  reserveEventSequence: existing.eventSequence,
+                },
+              );
               if (!verifiedUse) {
                 throw new PaperReservationConflictError(
                   "Existing reserve lacks matching G2 approval provenance",
@@ -637,27 +635,25 @@ export async function reserveApprovedTradingPaperSignal(
           const existing = await readExistingDecision(tx, owner, ledgerId, proposal, evidenceId);
           if (!existing) throw error;
           if (resolvedResearch) {
-            const currentAuthority =
-              await verifyTradingPaperResolvedResearchAuthorityInTransaction(
-                tx,
-                owner,
-                resolvedResearch.authority,
-                resolvedResearch.envelope,
-                new Date(),
-              );
+            const currentAuthority = await verifyTradingPaperResolvedResearchAuthorityInTransaction(
+              tx,
+              owner,
+              resolvedResearch.authority,
+              resolvedResearch.envelope,
+              new Date(),
+            );
             if (!currentAuthority) throw error;
-            const verifiedUse =
-              await verifyTradingPaperResolvedResearchReserveUseInTransaction(
-                tx,
-                owner,
-                currentAuthority,
-                {
-                  reservationId: existing.reservationId,
-                  signalId: existing.signalId,
-                  evidenceId,
-                  reserveEventSequence: existing.eventSequence,
-                },
-              );
+            const verifiedUse = await verifyTradingPaperResolvedResearchReserveUseInTransaction(
+              tx,
+              owner,
+              currentAuthority,
+              {
+                reservationId: existing.reservationId,
+                signalId: existing.signalId,
+                evidenceId,
+                reserveEventSequence: existing.eventSequence,
+              },
+            );
             if (!verifiedUse) throw error;
           }
           return existing;
@@ -667,7 +663,6 @@ export async function reserveApprovedTradingPaperSignal(
     );
   }
 }
-
 
 /** G2 PAPER-only bridge from one explicitly approved Resolver/Skill proposal
  * into the existing B7 synthetic reserve/risk transaction. It revalidates G1
