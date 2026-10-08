@@ -1,9 +1,9 @@
 import {
   type MarketResolverImplementation,
+  MarketResolverPlanSchema,
   type MarketResolverReadOnlySelection,
   MarketResolverReadOnlySelectionSchema,
   type MarketResolverSelectionSkip,
-  MarketResolverPlanSchema,
 } from "@rakazo/contracts";
 
 export type {
