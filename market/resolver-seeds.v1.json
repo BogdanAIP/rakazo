@@ -10,20 +10,28 @@
         "semanticKey": "browser.semantic",
         "implementations": [
           {
+            "name": "Rakazo Browser v2 Router",
+            "kind": "browser",
+            "reference": "rakazo:computer/browser",
+            "priority": 1,
+            "readOnly": false,
+            "constraints": [
+              "requires linked running Windows Host and current Computer control lease",
+              "open mode auto prefers Playwright Persistent, then OpenCLI fallback",
+              "use only the returned sessionToken; close only owned sessions",
+              "CDP and Extension are explicit opt-in modes, never automatic"
+            ]
+          },
+          {
             "name": "Microsoft Playwright MCP",
             "kind": "mcp",
             "reference": "microsoft/playwright-mcp",
-            "priority": 1,
-            "readOnly": false,
-            "constraints": ["must be installed and authorized for the Project"]
-          },
-          {
-            "name": "Rakazo OpenCLI browser",
-            "kind": "browser",
-            "reference": "rakazo:opencli",
             "priority": 2,
             "readOnly": false,
-            "constraints": ["requires linked Windows Host and owned browser session"]
+            "constraints": [
+              "optional specialist provider: must be installed, assigned and authorized for the Project",
+              "do not auto-install when Rakazo Browser Router is already available"
+            ]
           },
           {
             "name": "Chrome DevTools MCP",
