@@ -162,6 +162,8 @@ describe("reservePersistedPaperWorkerProposal", () => {
       stored.output.signal,
       stored.record.quoteEvidenceId,
       readyGate,
+      undefined,
+      undefined,
     );
   });
 
