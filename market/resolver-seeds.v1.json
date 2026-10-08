@@ -515,16 +515,6 @@
             "constraints": [
               "Public token-audit endpoint only; treat risk output as one feature, not a safety guarantee or trade authorization"
             ]
-          },
-          {
-            "name": "OKX OnchainOS token security scan",
-            "kind": "cli",
-            "reference": "market:okx/onchainos-skills:security-token-scan",
-            "priority": 2,
-            "readOnly": true,
-            "constraints": [
-              "Read-only security scan only; do not expose wallet signing, swap or broadcast capabilities to PAPER project"
-            ]
           }
         ]
       }
