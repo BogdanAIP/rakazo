@@ -260,7 +260,10 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
     );
 
     const newStart = await effect("paper_session_control", {
-      action: "start", ledger_id: ledgerId, expected_revision: 3, duration_minutes: 5,
+      action: "start",
+      ledger_id: ledgerId,
+      expected_revision: 3,
+      duration_minutes: 5,
     });
     expect(
       await applyApprovedTradingPaperEntrySessionControl(first.prisma, owner, newStart.id),
