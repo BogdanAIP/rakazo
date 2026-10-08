@@ -178,18 +178,14 @@ function normalizeTags(values: string[]): string[] {
   );
 }
 
-function parseMarketSkillReference(
-  reference: string,
-): { repository: string; name: string } | null {
+function parseMarketSkillReference(reference: string): { repository: string; name: string } | null {
   if (!reference.startsWith("market:")) return null;
   const body = reference.slice("market:".length);
   const separator = body.lastIndexOf(":");
   if (separator <= 0 || separator === body.length - 1) return null;
   const repository = body.slice(0, separator);
   const name = body.slice(separator + 1);
-  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)
-    ? { repository, name }
-    : null;
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) ? { repository, name } : null;
 }
 
 function resolveMarketSkillLink(
@@ -200,9 +196,7 @@ function resolveMarketSkillLink(
   if (!target) return null;
   const matches = rows.filter(
     (row) =>
-      row.kind === "skill" &&
-      row.repository === target.repository &&
-      row.name === target.name,
+      row.kind === "skill" && row.repository === target.repository && row.name === target.name,
   );
   if (matches.length === 0) return { status: "missing" };
   if (matches.length > 1) return { status: "ambiguous", matches: matches.length };
