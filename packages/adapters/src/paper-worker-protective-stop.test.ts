@@ -49,6 +49,14 @@ const candidatePreflight = {
   positions: [candidate],
 };
 
+const emptyResolvedPreflight = {
+  status: "ready" as const,
+  mode: "paper_only" as const,
+  ledgerId: "paper-1",
+  positions: [],
+};
+const noResolvedCandidates = async () => emptyResolvedPreflight;
+
 describe("handleVerifiedPaperWorkerAutomaticStops", () => {
   it("rejects an invalid trusted clock before any authority or market read", async () => {
     const readWake = vi.fn();
@@ -65,6 +73,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
         readCandidates,
         capture,
         close,
+        noResolvedCandidates,
       ),
     ).rejects.toThrow("Invalid automatic PAPER stop handler clock");
     expect(readWake).not.toHaveBeenCalled();
@@ -93,6 +102,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
         readCandidates,
         capture,
         close,
+        noResolvedCandidates,
       ),
     ).resolves.toEqual({
       status: "stop",
@@ -125,6 +135,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
         readCandidates,
         capture,
         close,
+        noResolvedCandidates,
       ),
     ).resolves.toEqual({
       status: "continue",
@@ -160,6 +171,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
         readCandidates,
         capture,
         close,
+        noResolvedCandidates,
       ),
     ).resolves.toEqual({
       status: "continue",
@@ -223,6 +235,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
       readCandidates,
       capture,
       close,
+      noResolvedCandidates,
     );
     expect(result).toMatchObject({
       status: "close_result",
@@ -257,6 +270,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
         readCandidates,
         capture,
         close,
+        noResolvedCandidates,
       ),
     ).resolves.toEqual({
       status: "stop",
@@ -292,6 +306,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
         readCandidates,
         capture,
         close,
+        noResolvedCandidates,
       ),
     ).resolves.toEqual({
       status: "stop",
@@ -328,6 +343,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
         readCandidates,
         capture,
         close,
+        noResolvedCandidates,
       ),
     ).resolves.toEqual({
       status: "stop",
