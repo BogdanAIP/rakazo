@@ -4,6 +4,7 @@ import { deriveTradingPaperRiskState } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
 import { verifyHistoricalTradingPaperProtectiveExitApprovalInTransaction } from "./trading-paper-protective-exit-authority.js";
+import { verifyHistoricalTradingPaperResolvedResearchFillApprovalInTransaction } from "./trading-paper-resolved-research-fill-gate.js";
 import { verifyHistoricalTradingPaperResolvedResearchReserveApprovalInTransaction } from "./trading-paper-resolved-research-gate.js";
 import { verifyTradingPaperStopGuardsInTransaction } from "./trading-paper-stop-guard.js";
 import { recoverTradingPaperLedgerInTransaction } from "./trading-paper-store.js";
@@ -165,7 +166,26 @@ export async function auditTradingPaperLifecycleInTransaction(
         actedAt: record.filledAt.toISOString(),
       },
     );
-    assert(worker, "Missing or mismatched historical automatic-fill approval");
+    if (worker) return;
+    const resolved =
+      await verifyHistoricalTradingPaperResolvedResearchFillApprovalInTransaction(
+        tx,
+        owner,
+        record.policyApprovalEffectId,
+        {
+          ledgerId: record.ledgerId,
+          reservationId: record.reservationId,
+          signalId: reserve.signalId,
+          policyRevision: record.policyRevision,
+          reserveEvidenceId: decision.evidenceId,
+          evidenceId: record.evidenceId,
+          reserveEventSequence: record.reserveEventSequence,
+          fillEventSequence: record.fillEventSequence,
+          actedAt: record.filledAt.toISOString(),
+          market: reserve.market,
+        },
+      );
+    assert(resolved, "Missing or mismatched historical automatic-fill approval");
   }
 
   async function approvedClose(record: (typeof closes)[number]) {
