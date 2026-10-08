@@ -617,9 +617,7 @@ describe("Market Skills + Market Resolver service", () => {
       tags: ["trading", "adapt-to-paper", "mcp", "market-data"],
       content: skillContent,
       sourceUrl:
-        "https://github.com/ccxt/ccxt/blob/" +
-        sourceRef +
-        "/.claude/skills/ccxt-mcp/SKILL.md",
+        "https://github.com/ccxt/ccxt/blob/" + sourceRef + "/.claude/skills/ccxt-mcp/SKILL.md",
       repository: "ccxt/ccxt",
       sourcePath: ".claude/skills/ccxt-mcp/SKILL.md",
       sourceRef,
