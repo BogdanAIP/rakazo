@@ -1,6 +1,9 @@
 import * as z from "zod";
 import { IsoDate } from "./ids.js";
-import { TradingPaperLedgerEventSchema, TradingPaperLedgerStateSchema } from "./trading-paper-ledger.js";
+import {
+  TradingPaperLedgerEventSchema,
+  TradingPaperLedgerStateSchema,
+} from "./trading-paper-ledger.js";
 
 const PaperLedgerIdSchema = z
   .string()
@@ -11,15 +14,17 @@ const PaperLedgerIdSchema = z
 
 export const TradingPaperJournalListOutputSchema = z.object({
   mode: z.literal("paper_only"),
-  ledgers: z.array(
-    z.object({
-      ledgerId: PaperLedgerIdSchema,
-      openedAt: IsoDate,
-      updatedAt: IsoDate,
-      quoteCurrency: z.string(),
-      eventsCount: z.number().int().nonnegative(),
-    }),
-  ).max(50),
+  ledgers: z
+    .array(
+      z.object({
+        ledgerId: PaperLedgerIdSchema,
+        openedAt: IsoDate,
+        updatedAt: IsoDate,
+        quoteCurrency: z.string(),
+        eventsCount: z.number().int().nonnegative(),
+      }),
+    )
+    .max(50),
 });
 
 export const TradingPaperJournalReadInputSchema = z.object({
