@@ -2879,17 +2879,7 @@ export function createRouter(deps: RouterDeps) {
           computerContext(context.actor, bot.id, "browser"),
         );
         await keepComputerAwake(deps, computer.id);
-        return {
-          ok: result.ok,
-          ...(result.sessionToken === undefined ? {} : { sessionToken: result.sessionToken }),
-          ...(result.completed === undefined ? {} : { completed: result.completed }),
-          ...(result.uncertain === undefined ? {} : { uncertain: result.uncertain }),
-          ...(result.url === undefined ? {} : { url: result.url }),
-          ...(result.title === undefined ? {} : { title: result.title }),
-          ...(result.tree === undefined ? {} : { tree: result.tree }),
-          ...(result.elements === undefined ? {} : { elements: result.elements }),
-          ...(result.error === undefined ? {} : { error: result.error }),
-        };
+        return result;
       }),
       observe: authed.computer.observe.handler(async ({ context, input }) => {
         let bot = await repos.getBot(context.actor, input.botId);

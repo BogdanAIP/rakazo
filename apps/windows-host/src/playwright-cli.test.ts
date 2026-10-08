@@ -202,6 +202,7 @@ describe("WindowsPlaywrightCliBackend", () => {
       {
         ...cdpConfig,
         mode: "playwright-cli-persistent",
+        headed: true,
         userDataDir: "C:\\Rakazo\\playwright-profile",
       },
       process.cwd(),
@@ -222,6 +223,7 @@ describe("WindowsPlaywrightCliBackend", () => {
           argv.includes("--browser=chrome"),
       ),
     ).toBe(true);
+    expect(calls.some((argv) => argv.includes("--headed"))).toBe(true);
     expect(calls.some((argv) => argv.includes("close"))).toBe(true);
   });
 
@@ -257,6 +259,34 @@ describe("WindowsPlaywrightCliBackend", () => {
     expect(calls.some((argv) => argv[1] === "click" && argv[2] === "e2")).toBe(true);
   });
 
+  it("maps Playwright frame refs to accepted browser refs while filling the real target", async () => {
+    const calls: string[][] = [];
+    const runner = fakeRunner((argv) => {
+      calls.push(argv);
+      const command = argv[1];
+      if (command === "attach") return JSON.stringify({ result: {} });
+      if (command === "tab-list") return currentTab();
+      if (command === "snapshot")
+        return JSON.stringify({ snapshot: [{ role: "searchbox", name: "Search", ref: "f4e53" }] });
+      if (command === "fill") return JSON.stringify({ result: {} });
+      throw new Error(`Unexpected command: ${command}`);
+    });
+    const backend = new WindowsPlaywrightCliBackend(cdpConfig, process.cwd(), runner);
+    const opened = await backend.browser("bot-a", { command: "open" });
+    const observed = await backend.browser("bot-a", {
+      command: "snapshot",
+      sessionToken: opened.sessionToken!,
+    });
+    expect(observed.elements).toEqual([{ ref: "e1", role: "searchbox", name: "Search" }]);
+    expect(observed.tree).toContain('"ref": "e1"');
+    const acted = await backend.browser("bot-a", {
+      command: "act",
+      sessionToken: opened.sessionToken!,
+      actions: [{ kind: "fill", ref: "e1", text: "hydrogen" }],
+    });
+    expect(acted).toMatchObject({ ok: true, completed: 1 });
+    expect(calls.some((argv) => argv[1] === "fill" && argv[2] === "f4e53")).toBe(true);
+  });
   it("creates, selects and closes only tab identities observed by the session", async () => {
     let tabs = "- 0: (current) [One](https://one.example/)";
     const runner = fakeRunner((argv) => {

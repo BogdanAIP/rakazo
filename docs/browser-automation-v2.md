@@ -317,3 +317,15 @@ Only after this acceptance should Browser v2 be considered complete.
 The separate task **Market Original vs WRAPPED/RCCL/HYBRID evaluation** remains open and deferred.
 
 Browser/debug Skill adaptation should start only after BV2 acceptance so adaptation is driven by the final browser capability surface and real benchmark evidence.
+
+### Persistent browser for manual sign-in (BV2 follow-up)
+
+- Rakazo keeps Persistent automation data in a separate directory from the user's daily Chrome profile. The default is headless for non-interactive automated work.
+- Set RAKAZO_PLAYWRIGHT_HEADED=1 in the Windows Host process environment before startup to opt in to a visible Persistent browser for interactive sign-in. The flag is specific to Persistent launches. Do not turn it on in unattended auto-routing without considering visible windows and profile ownership.
+- The user enters passwords and completes SSO/2FA directly in the headed browser. Rakazo does not copy credentials into project files, Git or screenshots. Login state survives browser restarts in the dedicated profile, subject to each website's session lifetime.
+- Rakazo translates Playwright frame-prefixed snapshot references to observation-local, contract-compatible element references and translates them back before a CLI click or fill. The stale-reference checks compare source refs to avoid cross-frame or changed-element confusion.
+- Headed mode does not change the network egress IP. Troubleshoot site-specific browser errors separately from DNS, provider blocks and proxy routing.
+
+### Repeatable isolated Persistent smoke
+
+Run pnpm exec tsx apps/windows-host/scripts/browser-v2-isolated-acceptance.ts on the physical Windows Host from a checkout with dependencies installed. The smoke creates a disposable localhost test site and temporary Chromium profile outside the user's actual Playwright and daily Chrome profiles. It verifies auto selects Persistent, navigates, discovers an input inside an iframe, fills that input using the public eN reference, observes the changed value, then closes the session and cleans up. Expect PHYSICAL_PASS and CLOSE true. This is a manual, isolated acceptance check; it does not log in to real services or replace checks for CDP, Extension, OpenCLI or a supervised Windows Host deployment.
