@@ -180,8 +180,7 @@ export async function handleVerifiedPaperWorkerAutomaticStops(
   readCandidates: ReadCandidates = readVerifiedTradingPaperWorkerAutomaticStopCandidates,
   capture: CaptureEvidence = capturePublicPaperSpotEvidence,
   closePosition: ClosePosition = closeTradingPaperPositionOnStop,
-  readResolvedCandidates: ReadResolvedCandidates =
-    readVerifiedTradingPaperResolvedResearchAutomaticStopCandidates,
+  readResolvedCandidates: ReadResolvedCandidates = readVerifiedTradingPaperResolvedResearchAutomaticStopCandidates,
 ): Promise<PaperWorkerAutomaticStopHandlingResult> {
   if (!Number.isFinite(now.getTime())) {
     throw new Error("Invalid automatic PAPER stop handler clock");
