@@ -10,9 +10,15 @@ import {
   MarketResolverContentSchema,
   type MarketResolverImplementation,
   type MarketResolverPlan,
+  type MarketResolverReadOnlySelection,
   type MarketResolverSkillLink,
 } from "@rakazo/contracts";
-import { analyzeRcclSkillMd, buildSkillMd, parseSkillMd } from "@rakazo/core";
+import {
+  analyzeRcclSkillMd,
+  buildSkillMd,
+  parseSkillMd,
+  selectMarketResolverReadOnlyImplementation,
+} from "@rakazo/core";
 import { IsolationError, type Prisma, type PrismaClient } from "@rakazo/db";
 
 const MARKET_CONTENT_LIMIT = 200_000;
@@ -612,6 +618,23 @@ export function createMarketService(
         preferred: candidates[0] ?? null,
         candidates,
       };
+    },
+
+    async select(
+      actor: Actor,
+      input: {
+        semanticKey: string;
+        resolverKey?: string;
+        expectedDigest?: string;
+        allowedKinds?: Array<MarketResolverImplementation["kind"]>;
+        limit: number;
+      },
+    ): Promise<MarketResolverReadOnlySelection> {
+      const plan = await this.resolve(actor, {
+        ...input,
+        requireReadOnly: false,
+      });
+      return selectMarketResolverReadOnlyImplementation(plan);
     },
 
     async importGithub(
