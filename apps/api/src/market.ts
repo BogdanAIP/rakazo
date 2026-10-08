@@ -16,8 +16,8 @@ import {
 import {
   analyzeRcclSkillMd,
   buildSkillMd,
-  parseSkillMd,
   MarketResolverPlanResolutionError,
+  parseSkillMd,
   prepareMarketResolverResearch,
   resolveMarketResolverPlanFromEntries,
   selectMarketResolverReadOnlyImplementation,
