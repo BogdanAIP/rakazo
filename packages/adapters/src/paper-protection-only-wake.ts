@@ -1,5 +1,5 @@
 import type { BackgroundJobPayloads } from "@rakazo/adapter-kit";
-import type { PrismaClient, PaperProtectionWakePreflight } from "@rakazo/db";
+import type { PaperProtectionWakePreflight, PrismaClient } from "@rakazo/db";
 import {
   readTradingPaperProtectionWakePreflight,
   readTradingPaperWorkerWakePreflight,
