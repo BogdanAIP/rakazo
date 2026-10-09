@@ -220,6 +220,10 @@ async function readInTransaction(
     (row.enabled &&
       (request.durationMinutes !== (row.expiresAt.getTime() - row.startedAt.getTime()) / 60_000 ||
         request.cadenceMinutes !== row.cadenceMinutes)) ||
+    approved.ok !== true ||
+    approved.action !== action ||
+    approved.mode !== "paper_only" ||
+    approved.ledgerId !== ledgerId ||
     approved.revision !== row.revision ||
     approved.status !== (row.enabled ? "active" : "ended") ||
     approved.workerGateRevision !== row.workerGateRevision ||
