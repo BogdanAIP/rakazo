@@ -97,15 +97,16 @@ export async function handlePaperProtectionOnlyWake(
     return readWorker(...args);
   };
   const guardedClose: typeof closeTradingPaperPositionOnStop = (
-    db, nextOwner, ledgerId, positionId, evidenceId,
-  ) => closeTradingPaperPositionOnStop(
     db,
     nextOwner,
     ledgerId,
     positionId,
     evidenceId,
-    { revision: payload.leaseRevision, gateRevision: payload.gateRevision },
-  );
+  ) =>
+    closeTradingPaperPositionOnStop(db, nextOwner, ledgerId, positionId, evidenceId, {
+      revision: payload.leaseRevision,
+      gateRevision: payload.gateRevision,
+    });
   const protectiveStop = await runStops(
     prisma,
     stopPayload,
