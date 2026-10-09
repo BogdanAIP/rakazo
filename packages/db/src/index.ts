@@ -85,6 +85,7 @@ export {
   PaperRiskPolicyIntegrityError,
   readVerifiedTradingPaperRiskPolicy,
 } from "./trading-paper-risk-policy.js";
+export * from "./trading-paper-protection-lease.js";
 export * from "./trading-paper-session-settlement.js";
 export {
   appendTradingPaperLedgerEvent,
