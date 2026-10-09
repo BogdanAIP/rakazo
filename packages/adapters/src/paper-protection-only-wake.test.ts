@@ -1,10 +1,10 @@
 import type { PrismaClient } from "@rakazo/db";
-import type { handleVerifiedPaperWorkerAutomaticStops } from "./paper-worker-protective-stop.js";
 import { describe, expect, it, vi } from "vitest";
 import {
   handlePaperProtectionOnlyWake,
   type PaperProtectionOnlyWake,
 } from "./paper-protection-only-wake.js";
+import type { handleVerifiedPaperWorkerAutomaticStops } from "./paper-worker-protective-stop.js";
 
 const payload: PaperProtectionOnlyWake = {
   ledgerId: "paper-1",
