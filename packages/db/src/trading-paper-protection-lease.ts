@@ -3,14 +3,10 @@ import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
 import { verifyTradingPaperSessionSettlingAuthorityInTransaction } from "./trading-paper-entry-session.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
-import {
-  readTradingPaperResolvedResearchFillUseInTransaction,
-} from "./trading-paper-resolved-research-fill-gate.js";
+import { readTradingPaperResolvedResearchFillUseInTransaction } from "./trading-paper-resolved-research-fill-gate.js";
 import { verifyTradingPaperStopGuardsInTransaction } from "./trading-paper-stop-guard.js";
 import { recoverTradingPaperLedgerInTransaction } from "./trading-paper-store.js";
-import {
-  assessTradingPaperWorkerWakePreflightInTransaction,
-} from "./trading-paper-worker-gate.js";
+import { assessTradingPaperWorkerWakePreflightInTransaction } from "./trading-paper-worker-gate.js";
 import { readTradingPaperWorkerFillUseInTransaction } from "./trading-paper-worker-fill-gate.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
@@ -78,8 +74,14 @@ export type PaperProtectionControlResult =
       ledgerId: string;
       action: Action;
       currentRevision: number;
-      reason: "stale_revision" | "already_active" | "not_active" | "worker_denied"
-        | "entry_not_stopped" | "no_protectable_positions" | "positions_still_open";
+      reason:
+        | "stale_revision"
+        | "already_active"
+        | "not_active"
+        | "worker_denied"
+        | "entry_not_stopped"
+        | "no_protectable_positions"
+        | "positions_still_open";
     };
 
 function parseRequest(input: unknown): Request {
@@ -91,19 +93,24 @@ function parseRequest(input: unknown): Request {
     throw new PaperProtectionLeaseIntegrityError("Invalid protection control action");
   }
   const keys = Object.keys(v).sort();
-  const expected = v.action === "start"
-    ? ["action", "cadence_minutes", "duration_minutes", "expected_revision", "ledger_id"]
-    : ["action", "expected_revision", "ledger_id"];
+  const expected =
+    v.action === "start"
+      ? ["action", "cadence_minutes", "duration_minutes", "expected_revision", "ledger_id"]
+      : ["action", "expected_revision", "ledger_id"];
   if (
     JSON.stringify(keys) !== JSON.stringify(expected) ||
-    typeof v.ledger_id !== "string" || v.ledger_id.length < 1 || v.ledger_id.length > 128 ||
-    !Number.isSafeInteger(v.expected_revision) || (v.expected_revision as number) < 0 ||
-    (v.action === "start" && (
-      !Number.isSafeInteger(v.cadence_minutes) || (v.cadence_minutes as number) < 5 ||
-      (v.cadence_minutes as number) > 60 ||
-      !Number.isSafeInteger(v.duration_minutes) || (v.duration_minutes as number) < 5 ||
-      (v.duration_minutes as number) > 1440
-    ))
+    typeof v.ledger_id !== "string" ||
+    v.ledger_id.length < 1 ||
+    v.ledger_id.length > 128 ||
+    !Number.isSafeInteger(v.expected_revision) ||
+    (v.expected_revision as number) < 0 ||
+    (v.action === "start" &&
+      (!Number.isSafeInteger(v.cadence_minutes) ||
+        (v.cadence_minutes as number) < 5 ||
+        (v.cadence_minutes as number) > 60 ||
+        !Number.isSafeInteger(v.duration_minutes) ||
+        (v.duration_minutes as number) < 5 ||
+        (v.duration_minutes as number) > 1440))
   ) {
     throw new PaperProtectionLeaseIntegrityError("Invalid scoped protection approval payload");
   }
@@ -112,7 +119,10 @@ function parseRequest(input: unknown): Request {
     ledgerId: v.ledger_id as string,
     expectedRevision: v.expected_revision as number,
     ...(v.action === "start"
-      ? { cadenceMinutes: v.cadence_minutes as number, durationMinutes: v.duration_minutes as number }
+      ? {
+          cadenceMinutes: v.cadence_minutes as number,
+          durationMinutes: v.duration_minutes as number,
+        }
       : {}),
   };
 }
@@ -121,9 +131,17 @@ function digest(v: Omit<Row, "leaseSha256">): string {
   return createHash("sha256")
     .update(
       JSON.stringify([
-        v.ledgerId, v.spaceId, v.userId, v.enabled, v.revision,
-        v.workerGateRevision, v.entryRevision, v.cadenceMinutes,
-        v.startedAt.toISOString(), v.expiresAt.toISOString(), v.approvalEffectId,
+        v.ledgerId,
+        v.spaceId,
+        v.userId,
+        v.enabled,
+        v.revision,
+        v.workerGateRevision,
+        v.entryRevision,
+        v.cadenceMinutes,
+        v.startedAt.toISOString(),
+        v.expiresAt.toISOString(),
+        v.approvalEffectId,
       ]),
       "utf8",
     )
@@ -131,7 +149,9 @@ function digest(v: Omit<Row, "leaseSha256">): string {
 }
 
 async function dbNow(tx: Prisma.TransactionClient): Promise<Date> {
-  const rows = await tx.$queryRaw<Array<{ db_now: Date }>>(Prisma.sql`SELECT clock_timestamp() AS db_now`);
+  const rows = await tx.$queryRaw<Array<{ db_now: Date }>>(
+    Prisma.sql`SELECT clock_timestamp() AS db_now`,
+  );
   const now = rows[0]?.db_now;
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) {
     throw new PaperProtectionLeaseIntegrityError("Trusted database clock unavailable");
@@ -149,17 +169,24 @@ async function readInTransaction(
     where: { id: ledgerId, spaceId: owner.spaceId, ownerUserId: owner.userId },
     select: { id: true },
   });
-  if (!owned) throw new PaperProtectionLeaseIntegrityError("PAPER protection ledger owner mismatch");
+  if (!owned)
+    throw new PaperProtectionLeaseIntegrityError("PAPER protection ledger owner mismatch");
   const raw = await tx.tradingPaperProtectionLease.findUnique({ where: { ledgerId } });
   if (!raw) return { status: "absent", mode: "paper_only", ledgerId, revision: 0 };
   const row = raw as Row;
   if (
-    row.ledgerId !== ledgerId || row.spaceId !== owner.spaceId || row.userId !== owner.userId ||
-    !Number.isSafeInteger(row.revision) || row.revision < 1 ||
-    !Number.isSafeInteger(row.entryRevision) || row.entryRevision < 1 ||
-    !Number.isSafeInteger(row.workerGateRevision) || row.workerGateRevision < 0 ||
+    row.ledgerId !== ledgerId ||
+    row.spaceId !== owner.spaceId ||
+    row.userId !== owner.userId ||
+    !Number.isSafeInteger(row.revision) ||
+    row.revision < 1 ||
+    !Number.isSafeInteger(row.entryRevision) ||
+    row.entryRevision < 1 ||
+    !Number.isSafeInteger(row.workerGateRevision) ||
+    row.workerGateRevision < 0 ||
     !Number.isSafeInteger(row.cadenceMinutes) ||
-    row.cadenceMinutes < 5 || row.cadenceMinutes > 60 ||
+    row.cadenceMinutes < 5 ||
+    row.cadenceMinutes > 60 ||
     row.expiresAt <= row.startedAt ||
     row.expiresAt.getTime() - row.startedAt.getTime() > 86400_000 ||
     row.leaseSha256 !== digest(row)
@@ -171,9 +198,11 @@ async function readInTransaction(
     include: { run: { select: { spaceId: true, userId: true } } },
   });
   if (
-    effect?.status !== "completed" || effect.kind !== "paper_protection_control" ||
+    effect?.status !== "completed" ||
+    effect.kind !== "paper_protection_control" ||
     effect.spaceId !== owner.spaceId ||
-    effect.run.spaceId !== owner.spaceId || effect.run.userId !== owner.userId
+    effect.run.spaceId !== owner.spaceId ||
+    effect.run.userId !== owner.userId
   ) {
     throw new PaperProtectionLeaseIntegrityError("Protection effect scope mismatch");
   }
@@ -185,14 +214,12 @@ async function readInTransaction(
   const approved = result as Record<string, unknown>;
   const action = row.enabled ? "start" : "end";
   if (
-    request.action !== action || request.ledgerId !== ledgerId ||
+    request.action !== action ||
+    request.ledgerId !== ledgerId ||
     request.expectedRevision !== row.revision - 1 ||
-    (row.enabled && (
-      request.durationMinutes !== (row.expiresAt.getTime() - row.startedAt.getTime()) / 60_000 ||
-      request.cadenceMinutes !== row.cadenceMinutes
-    )) ||
-    approved.ok !== true || approved.action !== action ||
-    approved.mode !== "paper_only" || approved.ledgerId !== ledgerId ||
+    (row.enabled &&
+      (request.durationMinutes !== (row.expiresAt.getTime() - row.startedAt.getTime()) / 60_000 ||
+        request.cadenceMinutes !== row.cadenceMinutes)) ||
     approved.revision !== row.revision ||
     approved.status !== (row.enabled ? "active" : "ended") ||
     approved.workerGateRevision !== row.workerGateRevision ||
