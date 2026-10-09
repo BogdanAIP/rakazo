@@ -473,8 +473,11 @@ export async function applyApprovedTradingPaperEntrySessionControl(
           });
           if (protection?.enabled) {
             return complete({
-              ok: false, mode: "paper_only", action: request.action,
-              ledgerId: request.ledgerId, reason: "protective_supervision_active",
+              ok: false,
+              mode: "paper_only",
+              action: request.action,
+              ledgerId: request.ledgerId,
+              reason: "protective_supervision_active",
               currentRevision: previous.revision,
             });
           }
