@@ -16,7 +16,6 @@ export * from "./scope.js";
 export * from "./spaces.js";
 export { closeTradingPaperPositionOnStop } from "./trading-paper-close.js";
 export * from "./trading-paper-entry-session.js";
-export * from "./trading-paper-session-settlement.js";
 export {
   fillApprovedResolvedTradingPaperReservation,
   fillApprovedTradingPaperReservation,
@@ -86,6 +85,7 @@ export {
   PaperRiskPolicyIntegrityError,
   readVerifiedTradingPaperRiskPolicy,
 } from "./trading-paper-risk-policy.js";
+export * from "./trading-paper-session-settlement.js";
 export {
   appendTradingPaperLedgerEvent,
   createTradingPaperLedger,
