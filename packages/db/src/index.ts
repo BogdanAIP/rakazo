@@ -21,6 +21,7 @@ export {
   fillApprovedTradingPaperReservation,
   type TradingPaperFillResult,
 } from "./trading-paper-fill.js";
+export * from "./trading-paper-protection-lease.js";
 export { applyApprovedTradingPaperProtectiveExitControl } from "./trading-paper-protective-exit-authority.js";
 export {
   PaperQuoteEvidenceError,
@@ -85,7 +86,6 @@ export {
   PaperRiskPolicyIntegrityError,
   readVerifiedTradingPaperRiskPolicy,
 } from "./trading-paper-risk-policy.js";
-export * from "./trading-paper-protection-lease.js";
 export * from "./trading-paper-session-settlement.js";
 export {
   appendTradingPaperLedgerEvent,
