@@ -70,7 +70,8 @@ export type PaperEntrySessionControlResult =
         | "already_active"
         | "not_active"
         | "worker_denied"
-        | "pending_reservations";
+        | "pending_reservations"
+        | "protective_supervision_active";
       currentRevision: number;
     };
 
@@ -466,6 +467,17 @@ export async function applyApprovedTradingPaperEntrySessionControl(
         let startTime = previous.status === "absent" ? now : new Date(previous.startedAt);
         let expiry = previous.status === "absent" ? now : new Date(previous.expiresAt);
         if (request.action === "start") {
+          const protection = await tx.tradingPaperProtectionLease.findUnique({
+            where: { ledgerId: request.ledgerId },
+            select: { enabled: true },
+          });
+          if (protection?.enabled) {
+            return complete({
+              ok: false, mode: "paper_only", action: request.action,
+              ledgerId: request.ledgerId, reason: "protective_supervision_active",
+              currentRevision: previous.revision,
+            });
+          }
           const wake = await assessTradingPaperWorkerWakePreflightInTransaction(
             tx,
             owner,
