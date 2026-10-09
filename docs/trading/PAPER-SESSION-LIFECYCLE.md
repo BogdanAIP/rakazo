@@ -328,3 +328,27 @@ virtually closed per wake, inherited from F4/G5.
 
 H2b-0 cannot enable a worker or dispatch a recurring task on its own;
 all existing code remains in the draft PR.
+
+
+## H2b-1 — same-transaction protection fencing at C2
+
+H2b-0's separately approved protection-only lease is now reverified
+**inside** the existing C2 synthetic `fill_sell` serializable money
+transaction. The C2 writer takes the same owner-scoped ledger-row
+`FOR UPDATE` lock as protection Start/End, checks the current finite
+lease revision, Worker D2 approval, inactive entry-session status and DB
+clock, and only then is a *new* virtual protective close allowed. An
+old tokenless D2 stop caller cannot bypass the separately enabled
+protection-only lease. The old C2 route without any protection lease
+remains compatible for historical tests, as before.
+
+The H2b adapter supplies the exact approved `leaseRevision` and D2
+`gateRevision` via its injected stop-only C2 callback. Existing
+F4/G5 provenance, market validation, one-position-per-wake limitation,
+ledger/audit and idempotent `duplicate` recovery all remain unchanged.
+
+A separately approved protection lease **does not** create a recurring
+job. Durable, owner-scoped protection-only job intent, restart recovery,
+expiry escalation, and a positive PostgreSQL F3/G4 live-position test
+remain unimplemented. Do not portray H2b as automatically monitoring
+positions after session expiry until those pieces are in place.
