@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { TradingInstrumentSchema } from "@rakazo/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb, type Prisma } from "./client.js";
 import {
@@ -11,7 +12,11 @@ import {
   applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,
 } from "./trading-paper-risk-policy.js";
-import { createTradingPaperLedger } from "./trading-paper-store.js";
+import { recordPublicAdapterPaperQuoteEvidence } from "./trading-paper-quote-evidence.js";
+import { reserveApprovedTradingPaperSignal } from "./trading-paper-reserve.js";
+import { settleVerifiedTradingPaperSessionReservations } from "./trading-paper-session-settlement.js";
+import { auditTradingPaperLifecycle } from "./trading-paper-lifecycle-audit.js";
+import { createTradingPaperLedger, readVerifiedTradingPaperLedger } from "./trading-paper-store.js";
 import { applyApprovedTradingPaperWorkerControl } from "./trading-paper-worker-gate.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -301,5 +306,118 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
     expect(newMoney).toMatchObject({ status: "ready", sessionRevision: 4 });
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(0);
     expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(0);
+  });
+
+  it("H2a releases only pending PAPER reserves after approved Pause, never closes positions and is idempotent", async () => {
+    const instrument = TradingInstrumentSchema.parse({
+      venue: "okx",
+      kind: "spot",
+      symbol: "SOL-USDT",
+      base: "SOL",
+      quote: "USDT",
+      status: "active",
+      priceIncrement: "0.01",
+      quantityIncrement: "0.01",
+      minNotional: "5",
+      expiryAt: null,
+    });
+    const observedAt = new Date().toISOString();
+    const quote = await recordPublicAdapterPaperQuoteEvidence(
+      first.prisma,
+      owner,
+      ledgerId,
+      instrument,
+      {
+        venue: "okx",
+        kind: "spot",
+        symbol: "SOL-USDT",
+        observedAt,
+        fetchedAt: observedAt,
+        bid: "100",
+        ask: "100.1",
+        quoteVolume24h: "100000",
+      },
+    );
+    const signal = {
+      kind: "proposal",
+      executionStatus: "research_only",
+      signalId: `h2a-${suffix}`,
+      strategyId: "h2a-fixture",
+      strategyVersion: "1",
+      createdAt: new Date(Date.now() - 1_000).toISOString(),
+      expiresAt: new Date(Date.now() + 120_000).toISOString(),
+      evidenceIds: ["research-only"],
+      market: instrument,
+      action: "spot_buy",
+      entryTrigger: "100.1",
+      stopLoss: "95",
+      takeProfit: ["110"],
+      invalidation: "fixture",
+      rationale: "H2a synthetic settlement",
+      riskBudgetQuote: "10",
+      maxSlippageBps: null,
+    } as const;
+    const held = await reserveApprovedTradingPaperSignal(
+      first.prisma,
+      owner,
+      ledgerId,
+      signal,
+      quote.id,
+    );
+    expect(held.status).toBe("reserved");
+    expect((await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId)).reservations)
+      .toHaveLength(1);
+
+    await expect(
+      settleVerifiedTradingPaperSessionReservations(second.prisma, owner, ledgerId),
+    ).rejects.toThrow("An active or absent entry session cannot authorize");
+    expect(await first.prisma.tradingPaperReleaseAudit.count({ where: { ledgerId } })).toBe(0);
+
+    const pause = await effect("paper_session_control", {
+      action: "pause",
+      ledger_id: ledgerId,
+      expected_revision: 4,
+    });
+    expect(
+      await applyApprovedTradingPaperEntrySessionControl(second.prisma, owner, pause.id),
+    ).toMatchObject({ ok: true, status: "paused", revision: 5 });
+
+    const settled = await settleVerifiedTradingPaperSessionReservations(
+      first.prisma,
+      owner,
+      ledgerId,
+    );
+    expect(settled).toMatchObject({
+      status: "settled_reservations",
+      sessionRevision: 5,
+      sessionStatus: "paused",
+      releasedReservations: 1,
+      remainingReservations: 0,
+      openPositions: 0,
+    });
+    expect(
+      await settleVerifiedTradingPaperSessionReservations(second.prisma, owner, ledgerId),
+    ).toMatchObject({
+      sessionRevision: 5,
+      releasedReservations: 0,
+      remainingReservations: 0,
+    });
+    const audited = await auditTradingPaperLifecycle(first.prisma, owner, ledgerId);
+    expect(audited.openReservations).toBe(0);
+    const rows = await first.prisma.tradingPaperReleaseAudit.findMany({ where: { ledgerId } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.reason).toBe("session_end");
+    const state = await readVerifiedTradingPaperLedger(second.prisma, owner, ledgerId);
+    expect(state.reservations).toHaveLength(0);
+    expect(state.positions).toHaveLength(0);
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(2);
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(2);
+    await expect(
+      settleVerifiedTradingPaperSessionReservations(
+        second.prisma,
+        { ...owner, userId: `other-${suffix}` },
+        ledgerId,
+      ),
+    ).rejects.toThrow();
   });
 });
