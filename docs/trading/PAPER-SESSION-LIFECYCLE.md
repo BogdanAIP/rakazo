@@ -268,5 +268,14 @@ any live exchange order exists in PAPER v1. A successful reservation
 settlement does NOT justify showing "completely stopped" while positions,
 unsettled worker operations or uncertain queue state exist.
 
+**Migration/cutover boundary:** H2a currently releases every outstanding
+virtual reservation from its owned PAPER ledger, even one placed manually
+through the legacy internal B7 path. Do not activate session-end release
+on a ledger that mixes automatic and unrelated manual holds. Before
+enabling it for end users, enforce a dedicated session-owned ledger or
+record and validate per-reservation `sessionRevision` provenance and
+reconcile only those session-linked reservations. Add cross-mode tests.
+Until then, H2a stays an unexposed internal implementation.
+
 H2a does not register UI controls, enable workers, schedule jobs, merge
 the PR or deploy anything.
