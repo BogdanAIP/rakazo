@@ -58,7 +58,7 @@ describe("H2b protection-only wake", () => {
     const stops = vi.fn(
       async (...args: Parameters<typeof handleVerifiedPaperWorkerAutomaticStops>) => {
         const [_prisma, p, _now, wrapped] = args;
-      expect(typeof args[6]).toBe("function");
+        expect(typeof args[6]).toBe("function");
 
         if (!wrapped) throw new Error("Protection-only wake must inject guarded worker preflight");
         expect(p).toMatchObject({
