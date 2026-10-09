@@ -1,8 +1,5 @@
 import type { BackgroundJobPayloads } from "@rakazo/adapter-kit";
-import type {
-  PrismaClient,
-  PaperProtectionWakePreflight,
-} from "@rakazo/db";
+import type { PrismaClient, PaperProtectionWakePreflight } from "@rakazo/db";
 import {
   readTradingPaperProtectionWakePreflight,
   readTradingPaperWorkerWakePreflight,
@@ -67,13 +64,7 @@ export async function handlePaperProtectionOnlyWake(
   }
   const owner = { spaceId: payload.spaceId, userId: payload.userId };
   const check = (): Promise<PaperProtectionWakePreflight> =>
-    readProtection(
-      prisma,
-      owner,
-      payload.ledgerId,
-      payload.leaseRevision,
-      payload.gateRevision,
-    );
+    readProtection(prisma, owner, payload.ledgerId, payload.leaseRevision, payload.gateRevision);
   const approved = await check();
   if (approved.status !== "ready") {
     return {
@@ -95,16 +86,16 @@ export async function handlePaperProtectionOnlyWake(
     const again = await check();
     if (again.status !== "ready") {
       // F4/G5 accepts a typed D2 deny. No C2 execution is permitted.
-      return { status: "deny", mode: "paper_only", ledgerId: payload.ledgerId, reason: "worker_gate_disabled" };
+      return {
+        status: "deny",
+        mode: "paper_only",
+        ledgerId: payload.ledgerId,
+        reason: "worker_gate_disabled",
+      };
     }
     return readWorker(...args);
   };
-  const protectiveStop = await runStops(
-    prisma,
-    stopPayload,
-    now,
-    guardedReadWorker,
-  );
+  const protectiveStop = await runStops(prisma, stopPayload, now, guardedReadWorker);
   return {
     status: "handled",
     ledgerId: payload.ledgerId,
