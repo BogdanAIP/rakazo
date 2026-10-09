@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@rakazo/db";
+import type { handleVerifiedPaperWorkerAutomaticStops } from "./paper-worker-protective-stop.js";
 import { describe, expect, it, vi } from "vitest";
 import {
   handlePaperProtectionOnlyWake,
@@ -55,7 +56,9 @@ describe("H2b protection-only wake", () => {
       paperApprovalEffectId: "paper-effect",
       workerApprovalEffectId: "worker-effect",
     }));
-    const stops = vi.fn(async (_prisma, p, _now, wrapped) => {
+    const stops = vi.fn(async (...args: Parameters<typeof handleVerifiedPaperWorkerAutomaticStops>) => {
+      const [_prisma, p, _now, wrapped] = args;
+      if (!wrapped) throw new Error("Protection-only wake must inject guarded worker preflight");
       expect(p).toMatchObject({
         ledgerId: "paper-1", gateRevision: 7,
       });
@@ -86,7 +89,9 @@ describe("H2b protection-only wake", () => {
         reason: "protection_not_active",
       });
     const worker = vi.fn();
-    const stops = vi.fn(async (_prisma, _p, _n, wrapped) => {
+    const stops = vi.fn(async (...args: Parameters<typeof handleVerifiedPaperWorkerAutomaticStops>) => {
+      const [, , , wrapped] = args;
+      if (!wrapped) throw new Error("Guarded worker preflight is mandatory");
       expect(await wrapped(prisma, { spaceId: "space-1", userId: "user-1" }, "paper-1", now)).toMatchObject({
         status: "deny", reason: "worker_gate_disabled",
       });
