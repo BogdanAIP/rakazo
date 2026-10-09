@@ -252,10 +252,9 @@ export async function readVerifiedTradingPaperProtectionLease(
   ledgerId: string,
 ): Promise<TradingPaperProtectionLeaseStatus> {
   return withTransactionRetry(() =>
-    prisma.$transaction(
-      async tx => readInTransaction(tx, owner, ledgerId, await dbNow(tx)),
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    ),
+    prisma.$transaction(async (tx) => readInTransaction(tx, owner, ledgerId, await dbNow(tx)), {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    }),
   );
 }
 
@@ -273,7 +272,10 @@ export type PaperProtectionWakePreflight =
       status: "deny";
       mode: "paper_only";
       ledgerId: string;
-      reason: "protection_not_active" | "protection_scope_changed" | "entry_not_stopped"
+      reason:
+        | "protection_not_active"
+        | "protection_scope_changed"
+        | "entry_not_stopped"
         | "worker_gate_denied";
     };
 
@@ -305,28 +307,30 @@ export async function assessTradingPaperProtectionWakePreflightInTransaction(
     reason,
   });
   if (current.status !== "active") return deny("protection_not_active");
-  if (current.revision !== expectedRevision ||
-      current.workerGateRevision !== expectedGateRevision) {
+  if (
+    current.revision !== expectedRevision ||
+    current.workerGateRevision !== expectedGateRevision
+  ) {
     return deny("protection_scope_changed");
   }
   const entry = await verifyTradingPaperSessionSettlingAuthorityInTransaction(
-    tx, owner, ledgerId,
+    tx,
+    owner,
+    ledgerId,
   ).catch((error: unknown) => {
-    if (
-      error instanceof Error &&
-      error.message.includes("active or absent entry session")
-    ) return null;
+    if (error instanceof Error && error.message.includes("active or absent entry session"))
+      return null;
     throw error;
   });
   if (!entry || entry.sessionRevision < current.entryRevision) return deny("entry_not_stopped");
-  const gate = await assessTradingPaperWorkerWakePreflightInTransaction(
-    tx, owner, ledgerId, now,
-  );
+  const gate = await assessTradingPaperWorkerWakePreflightInTransaction(tx, owner, ledgerId, now);
   if (gate.status !== "ready" || gate.gateRevision !== current.workerGateRevision) {
     return deny("worker_gate_denied");
   }
   return {
-    status: "ready", mode: "paper_only", ledgerId,
+    status: "ready",
+    mode: "paper_only",
+    ledgerId,
     revision: current.revision,
     gateRevision: current.workerGateRevision,
     cadenceMinutes: current.cadenceMinutes,
@@ -344,9 +348,13 @@ export async function readTradingPaperProtectionWakePreflight(
 ): Promise<PaperProtectionWakePreflight> {
   return withTransactionRetry(() =>
     prisma.$transaction(
-      tx =>
+      (tx) =>
         assessTradingPaperProtectionWakePreflightInTransaction(
-          tx, owner, ledgerId, expectedRevision, expectedGateRevision,
+          tx,
+          owner,
+          ledgerId,
+          expectedRevision,
+          expectedGateRevision,
         ),
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
@@ -375,9 +383,12 @@ export async function applyApprovedTradingPaperProtectionControl(
           effect?.status !== "executing" ||
           effect.kind !== "paper_protection_control" ||
           effect.spaceId !== owner.spaceId ||
-          effect.run.spaceId !== owner.spaceId || effect.run.userId !== owner.userId
+          effect.run.spaceId !== owner.spaceId ||
+          effect.run.userId !== owner.userId
         ) {
-          throw new PaperProtectionLeaseIntegrityError("Explicit protection owner approval required");
+          throw new PaperProtectionLeaseIntegrityError(
+            "Explicit protection owner approval required",
+          );
         }
         const request = parseRequest(effect.request);
         const locked = await tx.$queryRaw<Array<{ id: string }>>(
@@ -404,16 +415,25 @@ export async function applyApprovedTradingPaperProtectionControl(
         };
         const deny = async (
           reason: Extract<PaperProtectionControlResult, { ok: false }>["reason"],
-        ) => complete({
-          ok: false, mode: "paper_only", ledgerId: request.ledgerId,
-          action: request.action, reason, currentRevision: previous.revision,
-        });
+        ) =>
+          complete({
+            ok: false,
+            mode: "paper_only",
+            ledgerId: request.ledgerId,
+            action: request.action,
+            reason,
+            currentRevision: previous.revision,
+          });
         if (request.expectedRevision !== previous.revision) return deny("stale_revision");
-        if (request.action === "start" && previous.status === "active") return deny("already_active");
+        if (request.action === "start" && previous.status === "active")
+          return deny("already_active");
         if (request.action === "end" && previous.status !== "active") return deny("not_active");
 
         const report = await auditTradingPaperLifecycleInTransaction(
-          tx, owner, request.ledgerId, now,
+          tx,
+          owner,
+          request.ledgerId,
+          now,
         );
         const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, request.ledgerId);
         if (request.action === "end" && report.openPositions !== 0) {
@@ -423,21 +443,32 @@ export async function applyApprovedTradingPaperProtectionControl(
         let entryRevision = previous.status === "absent" ? 0 : previous.entryRevision;
         let gateRevision = previous.status === "absent" ? 0 : previous.workerGateRevision;
         let cadence = previous.status === "absent" ? 5 : previous.cadenceMinutes;
-        let startedAt = previous.status === "absent" ? now : (await tx.tradingPaperProtectionLease.findUniqueOrThrow({
-          where: { ledgerId: request.ledgerId },
-          select: { startedAt: true },
-        })).startedAt;
+        let startedAt =
+          previous.status === "absent"
+            ? now
+            : (
+                await tx.tradingPaperProtectionLease.findUniqueOrThrow({
+                  where: { ledgerId: request.ledgerId },
+                  select: { startedAt: true },
+                })
+              ).startedAt;
         let expiresAt = previous.status === "absent" ? now : new Date(previous.expiresAt);
         if (request.action === "start") {
           const settled = await verifyTradingPaperSessionSettlingAuthorityInTransaction(
-            tx, owner, request.ledgerId,
+            tx,
+            owner,
+            request.ledgerId,
           ).catch((err: unknown) => {
-            if (err instanceof Error && err.message.includes("active or absent entry session")) return null;
+            if (err instanceof Error && err.message.includes("active or absent entry session"))
+              return null;
             throw err;
           });
           if (!settled) return deny("entry_not_stopped");
           const worker = await assessTradingPaperWorkerWakePreflightInTransaction(
-            tx, owner, request.ledgerId, now,
+            tx,
+            owner,
+            request.ledgerId,
+            now,
           );
           if (worker.status !== "ready") return deny("worker_denied");
           const guards = await verifyTradingPaperStopGuardsInTransaction(
