@@ -1,6 +1,7 @@
 import type { BackgroundJobPayloads } from "@rakazo/adapter-kit";
 import type { PaperProtectionWakePreflight, PrismaClient } from "@rakazo/db";
 import {
+  closeTradingPaperPositionOnStop,
   readTradingPaperProtectionWakePreflight,
   readTradingPaperWorkerWakePreflight,
 } from "@rakazo/db";
@@ -95,7 +96,25 @@ export async function handlePaperProtectionOnlyWake(
     }
     return readWorker(...args);
   };
-  const protectiveStop = await runStops(prisma, stopPayload, now, guardedReadWorker);
+  const guardedClose: typeof closeTradingPaperPositionOnStop = (
+    db, nextOwner, ledgerId, positionId, evidenceId,
+  ) => closeTradingPaperPositionOnStop(
+    db,
+    nextOwner,
+    ledgerId,
+    positionId,
+    evidenceId,
+    { revision: payload.leaseRevision, gateRevision: payload.gateRevision },
+  );
+  const protectiveStop = await runStops(
+    prisma,
+    stopPayload,
+    now,
+    guardedReadWorker,
+    undefined,
+    undefined,
+    guardedClose,
+  );
   return {
     status: "handled",
     ledgerId: payload.ledgerId,
