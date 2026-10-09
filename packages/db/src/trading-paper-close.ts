@@ -6,6 +6,7 @@ import {
   verifyTradingPaperOpenFillInTransaction,
 } from "./trading-paper-fill.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
+import { assessTradingPaperProtectionWakePreflightInTransaction } from "./trading-paper-protection-lease.js";
 import {
   assessTradingPaperProtectiveExitAuthorityInTransaction,
   verifyTradingPaperProtectiveExitAuthorityInTransaction,
@@ -65,6 +66,7 @@ export type TradingPaperCloseResult =
         | "position_unverified"
         | "position_unavailable"
         | "paper_capability_unapproved"
+        | "protection_lease_inactive"
         | "trusted_market_snapshot_unavailable"
         | "market_snapshot_stale"
         | "market_snapshot_mismatch"
@@ -255,6 +257,7 @@ export async function closeTradingPaperPositionOnStop(
   ledgerId: string,
   positionId: string,
   evidenceId: string,
+  protection?: { revision: number; gateRevision: number },
 ): Promise<TradingPaperCloseResult> {
   const operation = async (): Promise<TradingPaperCloseResult> =>
     prisma.$transaction(
@@ -263,6 +266,35 @@ export async function closeTradingPaperPositionOnStop(
         await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         const prior = await readExistingClose(tx, owner, ledgerId, positionId, evidenceId);
         if (prior) return prior;
+
+        // H2b-1: a protective-only lease cannot be bypassed by an older
+        // queued D2 stop. Recheck approval under the SAME ledger-row lock
+        // as Start/End and the SAME serializable transaction as C2 fill_sell.
+        const protectedLease = await tx.tradingPaperProtectionLease.findUnique({
+          where: { ledgerId },
+          select: { enabled: true },
+        });
+        if (protection || protectedLease?.enabled) {
+          if (!protection) {
+            return { status: "deny", mode: "paper_only", reason: "protection_lease_inactive" };
+          }
+          const locked = await tx.$queryRaw<Array<{ id: string }>>(
+            Prisma.sql`SELECT "id" FROM "trading_paper_ledgers"
+                       WHERE "id" = ${ledgerId} AND "spaceId" = ${owner.spaceId}
+                         AND "ownerUserId" = ${owner.userId} FOR UPDATE`,
+          );
+          if (locked.length !== 1) throw new PaperCloseIntegrityError("Protection ledger lock missing");
+          const authority = await assessTradingPaperProtectionWakePreflightInTransaction(
+            tx,
+            owner,
+            ledgerId,
+            protection.revision,
+            protection.gateRevision,
+          );
+          if (authority.status !== "ready") {
+            return { status: "deny", mode: "paper_only", reason: "protection_lease_inactive" };
+          }
+        }
 
         const policy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         if (!policy.policy.enabled) {
