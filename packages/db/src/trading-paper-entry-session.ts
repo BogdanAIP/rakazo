@@ -369,11 +369,7 @@ export async function verifyTradingPaperSessionSettlingAuthorityInTransaction(
 ): Promise<{ sessionRevision: number; checkedAt: Date; status: "paused" | "ended" | "expired" }> {
   const checkedAt = await databaseNow(tx);
   const session = await readInTransaction(tx, owner, ledgerId, checkedAt);
-  if (
-    session.status !== "paused" &&
-    session.status !== "ended" &&
-    session.status !== "expired"
-  ) {
+  if (session.status !== "paused" && session.status !== "ended" && session.status !== "expired") {
     throw new PaperEntrySessionIntegrityError(
       "An active or absent entry session cannot authorize normal settling releases",
     );
