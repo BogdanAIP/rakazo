@@ -35,11 +35,10 @@ describe("H2b protection-only wake", () => {
       reason: "protection_not_active" as const,
     }));
     const stops = vi.fn();
-    const result = await handlePaperProtectionOnlyWake(
-      prisma, payload, now, preflight, stops,
-    );
+    const result = await handlePaperProtectionOnlyWake(prisma, payload, now, preflight, stops);
     expect(result).toMatchObject({
-      status: "deny", reason: "protection_not_active",
+      status: "deny",
+      reason: "protection_not_active",
     });
     expect(stops).not.toHaveBeenCalled();
   });
@@ -56,21 +55,25 @@ describe("H2b protection-only wake", () => {
       paperApprovalEffectId: "paper-effect",
       workerApprovalEffectId: "worker-effect",
     }));
-    const stops = vi.fn(async (...args: Parameters<typeof handleVerifiedPaperWorkerAutomaticStops>) => {
-      const [_prisma, p, _now, wrapped] = args;
-      if (!wrapped) throw new Error("Protection-only wake must inject guarded worker preflight");
-      expect(p).toMatchObject({
-        ledgerId: "paper-1", gateRevision: 7,
-      });
-      expect(p).not.toHaveProperty("leaseRevision");
-      expect(await wrapped(prisma, { spaceId: "space-1", userId: "user-1" }, "paper-1", now)).toMatchObject({
-        status: "ready", gateRevision: 7,
-      });
-      return { status: "continue" as const, ledgerId: "paper-1", checkedPositions: 1 };
-    });
-    const out = await handlePaperProtectionOnlyWake(
-      prisma, payload, now, preflight, stops, worker,
+    const stops = vi.fn(
+      async (...args: Parameters<typeof handleVerifiedPaperWorkerAutomaticStops>) => {
+        const [_prisma, p, _now, wrapped] = args;
+        if (!wrapped) throw new Error("Protection-only wake must inject guarded worker preflight");
+        expect(p).toMatchObject({
+          ledgerId: "paper-1",
+          gateRevision: 7,
+        });
+        expect(p).not.toHaveProperty("leaseRevision");
+        expect(
+          await wrapped(prisma, { spaceId: "space-1", userId: "user-1" }, "paper-1", now),
+        ).toMatchObject({
+          status: "ready",
+          gateRevision: 7,
+        });
+        return { status: "continue" as const, ledgerId: "paper-1", checkedPositions: 1 };
+      },
     );
+    const out = await handlePaperProtectionOnlyWake(prisma, payload, now, preflight, stops, worker);
     expect(out).toMatchObject({
       status: "handled",
       leaseRevision: 3,
@@ -82,29 +85,32 @@ describe("H2b protection-only wake", () => {
   });
 
   it("revocation during a quote fetch prevents the second F4/G5 worker authorization", async () => {
-    const preflight = vi.fn()
-      .mockResolvedValueOnce(ready)
-      .mockResolvedValueOnce({
-        status: "deny", mode: "paper_only", ledgerId: "paper-1",
-        reason: "protection_not_active",
-      });
-    const worker = vi.fn();
-    const stops = vi.fn(async (...args: Parameters<typeof handleVerifiedPaperWorkerAutomaticStops>) => {
-      const [, , , wrapped] = args;
-      if (!wrapped) throw new Error("Guarded worker preflight is mandatory");
-      expect(await wrapped(prisma, { spaceId: "space-1", userId: "user-1" }, "paper-1", now)).toMatchObject({
-        status: "deny", reason: "worker_gate_disabled",
-      });
-      return {
-        status: "stop" as const,
-        ledgerId: "paper-1",
-        checkedPositions: 0,
-        reason: "worker_gate_denied" as const,
-      };
+    const preflight = vi.fn().mockResolvedValueOnce(ready).mockResolvedValueOnce({
+      status: "deny",
+      mode: "paper_only",
+      ledgerId: "paper-1",
+      reason: "protection_not_active",
     });
-    const out = await handlePaperProtectionOnlyWake(
-      prisma, payload, now, preflight, stops, worker,
+    const worker = vi.fn();
+    const stops = vi.fn(
+      async (...args: Parameters<typeof handleVerifiedPaperWorkerAutomaticStops>) => {
+        const [, , , wrapped] = args;
+        if (!wrapped) throw new Error("Guarded worker preflight is mandatory");
+        expect(
+          await wrapped(prisma, { spaceId: "space-1", userId: "user-1" }, "paper-1", now),
+        ).toMatchObject({
+          status: "deny",
+          reason: "worker_gate_disabled",
+        });
+        return {
+          status: "stop" as const,
+          ledgerId: "paper-1",
+          checkedPositions: 0,
+          reason: "worker_gate_denied" as const,
+        };
+      },
     );
+    const out = await handlePaperProtectionOnlyWake(prisma, payload, now, preflight, stops, worker);
     expect(out).toMatchObject({
       status: "handled",
       protectiveStop: { status: "stop", reason: "worker_gate_denied" },
@@ -115,9 +121,14 @@ describe("H2b protection-only wake", () => {
   it("rejects malformed lease revisions before any protective checks", async () => {
     const preflight = vi.fn();
     for (const invalid of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
-      await expect(handlePaperProtectionOnlyWake(
-        prisma, { ...payload, leaseRevision: invalid }, now, preflight,
-      )).rejects.toThrow("Invalid protection-only PAPER wake scope");
+      await expect(
+        handlePaperProtectionOnlyWake(
+          prisma,
+          { ...payload, leaseRevision: invalid },
+          now,
+          preflight,
+        ),
+      ).rejects.toThrow("Invalid protection-only PAPER wake scope");
     }
     expect(preflight).not.toHaveBeenCalled();
   });
