@@ -238,3 +238,35 @@ Remaining:
   audited normal-stop reservation release and safe status reconciliation.
 
 No automatic worker or private/live exchange order has been enabled.
+
+
+## H2a — audited normal PAPER reserve release (2026-10-09)
+
+H2a adds `settleVerifiedTradingPaperSessionReservations`, a **DB-only**
+internal idempotent operation after an *owner-approved* Pause/End or an
+already-approved finite Start that has expired. It takes the existing
+risk-policy and ledger row locks used by B7/C1 and H1 Start/Pause/End,
+verifies owner identity, session effect provenance and PostgreSQL time,
+then releases **only unfilled PAPER reservations**. The existing hash-chain,
+inert outbox and `trading_paper_release_audits` are reused with a distinct
+`session_end` reason; historical `expired` and `kill_switch`
+semantics, provenance digests and rows remain unchanged. Repeated calls
+release zero reservations, not duplicate events. An active or absent
+session CANNOT authorize normal-stop releases.
+
+An integration test with a genuine synthetic reserve exercises:
+active Start -> reserve -> denied early settle -> owner-approved Pause ->
+exactly one audited release -> idempotent retry -> no remaining reserve
+and no open position; a cross-owner call is rejected.
+
+**H2a is not a complete session-stop feature**. Existing open positions
+are NEVER closed here; a separate audited protection-only supervisor
+with an independent schedule and authority is still needed. Currently
+the risk/stop monitoring path is coupled to D2 worker preflight.
+Neither source-of-truth verification of remote live exchange orders nor
+any live exchange order exists in PAPER v1. A successful reservation
+settlement does NOT justify showing "completely stopped" while positions,
+unsettled worker operations or uncertain queue state exist.
+
+H2a does not register UI controls, enable workers, schedule jobs, merge
+the PR or deploy anything.
