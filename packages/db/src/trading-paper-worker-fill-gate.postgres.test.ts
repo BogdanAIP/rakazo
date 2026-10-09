@@ -110,7 +110,9 @@ describePostgres("paper worker fill gate PostgreSQL authorization", () => {
       | "paper_worker_control"
       | "paper_worker_signal_control"
       | "paper_worker_fill_control"
-      | "paper_worker_market_target_control",
+      | "paper_worker_market_target_control"
+      | "paper_session_control"
+      | "paper_protection_control",
     label: string,
     request: Prisma.InputJsonValue,
   ) => {
