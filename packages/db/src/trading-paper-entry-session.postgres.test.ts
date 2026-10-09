@@ -427,12 +427,14 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
     ).rejects.toThrow();
   });
   it("H2b requires separate owner approval and refuses fake protective oversight for a flat ledger", async () => {
-    expect(await readVerifiedTradingPaperProtectionLease(first.prisma, owner, ledgerId))
-      .toMatchObject({ status: "absent", revision: 0 });
+    expect(
+      await readVerifiedTradingPaperProtectionLease(first.prisma, owner, ledgerId),
+    ).toMatchObject({ status: "absent", revision: 0 });
     await expect(
       readTradingPaperProtectionWakePreflight(first.prisma, owner, ledgerId, 1, 2),
     ).resolves.toMatchObject({
-      status: "deny", reason: "protection_not_active",
+      status: "deny",
+      reason: "protection_not_active",
     });
 
     const start = await effect("paper_protection_control", {
@@ -449,21 +451,23 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
       reason: "no_protectable_positions",
       currentRevision: 0,
     });
-    expect(await first.prisma.tradingPaperProtectionLease.count({ where: { ledgerId } }))
-      .toBe(0);
+    expect(await first.prisma.tradingPaperProtectionLease.count({ where: { ledgerId } })).toBe(0);
     expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(2);
 
     const end = await effect("paper_protection_control", {
-      action: "end", ledger_id: ledgerId, expected_revision: 0,
+      action: "end",
+      ledger_id: ledgerId,
+      expected_revision: 0,
     });
     expect(
       await applyApprovedTradingPaperProtectionControl(first.prisma, owner, end.id),
     ).toMatchObject({ ok: false, reason: "not_active" });
     await expect(
       readVerifiedTradingPaperProtectionLease(
-        second.prisma, { spaceId: owner.spaceId, userId: `different-${suffix}` }, ledgerId,
+        second.prisma,
+        { spaceId: owner.spaceId, userId: `different-${suffix}` },
+        ledgerId,
       ),
     ).rejects.toThrow("PAPER protection ledger owner mismatch");
   });
-
 });
