@@ -11,8 +11,8 @@ import {
 import { auditTradingPaperLifecycle } from "./trading-paper-lifecycle-audit.js";
 import {
   applyApprovedTradingPaperProtectionControl,
-  readVerifiedTradingPaperProtectionLease,
   readTradingPaperProtectionWakePreflight,
+  readVerifiedTradingPaperProtectionLease,
 } from "./trading-paper-protection-lease.js";
 import { recordPublicAdapterPaperQuoteEvidence } from "./trading-paper-quote-evidence.js";
 import { reserveApprovedTradingPaperSignal } from "./trading-paper-reserve.js";
