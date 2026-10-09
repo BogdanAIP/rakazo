@@ -506,22 +506,32 @@ describePostgres("paper worker fill gate PostgreSQL authorization", () => {
       duration_minutes: 30,
     });
     const granted = await applyApprovedTradingPaperProtectionControl(
-      first.prisma, owner, protectionStart.id,
+      first.prisma,
+      owner,
+      protectionStart.id,
     );
     expect(granted).toMatchObject({
-      ok: true, status: "active", revision: 1, workerGateRevision: 1,
+      ok: true,
+      status: "active",
+      revision: 1,
+      workerGateRevision: 1,
       entryRevision: 2,
     });
-    expect(await readVerifiedTradingPaperProtectionLease(second.prisma, owner, ledgerId))
-      .toMatchObject({ status: "active", revision: 1 });
-    expect(await readTradingPaperProtectionWakePreflight(
-      second.prisma, owner, ledgerId, 1, 1,
-    )).toMatchObject({ status: "ready", revision: 1 });
+    expect(
+      await readVerifiedTradingPaperProtectionLease(second.prisma, owner, ledgerId),
+    ).toMatchObject({ status: "active", revision: 1 });
+    expect(
+      await readTradingPaperProtectionWakePreflight(second.prisma, owner, ledgerId, 1, 1),
+    ).toMatchObject({ status: "ready", revision: 1 });
 
     // Old unscoped F4 must not bypass the independently approved lease.
     await expect(
       closeTradingPaperPositionOnStop(
-        first.prisma, owner, ledgerId, reserved.reservationId, fillEvidence.id,
+        first.prisma,
+        owner,
+        ledgerId,
+        reserved.reservationId,
+        fillEvidence.id,
       ),
     ).resolves.toMatchObject({ status: "deny", reason: "protection_lease_inactive" });
 
@@ -555,15 +565,22 @@ describePostgres("paper worker fill gate PostgreSQL authorization", () => {
       },
     );
     const closed = await closeTradingPaperPositionOnStop(
-      second.prisma, owner, ledgerId, reserved.reservationId, stopEvidence.id,
+      second.prisma,
+      owner,
+      ledgerId,
+      reserved.reservationId,
+      stopEvidence.id,
       { revision: 1, gateRevision: 1 },
     );
     expect(closed).toMatchObject({ status: "closed", mode: "paper_only" });
-    expect(await first.prisma.tradingPaperLedgerEvent.count({
-      where: { ledgerId, kind: "fill_sell" },
-    })).toBe(1);
-    expect(await auditTradingPaperLifecycle(second.prisma, owner, ledgerId))
-      .resolves.toMatchObject({ openPositions: 0 });
+    expect(
+      await first.prisma.tradingPaperLedgerEvent.count({
+        where: { ledgerId, kind: "fill_sell" },
+      }),
+    ).toBe(1);
+    expect(await auditTradingPaperLifecycle(second.prisma, owner, ledgerId)).resolves.toMatchObject(
+      { openPositions: 0 },
+    );
 
     const protectionEnd = await makeEffect("paper_protection_control", "h2b-protection-end", {
       action: "end",
@@ -573,9 +590,9 @@ describePostgres("paper worker fill gate PostgreSQL authorization", () => {
     expect(
       await applyApprovedTradingPaperProtectionControl(second.prisma, owner, protectionEnd.id),
     ).toMatchObject({ ok: true, status: "ended", revision: 2 });
-    expect(await readTradingPaperProtectionWakePreflight(
-      first.prisma, owner, ledgerId, 1, 1,
-    )).toMatchObject({ status: "deny", reason: "protection_not_active" });
+    expect(
+      await readTradingPaperProtectionWakePreflight(first.prisma, owner, ledgerId, 1, 1),
+    ).toMatchObject({ status: "deny", reason: "protection_not_active" });
   });
 
   it("requires separate fill permission and invalidates it when the signal gate changes", async () => {
