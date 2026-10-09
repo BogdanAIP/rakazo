@@ -6,8 +6,8 @@ import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecyc
 import { readTradingPaperResolvedResearchFillUseInTransaction } from "./trading-paper-resolved-research-fill-gate.js";
 import { verifyTradingPaperStopGuardsInTransaction } from "./trading-paper-stop-guard.js";
 import { recoverTradingPaperLedgerInTransaction } from "./trading-paper-store.js";
-import { assessTradingPaperWorkerWakePreflightInTransaction } from "./trading-paper-worker-gate.js";
 import { readTradingPaperWorkerFillUseInTransaction } from "./trading-paper-worker-fill-gate.js";
+import { assessTradingPaperWorkerWakePreflightInTransaction } from "./trading-paper-worker-gate.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 type Owner = { spaceId: string; userId: string };
