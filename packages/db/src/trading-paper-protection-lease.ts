@@ -277,7 +277,64 @@ export type PaperProtectionWakePreflight =
         | "worker_gate_denied";
     };
 
-/** Independent authority, NOT an entry lease, rechecked every protection wake. */
+/**
+ * H2b-1: same-transaction protection authority check. The caller must
+ * hold the owned ledger FOR UPDATE lock before invoking this at C2.
+ */
+export async function assessTradingPaperProtectionWakePreflightInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  ledgerId: string,
+  expectedRevision: number,
+  expectedGateRevision: number,
+): Promise<PaperProtectionWakePreflight> {
+  if (
+    !Number.isSafeInteger(expectedRevision) ||
+    expectedRevision < 1 ||
+    !Number.isSafeInteger(expectedGateRevision) ||
+    expectedGateRevision < 0
+  ) {
+    throw new PaperProtectionLeaseIntegrityError("Malformed protection wake revision");
+  }
+  const now = await dbNow(tx);
+  const current = await readInTransaction(tx, owner, ledgerId, now);
+  const deny = (reason: Extract<PaperProtectionWakePreflight, { status: "deny" }>["reason"]) => ({
+    status: "deny" as const,
+    mode: "paper_only" as const,
+    ledgerId,
+    reason,
+  });
+  if (current.status !== "active") return deny("protection_not_active");
+  if (current.revision !== expectedRevision ||
+      current.workerGateRevision !== expectedGateRevision) {
+    return deny("protection_scope_changed");
+  }
+  const entry = await verifyTradingPaperSessionSettlingAuthorityInTransaction(
+    tx, owner, ledgerId,
+  ).catch((error: unknown) => {
+    if (
+      error instanceof Error &&
+      error.message.includes("active or absent entry session")
+    ) return null;
+    throw error;
+  });
+  if (!entry || entry.sessionRevision < current.entryRevision) return deny("entry_not_stopped");
+  const gate = await assessTradingPaperWorkerWakePreflightInTransaction(
+    tx, owner, ledgerId, now,
+  );
+  if (gate.status !== "ready" || gate.gateRevision !== current.workerGateRevision) {
+    return deny("worker_gate_denied");
+  }
+  return {
+    status: "ready", mode: "paper_only", ledgerId,
+    revision: current.revision,
+    gateRevision: current.workerGateRevision,
+    cadenceMinutes: current.cadenceMinutes,
+    expiresAt: current.expiresAt,
+  };
+}
+
+/** Read-only companion wrapper for independent protection-only wakes. */
 export async function readTradingPaperProtectionWakePreflight(
   prisma: Db,
   owner: Owner,
@@ -285,47 +342,12 @@ export async function readTradingPaperProtectionWakePreflight(
   expectedRevision: number,
   expectedGateRevision: number,
 ): Promise<PaperProtectionWakePreflight> {
-  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1 ||
-      !Number.isSafeInteger(expectedGateRevision) || expectedGateRevision < 0) {
-    throw new PaperProtectionLeaseIntegrityError("Malformed protection wake revision");
-  }
   return withTransactionRetry(() =>
     prisma.$transaction(
-      async (tx): Promise<PaperProtectionWakePreflight> => {
-        const now = await dbNow(tx);
-        const current = await readInTransaction(tx, owner, ledgerId, now);
-        const deny = (reason: Extract<PaperProtectionWakePreflight, { status: "deny" }>["reason"]) =>
-          ({ status: "deny" as const, mode: "paper_only" as const, ledgerId, reason });
-        if (current.status !== "active") return deny("protection_not_active");
-        if (current.revision !== expectedRevision ||
-            current.workerGateRevision !== expectedGateRevision) {
-          return deny("protection_scope_changed");
-        }
-        const entry = await verifyTradingPaperSessionSettlingAuthorityInTransaction(
-          tx, owner, ledgerId,
-        ).catch((error: unknown) => {
-          if (error instanceof Error && error.message.includes("active or absent entry session")) {
-            return null;
-          }
-          throw error;
-        });
-        if (!entry || entry.sessionRevision < current.entryRevision) {
-          return deny("entry_not_stopped");
-        }
-        const gate = await assessTradingPaperWorkerWakePreflightInTransaction(
-          tx, owner, ledgerId, now,
-        );
-        if (gate.status !== "ready" || gate.gateRevision !== current.workerGateRevision) {
-          return deny("worker_gate_denied");
-        }
-        return {
-          status: "ready", mode: "paper_only", ledgerId,
-          revision: current.revision,
-          gateRevision: current.workerGateRevision,
-          cadenceMinutes: current.cadenceMinutes,
-          expiresAt: current.expiresAt,
-        };
-      },
+      tx =>
+        assessTradingPaperProtectionWakePreflightInTransaction(
+          tx, owner, ledgerId, expectedRevision, expectedGateRevision,
+        ),
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
   );
