@@ -279,3 +279,52 @@ Until then, H2a stays an unexposed internal implementation.
 
 H2a does not register UI controls, enable workers, schedule jobs, merge
 the PR or deploy anything.
+
+
+## H2b-0 — independent finite, explicitly approved protective-only authorization
+
+A separate `TradingPaperProtectionLease` and SQL migration now exist
+alongside the original H1 entry session, NOT in its place. The owner must
+explicitly approve a `paper_protection_control` `start` effect (5–1440
+minutes, 5–60-minute cadence). The lease is persisted on the existing PAPER
+ledger and bound to owner, approved ExternalEffect and worker-gate revision;
+no row = no authority. The underlying PAPER risk policy and D2 approval
+must remain enabled and unchanged. Lease expiry/revocation fails closed.
+`end` is rejected while any PAPER position remains open. A new entry
+session Start is denied while a protective lease is enabled, preventing
+accidental conversion back into entry mode during supervision.
+
+Protection Start checks the entry session is already Paused/Ended/Expired,
+audits the PAPER ledger, checks that every open position has a verified stop
+guard and was opened through exactly one historical F3 or G4 fill authority.
+No manual position is ever described as automatically protected. A zero
+position ledger needs no automatic stop supervision and cannot create a
+protection-only lease.
+
+`handlePaperProtectionOnlyWake` is a new **unregistered** adapter that
+requires the separate verified lease and passes a constrained payload to
+the EXISTING F4/G5 → C2 synthetic stop-only implementation. It rechecks
+the protection lease before each existing D2 protective wake preflight,
+including after public quote capture. No Market/Resolver research,
+new signal, reserve, buy, entry successor, exchange order or recurring
+enqueue path exists in this adapter. Only one verified position can be
+virtually closed per wake, inherited from F4/G5.
+
+**Remaining safety blockers / not yet delivered:**
+- H2b-0 is not registered with the background-job dispatcher. There is no
+  independently approved, durable PROTECTION-ONLY recurrence and no
+  verified post-close queue/inflight reconciliation. Thus it is not yet
+  unattended protective supervision, and it is unsafe to tell the user
+  positions will remain automatically protected after entry expiry.
+- A separate protection timer expires unless the user reapproves. A
+  production UI must prominently warn and require manual action or a
+  verified renewal for still-open positions before this deadline.
+- Protection-only expiry/revocation while a quote/close is in-flight must
+  be revalidated at the actual C2 transaction boundary before deployment.
+- H2a's entire-ledger reserve-release scope must be narrowed to current
+  session-owned reservations (or use a dedicated managed ledger).
+- There is still no end-user Start/Pause/End/Protection UI, no full
+  automatic-entry cutover, and no private/live broker order path.
+
+H2b-0 cannot enable a worker or dispatch a recurring task on its own;
+all existing code remains in the draft PR.
