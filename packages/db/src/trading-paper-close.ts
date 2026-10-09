@@ -283,7 +283,8 @@ export async function closeTradingPaperPositionOnStop(
                        WHERE "id" = ${ledgerId} AND "spaceId" = ${owner.spaceId}
                          AND "ownerUserId" = ${owner.userId} FOR UPDATE`,
           );
-          if (locked.length !== 1) throw new PaperCloseIntegrityError("Protection ledger lock missing");
+          if (locked.length !== 1)
+            throw new PaperCloseIntegrityError("Protection ledger lock missing");
           const authority = await assessTradingPaperProtectionWakePreflightInTransaction(
             tx,
             owner,
