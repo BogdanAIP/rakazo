@@ -365,8 +365,9 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
       quote.id,
     );
     expect(held.status).toBe("reserved");
-    expect((await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId)).reservations)
-      .toHaveLength(1);
+    expect(
+      (await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId)).reservations,
+    ).toHaveLength(1);
 
     await expect(
       settleVerifiedTradingPaperSessionReservations(second.prisma, owner, ledgerId),
