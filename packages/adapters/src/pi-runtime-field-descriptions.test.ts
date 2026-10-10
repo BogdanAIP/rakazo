@@ -136,3 +136,48 @@ describe("string enums keep their allowed values in a plain enum", () => {
     }
   });
 });
+
+describe("resolved PAPER research scope reaches the model tool boundary", () => {
+  const scope = {
+    schemaVersion: "trading-resolved-research-scope-v2",
+    semanticKey: "signal.discovery",
+    resolverKey: "resolver-fixture",
+    resolverDigest: "a".repeat(64),
+    implementationReference: "skill:research-fixture",
+    skillSourceDigest: null,
+    skillVariant: "rccl",
+    skillContentSha256: "b".repeat(64),
+    strategyId: "market_skill_v1",
+    strategyVersion: "1",
+    venue: "okx",
+    marketKind: "spot",
+    action: "spot_buy",
+  };
+
+  it.each(["paper_resolved_research_control", "paper_resolved_research_fill_control"])(
+    "%s accepts a prepared v2 scope and rejects missing content identity",
+    (name) => {
+      const tool = builtinAgentTools.find((entry) => entry.name === name)!;
+      const args = {
+        action: "enable",
+        ledger_id: "paper-fixture",
+        expected_gate_revision: 1,
+        ...(name.endsWith("fill_control") ? { expected_research_revision: 1 } : {}),
+        scope,
+      };
+      expect(() => validate(tool, args)).not.toThrow();
+      const { skillContentSha256: _digest, ...missingDigest } = scope;
+      expect(() => validate(tool, { ...args, scope: missingDigest })).toThrow();
+      expect(() =>
+        validate(tool, { ...args, scope: { ...scope, skillVariant: "unknown" } }),
+      ).toThrow();
+      const { skillContentSha256: _hash, skillVariant: _variant, ...legacy } = scope;
+      expect(() =>
+        validate(tool, {
+          ...args,
+          scope: { ...legacy, schemaVersion: "trading-resolved-research-scope-v1" },
+        }),
+      ).not.toThrow();
+    },
+  );
+});
