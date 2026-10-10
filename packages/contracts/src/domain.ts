@@ -1,7 +1,12 @@
 import * as z from "zod";
 import { BotAvatarValueSchema } from "./bot-avatar.js";
+import {
+  CLOUDFLARE_AI_GATEWAY_CONFIG_MESSAGE,
+  cloudflareGatewayRoutingId,
+  isCloudflareAiGatewayProvider,
+} from "./cloudflare-ai-gateway.js";
 import { ThreadMessageSchema } from "./events.js";
-import { Id, MemoryScope, RunStatus, SandboxKind } from "./ids.js";
+import { Id, IsoDate, MemoryScope, RunStatus, SandboxKind } from "./ids.js";
 import { McpHeadersSchema, McpRemoteEndpointSchema, McpTransportSchema } from "./mcp.js";
 
 export const ComputerModeSchema = z.enum(["team", "dedicated"]);
@@ -421,6 +426,7 @@ export type ScratchpadItemStatus = z.infer<typeof ScratchpadItemStatusSchema>;
 export const ScratchpadItemSchema = z.object({
   id: Id,
   botId: Id,
+  projectId: Id.nullable(),
   title: z.string(),
   status: ScratchpadItemStatusSchema,
   notes: z.string(),
@@ -431,6 +437,7 @@ export type ScratchpadItem = z.infer<typeof ScratchpadItemSchema>;
 
 export const CreateScratchpadItemInput = z.object({
   botId: Id,
+  projectId: Id.optional(),
   title: z.string().min(1).max(200),
   status: ScratchpadItemStatusSchema.default("open"),
   notes: z.string().max(4_000).default(""),
@@ -517,6 +524,248 @@ export const AgentSkillCatalogEntrySchema = AgentSkillSchema.pick({
   readOnly: true,
 });
 export type AgentSkillCatalogEntry = z.infer<typeof AgentSkillCatalogEntrySchema>;
+
+export const MarketEntryKindSchema = z.enum(["skill", "resolver"]);
+export type MarketEntryKind = z.infer<typeof MarketEntryKindSchema>;
+
+export const MarketTrustSchema = z.enum(["curated"]);
+export type MarketTrust = z.infer<typeof MarketTrustSchema>;
+
+export const MarketPreferredVariantSchema = z.enum(["original", "rccl", "wrapped", "hybrid"]);
+export type MarketPreferredVariant = z.infer<typeof MarketPreferredVariantSchema>;
+
+export const MarketAdaptationModeSchema = z.enum(["rccl", "wrapped", "hybrid"]);
+export type MarketAdaptationMode = z.infer<typeof MarketAdaptationModeSchema>;
+
+export const MarketResolverContentSchema = z.object({
+  semanticKey: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .regex(/^[a-z][a-z0-9._-]*$/),
+  implementations: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(120),
+        kind: z.enum(["mcp", "api", "cli", "native", "computer", "browser"]),
+        reference: z.string().trim().min(1).max(500),
+        skillReference: z.string().trim().min(1).max(500).optional(),
+        priority: z.number().int().min(1).max(100),
+        readOnly: z.boolean().optional(),
+        constraints: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
+        notes: z.string().trim().max(2_000).optional(),
+      }),
+    )
+    .min(1)
+    .max(32),
+});
+export type MarketResolverContent = z.infer<typeof MarketResolverContentSchema>;
+
+export const MarketResolverSkillLinkSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("resolved"),
+    entryId: Id,
+    key: z.string().min(1).max(500),
+    name: z.string().min(1).max(120),
+    repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
+    digest: z.string().regex(/^[0-9a-f]{64}$/),
+    variant: MarketPreferredVariantSchema,
+    tags: z.array(z.string().min(1).max(80)).max(50),
+  }),
+  z.object({ status: z.literal("missing") }),
+  z.object({
+    status: z.literal("ambiguous"),
+    matches: z.number().int().min(2).max(2_000),
+  }),
+]);
+export type MarketResolverSkillLink = z.infer<typeof MarketResolverSkillLinkSchema>;
+
+export const MarketResolverImplementationSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  kind: z.enum(["mcp", "api", "cli", "native", "computer", "browser"]),
+  reference: z.string().trim().min(1).max(500),
+  skillReference: z.string().trim().min(1).max(500).nullable(),
+  priority: z.number().int().min(1).max(100),
+  readOnly: z.boolean(),
+  constraints: z.array(z.string().trim().min(1).max(500)).max(20),
+  notes: z.string().trim().max(2_000).optional(),
+  skill: MarketResolverSkillLinkSchema.nullable(),
+});
+export type MarketResolverImplementation = z.infer<typeof MarketResolverImplementationSchema>;
+
+export const MarketResolverPlanSchema = z.object({
+  resolver: z.object({
+    entryId: Id,
+    key: z.string().min(1).max(500),
+    digest: z.string().regex(/^[0-9a-f]{64}$/),
+    semanticKey: z
+      .string()
+      .trim()
+      .min(1)
+      .max(120)
+      .regex(/^[a-z][a-z0-9._-]*$/),
+  }),
+  preferred: MarketResolverImplementationSchema.nullable(),
+  candidates: z.array(MarketResolverImplementationSchema).max(32),
+});
+export type MarketResolverPlan = z.infer<typeof MarketResolverPlanSchema>;
+
+export const MarketResolverSelectionSkipReasonSchema = z.enum([
+  "implementation_not_read_only",
+  "market_skill_missing",
+  "market_skill_ambiguous",
+]);
+export type MarketResolverSelectionSkipReason = z.infer<
+  typeof MarketResolverSelectionSkipReasonSchema
+>;
+
+export const MarketResolverSelectionSkipSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  reference: z.string().trim().min(1).max(500),
+  priority: z.number().int().min(1).max(100),
+  reason: MarketResolverSelectionSkipReasonSchema,
+  matches: z.number().int().min(2).max(2_000).optional(),
+});
+export type MarketResolverSelectionSkip = z.infer<typeof MarketResolverSelectionSkipSchema>;
+
+const MarketResolverSelectedImplementationSchema = MarketResolverImplementationSchema.omit({
+  skill: true,
+}).extend({
+  readOnly: z.literal(true),
+});
+
+const MarketResolverResolvedSkillSelectionSchema = z.object({
+  status: z.literal("resolved"),
+  entryId: Id,
+  key: z.string().min(1).max(500),
+  name: z.string().min(1).max(120),
+  repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
+  digest: z.string().regex(/^[0-9a-f]{64}$/),
+  variant: MarketPreferredVariantSchema,
+  tags: z.array(z.string().min(1).max(80)).max(50),
+});
+
+export const MarketResolverReadOnlySelectionSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("ready"),
+    resolver: MarketResolverPlanSchema.shape.resolver,
+    implementation: MarketResolverSelectedImplementationSchema,
+    skill: MarketResolverResolvedSkillSelectionSchema.nullable(),
+    skipped: z.array(MarketResolverSelectionSkipSchema).max(32),
+  }),
+  z.object({
+    status: z.literal("deny"),
+    resolver: MarketResolverPlanSchema.shape.resolver,
+    reason: z.literal("no_eligible_read_only_implementation"),
+    skipped: z.array(MarketResolverSelectionSkipSchema).max(32),
+  }),
+]);
+export type MarketResolverReadOnlySelection = z.infer<typeof MarketResolverReadOnlySelectionSchema>;
+
+/**
+ * Minimal immutable provenance emitted from one ready read-only Resolver
+ * selection. This is intentionally research-only metadata: it contains no
+ * tool arguments, credentials, order fields, PAPER authority or execution
+ * capability. Trading can consume this shape without copying Market storage.
+ */
+export const MarketResolverPinnedResearchProvenanceSchema = z.object({
+  semanticKey: z
+    .string()
+    .trim()
+    .min(3)
+    .max(80)
+    .regex(/^[a-z][a-z0-9._-]*$/),
+  resolverKey: z.string().trim().min(1).max(500),
+  resolverDigest: z.string().regex(/^[0-9a-f]{64}$/),
+  implementation: z.object({
+    name: z.string().trim().min(1).max(120),
+    kind: z.enum(["mcp", "api", "cli", "native", "computer", "browser"]),
+    reference: z.string().trim().min(1).max(500),
+    priority: z.number().int().min(1).max(100),
+    readOnly: z.literal(true),
+  }),
+  skill: z
+    .object({
+      marketEntryId: Id,
+      marketKey: z.string().min(1).max(500),
+      sourceDigest: z.string().regex(/^[0-9a-f]{64}$/),
+      variant: MarketPreferredVariantSchema,
+    })
+    .nullable(),
+  resolvedAt: IsoDate,
+});
+export type MarketResolverPinnedResearchProvenance = z.infer<
+  typeof MarketResolverPinnedResearchProvenanceSchema
+>;
+
+export const MarketResolverPreparedResearchSchema = z
+  .object({
+    selection: MarketResolverReadOnlySelectionSchema,
+    provenance: MarketResolverPinnedResearchProvenanceSchema.nullable(),
+    skillContent: z.string().max(200_000).nullable(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.selection.status === "deny") {
+      if (value.provenance !== null || value.skillContent !== null) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Denied Resolver selection cannot carry prepared research provenance",
+          path: ["provenance"],
+        });
+      }
+      return;
+    }
+    if (value.provenance === null) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Ready Resolver selection requires pinned research provenance",
+        path: ["provenance"],
+      });
+    }
+    const needsSkill = value.selection.skill !== null;
+    if (needsSkill !== (value.skillContent !== null)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Prepared Market Skill content must match the pinned Resolver selection",
+        path: ["skillContent"],
+      });
+    }
+  });
+export type MarketResolverPreparedResearch = z.infer<typeof MarketResolverPreparedResearchSchema>;
+
+export const MarketEntrySchema = z.object({
+  id: Id,
+  kind: MarketEntryKindSchema,
+  key: z.string().min(1).max(500),
+  name: z.string().min(1).max(120),
+  description: z.string().max(2_000),
+  tags: z.array(z.string().min(1).max(80)).max(50),
+  originalContent: z.string().max(200_000),
+  adaptedContent: z.string().max(200_000).nullable(),
+  adaptationMode: MarketAdaptationModeSchema.nullable(),
+  preferredVariant: MarketPreferredVariantSchema,
+  sourceUrl: z.string().url().max(2_048),
+  repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
+  sourcePath: z.string().max(2_048).nullable(),
+  sourceRef: z.string().regex(/^[0-9a-f]{40}$/),
+  license: z.string().max(120).nullable(),
+  digest: z.string().regex(/^[0-9a-f]{64}$/),
+  trust: MarketTrustSchema,
+  metrics: z.record(z.string(), z.unknown()),
+  metadata: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type MarketEntry = z.infer<typeof MarketEntrySchema>;
+
+export const MarketCatalogEntrySchema = MarketEntrySchema.omit({
+  originalContent: true,
+  adaptedContent: true,
+  metrics: true,
+  metadata: true,
+});
+export type MarketCatalogEntry = z.infer<typeof MarketCatalogEntrySchema>;
 
 export const CreateAgentSkillInput = z
   .object({
@@ -606,6 +855,67 @@ export const ActionAutoReviewSettingsSchema = z.object({
 });
 export type ActionAutoReviewSettings = z.infer<typeof ActionAutoReviewSettingsSchema>;
 
+export const ProjectSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(/^[a-z0-9][a-z0-9._-]*$/);
+export type ProjectSlug = z.infer<typeof ProjectSlugSchema>;
+
+export const ProjectSummarySchema = z.object({
+  id: Id,
+  slug: ProjectSlugSchema,
+  name: z.string(),
+  description: z.string(),
+  memoryRevision: z.number().int().positive(),
+  archivedAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type ProjectSummary = z.infer<typeof ProjectSummarySchema>;
+
+export const ProjectSchema = ProjectSummarySchema.extend({
+  memory: z.string(),
+});
+export type Project = z.infer<typeof ProjectSchema>;
+
+export const ProjectResourceSchema = z.object({
+  id: Id,
+  projectId: Id,
+  kind: z.string().regex(/^[a-z][a-z0-9._-]{0,79}$/),
+  ref: z.string(),
+  label: z.string(),
+  metadata: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type ProjectResource = z.infer<typeof ProjectResourceSchema>;
+
+export const CapabilityToolRouteSchema = z.object({
+  connectorId: z.string().min(1).max(120),
+  toolName: z.string().min(1).max(200),
+  resourceId: z.string().min(1).max(500).optional(),
+  resourceRevision: z.union([z.string(), z.number()]).optional(),
+  catalogGroup: z.string().max(200).optional(),
+});
+export type CapabilityToolRoute = z.infer<typeof CapabilityToolRouteSchema>;
+
+export const CapabilityToolSchema = z.object({
+  name: z.string().min(1).max(300),
+  description: z.string().max(4_000),
+  inputSchema: z.record(z.string(), z.unknown()),
+  readOnly: z.boolean(),
+  route: CapabilityToolRouteSchema,
+});
+export type CapabilityTool = z.infer<typeof CapabilityToolSchema>;
+
+export const CapabilityInvocationResultSchema = z.object({
+  logs: z.array(z.string().max(2_000)).max(100),
+  result: z.unknown().optional(),
+  error: z.string().max(4_000).nullable(),
+});
+export type CapabilityInvocationResult = z.infer<typeof CapabilityInvocationResultSchema>;
 export const CapabilityInstallSchema = z.object({
   id: Id,
   kind: z.enum(["skill", "plugin", "mcp", "api", "graphql", "connection"]),
@@ -946,6 +1256,8 @@ export const ModelCredentialSchema = z.object({
   hasKey: z.boolean(),
   isDefault: z.boolean(),
   baseUrl: z.string().optional(),
+  accountId: z.string().optional(),
+  gatewayId: z.string().optional(),
   modelId: z.string().optional(),
   reasoning: z.boolean().optional(),
   thinkingLevel: ThinkingLevelSchema.nullable().optional(),
@@ -963,6 +1275,8 @@ export const ModelConnectInputSchema = z
   .object({
     provider: z.string(),
     apiKey: z.string().optional(),
+    accountId: z.string().optional(),
+    gatewayId: z.string().optional(),
     baseUrl: z.string().optional(),
     label: z.string().optional(),
     modelId: z.string().optional(),
@@ -984,6 +1298,22 @@ export const ModelConnectInputSchema = z
         message: "Maximum output tokens cannot exceed the context limit",
         path: ["maxTokens"],
       });
+    }
+    if (isCloudflareAiGatewayProvider(value.provider)) {
+      if (value.accountId !== undefined && !cloudflareGatewayRoutingId(value.accountId)) {
+        ctx.addIssue({
+          code: "custom",
+          message: CLOUDFLARE_AI_GATEWAY_CONFIG_MESSAGE,
+          path: ["accountId"],
+        });
+      }
+      if (value.gatewayId !== undefined && !cloudflareGatewayRoutingId(value.gatewayId)) {
+        ctx.addIssue({
+          code: "custom",
+          message: CLOUDFLARE_AI_GATEWAY_CONFIG_MESSAGE,
+          path: ["gatewayId"],
+        });
+      }
     }
     if (value.provider === OPENAI_COMPATIBLE_PROVIDER_ID) {
       if (!value.baseUrl?.trim()) {

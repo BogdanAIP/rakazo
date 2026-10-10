@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
 import { ORPCError, onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import type {
@@ -32,10 +31,12 @@ import {
   createRunSandbox,
   createRunSecretWriter,
   createWebProvider,
+  deletePushToken,
   destroyBot,
   EmailEmulator,
   EncryptedSecretStore,
   ExpoPushProvider,
+  endSessionPushToken,
   GraphileJobPublisher,
   InMemoryJobQueue,
   InMemoryRealtimeFanout,
@@ -55,7 +56,6 @@ import {
   PostgresRealtimeFanout,
   pipedreamConfigFromEnv,
   piSessionsRoot,
-  pushTokenPath,
   reconcileCloudAgents,
   reconcileComputerUpdates,
   reconcileTradingPaperWorkspaces,
@@ -66,15 +66,18 @@ import {
   sandboxProviderOptionsFromEnv,
   toTeamChatInbound,
 } from "@rakazo/adapters";
-import { createAuth, isBlockedAuthPath } from "@rakazo/auth";
+import { createAuth, isBlockedAuthPath, loopbackTwinOrigins } from "@rakazo/auth";
+import type { Actor } from "@rakazo/contracts";
 import { signupAllowlistBootUpdate, signupPolicyFromEnv } from "@rakazo/core";
 import type { Pool, PrismaClient } from "@rakazo/db";
 import {
   createDb,
   createPool,
   createThreadEvents,
+  IsolationError,
   parsePositiveInteger,
   provisionMessagingIdentity,
+  pushSessionExpiresAt,
   requireMembership,
 } from "@rakazo/db";
 import type { Logger } from "@rakazo/logging";
@@ -368,7 +371,9 @@ export async function createApp(
       : new PiAgentRuntime({
           sessionRoot: env.piSessionRecording ? piSessionsRoot(env.dataDir) : undefined,
         });
-  const notifications = new ExpoPushProvider(env.dataDir);
+  const notifications = new ExpoPushProvider(env.dataDir, (sessionId) =>
+    pushSessionExpiresAt(prisma, sessionId),
+  );
   const auth = createAuth(prisma, {
     secret: env.authSecret,
     baseURL: env.authUrl,
@@ -401,7 +406,20 @@ export async function createApp(
         ),
       );
       await removePiUserSessions(env.dataDir, userId);
-      await rm(pushTokenPath(env.dataDir, userId), { force: true }).catch(() => undefined);
+      await deletePushToken(env.dataDir, userId).catch((error) =>
+        getLogger().error("push token removal failed", error),
+      );
+    },
+    // The session change already happened, so a token file failure must not fail sign-out.
+    afterDeleteSession: async (session) => {
+      await endSessionPushToken(env.dataDir, session.userId, session.id).catch((error) =>
+        getLogger().error("push token removal failed", error),
+      );
+    },
+    afterReplaceSession: async (previous, session) => {
+      await endSessionPushToken(env.dataDir, session.userId, previous.id, session.id).catch(
+        (error) => getLogger().error("push token session update failed", error),
+      );
     },
   });
   // One provider instance so emulator launches and polls share the same Map.
@@ -479,6 +497,8 @@ export async function createApp(
     ? createJobReconciler({
         prisma,
         jobs,
+        events,
+        notifications,
         reconcileCloudAgents: () => reconcileCloudAgents({ prisma, jobs, cloudAgent }),
         reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
         reconcilePaperWorkspaces: () => reconcileTradingPaperWorkspaces({ prisma, jobs }),
@@ -570,18 +590,25 @@ export async function createApp(
     return auth.handler(c.req.raw);
   });
   mountLocalSettings(app, { token: env.desktopStackToken, prisma, rpc });
+  const requestSession = async (request: Request) => {
+    const session = await auth.api.getSession({ headers: sessionHeaders(request) });
+    if (!session?.user) return null;
+    const actor = await actorFromMembership(
+      requireMembership(
+        prisma,
+        session.user.id,
+        request.headers.get("x-rakazo-space-id") ?? undefined,
+      ),
+    );
+    return actor && { actor, sessionId: session.session.id };
+  };
+  const sessionActor = async (request: Request) => (await requestSession(request))?.actor ?? null;
   mountWindowsHostRoutes(app, {
     prisma,
     commandHub: windowsHostCommandHub,
     internalToken: windowsHostEnabled ? windowsHostInternalToken : undefined,
     resolveOwner: async (request) => {
-      const session = await auth.api.getSession({ headers: sessionHeaders(request) });
-      if (!session?.user) return null;
-      const actor = await requireMembership(
-        prisma,
-        session.user.id,
-        request.headers.get("x-rakazo-space-id") ?? undefined,
-      ).catch(() => null);
+      const actor = await sessionActor(request);
       if (!actor) return null;
       return {
         userId: actor.userId,
@@ -590,29 +617,32 @@ export async function createApp(
     },
   });
   app.use("/rpc/*", async (c, next) => {
-    const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
-    const requestedSpaceId = c.req.header("x-rakazo-space-id");
-    const actor = session?.user
-      ? await requireMembership(prisma, session.user.id, requestedSpaceId).catch(() => null)
-      : null;
+    const session = await requestSession(c.req.raw);
+    const actor = session?.actor ?? null;
     if (actor) {
       enrichLogContext({ "user.id": actor.userId, "space.id": actor.spaceId });
     }
     const { matched, response } = await rpc.handle(c.req.raw, {
       prefix: "/rpc",
-      context: { actor, signal: c.req.raw.signal },
+      context: {
+        actor,
+        sessionId: session?.sessionId,
+        signal: c.req.raw.signal,
+        // Same user in the same space, so leaving the space also ends a stream.
+        // A database failure rejects this check; only a missing membership is unauthorized.
+        stillAuthorized: async () => {
+          const current = await sessionActor(c.req.raw);
+          return Boolean(
+            actor && current?.userId === actor.userId && current.spaceId === actor.spaceId,
+          );
+        },
+      },
     });
     if (matched) return c.newResponse(response.body, response);
     await next();
   });
   mountVoiceHttpRoutes(app, { prisma, secrets }, async (c) => {
-    const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
-    if (!session?.user) return null;
-    const actor = await requireMembership(
-      prisma,
-      session.user.id,
-      c.req.header("x-rakazo-space-id"),
-    ).catch(() => null);
+    const actor = await sessionActor(c.req.raw);
     if (actor) enrichLogContext({ "user.id": actor.userId, "space.id": actor.spaceId });
     return actor;
   });
@@ -946,20 +976,53 @@ export async function createApp(
   };
 }
 
-function isTrustedOrigin(origin: string, env: AppEnv) {
+export function isTrustedOrigin(
+  origin: string,
+  env: Pick<AppEnv, "webOrigin" | "apiUrl" | "authUrl">,
+) {
   if (!origin) return true;
-  if (origin === env.webOrigin || origin === env.apiUrl || origin === env.authUrl) return true;
   if (origin.startsWith("rakazo://")) return true;
-  try {
-    const host = new URL(origin).hostname;
-    return isLoopbackHost(host);
-  } catch {
-    return false;
-  }
+  const allowed = new Set(
+    [env.webOrigin, env.apiUrl, env.authUrl, ...MOBILE_AUTH_ORIGINS].flatMap(originVariants),
+  );
+  return allowed.has(origin);
 }
 
 function isLoopbackHost(host: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+}
+
+function originVariants(origin: string): string[] {
+  if (!origin || origin === "rakazo://") return [];
+  const variants = [origin, ...loopbackTwinOrigins(origin)];
+  try {
+    const url = new URL(origin);
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      variants.push(url.origin);
+    }
+    if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+      const v6 = new URL(origin);
+      v6.hostname = "[::1]";
+      variants.push(v6.origin);
+    }
+  } catch {
+    return variants;
+  }
+  return variants;
+}
+
+/**
+ * No membership is no actor, which the RPC layer answers as 401. A database
+ * failure, including the deployment-settings lookup, must stay a server error
+ * so a blip does not look like a rejected session.
+ */
+export async function actorFromMembership(membership: Promise<Actor>): Promise<Actor | null> {
+  try {
+    return await membership;
+  } catch (error) {
+    if (error instanceof IsolationError) return null;
+    throw error;
+  }
 }
 
 function sessionHeaders(request: Request) {

@@ -17,7 +17,21 @@ const execFileAsync = promisify(execFile);
 const installerPath = fileURLToPath(
   new URL("../scripts/install-current-user.ps1", import.meta.url),
 );
-const installerLiteral = JSON.stringify(installerPath);
+const guiScriptPath = fileURLToPath(new URL("../scripts/windows-gui.ps1", import.meta.url));
+for (const scriptPath of [installerPath, guiScriptPath]) {
+  const scriptLiteral = JSON.stringify(scriptPath);
+  await execFileAsync(
+    "powershell.exe",
+    [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      `$errors=@();$tokens=@();[void][System.Management.Automation.Language.Parser]::ParseFile(${scriptLiteral},[ref]$tokens,[ref]$errors);if($errors.Count){$errors|ForEach-Object{[Console]::Error.WriteLine($_.Message)};exit 1}`,
+    ],
+    { windowsHide: true, timeout: 10_000 },
+  );
+}
 await execFileAsync(
   "powershell.exe",
   [
@@ -25,7 +39,7 @@ await execFileAsync(
     "-NoProfile",
     "-NonInteractive",
     "-Command",
-    `$errors=@();$tokens=@();[void][System.Management.Automation.Language.Parser]::ParseFile(${installerLiteral},[ref]$tokens,[ref]$errors);if($errors.Count){$errors|ForEach-Object{[Console]::Error.WriteLine($_.Message)};exit 1}`,
+    "Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName UIAutomationTypes; if (-not [System.Windows.Automation.TreeWalker]::ControlViewWalker) { exit 1 }",
   ],
   { windowsHide: true, timeout: 10_000 },
 );
@@ -68,7 +82,7 @@ try {
   );
 
   console.log(
-    "Windows native DPAPI, tasklist, installer syntax and bounded workspace read/write smoke passed",
+    "Windows native DPAPI, tasklist, installer/GUI syntax, UIA assemblies and bounded workspace read/write smoke passed",
   );
 } finally {
   await rm(stateDir, { recursive: true, force: true });

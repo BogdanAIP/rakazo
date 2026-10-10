@@ -47,6 +47,7 @@ describe("toolRequiresApproval", () => {
     expect(toolRequiresExplicitApproval("paper_resolved_research_fill_control")).toBe(true);
     expect(toolRequiresApproval("paper_worker_fill_control", false)).toBe(true);
     expect(toolRequiresExplicitApproval("paper_worker_fill_control")).toBe(true);
+    expect(toolRequiresExplicitApproval("save_shared_memory")).toBe(false);
     expect(toolRequiresExplicitApproval("archive_bot")).toBe(false);
   });
 
@@ -58,6 +59,7 @@ describe("toolRequiresApproval", () => {
       "write_file",
       "shell",
       "remember",
+      "save_shared_memory",
       "spawn_bot",
       "run_subagent",
     ]) {

@@ -98,12 +98,60 @@ export const WindowsHostBrowserSessionTokenSchema = z.string().uuid();
 
 export const WindowsHostBrowserRequestSchema = z.discriminatedUnion("command", [
   z.object({ command: z.literal("open") }),
+  z.object({ command: z.literal("recover"), sessionToken: WindowsHostBrowserSessionTokenSchema }),
   z.object({
     command: z.literal("navigate"),
     sessionToken: WindowsHostBrowserSessionTokenSchema,
     url: z.string().url().max(4_096),
   }),
   z.object({ command: z.literal("snapshot"), sessionToken: WindowsHostBrowserSessionTokenSchema }),
+  // Read-only OpenCLI capabilities, scoped to the server-minted task session.
+  z.object({
+    command: z.literal("find"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    css: z.string().min(1).max(500),
+  }),
+  z.object({
+    command: z.literal("wait"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    kind: z.enum(["selector", "text"]),
+    value: z.string().min(1).max(500),
+    timeoutMs: z.number().int().min(100).max(9_000).optional(),
+  }),
+  z.object({
+    command: z.literal("extract"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    selector: z.string().min(1).max(500).optional(),
+    start: z.number().int().min(0).max(1_000_000).optional(),
+  }),
+  z.object({
+    command: z.literal("scroll"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    direction: z.enum(["up", "down"]),
+    amount: z.number().int().min(1).max(5_000).optional(),
+  }),
+  z.object({
+    command: z.literal("screenshot"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    annotate: z.boolean().optional(),
+    width: z.number().int().min(320).max(4_096).optional(),
+    height: z.number().int().min(200).max(4_096).optional(),
+  }),
+  z.object({
+    command: z.literal("tabNew"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    url: z.string().url().max(4_096).optional(),
+  }),
+  z.object({
+    command: z.literal("tabSelect"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    pageId: z.string().min(1).max(256),
+  }),
+  z.object({
+    command: z.literal("tabClose"),
+    sessionToken: WindowsHostBrowserSessionTokenSchema,
+    pageId: z.string().min(1).max(256),
+  }),
   z.object({ command: z.literal("close"), sessionToken: WindowsHostBrowserSessionTokenSchema }),
   z.object({
     command: z.literal("act"),
@@ -122,6 +170,11 @@ export const WindowsHostBrowserResultSchema = z.object({
   url: z.string().max(4_096).optional(),
   title: z.string().max(2_048).optional(),
   tree: z.string().max(65_536).optional(),
+  content: z.string().max(65_536).optional(),
+  imageBase64: z.string().min(1).max(6_000_000).optional(),
+  mimeType: z.literal("image/png").optional(),
+  pageId: z.string().min(1).max(256).optional(),
+  pageIds: z.array(z.string().min(1).max(256)).max(8).optional(),
   elements: z
     .array(
       z.object({
@@ -173,6 +226,34 @@ export const WindowsHostGuiRequestSchema = z.discriminatedUnion("command", [
 
 export type WindowsHostGuiRequest = z.infer<typeof WindowsHostGuiRequestSchema>;
 
+export const WindowsHostUiaElementSchema = z.object({
+  ref: z.string().regex(/^u\d{1,4}$/u),
+  role: z.string().max(100),
+  name: z.string().max(512),
+  automationId: z.string().max(256).optional(),
+  className: z.string().max(256).optional(),
+  enabled: z.boolean().optional(),
+  focused: z.boolean().optional(),
+  rect: z
+    .object({
+      x: z.number().int().min(0).max(10_000),
+      y: z.number().int().min(0).max(10_000),
+      width: z.number().int().min(1).max(10_000),
+      height: z.number().int().min(1).max(10_000),
+    })
+    .optional(),
+});
+
+export type WindowsHostUiaElement = z.infer<typeof WindowsHostUiaElementSchema>;
+
+export const WindowsHostUiaSnapshotSchema = z.object({
+  source: z.literal("uia"),
+  truncated: z.boolean(),
+  elements: z.array(WindowsHostUiaElementSchema).max(256),
+});
+
+export type WindowsHostUiaSnapshot = z.infer<typeof WindowsHostUiaSnapshotSchema>;
+
 export const WindowsHostGuiObservationSchema = z.object({
   imageBase64: z.string().min(1).max(8_000_000),
   mimeType: z.literal("image/png"),
@@ -185,6 +266,7 @@ export const WindowsHostGuiObservationSchema = z.object({
       title: z.string().max(512).optional(),
     })
     .optional(),
+  uia: WindowsHostUiaSnapshotSchema.optional(),
 });
 
 export const WindowsHostGuiResultSchema = z.discriminatedUnion("kind", [

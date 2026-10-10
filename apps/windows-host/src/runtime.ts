@@ -8,6 +8,7 @@ import {
   type WindowsHostCommandResult,
   WindowsHostHeartbeatSchema,
 } from "@rakazo/contracts";
+import type { WindowsBrowserBackend } from "./browser-backend.js";
 import type { WindowsHostConfig } from "./config.js";
 import {
   ProtectedWindowsHostCredentialStore,
@@ -55,7 +56,7 @@ export async function buildAdvertisement(
     capabilities: [
       ...INITIAL_CAPABILITIES,
       ...(browserAvailable ? ["browser" as const] : []),
-      ...(guiAvailable ? (["screen", "input"] as const) : []),
+      ...(guiAvailable ? (["screen", "input", "uia"] as const) : []),
       ...(processEnabled ? (["terminal"] as const) : []),
     ],
     startedAt,
@@ -130,7 +131,7 @@ export class WindowsHostRuntime {
     private readonly readOnlyBackend: WindowsHostReadOnlyBackend = new WindowsHostReadOnlyBackend(
       config.stateDir,
     ),
-    private readonly browserBackend: WindowsOpenCliBackend = new WindowsOpenCliBackend(),
+    private readonly browserBackend: WindowsBrowserBackend = new WindowsOpenCliBackend(),
     private readonly guiBackend: WindowsGuiBackend = new WindowsGuiBackend(),
     private readonly processBackend: WindowsProcessBackend = new WindowsProcessBackend(
       config.stateDir,
@@ -262,7 +263,7 @@ export async function executeWindowsHostCommand(
   command: WindowsHostCommandEnvelope,
   advertisement: WindowsHostAdvertisement,
   backend: WindowsHostReadOnlyBackend = new WindowsHostReadOnlyBackend("."),
-  browserBackend: WindowsOpenCliBackend = new WindowsOpenCliBackend(),
+  browserBackend: WindowsBrowserBackend = new WindowsOpenCliBackend(),
   guiBackend: WindowsGuiBackend = new WindowsGuiBackend(),
   processBackend: WindowsProcessBackend = new WindowsProcessBackend("."),
   fileMutationBackend: WindowsHostFileMutationBackend = new WindowsHostFileMutationBackend("."),

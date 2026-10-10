@@ -295,6 +295,7 @@ export const DE_MESSAGES: Record<string, string> = {
   "Maximum output tokens": "Maximale Ausgabetokens",
   "Model id": "Modell-ID",
   "Model updated.": "Modell aktualisiert.",
+  "No matching models": "Keine passenden Modelle",
   "Not connected": "Nicht verbunden",
   "Not now": "Nicht jetzt",
   "Now using {label}.": "{label} ist jetzt aktiv.",
@@ -307,6 +308,7 @@ export const DE_MESSAGES: Record<string, string> = {
   "Reasoning effort": "Denkaufwand",
   "Replace API key": "API-Schlüssel ersetzen",
   "Saved.": "Gespeichert.",
+  "Search models": "Modelle suchen",
   "Server URL": "Server-URL",
   "Server found. Enter a model name.": "Server gefunden. Gib einen Modellnamen ein.",
   "Setup help": "Einrichtungshilfe",
@@ -388,6 +390,8 @@ export const DE_MESSAGES: Record<string, string> = {
   "{count} tools": "{count} Tools",
   // app/integration-setup.tsx
   "API key": "API-Schlüssel",
+  "Account ID": "Konto-ID",
+  "Gateway ID": "Gateway-ID",
   "Ask the server owner to configure this provider.":
     "Der Serverbetreiber muss diesen Anbieter einrichten.",
   "Client ID": "Client-ID",
@@ -414,7 +418,9 @@ export const DE_MESSAGES: Record<string, string> = {
   "Could not save that preference": "Diese Einstellung konnte nicht gespeichert werden",
   "Could not save that speech model": "Sprachmodell konnte nicht gespeichert werden",
   "Could not save that voice": "Stimme konnte nicht gespeichert werden",
+  "Disconnect {name}?": "{name} trennen?",
   Disconnect: "Trennen",
+  "This removes the connection from every space.": "Die Verbindung wird in jedem Space entfernt.",
   "Disconnecting…": "Verbindung wird getrennt…",
   "Hear a sample": "Beispiel anhören",
   "Hi, this is how I'll sound when I read replies out loud.":
@@ -619,6 +625,21 @@ export const DE_MESSAGES: Record<string, string> = {
   "Android blocked notifications.": "Android hat Benachrichtigungen blockiert.",
   // lib/voice.ts
   "Could not play that clip.": "Dieser Clip konnte nicht abgespielt werden.",
+  // app/models.tsx
+  "A sign-in page opened — enter this code there:":
+    "Eine Anmeldeseite wurde geöffnet — gib dort diesen Code ein:",
+  "All providers": "Alle Anbieter",
+  Copied: "Kopiert",
+  "Could not disconnect this provider": "Anbieter konnte nicht getrennt werden",
+  "Default ({level})": "Standard ({level})",
+  "Disconnected {provider}.": "{provider} getrennt.",
+  "Save limits": "Limits speichern",
+  "Sign in again": "Erneut anmelden",
+  "Thinking: {level}": "Denkmodus: {level}",
+  "Waiting for sign-in — the code expires in about {minutes} minutes.":
+    "Warte auf Anmeldung — der Code läuft in etwa {minutes} Minuten ab.",
+  "Waiting for sign-in — the link expires in about {minutes} minutes.":
+    "Warte auf Anmeldung — der Link läuft in etwa {minutes} Minuten ab.",
   // call
   "Allow microphone access to call a bot.": "Erlaube den Mikrofonzugriff, um einen Bot anzurufen.",
   "Allow speech recognition in Settings, or connect ElevenLabs, OpenAI, or Fish Audio.":

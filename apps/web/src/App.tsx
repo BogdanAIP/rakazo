@@ -1,12 +1,22 @@
 import { Trans, useLingui } from "@lingui/react/macro";
+import { RemoteImagesContext } from "@rakazo/chat-ui/web";
 import { LOCAL_SETTINGS_PAGE } from "@rakazo/contracts";
 import { Button, Skeleton } from "@rakazo/ui-web";
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { LoadingState } from "./components/ai/primitives";
 import { authClient } from "./lib/auth";
 import { chatGptSessionHandoffNext } from "./lib/chatgpt-session-handoff";
 import { markAfterPaint, markOnce } from "./lib/performance";
+import { getRemoteImagesEnabled, subscribeRemoteImages } from "./lib/remote-images-preference";
 import {
   holdUnreachableGate,
   sessionGate,
@@ -39,8 +49,16 @@ const PaperJournalPage = lazy(() =>
 );
 
 export function App() {
-  if (window.location.pathname === LOCAL_SETTINGS_PAGE) return <LocalSettingsPage />;
-  return <SessionApp />;
+  const loadRemoteImages = useSyncExternalStore(
+    subscribeRemoteImages,
+    getRemoteImagesEnabled,
+    () => false,
+  );
+  return (
+    <RemoteImagesContext.Provider value={loadRemoteImages}>
+      {window.location.pathname === LOCAL_SETTINGS_PAGE ? <LocalSettingsPage /> : <SessionApp />}
+    </RemoteImagesContext.Provider>
+  );
 }
 
 function SessionApp() {

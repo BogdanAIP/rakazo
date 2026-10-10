@@ -242,7 +242,7 @@ export function isRetiredModelCredentialError(error: unknown): boolean {
 }
 
 export type StoredModelSecret =
-  | { kind: "api_key"; key: string; maxTokens?: number }
+  | { kind: "api_key"; key: string; maxTokens?: number; accountId?: string; gatewayId?: string }
   | { kind: "oauth"; credential: OAuthCredential; maxTokens?: number }
   | {
       kind: "openai_compatible";
@@ -261,6 +261,7 @@ export type PiOAuthConnected = {
   credential: OAuthCredential;
   provider: string;
   modelId?: string;
+  thinkingLevel?: string | null;
   label?: string;
   signal: AbortSignal;
 };
@@ -295,6 +296,7 @@ type Session = {
   spaceId: string;
   provider: string;
   modelId?: string;
+  thinkingLevel?: string | null;
   label?: string;
   abort: AbortController;
   state: SessionState;
@@ -325,6 +327,12 @@ function readOAuthCredential(value: unknown): OAuthCredential | undefined {
     return parsed as OAuthCredential;
   }
   return undefined;
+}
+
+function parsedRoutingId(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
 }
 
 function parsedMaxTokens(value: unknown): number | undefined {
@@ -390,10 +398,14 @@ export function parseModelSecret(plaintext: string): StoredModelSecret {
       throw new Error(CORRUPT_MODEL_SECRET_MESSAGE);
     }
     const maxTokens = parsedMaxTokens(parsed.maxTokens);
+    const accountId = parsedRoutingId(parsed.accountId);
+    const gatewayId = parsedRoutingId(parsed.gatewayId);
     return {
       kind: "api_key",
       key: parsed.key,
       ...(maxTokens !== undefined ? { maxTokens } : {}),
+      ...(accountId ? { accountId } : {}),
+      ...(gatewayId ? { gatewayId } : {}),
     };
   }
   if (parsed.kind === "oauth") {
@@ -439,11 +451,19 @@ export function serializeModelSecret(secret: StoredModelSecret): string {
         : {}),
     });
   }
-  if (secret.maxTokens === undefined) return secret.key;
+  if (
+    secret.maxTokens === undefined &&
+    secret.accountId === undefined &&
+    secret.gatewayId === undefined
+  ) {
+    return secret.key;
+  }
   return JSON.stringify({
     kind: "api_key",
     key: secret.key,
-    maxTokens: secret.maxTokens,
+    ...(secret.maxTokens !== undefined ? { maxTokens: secret.maxTokens } : {}),
+    ...(secret.accountId ? { accountId: secret.accountId } : {}),
+    ...(secret.gatewayId ? { gatewayId: secret.gatewayId } : {}),
   });
 }
 
@@ -758,6 +778,7 @@ export class PiOAuthLogins {
     spaceId: string;
     provider: string;
     modelId?: string;
+    thinkingLevel?: string | null;
     label?: string;
     signal?: AbortSignal;
   }): Promise<PiOAuthBegin> {
@@ -771,7 +792,8 @@ export class PiOAuthLogins {
     }
 
     const scope = oauthScopeKey(input.userId, input.spaceId, input.provider);
-    const prepared = await this.withReplacementLock(scope, input.signal, async () => {
+    const lockKey = oauthProviderKey(input.userId, input.provider);
+    const prepared = await this.withReplacementLock(lockKey, input.signal, async () => {
       await this.retireActiveSession(scope, input.signal);
       throwIfAborted(input.signal);
 
@@ -785,6 +807,7 @@ export class PiOAuthLogins {
         spaceId: input.spaceId,
         provider: input.provider,
         modelId: input.modelId,
+        thinkingLevel: input.thinkingLevel,
         label: input.label,
         abort,
         state: "pending",
@@ -947,6 +970,7 @@ export class PiOAuthLogins {
         credential: session.credential,
         provider: session.provider,
         modelId: session.modelId,
+        thinkingLevel: session.thinkingLevel,
         label: session.label,
         signal: session.abort.signal,
       };
@@ -1058,6 +1082,30 @@ export class PiOAuthLogins {
     }
   }
 
+  /** Retire every sign-in this user started for one provider, in any space —
+   *  disconnect removes the account credential, so no space's session may
+   *  finish afterward. The shared provider lock orders this against begin. */
+  async cancelProvider(input: { userId: string; provider: string }): Promise<void> {
+    await this.withReplacementLock(
+      oauthProviderKey(input.userId, input.provider),
+      undefined,
+      async () => {
+        const scopes = [
+          ...new Set(
+            [...this.pending.values()]
+              .filter(
+                (session) => session.userId === input.userId && session.provider === input.provider,
+              )
+              .map((session) => session.scope),
+          ),
+        ];
+        for (const scope of scopes) {
+          await this.retireActiveSession(scope, undefined);
+        }
+      },
+    );
+  }
+
   private removeSession(session: Session): void {
     if (session.expiresTimer) clearTimeout(session.expiresTimer);
     session.expiresTimer = undefined;
@@ -1104,6 +1152,12 @@ function sleep(ms: number): Promise<void> {
 
 function oauthScopeKey(userId: string, spaceId: string, provider: string): string {
   return JSON.stringify([userId, spaceId, provider]);
+}
+
+// Begins and disconnect cancellation share one lock per user+provider so a
+// mid-flight begin cannot install a session after disconnect retires them.
+function oauthProviderKey(userId: string, provider: string): string {
+  return JSON.stringify([userId, provider]);
 }
 
 function httpsAuthorizationUrl(input: string): string {

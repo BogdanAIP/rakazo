@@ -35,7 +35,7 @@ The computer container is the security boundary. Team bots share the OS user, wo
 
 The helper uses an isolated script world, masks password values, and rejects stale refs instead of retargeting replacement elements. Snapshots include bounded page text and up to 80 interactive elements. Frames and unsupported interactions require desktop tools. A failed action reports confirmed progress and whether its outcome is uncertain: inspect the current state before continuing and never replay completed or uncertain actions automatically. For models without vision, request takeover if page tools cannot operate.
 
-Fake computers and explicit `BROWSER_PROVIDER=fake|emulator` use an in-process session for tests. These sessions are not the live logged-in browser. Browser mutations share the existing teaching guard and workspace checkpoint flow. `computer_observe`, batched `computer_act`, `open_path`, `launch_app`, `shell`, and file tools remain available according to the computer and model capabilities. Identical consecutive desktop frames keep their metadata but omit duplicate image bytes from model context.
+Fake computers and explicit `BROWSER_PROVIDER=fake|emulator` use an in-process session for tests. These sessions are not the live logged-in browser. Browser mutations share the existing teaching guard and workspace checkpoint flow. `computer_observe`, batched `computer_act`, `open_path`, `launch_app`, `shell`, and file tools remain available according to the computer and model capabilities. Identical consecutive desktop frames keep their metadata but omit duplicate image bytes from model context. The tool result says the previous screenshot remains valid. After repeated identical visual actions leave the frame unchanged, computer_act refuses another copy of that action and points the agent at page text tools.
 
 Human input and agent input may coexist on distinct Team screens. “Take control” grants the user an exclusive control lease on that bot’s screen so the embedded viewer accepts input. For a Team bot, takeover is refused with HTTP 409 (“Stop the bot first”) while that bot holds a live computer execution lease or an active run, unless the run is `waiting_takeover` (the bot asked for protected input). Stop the bot first, then take control; after release, the agent may continue. `request_takeover` remains available when the model explicitly needs protected input or human judgment.
 
@@ -63,6 +63,12 @@ The web and desktop computer view opens a terminal and a file browser from a doc
 - Download needs a running computer.
 - Upload also needs control. Uploads land under the bot's workspace path and are capped at the attachment size limit.
 
+## Screen connection diagnostics
+
+The web service logs `screen.proxy.target_rejected`, `screen.proxy.http_failed`, `screen.proxy.http_upstream_response`, `screen.proxy.websocket_handshake_failed`, `screen.proxy.websocket_error`, `screen.proxy.websocket_upgraded`, `screen.proxy.websocket_closed`, and revocation events. Each event includes a random `screen.connection_id` and a view/control policy. WebSocket close events include whether the upstream handshake completed, its duration, and the side that initiated the close (`client`, `upstream`, or `revoked`). Logs omit capability URLs, socket tokens, provider hostnames, cookies, and request headers.
+
+When the screen shows a connection error, check whether `computer.screenUrl` succeeded in the API logs, then inspect web-service `screen.proxy.*` events around the same time. On `screen.proxy.target_rejected`, read `reason`: `invalid_path` is not a session path (API not contacted); `authority_rejected` is a non-OK API response (expired, revoked, or an API error); `invalid_authority_response` is an OK response with an invalid or malformed target body; `authority_unavailable` is a request, connectivity, or timeout failure. An upstream error or non-101 handshake points to the provider screen gateway. An upgraded connection that closes quickly points to a transport drop after the handshake. If the API issued a URL but no web-service event appears, inspect the browser Network panel and its WebSocket request. Do not paste the full capability URL into an issue or log.
+
 ## E2B backend
 
 The E2B adapter uses `@e2b/desktop` for machine lifecycle, shell commands, files, and port URLs. Every bot desktop uses the shared Linux runtime, including the first bot. Its X display, screenshots, input, and view/control transports follow the same lifecycle as the other managed providers.
@@ -87,7 +93,7 @@ Before exporting a remote workspace, remote backends quiesce desktop browsers so
 
 The disposable OS image is not a portable disk snapshot. System packages installed outside the workspace are lost when moving to another provider; durable machine customization should be represented by a reproducible image or setup recipe. This is what makes a future backend switch practical instead of trying to translate vendor-specific VM snapshots.
 
-Docker computers include `uv` for rootless Python CLI installs. Run `uv tool install <package>`; the tool environments, command shims, managed Python versions, and cache stay under the persistent home. This installs Python command-line tools, not system packages such as `apt` dependencies. The image also ships GitHub's `gh` CLI; bots authenticate the CLI through device flow, and gh stores that credential under the persistent home.
+Docker computers include `uv` for rootless Python CLI installs. Run `uv tool install <package>`; the tool environments, command shims, managed Python versions, and cache stay under the persistent home. This installs Python command-line tools, not system packages such as `apt` dependencies. The image also ships GitHub's `gh` CLI; bots authenticate the CLI through device flow, and gh stores that credential under the persistent home. `pdftotext`, `pandoc`, and `openpyxl` are available to extract text from PDFs, documents, and spreadsheets.
 
 ## Verification
 

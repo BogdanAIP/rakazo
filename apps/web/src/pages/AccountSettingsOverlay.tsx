@@ -19,9 +19,17 @@ import { SoftwareUpdateSection } from "../components/SoftwareUpdateSection";
 import { authClient } from "../lib/auth";
 import { getActiveUiLocale, setUiLocale } from "../lib/i18n";
 import {
+  getRemoteImagesPreference,
+  setRemoteImagesPreference,
+} from "../lib/remote-images-preference";
+import {
   getResponseStreamingPreference,
   setResponseStreamingPreference,
 } from "../lib/response-streaming";
+import {
+  getToolActivityPreference,
+  setToolActivityPreference,
+} from "../lib/tool-activity-preference";
 import {
   type AppearancePreference,
   getUiAppearancePreference,
@@ -58,6 +66,14 @@ export function GeneralSettingsPanels({
     () => getResponseStreamingPreference() === "on",
   );
   const streamRepliesId = useId();
+  const [showToolActivity, setShowToolActivity] = useState(
+    () => getToolActivityPreference() === "on",
+  );
+  const showToolActivityId = useId();
+  const [loadRemoteImages, setLoadRemoteImages] = useState(
+    () => getRemoteImagesPreference() === "on",
+  );
+  const loadRemoteImagesId = useId();
   const [avatarPending, setAvatarPending] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
@@ -173,13 +189,8 @@ export function GeneralSettingsPanels({
 
       <details data-testid="advanced-settings" className="group rounded-xl border border-border">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 text-[14px] text-foreground/75">
-          <span>
-            <span className="block text-[15px] text-foreground">
-              <Trans>Advanced</Trans>
-            </span>
-            <span className="mt-1 block text-[12.5px] text-muted-foreground/80">
-              <Trans>Optional controls most people never need</Trans>
-            </span>
+          <span className="block text-[15px] text-foreground">
+            <Trans>Advanced</Trans>
           </span>
           <span aria-hidden="true" className="transition-transform group-open:rotate-90">
             ›
@@ -199,6 +210,42 @@ export function GeneralSettingsPanels({
             />
             <Label htmlFor={streamRepliesId} className="text-[14px] font-normal text-foreground/75">
               <Trans>Stream replies</Trans>
+            </Label>
+          </div>
+          <div className="flex items-start gap-3 pt-4">
+            <Switch
+              id={showToolActivityId}
+              data-testid="tool-activity-toggle"
+              className="mt-0.5"
+              checked={showToolActivity}
+              onCheckedChange={(checked) => {
+                setShowToolActivity(checked);
+                setToolActivityPreference(checked ? "on" : "off");
+              }}
+            />
+            <Label
+              htmlFor={showToolActivityId}
+              className="text-[14px] font-normal text-foreground/75"
+            >
+              <Trans>Show tool activity</Trans>
+            </Label>
+          </div>
+          <div className="flex items-start gap-3 pt-4">
+            <Switch
+              id={loadRemoteImagesId}
+              data-testid="remote-images-toggle"
+              className="mt-0.5"
+              checked={loadRemoteImages}
+              onCheckedChange={(checked) => {
+                setLoadRemoteImages(checked);
+                setRemoteImagesPreference(checked ? "on" : "off");
+              }}
+            />
+            <Label
+              htmlFor={loadRemoteImagesId}
+              className="text-[14px] font-normal text-foreground/75"
+            >
+              <Trans>Load web images automatically</Trans>
             </Label>
           </div>
           <ApprovalRulesSettings />
@@ -239,7 +286,15 @@ export function UsageSettingsPanel({
   );
 }
 
-export function ComputerSettingsPanel() {
+export function ComputerSettingsPanel({
+  sandboxProvider,
+  onSandboxProviderChange,
+  onRecoveryDismissed,
+}: {
+  sandboxProvider?: string | null;
+  onSandboxProviderChange?: (sandboxProvider: string) => void;
+  onRecoveryDismissed?: () => void;
+}) {
   return (
     <div
       data-testid="computers-setup-settings"
@@ -248,7 +303,12 @@ export function ComputerSettingsPanel() {
       <h3 className="text-[15px] font-medium text-foreground">
         <Trans>Computers</Trans>
       </h3>
-      <ComputersUnavailableHint className="mt-3 text-[13px] leading-relaxed text-muted-foreground" />
+      <ComputersUnavailableHint
+        className="mt-3 text-[13px] leading-relaxed text-muted-foreground"
+        sandboxProvider={sandboxProvider}
+        onRecovered={onSandboxProviderChange}
+        onRecoveryDismissed={onRecoveryDismissed}
+      />
     </div>
   );
 }

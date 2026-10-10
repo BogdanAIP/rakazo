@@ -19,6 +19,8 @@ type ProcedureContract = {
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
 const READ_ACTIONS = new Set([
+  "read",
+  "context",
   "all",
   "analyze",
   "bootstrap",
@@ -45,7 +47,9 @@ const READ_ACTIONS = new Set([
   "providerConfig",
   "query",
   "readFile",
+  "search",
   "screenUrl",
+  "select",
   "snapshot",
   "status",
   "summary",
@@ -79,6 +83,10 @@ const WRITE_ACTIONS = new Set([
   "heartbeat",
   "input",
   "install",
+  "import",
+  "importBatch",
+  "importGithub",
+  "importGithubBatch",
   "markRead",
   "markUnread",
   "promptFocus",
@@ -109,6 +117,7 @@ const WRITE_ACTIONS = new Set([
   "updateDraft",
   "updatePolicy",
   "uploadFile",
+  "upsert",
 ]);
 
 const DESTRUCTIVE_ACTIONS = new Set([

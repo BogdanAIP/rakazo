@@ -1,5 +1,6 @@
+import type { AdapterContext } from "@rakazo/adapter-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { allowlistDrift, McpConnector } from "./mcp-connector.js";
+import { allowlistDrift, isOfficialGithubMcpServer, McpConnector } from "./mcp-connector.js";
 import { type McpOAuthBroker, StoredMcpOAuthProvider } from "./mcp-oauth.js";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -44,8 +45,14 @@ function mcpFetch(
     failNext: boolean;
     initializations: number;
     headers?: Record<string, string>[];
-    tools?: Array<{ name: string; description?: string; inputSchema: Record<string, unknown> }>;
+    tools?: Array<{
+      name: string;
+      description?: string;
+      inputSchema: Record<string, unknown>;
+      annotations?: { readOnlyHint?: boolean };
+    }>;
     calls?: string[];
+    responses?: Record<string, unknown>;
   },
   expectedUrl = "https://mcp.example.test/mcp",
 ) {
@@ -87,7 +94,9 @@ function mcpFetch(
       return Response.json({
         jsonrpc: "2.0",
         id: message.id,
-        result: { content: [{ type: "text", text: "ok" }] },
+        result: (message.params?.name && state.responses?.[message.params.name]) ?? {
+          content: [{ type: "text", text: "ok" }],
+        },
       });
     }
     return new Response(null, { status: 202 });
@@ -941,5 +950,309 @@ describe("allowlistDrift", () => {
       offered: 2,
       stringAllowedCount: 1,
     });
+  });
+});
+
+describe("GitHub MCP project write enforcement", () => {
+  it("authorizes a scoped direct write and rejects a foreign repository through the lazy catalog", async () => {
+    const state = {
+      failNext: false,
+      initializations: 0,
+      calls: [] as string[],
+      tools: [
+        {
+          name: "push_files",
+          inputSchema: {
+            type: "object",
+            properties: {
+              owner: { type: "string" },
+              repo: { type: "string" },
+            },
+            required: ["owner", "repo"],
+          },
+          annotations: { readOnlyHint: false },
+        },
+        {
+          name: "get_file_contents",
+          inputSchema: { type: "object" },
+          annotations: { readOnlyHint: true },
+        },
+      ],
+    };
+    vi.stubGlobal("fetch", mcpFetch(state));
+    const server = { ...SERVER, slug: "github" };
+    const assignment = { ...ASSIGNMENT, server };
+    const prisma = {
+      botMcpServer: {
+        findMany: vi.fn().mockResolvedValue([assignment]),
+        findFirst: vi.fn().mockResolvedValue(assignment),
+      },
+      project: { findFirst: vi.fn().mockResolvedValue({ id: "project-1" }) },
+      projectResource: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            ref: "BogdanAIP/rakazo",
+            metadata: { githubAccess: "autonomous_write", githubMcpServerId: "server-1" },
+          },
+        ]),
+      },
+    };
+    const connector = new McpConnector(prisma as never, {} as never, {
+      network: TEST_NETWORK,
+    });
+    const context: AdapterContext = {
+      operationId: "test",
+      traceId: "test",
+      spaceId: "w1",
+      userId: "u1",
+      botId: "bot-1",
+      projectId: "project-1",
+      signal: new AbortController().signal,
+    };
+    const collect = async (
+      call: Parameters<McpConnector["execute"]>[0],
+      ctx: AdapterContext = context,
+    ) => {
+      const events = [];
+      for await (const event of connector.execute(call, ctx)) events.push(event);
+      return events;
+    };
+    const route = {
+      connectorId: "mcp",
+      resourceId: "server-1",
+      resourceRevision: 1,
+      toolName: "push_files",
+      catalogGroup: "github",
+    };
+    const allowed = await collect({
+      tool: "mcp__github__push_files",
+      route,
+      args: { owner: "BogdanAIP", repo: "rakazo" },
+      executionId: "allowed-1",
+    });
+    expect(allowed.some((event) => event.type === "result")).toBe(true);
+    expect(state.calls).toEqual(["push_files"]);
+
+    const denied = await collect({
+      tool: "connectors_execute_tool",
+      route: { connectorId: "mcp", toolName: "__catalog_execute" },
+      args: {
+        id: "server-1:push_files",
+        arguments: { owner: "BogdanAIP", repo: "AIHOT" },
+      },
+      executionId: "denied-1",
+    });
+    expect(denied.some((event) => event.type === "error")).toBe(true);
+    expect(state.calls).toEqual(["push_files"]);
+
+    const read = await collect(
+      {
+        tool: "mcp__github__get_file_contents",
+        route: { ...route, toolName: "get_file_contents" },
+        args: { owner: "BogdanAIP", repo: "AIHOT" },
+        executionId: "read-1",
+      },
+      { ...context, projectId: undefined },
+    );
+    expect(read.some((event) => event.type === "result")).toBe(true);
+    expect(state.calls).toEqual(["push_files", "get_file_contents"]);
+    await connector.close();
+  });
+});
+
+describe("official GitHub MCP identity", () => {
+  it("keeps the repository fence after a server rename", () => {
+    expect(isOfficialGithubMcpServer({ slug: "github", command: null, endpoint: null })).toBe(true);
+    expect(
+      isOfficialGithubMcpServer({
+        slug: "renamed",
+        command: "C:\\tools\\github-mcp-server.exe",
+        endpoint: null,
+      }),
+    ).toBe(true);
+    expect(
+      isOfficialGithubMcpServer({
+        slug: "renamed",
+        command: null,
+        endpoint: "https://api.githubcopilot.com/mcp/",
+      }),
+    ).toBe(true);
+    expect(
+      isOfficialGithubMcpServer({
+        slug: "other",
+        command: null,
+        endpoint: "https://other.example/mcp",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("fork creation and contribution through the MCP execution boundary", () => {
+  it("checks identity/destination and only registers verified fork before scoped PR", async () => {
+    const forkReply = {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            full_name: "BogdanAIP/library",
+            fork: true,
+            owner: { login: "BogdanAIP" },
+            parent: { full_name: "OtherProject/library" },
+          }),
+        },
+      ],
+    };
+    const state = {
+      failNext: false,
+      initializations: 0,
+      calls: [] as string[],
+      responses: {
+        get_me: { content: [{ type: "text", text: '{"login":"BogdanAIP"}' }] },
+        fork_repository: forkReply,
+      } as Record<string, unknown>,
+      tools: [
+        { name: "get_me", inputSchema: { type: "object" }, annotations: { readOnlyHint: true } },
+        {
+          name: "fork_repository",
+          inputSchema: {
+            type: "object",
+            properties: {
+              owner: { type: "string" },
+              repo: { type: "string" },
+              organization: { type: "string" },
+            },
+            required: ["owner", "repo"],
+          },
+          annotations: { readOnlyHint: false },
+        },
+        {
+          name: "create_pull_request",
+          inputSchema: {
+            type: "object",
+            properties: {
+              owner: { type: "string" },
+              repo: { type: "string" },
+              head: { type: "string" },
+              base: { type: "string" },
+            },
+            required: ["owner", "repo", "head", "base"],
+          },
+          annotations: { readOnlyHint: false },
+        },
+      ],
+    };
+    vi.stubGlobal("fetch", mcpFetch(state));
+    const server = { ...SERVER, slug: "github" };
+    const assignment = { ...ASSIGNMENT, server };
+    const resources = [
+      {
+        kind: "github.fork.destination",
+        ref: "BogdanAIP",
+        metadata: { githubAccess: "allow_fork", githubMcpServerId: "server-1" },
+      },
+      {
+        kind: "github.pr.upstream",
+        ref: "otherproject/library#bogdanaip/library",
+        metadata: {
+          githubAccess: "contribute_via_pr",
+          githubMcpServerId: "server-1",
+          upstream: "otherproject/library",
+          forkRef: "bogdanaip/library",
+          verifiedFork: true,
+        },
+      },
+      {
+        kind: "github.repo",
+        ref: "BogdanAIP/library",
+        metadata: {
+          githubAccess: "autonomous_write",
+          githubMcpServerId: "server-1",
+          forkOf: "otherproject/library",
+          verifiedFork: true,
+        },
+      },
+    ];
+    const create = vi.fn().mockResolvedValue({ id: "fork-record" });
+    const project = { findFirst: vi.fn().mockResolvedValue({ id: "project-1" }) };
+    const projectResource = { findMany: vi.fn().mockResolvedValue(resources.slice(0, 2)), create };
+    const prisma = {
+      botMcpServer: {
+        findMany: vi.fn().mockResolvedValue([assignment]),
+        findFirst: vi.fn().mockResolvedValue(assignment),
+      },
+      project,
+      projectResource,
+      $transaction: vi.fn(async (run: (tx: unknown) => Promise<unknown>) =>
+        run({ project, projectResource }),
+      ),
+    };
+    const connector = new McpConnector(prisma as never, {} as never, { network: TEST_NETWORK });
+    const context: AdapterContext = {
+      operationId: "fork-test",
+      traceId: "fork-test",
+      spaceId: "w1",
+      userId: "u1",
+      botId: "bot-1",
+      projectId: "project-1",
+      signal: new AbortController().signal,
+    };
+    const call = async (name: string, args: Record<string, unknown>) => {
+      const out = [];
+      for await (const event of connector.execute(
+        {
+          tool: `mcp__github__${name}`,
+          args,
+          executionId: `${name}-test`,
+          route: {
+            connectorId: "mcp",
+            resourceId: "server-1",
+            resourceRevision: 1,
+            toolName: name,
+            catalogGroup: "github",
+          },
+        },
+        context,
+      ))
+        out.push(event);
+      return out;
+    };
+    const fork = await call("fork_repository", { owner: "OtherProject", repo: "library" });
+    expect(fork).toEqual(expect.arrayContaining([expect.objectContaining({ type: "result" })]));
+    expect(state.calls).toEqual(["get_me", "fork_repository"]);
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        ref: "bogdanaip/library",
+        metadata: expect.objectContaining({ verifiedFork: true }),
+      }),
+    });
+
+    const otherDest = await call("fork_repository", {
+      owner: "OtherProject",
+      repo: "library",
+      organization: "OtherOrg",
+    });
+    expect(otherDest.some((e) => e.type === "error")).toBe(true);
+    expect(state.calls.filter((name) => name === "fork_repository")).toHaveLength(1);
+
+    prisma.projectResource.findMany.mockResolvedValue(resources);
+    const contribute = await call("create_pull_request", {
+      owner: "OtherProject",
+      repo: "library",
+      head: "BogdanAIP:feature/fix",
+      base: "main",
+    });
+    expect(contribute.some((e) => e.type === "result")).toBe(true);
+    expect(state.calls.filter((name) => name === "create_pull_request")).toHaveLength(1);
+    const bad = await call("create_pull_request", {
+      owner: "OtherProject",
+      repo: "library",
+      head: "Unrelated:feature/fix",
+      base: "main",
+    });
+    expect(bad.some((e) => e.type === "error")).toBe(true);
+    expect(state.calls.filter((name) => name === "create_pull_request")).toHaveLength(1);
+    expect(state.initializations).toBe(1);
+    await connector.close();
   });
 });

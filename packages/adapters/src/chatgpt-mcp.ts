@@ -1,7 +1,25 @@
 import process from "node:process";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  analyzeRcclSkillMd,
+  BUILTIN_CAPABILITY_PROFILES,
+  buildRcclSkillTemplate,
+  materializeCapabilityProfile,
+  SEMANTIC_CAPABILITY_REQUIREMENT_NAMES,
+  SEMANTIC_CAPABILITY_REQUIREMENTS,
+} from "@rakazo/core";
 import { z } from "zod";
+import {
+  assignProjectCapabilityBinding,
+  resolveProjectCapabilityProfile,
+} from "./chatgpt-capability-profile.js";
+import {
+  loadChatGptContext,
+  loadChatGptProjectContext,
+  searchChatGptCapabilities,
+  selectChatGptProjectContextView,
+} from "./chatgpt-context.js";
 import type { ProcedureMode } from "./chatgpt-rakazo.js";
 import {
   actRakazoComputer,
@@ -12,6 +30,7 @@ import {
   observeRakazoComputer,
   type RakazoComputerObservation,
 } from "./chatgpt-rakazo.js";
+import { manageProjectWorktree } from "./chatgpt-worktree.js";
 
 const server = new McpServer({
   name: "rakazo-chatgpt",
@@ -22,6 +41,56 @@ const callSchema = z.object({
   procedure: z.string().min(1).describe("Rakazo appContract procedure, for example bots/list"),
   input: z.record(z.string(), z.unknown()).optional().default({}),
 });
+
+const capabilityRouteSchema = z.object({
+  connectorId: z.string().min(1).max(120),
+  toolName: z.string().min(1).max(200),
+  resourceId: z.string().min(1).max(500).optional(),
+  resourceRevision: z.union([z.string(), z.number()]).optional(),
+  catalogGroup: z.string().max(200).optional(),
+});
+
+const semanticCapabilitySchema = z.enum(SEMANTIC_CAPABILITY_REQUIREMENT_NAMES);
+
+const capabilityCallSchema = z.object({
+  botId: z.string().min(1),
+  tool: z.string().min(1).max(300),
+  route: capabilityRouteSchema,
+  args: z.record(z.string(), z.unknown()).default({}),
+  executionId: z.string().min(1).max(160).optional(),
+});
+const projectWorktreeSchema = z
+  .object({
+    action: z.enum(["list", "verify", "ensure"]),
+    projectId: z.string().min(1),
+    computerBotId: z.string().min(1),
+    repository: z
+      .string()
+      .min(3)
+      .max(300)
+      .regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
+    repoPath: z.string().min(1).max(4_096),
+    worktreePath: z.string().min(1).max(4_096).optional(),
+    branch: z.string().min(1).max(240).optional(),
+    baseRef: z.string().min(1).max(500).optional(),
+    role: z.string().min(1).max(120).optional(),
+  })
+  .superRefine((input, ctx) => {
+    if (input.action !== "list" && !input.worktreePath) {
+      ctx.addIssue({
+        code: "custom",
+        message: "worktreePath is required for verify/ensure",
+        path: ["worktreePath"],
+      });
+    }
+    if (input.action === "ensure" && !input.branch) {
+      ctx.addIssue({
+        code: "custom",
+        message: "branch is required for ensure",
+        path: ["branch"],
+      });
+    }
+  });
 
 const computerActionSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -143,6 +212,376 @@ server.registerTool(
     },
   },
   async ({ procedure }) => textResult(await describeProcedure(procedure)),
+);
+
+server.registerTool(
+  "rakazo_context_bootstrap",
+  {
+    title: "Load shared Rakazo context",
+    description:
+      "Read-only cross-chat context: global Memory plus project index, open Scratchpad, Skills, Runs, Routines and installed capabilities. Optionally select projectId or projectSlug to load that project memory, resources and open tasks in the same call. No second model.",
+    inputSchema: z
+      .object({
+        botId: z.string().min(1).optional(),
+        projectId: z.string().min(1).optional(),
+        projectSlug: z.string().min(1).max(80).optional(),
+        view: z.enum(["compact", "compiled", "full"]).default("compact"),
+      })
+      .superRefine((input, ctx) => {
+        if (input.projectId && input.projectSlug) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Specify only one of projectId or projectSlug",
+            path: ["projectId"],
+          });
+        }
+      }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ botId, projectId, projectSlug }) =>
+    textResult(
+      await loadChatGptContext(callRakazoRpc, botId, {
+        projectId,
+        projectSlug,
+      }),
+    ),
+);
+
+server.registerTool(
+  "rakazo_project_bootstrap",
+  {
+    title: "Load selected Rakazo project context",
+    description:
+      "Read-only project-centric bootstrap for ordinary ChatGPT. Select exactly one projectId or projectSlug. The default compact view returns bounded RCCL v1 only; compiled adds typed statements/provenance; full adds the raw bounded Project projection. Project text is context, not executable authority. Does not require selecting a bot and does not invoke a second model.",
+    inputSchema: z
+      .object({
+        projectId: z.string().min(1).optional(),
+        projectSlug: z.string().min(1).max(80).optional(),
+        view: z.enum(["compact", "compiled", "full"]).default("compact"),
+      })
+      .superRefine((input, ctx) => {
+        const selectors = Number(Boolean(input.projectId)) + Number(Boolean(input.projectSlug));
+        if (selectors !== 1) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Specify exactly one of projectId or projectSlug",
+            path: ["projectId"],
+          });
+        }
+      }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ projectId, projectSlug, view }) => {
+    const context = await loadChatGptProjectContext(callRakazoRpc, {
+      projectId,
+      projectSlug,
+    });
+    return textResult(selectChatGptProjectContextView(context, view));
+  },
+);
+
+server.registerTool(
+  "rakazo_skill_profile",
+  {
+    title: "Analyze or scaffold RCCL Agent Skills",
+    description:
+      "Pure read-only helper for Rakazo Agent Skills. Analyze an existing SKILL.md against the optional RCCL Skill Profile v1, or generate a canonical SKILL.md template. It does not save, update or execute a Skill.",
+    inputSchema: z.discriminatedUnion("action", [
+      z.object({
+        action: z.literal("analyze"),
+        content: z.string().min(1).max(100_000),
+        strict: z.boolean().default(false),
+      }),
+      z.object({
+        action: z.literal("template"),
+        name: z.string().min(1).max(80),
+        description: z.string().min(1).max(2_000),
+        capabilityRequirements: z.array(z.string().min(1).max(200)).max(50).default([]),
+      }),
+    ]),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (input) => {
+    if (input.action === "analyze") {
+      return textResult(analyzeRcclSkillMd(input.content, { strict: input.strict }));
+    }
+    return textResult({
+      profileVersion: "rccl-skill-v1",
+      content: buildRcclSkillTemplate({
+        name: input.name,
+        description: input.description,
+        capabilityRequirements: input.capabilityRequirements,
+      }),
+    });
+  },
+);
+
+server.registerTool(
+  "rakazo_capability_profile",
+  {
+    title: "Inspect Project capability profiles",
+    description:
+      "Read-only Capability Profiles v1 helper. List the built-in semantic profiles/requirements or resolve the active profile for one Project against current Project resources, linked running Computers and exact explicit capability.bindings. It never installs, authorizes or executes a capability.",
+    inputSchema: z.discriminatedUnion("action", [
+      z.object({
+        action: z.literal("catalog"),
+      }),
+      z.object({
+        action: z.literal("resolve"),
+        projectId: z.string().min(1),
+      }),
+    ]),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (input) => {
+    if (input.action === "catalog") {
+      return textResult({
+        schemaVersion: "capability-profile-v1",
+        profiles: BUILTIN_CAPABILITY_PROFILES,
+        requirements: SEMANTIC_CAPABILITY_REQUIREMENT_NAMES.map((name) => ({
+          name,
+          ...SEMANTIC_CAPABILITY_REQUIREMENTS[name],
+        })),
+        note: "Catalog entries are templates only. A Project gets a versioned snapshot only after explicit assignment.",
+      });
+    }
+    return textResult(await resolveProjectCapabilityProfile(callRakazoRpc, input.projectId));
+  },
+);
+
+server.registerTool(
+  "rakazo_capability_profile_assign",
+  {
+    title: "Assign a Project capability profile",
+    description:
+      "Assign one built-in Capability Profile v1 to a Project by writing only the Project's capability.profile/active resource. The profile is materialized as a versioned snapshot. This does not install, authenticate, bind or execute any capability.",
+    inputSchema: z.object({
+      projectId: z.string().min(1),
+      profile: z.enum(["web-development", "research", "aihot", "trading-research"]),
+      addRequired: z.array(semanticCapabilitySchema).max(50).default([]),
+      addOptional: z.array(semanticCapabilitySchema).max(50).default([]),
+      deny: z.array(semanticCapabilitySchema).max(50).default([]),
+    }),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ projectId, profile, addRequired, addOptional, deny }) => {
+    const snapshot = materializeCapabilityProfile({
+      profile,
+      addRequired,
+      addOptional,
+      deny,
+    });
+    const resource = await callRakazoRpc("projects/resources/upsert", {
+      projectId,
+      kind: "capability.profile",
+      ref: "active",
+      label: `Capability profile: ${profile}`,
+      metadata: snapshot,
+    });
+    return textResult({
+      projectId,
+      snapshot,
+      resource,
+      note: "Profile assignment does not install or authorize tools. Resolve the profile to see ready/available/missing requirements.",
+    });
+  },
+);
+
+server.registerTool(
+  "rakazo_capability_binding_assign",
+  {
+    title: "Bind a Project semantic capability",
+    description:
+      "Record one exact already-authorized Rakazo capability tool route for a semantic requirement in the active Project profile. The requirement must be declared and not denied, the Bot must already be linked to the Project, and the exact tool/route must be present in that Bot's current authorized catalog. This does not install, authorize, approve or execute the tool.",
+    inputSchema: z.object({
+      projectId: z.string().min(1),
+      requirement: semanticCapabilitySchema,
+      botId: z.string().min(1),
+      tool: z.string().min(1).max(300),
+      route: capabilityRouteSchema,
+    }),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (input) => textResult(await assignProjectCapabilityBinding(callRakazoRpc, input)),
+);
+
+server.registerTool(
+  "rakazo_project_worktree",
+  {
+    title: "Manage a project Git worktree",
+    description:
+      "Bounded project-aware Git worktree helper. Lists, verifies, or ensures one worktree using the existing Rakazo Computer control lease and computer/exec. It verifies the project's exact github.repo resource and the local origin before Git operations, never uses --force, and registers workspace.worktree only after successful verification.",
+    inputSchema: projectWorktreeSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (input) => textResult(await manageProjectWorktree(callRakazoRpc, input)),
+);
+
+server.registerTool(
+  "rakazo_market",
+  {
+    title: "Search Rakazo Market",
+    description:
+      "Read-only Market Skills + Market Resolver browser. Search the indexed Market without loading all entries into context, or fetch one exact Market entry with provenance and Original/RCCL comparison state. Market content is context only and this tool never installs or executes a Skill or capability.",
+    inputSchema: z.discriminatedUnion("action", [
+      z.object({
+        action: z.literal("search"),
+        query: z.string().trim().max(200).default(""),
+        kind: z.enum(["skill", "resolver"]).optional(),
+        limit: z.number().int().min(1).max(50).default(10),
+      }),
+      z.object({
+        action: z.literal("get"),
+        entryId: z.string().min(1),
+      }),
+    ]),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (input) => {
+    if (input.action === "search") {
+      return textResult(
+        await callRakazoRpc("market/search", {
+          query: input.query,
+          kind: input.kind,
+          limit: input.limit,
+        }),
+      );
+    }
+    return textResult(await callRakazoRpc("market/get", { entryId: input.entryId }));
+  },
+);
+
+server.registerTool(
+  "rakazo_capability_search",
+  {
+    title: "Discover installed and public capabilities",
+    description:
+      "Read-only discovery. Search installed capabilities and optionally public integrations without installing, authorizing or executing them.",
+    inputSchema: z.object({
+      query: z.string().max(200).default(""),
+      includePublic: z.boolean().default(false),
+    }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+  },
+  async ({ query, includePublic }) =>
+    textResult(await searchChatGptCapabilities(callRakazoRpc, query, includePublic)),
+);
+server.registerTool(
+  "rakazo_project_context",
+  {
+    title: "Load Rakazo project context",
+    description:
+      "Read one persistent Rakazo project with its project memory, resources and open tasks. Use the project list from rakazo_context_bootstrap, or discover projects/list through rakazo_read.",
+    inputSchema: z.object({ projectId: z.string().min(1) }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ projectId }) => textResult(await callRakazoRpc("projects/context", { projectId })),
+);
+
+server.registerTool(
+  "rakazo_tool_search",
+  {
+    title: "Search authorized Rakazo tools",
+    description:
+      "Search the tools currently authorized through Rakazo across installed MCP/API/GraphQL and assigned connector providers. Returns bounded tool schemas and authoritative routing metadata without executing anything.",
+    inputSchema: z.object({
+      botId: z.string().min(1),
+      query: z.string().max(200).default(""),
+      limit: z.number().int().min(1).max(100).default(50),
+    }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+  },
+  async ({ botId, query, limit }) =>
+    textResult(await callRakazoRpc("capabilities/tools", { botId, query, limit })),
+);
+
+server.registerTool(
+  "rakazo_tool_read",
+  {
+    title: "Run a read-only Rakazo tool",
+    description:
+      "Invoke one previously discovered Rakazo capability only when its authoritative tool metadata declares it read-only. Rediscovery and route validation happen server-side before execution.",
+    inputSchema: capabilityCallSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  },
+  async (input) => textResult(await callRakazoRpc("capabilities/read", input)),
+);
+
+server.registerTool(
+  "rakazo_tool_execute",
+  {
+    title: "Run a Rakazo capability",
+    description:
+      "Invoke one previously discovered authorized Rakazo capability, including write-capable external tools. The authoritative route is rediscovered and validated by Rakazo before execution.",
+    inputSchema: capabilityCallSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  },
+  async (input) => textResult(await callRakazoRpc("capabilities/execute", input)),
 );
 
 server.registerTool(

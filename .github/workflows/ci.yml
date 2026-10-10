@@ -81,6 +81,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @rakazo/windows-host check
       - run: pnpm --filter @rakazo/windows-host exec tsx src/windows-smoke.ts
+      - name: Native manual-launcher static gate
+        shell: pwsh
+        run: .\scripts\windows\manual-rakazo\Validate.ps1
 
   build:
     name: Production builds

@@ -36,7 +36,9 @@ import { t } from "./i18n";
 import { resumeLiveNotifications } from "./live-notifications";
 import {
   clearSessionToken,
+  currentSessionGeneration,
   loadSessionToken,
+  replaceSessionTokenIfCurrent,
   restoreSessionToken,
   saveSessionToken,
   snapshotSessionToken,
@@ -369,6 +371,11 @@ export type ApiRequestContext = {
   headers: Record<string, string>;
 };
 
+/** Keeps consent prompts separate across servers and the selected Space. */
+export function aiConsentCoalesceKey(requestContext: ApiRequestContext): string {
+  return [requestContext.apiBase, requestContext.headers["x-rakazo-space-id"] ?? ""].join("\u0000");
+}
+
 export async function captureApiRequestContext(): Promise<ApiRequestContext> {
   const apiBase = currentApiBase();
   const headers = await authHeaders(selectedSpaceId());
@@ -443,21 +450,56 @@ export async function requestPasswordReset(email: string, redirectTo: string): P
   if (!response.ok) throw new Error(responseErrorMessage(body, t("Could not send reset email")));
 }
 
+/** Revoking other sessions also refuses this one until the replacement is saved. */
+let passwordChangesInFlight = 0;
+
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  passwordChangesInFlight += 1;
+  try {
+    await replaceSessionAfterPasswordChange(currentPassword, newPassword);
+  } finally {
+    passwordChangesInFlight -= 1;
+  }
+}
+
+async function replaceSessionAfterPasswordChange(currentPassword: string, newPassword: string) {
+  const apiBase = currentApiBase();
+  const generation = currentSessionGeneration();
+  const headers = await authHeaders();
   const { response, body } = await fetchMobileJson<unknown>(
-    `${currentApiBase()}/api/auth/change-password`,
+    `${apiBase}/api/auth/change-password`,
     {
       method: "POST",
       headers: {
         "content-type": "application/json",
         origin: "rakazo://",
-        ...(await authHeaders()),
+        ...headers,
       },
       body: JSON.stringify({ currentPassword, newPassword, revokeOtherSessions: true }),
     },
     {},
   );
   if (!response.ok) throw new Error(responseErrorMessage(body, t("Could not change password")));
+  // Revoking other sessions also revokes this one; keep the replacement the server issued.
+  const token = tokenFromAuthResponse(response, body);
+  if (!token) return;
+  // A sign-out or server switch changes the session while the request is in flight.
+  if (currentApiBase() !== apiBase) return;
+  const maybeResume = async () => {
+    // Our save is the only change allowed; a sign-out during it must not restart notifications.
+    const spaceId = selectedSpaceId();
+    if (spaceId && currentSessionGeneration() === generation + 1) {
+      await resumeLiveNotifications(apiBase, token, spaceId).catch(() => undefined);
+    }
+  };
+  try {
+    if (!(await replaceSessionTokenIfCurrent(generation, token))) return;
+  } catch (error) {
+    // The replacement is already in memory; resume before the keychain error reaches the UI.
+    await maybeResume();
+    throw error;
+  }
+  await maybeResume();
 }
 
 async function fetchMobileJson<T>(
@@ -552,6 +594,21 @@ export async function deleteAccount(password: string) {
   await clearSpace();
 }
 
+const sessionRejectedListeners = new Set<() => void>();
+
+/** Runs after the server rejected the stored session and it was cleared. */
+export function subscribeSessionRejected(listener: () => void): () => void {
+  sessionRejectedListeners.add(listener);
+  return () => {
+    sessionRejectedListeners.delete(listener);
+  };
+}
+
+async function rejectSession() {
+  await clearSessionToken();
+  for (const listener of sessionRejectedListeners) listener();
+}
+
 export async function rpc<T>(
   proc: string,
   body: unknown = {},
@@ -563,6 +620,7 @@ export async function rpc<T>(
   } = {},
 ): Promise<T> {
   const requestSpaceGeneration = spaceSelectionGeneration;
+  const requestSessionGeneration = currentSessionGeneration();
   const uses = aiDataUsesForProcedure(proc, body);
   const consentContext =
     options.requestContext ?? (uses.length ? await captureApiRequestContext() : undefined);
@@ -576,6 +634,7 @@ export async function rpc<T>(
       ),
     prompt: promptAiConsent,
     allow: (input) => rpc("aiConsent/allow", input, { requestContext: consentContext }),
+    coalesceKey: consentContext ? aiConsentCoalesceKey(consentContext) : undefined,
   });
   // Abort with an explicit reason so every consumer of the signal (the fetch, the bounded body
   // read, and nested recovery calls that share this signal) reports the same cause.
@@ -627,13 +686,33 @@ export async function rpc<T>(
       throw abortReason(error);
     });
     if (!res.ok || parsed.error) {
-      const message = parsed.error?.message ?? `rpc ${proc} failed`;
-      const unauthorized = res.status === 401 || /unauthorized/i.test(message);
+      const jsonError = parsed.json as { message?: unknown } | undefined;
+      const message =
+        parsed.error?.message ??
+        (typeof jsonError?.message === "string" && jsonError.message
+          ? jsonError.message
+          : `rpc ${proc} failed`);
+      const unauthorized = res.status === 401;
+      // Without a Space header a 401 means the server no longer accepts the
+      // session itself; Space recovery below probes the same way. Clearing it
+      // bumps the session generation, so only the first rejection of a session
+      // acts, and a 401 sent before a newer sign-in or a password change on
+      // this device cannot clear the session that replaced it.
+      if (
+        unauthorized &&
+        !requestSpaceId &&
+        requestHeaders.authorization &&
+        !options.requestContext &&
+        !passwordChangesInFlight &&
+        requestSessionGeneration === currentSessionGeneration()
+      ) {
+        await rejectSession();
+      }
       // After a delete where SecureStore could not clear the stale id, restart
       // reloads it and the first RPCs 401. Probe once without a Space header:
       // success means the selection was inaccessible (clear it); failure means
-      // the session itself is bad (restore the selection so a later sign-in
-      // keeps the user's Space). Never replay a mutation against the default
+      // the session itself is bad (restore the selection; it stays until
+      // sign-in resets it). Never replay a mutation against the default
       // Space — only safe reads may retry as themselves; other procs probe
       // with spaces/list, then fail the original call.
       const previousSpaceId = selectedSpaceId();

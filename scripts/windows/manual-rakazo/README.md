@@ -51,6 +51,7 @@ The restored database is now in a **separate native PostgreSQL 17.11** cluster, 
 - Source Docker PostgreSQL 16 and both backups remain untouched for rollback. The source and target have 71 user tables, 458 total rows, 90 finished Prisma migrations, one Windows Host and matching per-table row-count fingerprint; this does not prove byte-for-byte row equality
 - A source archive created on 2026-10-02 has SHA-256 D209391019CF07D213A565E35414D7ED742EA1F1F00E4AD9663B9B857377A974; keep backups and local credentials private
 - Native controller now **requires** DATABASE_URL to name postgresql://rakazo@127.0.0.1:5434/rakazo_next (password omitted here). It must not print connection secrets. The local .env has NOT been switched by a GitHub commit
+- Crash restart recovery: when an exact postmaster.pid names this prepared data directory and port 5434 but its recorded PID no longer exists, the launcher now leaves the file untouched and delegates stale-file/WAL recovery to pg_ctl. A reused PID, malformed metadata, another data directory, or an occupied unverified port still fails closed for manual inspection. The launcher never uses pg_resetwal, initdb, broad postgres.exe termination, or touches AIHOT/Docker PostgreSQL.
 - Read-only Preflight checks the expected paths, PG_VERSION, exact live PID/path/start/port evidence and port readiness. When stopped, Run may start only this prepared cluster through pg_ctl. It does not create/reset a database, touch AIHOT, start Docker, register Windows autostart or stop PostgreSQL on Quit
 - Run only after local Validate and Preflight, with the private .env backed up and edited, no legacy API/Web/Worker/Host, and existing R either conclusively stopped or fully verified for read-only reuse. A live but ambiguous R still blocks Run.
 - Static code changes in GitHub are **not** evidence of a successful native Run; perform an explicit Start → R health/Host read-only verification → Quit → Start pilot before retiring V4
@@ -101,3 +102,12 @@ The previous manual controller forced `RAKAZO_WINDOWS_PROCESS_ENABLED=false`, `R
 The dedicated computer remains persistent between ordinary bot runs; ChatGPT can explicitly obtain a user-control lease for direct R computer calls after a run finishes. This does not create indefinite autonomous background action, bypass required control leases, or cause ChatGPT to wake itself up without a new conversation/automation trigger. The user's local GUI still runs only on manual click and no Windows autostart is added.
 
 Historical pilot status: the three Windows Host opt-ins were initially false. The current launcher now explicitly enables them following the owner's request; browser availability still requires a valid private OpenCLI profile/entry.
+
+## Native Windows update controls
+
+The running native tray has three separate commands:
+- Check GitHub updates fetches the current tracking branch and reports local/remote commits and blockers without installing or restarting anything; it accepts only the pinned Rakazo origin and current upstream.
+- Update from GitHub requires an explicit confirmation. It refuses dirty working trees, divergent history and automatic migration/tunnel-control changes. A separate PowerShell process waits for the owning controller to exit and ports 3100/5173 to be free, locks the original controller mutex, rechecks the pinned commit, performs a fast-forward, installs frozen dependencies, checks adapters and launches the existing GUI shortcut. It does not stop PostgreSQL or re-pair R. On failure consult the local native-update-stage.log and recover deliberately.
+- Refresh Plugin R requires confirmation and briefly interrupts R calls in other chats. It verifies the original tunnel ID and PID/start-time, protected credentials and health; stops only the exact verified process and reconnects the same alias. Its local plugin-r-refresh.log records stages.
+
+These controls belong to the native manual-launcher tray, not the packaged Electron/Compose updaters. They become visible after the normal native controller restart. The updater intentionally refuses to overwrite existing local changes such as apps/desktop/src/docker-cli.ts.

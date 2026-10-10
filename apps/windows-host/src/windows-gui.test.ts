@@ -8,6 +8,30 @@ const observation = {
   height: 1080,
   cursor: { x: 100, y: 200 },
   activeWindow: { id: "101", title: "Notepad" },
+  uia: {
+    source: "uia" as const,
+    truncated: false,
+    elements: [
+      {
+        ref: "u1",
+        role: "window",
+        name: "Notepad",
+        automationId: "MainWindow",
+        className: "Notepad",
+        enabled: true,
+        focused: true,
+        rect: { x: 20, y: 30, width: 800, height: 600 },
+      },
+      {
+        ref: "u2",
+        role: "edit",
+        name: "Text editor",
+        enabled: true,
+        focused: false,
+        rect: { x: 30, y: 70, width: 760, height: 540 },
+      },
+    ],
+  },
 };
 
 describe("WindowsGuiBackend", () => {
@@ -22,7 +46,18 @@ describe("WindowsGuiBackend", () => {
     const backend = new WindowsGuiBackend(runner, () => true);
     await expect(backend.execute({ command: "observe" })).resolves.toMatchObject({
       kind: "observation",
-      observation: { width: 1920, height: 1080 },
+      observation: {
+        width: 1920,
+        height: 1080,
+        uia: {
+          source: "uia",
+          truncated: false,
+          elements: [
+            expect.objectContaining({ ref: "u1", role: "window", name: "Notepad" }),
+            expect.objectContaining({ ref: "u2", role: "edit", name: "Text editor" }),
+          ],
+        },
+      },
     });
     expect(runner).toHaveBeenCalledWith({ command: "observe" });
   });
