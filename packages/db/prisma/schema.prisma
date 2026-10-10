@@ -1402,6 +1402,7 @@ model TradingPaperLedger {
   workerGate            TradingPaperWorkerGate?
   entrySession          TradingPaperEntrySession?
   protectionLease       TradingPaperProtectionLease?
+  protectionSuccessorIntents TradingPaperProtectionSuccessorIntent[]
   workerRecurrence      TradingPaperWorkerRecurrence?
   workerSuccessorIntents TradingPaperWorkerSuccessorIntent[]
   workerMarketTarget     TradingPaperWorkerMarketTarget?
@@ -1672,6 +1673,27 @@ model TradingPaperProtectionLease {
 
   @@index([spaceId, userId])
   @@map("trading_paper_protection_leases")
+}
+
+/** Durable, immutable version-scoped protection-only successor plan.
+ * It does not authorize a new trade or create a queue job on its own. */
+model TradingPaperProtectionSuccessorIntent {
+  id                      String             @id
+  ledgerId                String
+  ledger                  TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId                 String
+  userId                  String
+  leaseRevision           Int
+  gateRevision            Int
+  sourceScheduledFor      DateTime
+  successorScheduledFor   DateTime
+  approvalEffectId        String
+  intentSha256            String
+  createdAt               DateTime           @default(now())
+
+  @@unique([ledgerId, leaseRevision, sourceScheduledFor])
+  @@index([spaceId, userId])
+  @@map("trading_paper_protection_successor_intents")
 }
 
 /** Explicit owner-approved permission for recurring read-only PAPER preflights.
