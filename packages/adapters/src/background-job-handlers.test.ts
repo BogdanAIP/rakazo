@@ -12,7 +12,7 @@ import { createBackgroundJobHandlers } from "./background-job-handlers.js";
 import { createRunExecutor } from "./executor.js";
 import { compactHistory } from "./history-compaction.js";
 import { deliverMessagingOutbound, mirrorMessagingOutbound } from "./messaging-delivery.js";
-import { handlePaperWorkerPreflightWithSuccessor } from "./paper-worker-recurring-handler.js";
+import { handleManagedPaperWorkerWake } from "./paper-workspace-market.js";
 import type { EncryptedSecretStore } from "./secrets.js";
 
 vi.mock("./history-compaction.js", () => ({ compactHistory: vi.fn(async () => undefined) }));
@@ -20,8 +20,8 @@ vi.mock("./messaging-delivery.js", () => ({
   deliverMessagingOutbound: vi.fn(async () => undefined),
   mirrorMessagingOutbound: vi.fn(async () => undefined),
 }));
-vi.mock("./paper-worker-recurring-handler.js", () => ({
-  handlePaperWorkerPreflightWithSuccessor: vi.fn(async () => ({
+vi.mock("./paper-workspace-market.js", () => ({
+  handleManagedPaperWorkerWake: vi.fn(async () => ({
     status: "stop",
     preflight: { status: "deny", reason: "worker_gate_disabled" },
   })),
@@ -98,13 +98,21 @@ describe("createBackgroundJobHandlers", () => {
       scheduledFor: "2026-10-05T12:00:00.000Z",
     };
 
-    vi.mocked(handlePaperWorkerPreflightWithSuccessor).mockClear();
+    vi.mocked(handleManagedPaperWorkerWake).mockClear();
     const { sessionRevision: _revision, ...legacyPayload } = payload;
     await handlers["paper.worker-preflight"](legacyPayload);
-    expect(handlePaperWorkerPreflightWithSuccessor).not.toHaveBeenCalled();
+    expect(handleManagedPaperWorkerWake).not.toHaveBeenCalled();
     await handlers["paper.worker-preflight"](payload);
 
-    expect(handlePaperWorkerPreflightWithSuccessor).toHaveBeenCalledWith({ prisma, jobs }, payload);
+    expect(handleManagedPaperWorkerWake).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prisma,
+        jobs,
+        runtime: expect.anything(),
+        resolveModel: expect.any(Function),
+      }),
+      payload,
+    );
     expect(jobs.enqueue).not.toHaveBeenCalled();
     expect(executor.continueRun).not.toHaveBeenCalled();
     expect(executor.wakeRoutine).not.toHaveBeenCalled();

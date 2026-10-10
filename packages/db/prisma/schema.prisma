@@ -1463,6 +1463,7 @@ model IntegrationProviderConfig {
  * execution authority. All event append operations must be owner-space scoped.
  */
 model TradingPaperWorkspace {
+ researchSource Json?
  ledgerId String @id
  ledger TradingPaperLedger @relation(fields:[ledgerId],references:[id],onDelete:Cascade)
  name String
@@ -1479,6 +1480,7 @@ model TradingPaperWorkspace {
 }
 
 model TradingPaperLedger {
+ researchSnapshots TradingPaperResearchSnapshot[]
  workspace TradingPaperWorkspace?
   id                  String                    @id
   spaceId             String
@@ -2117,4 +2119,16 @@ model TradingPaperStopGuard {
 
   @@id([ledgerId, positionId])
   @@map("trading_paper_stop_guards")
+}
+
+model TradingPaperResearchSnapshot {
+ ledgerId String
+ sessionRevision Int
+ scheduledFor DateTime
+ envelope Json
+ envelopeSha256 String
+ createdAt DateTime @default(now())
+ ledger TradingPaperLedger @relation(fields:[ledgerId],references:[id],onDelete:Cascade)
+ @@id([ledgerId,sessionRevision,scheduledFor])
+ @@map("trading_paper_research_snapshots")
 }

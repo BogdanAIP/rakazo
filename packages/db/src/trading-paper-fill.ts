@@ -3,6 +3,7 @@ import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
 import { lockAndVerifyTradingPaperEntrySessionInTransaction } from "./trading-paper-entry-session.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
+import { verifyManagedTradingPaperMarketInTransaction } from "./trading-paper-managed-market.js";
 import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
 import {
@@ -583,6 +584,17 @@ export async function fillApprovedTradingPaperReservation(
             reason: "trusted_market_snapshot_unavailable",
           };
         }
+        if (
+          resolvedFillAuthority &&
+          !(await verifyManagedTradingPaperMarketInTransaction(
+            tx,
+            owner,
+            ledgerId,
+            evidence.market,
+            new Date(),
+          ))
+        )
+          return { status: "deny", mode: "paper_only", reason: "paper_resolved_fill_unapproved" };
         if (JSON.stringify(evidence.market) !== JSON.stringify(reservation.market)) {
           return { status: "deny", mode: "paper_only", reason: "market_snapshot_mismatch" };
         }
@@ -642,6 +654,16 @@ export async function fillApprovedTradingPaperReservation(
         const fillEventSequence = recovered.state.nextSequence;
         const executedPriceQuote = decimal(executed);
         const feeQuote = decimal(fee);
+        if (workerFillAuthority || resolvedFillAuthority || expectedSessionRevision !== undefined) {
+          const finalSession = await lockAndVerifyTradingPaperEntrySessionInTransaction(
+            tx,
+            owner,
+            ledgerId,
+            expectedSessionRevision,
+          );
+          if (finalSession.status !== "ready" && finalSession.status !== "legacy_absent")
+            return { status: "deny", mode: "paper_only", reason: "paper_entry_session_inactive" };
+        }
         const appended = await appendTradingPaperLedgerEventInTransaction(tx, owner, {
           ledgerId,
           eventId: fillEventId,

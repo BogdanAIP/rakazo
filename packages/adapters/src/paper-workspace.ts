@@ -121,34 +121,44 @@ export async function reconcileTradingPaperWorkspaces(
   deps: Deps,
   restarting = false,
 ): Promise<void> {
-  const workspaces = await deps.prisma.tradingPaperWorkspace.findMany({
-    take: 100,
-    orderBy: { updatedAt: "asc" },
-    include: { ledger: { select: { spaceId: true, ownerUserId: true } } },
-  });
-  for (const workspace of workspaces) {
-    const owner = { spaceId: workspace.ledger.spaceId, userId: workspace.ledger.ownerUserId };
-    try {
-      if (restarting)
-        await pauseOwnedTradingPaperWorkspaceAfterRestart(deps.prisma, owner, workspace.ledgerId);
-      const session = await readVerifiedTradingPaperEntrySession(
-        deps.prisma,
-        owner,
-        workspace.ledgerId,
-      );
-      if (
-        session.status === "paused" ||
-        session.status === "ended" ||
-        session.status === "expired"
-      ) {
-        await settleVerifiedTradingPaperSessionReservations(deps.prisma, owner, workspace.ledgerId);
-        await recoverTradingPaperProtectionQueue(deps, owner, workspace.ledgerId);
+  let afterLedger: string | undefined;
+  for (;;) {
+    const workspaces = await deps.prisma.tradingPaperWorkspace.findMany({
+      take: 100,
+      ...(afterLedger ? { where: { ledgerId: { gt: afterLedger } } } : {}),
+      orderBy: { ledgerId: "asc" },
+      include: { ledger: { select: { spaceId: true, ownerUserId: true } } },
+    });
+    for (const workspace of workspaces) {
+      const owner = { spaceId: workspace.ledger.spaceId, userId: workspace.ledger.ownerUserId };
+      try {
+        if (restarting)
+          await pauseOwnedTradingPaperWorkspaceAfterRestart(deps.prisma, owner, workspace.ledgerId);
+        const session = await readVerifiedTradingPaperEntrySession(
+          deps.prisma,
+          owner,
+          workspace.ledgerId,
+        );
+        if (
+          session.status === "paused" ||
+          session.status === "ended" ||
+          session.status === "expired"
+        ) {
+          await settleVerifiedTradingPaperSessionReservations(
+            deps.prisma,
+            owner,
+            workspace.ledgerId,
+          );
+          await recoverTradingPaperProtectionQueue(deps, owner, workspace.ledgerId);
+        }
+      } catch {
+        await deps.prisma.tradingPaperWorkspace.update({
+          where: { ledgerId: workspace.ledgerId },
+          data: { runtimeError: "reconciliation_unavailable" },
+        });
       }
-    } catch {
-      await deps.prisma.tradingPaperWorkspace.update({
-        where: { ledgerId: workspace.ledgerId },
-        data: { runtimeError: "reconciliation_unavailable" },
-      });
     }
+    if (workspaces.length < 100) break;
+    afterLedger = workspaces.at(-1)!.ledgerId;
   }
 }

@@ -1,4 +1,5 @@
 import * as z from "zod";
+import { TradingResolvedResearchApprovalScopeSchema } from "./trading.js";
 import { TradingPaperPolicySchema } from "./trading-paper.js";
 
 const Ledger = z
@@ -22,6 +23,27 @@ const Base = {
   commandId: z.string().uuid(),
   expectedRevision: z.number().int().nonnegative().safe(),
 };
+
+export const TradingPaperResearchSourceSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("baseline") }).strict(),
+  z
+    .object({ kind: z.literal("market"), scope: TradingResolvedResearchApprovalScopeSchema })
+    .strict(),
+]);
+export type TradingPaperResearchSource = z.infer<typeof TradingPaperResearchSourceSchema>;
+export const TradingPaperMarketPreparationSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("ready"),
+    name: z.string(),
+    variant: z.string(),
+    scope: TradingResolvedResearchApprovalScopeSchema,
+  }),
+  z.object({
+    status: z.literal("unavailable"),
+    reason: z.enum(["market_not_ready", "model_not_configured"]),
+  }),
+]);
+export type TradingPaperMarketPreparation = z.infer<typeof TradingPaperMarketPreparationSchema>;
 export const TradingPaperWorkspaceCommandSchema = z.discriminatedUnion("action", [
   z
     .object({
@@ -30,6 +52,7 @@ export const TradingPaperWorkspaceCommandSchema = z.discriminatedUnion("action",
       venue: z.enum(["okx", "bingx"]),
       symbol: z.string().regex(/^[A-Z0-9]{2,20}-USDT$/),
       durationMinutes: z.number().int().min(15).max(240),
+      researchSource: TradingPaperResearchSourceSchema.optional(),
     })
     .strict(),
   z.object({ ...Base, action: z.enum(["pause", "end"]) }).strict(),

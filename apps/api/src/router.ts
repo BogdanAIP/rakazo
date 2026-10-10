@@ -4,6 +4,7 @@ import { implement, ORPCError } from "@orpc/server";
 import type {
   AdapterContext,
   AgentHomeStore,
+  AgentRunModel,
   ArtifactStore,
   ConnectorCall,
   ConnectorCatalogItem,
@@ -192,6 +193,7 @@ import {
   Prisma,
   parseComputerMode,
   pushSessionExpiresAt,
+  readOwnedMarketPreparedResearch,
   readOwnedTradingPaperJournal,
   readOwnedTradingPaperWorkspace,
   releaseSpaceDeletionClaim,
@@ -206,6 +208,7 @@ import {
   selectSpaceModelPreference,
   selectSpaceVoicePreference,
   touchGroupUpdatedAt,
+  tradingPaperMarketScope,
   WindowsHostPairingError,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -709,6 +712,10 @@ function mcpAssignmentDto(row: {
 }
 
 export interface RouterDeps {
+  resolvePaperResearchModel?: (scope: {
+    spaceId: string;
+    userId: string;
+  }) => Promise<AgentRunModel>;
   cloudAgent?: CloudAgentConnection | null;
   prisma: PrismaClient;
   events: ThreadEvents;
@@ -932,6 +939,34 @@ export function createRouter(deps: RouterDeps) {
 
   return os.router({
     trading: {
+      marketPrepare: authed.trading.marketPrepare.handler(async ({ input, context }) => {
+        const owner = context.actor!;
+        const workspace = await readOwnedTradingPaperWorkspace(deps.prisma, owner, input.ledgerId);
+        if (workspace?.status !== "verified") throw new ORPCError("NOT_FOUND");
+        let prepared: Awaited<ReturnType<typeof readOwnedMarketPreparedResearch>>;
+        try {
+          prepared = await readOwnedMarketPreparedResearch(deps.prisma, owner, {
+            semanticKey: "signal.discovery",
+            limit: 50,
+          });
+          if (prepared.selection.status !== "ready" || !prepared.selection.skill)
+            return { status: "unavailable" as const, reason: "market_not_ready" as const };
+        } catch {
+          return { status: "unavailable" as const, reason: "market_not_ready" as const };
+        }
+        try {
+          if (!deps.resolvePaperResearchModel) throw new Error("Model unavailable");
+          await deps.resolvePaperResearchModel(owner);
+        } catch {
+          return { status: "unavailable" as const, reason: "model_not_configured" as const };
+        }
+        return {
+          status: "ready" as const,
+          name: prepared.selection.implementation.name,
+          variant: prepared.selection.skill.variant,
+          scope: tradingPaperMarketScope(prepared, input.venue),
+        };
+      }),
       accountCreate: authed.trading.accountCreate.handler(({ context, input }) =>
         createOwnedTradingPaperAccount(deps.prisma, context.actor, input),
       ),
@@ -945,6 +980,10 @@ export function createRouter(deps: RouterDeps) {
         return TradingPaperWorkspaceStatusSchema.parse(result);
       }),
       workspaceCommand: authed.trading.workspaceCommand.handler(async ({ context, input }) => {
+        if (input.action === "start" && input.researchSource?.kind === "market") {
+          if (!deps.resolvePaperResearchModel) throw new ORPCError("CONFLICT");
+          await deps.resolvePaperResearchModel(context.actor!);
+        }
         await controlTradingPaperWorkspace(
           { prisma: deps.prisma, jobs: deps.jobs },
           context.actor,

@@ -271,7 +271,7 @@ export async function recordIdempotentPublicAdapterPaperQuoteEvidence(
   rawMarket: unknown,
   rawTicker: unknown,
 ): Promise<{ id: string; source: typeof PUBLIC_SOURCE }> {
-  if (!/^paper-worker:[a-f0-9]{64}$/u.test(id)) {
+  if (!/^paper-(?:worker|resolver|market):[a-f0-9]{64}$/u.test(id)) {
     throw new PaperQuoteEvidenceError("Invalid paper worker evidence id");
   }
   return recordPublicAdapterPaperQuoteEvidenceWithId(

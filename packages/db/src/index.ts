@@ -8,6 +8,11 @@ export * from "./events.js";
 export * from "./expire-stuck-run.js";
 export * from "./external-conversations.js";
 export * from "./groups.js";
+export {
+  mapMarketEntry,
+  readOwnedMarketPreparedResearch,
+  readOwnedMarketResolverPlan,
+} from "./market-research-read.js";
 export * from "./memory-config.js";
 export * from "./messages.js";
 export * from "./messaging.js";
@@ -25,6 +30,7 @@ export {
 } from "./trading-paper-fill.js";
 export * from "./trading-paper-journal-read.js";
 export { auditTradingPaperLifecycle } from "./trading-paper-lifecycle-audit.js";
+export { tradingPaperMarketScope } from "./trading-paper-market-choice.js";
 export * from "./trading-paper-protection-lease.js";
 export * from "./trading-paper-protection-successor.js";
 export { applyApprovedTradingPaperProtectiveExitControl } from "./trading-paper-protective-exit-authority.js";
@@ -35,6 +41,10 @@ export {
   recordIdempotentPublicAdapterPaperQuoteEvidence,
   recordPublicAdapterPaperQuoteEvidence,
 } from "./trading-paper-quote-evidence.js";
+export {
+  readTradingPaperResearchSnapshot,
+  recordTradingPaperResearchSnapshot,
+} from "./trading-paper-research-snapshot.js";
 export * from "./trading-paper-reservation-preflight.js";
 export {
   PaperReservationConflictError,

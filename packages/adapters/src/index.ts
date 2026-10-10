@@ -91,6 +91,10 @@ export * from "./openai-compatible-url.js";
 export * from "./openai-voice.js";
 export * from "./page-browser-session.js";
 export * from "./paper-workspace.js";
+export {
+  handleManagedPaperWorkerWake,
+  invokePaperMarketSkillResearch,
+} from "./paper-workspace-market.js";
 export * from "./pi-catalog-availability.js";
 export * from "./pi-codex-catalog.js";
 export * from "./pi-credentials.js";

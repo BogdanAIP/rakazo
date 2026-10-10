@@ -1,3 +1,11 @@
+import {
+  mapMarketEntry,
+  readOwnedMarketPreparedResearch,
+  readOwnedMarketResolverPlan,
+} from "@rakazo/db";
+
+export { mapMarketEntry } from "@rakazo/db";
+
 import { createHash } from "node:crypto";
 import { ORPCError } from "@orpc/server";
 import {
@@ -18,8 +26,6 @@ import {
   buildSkillMd,
   MarketResolverPlanResolutionError,
   parseSkillMd,
-  prepareMarketResolverResearch,
-  resolveMarketResolverPlanFromEntries,
   selectMarketResolverReadOnlyImplementation,
 } from "@rakazo/core";
 import { IsolationError, type Prisma, type PrismaClient } from "@rakazo/db";
@@ -58,30 +64,6 @@ export const CURATED_MARKET_REPOSITORIES = {
 } as const;
 
 type CuratedMarketRepository = keyof typeof CURATED_MARKET_REPOSITORIES;
-
-type MarketEntryRow = {
-  id: string;
-  kind: string;
-  key: string;
-  name: string;
-  description: string;
-  tags: string[];
-  originalContent: string;
-  adaptedContent: string | null;
-  adaptationMode: string | null;
-  preferredVariant: string;
-  sourceUrl: string;
-  repository: string;
-  sourcePath: string | null;
-  sourceRef: string;
-  license: string | null;
-  digest: string;
-  trust: string;
-  metrics: unknown;
-  metadata: unknown;
-  createdAt: Date;
-  updatedAt: Date;
-};
 
 type GithubImportInput = {
   kind: MarketEntryKind;
@@ -122,35 +104,9 @@ function asVariant(value: string): MarketPreferredVariant {
   return "original";
 }
 
-function asAdaptationMode(value: string | null): MarketAdaptationMode | null {
+function _asAdaptationMode(value: string | null): MarketAdaptationMode | null {
   if (value === "rccl" || value === "wrapped" || value === "hybrid") return value;
   return null;
-}
-
-export function mapMarketEntry(row: MarketEntryRow): MarketEntry {
-  return {
-    id: row.id,
-    kind: row.kind === "resolver" ? "resolver" : "skill",
-    key: row.key,
-    name: row.name,
-    description: row.description,
-    tags: row.tags,
-    originalContent: row.originalContent,
-    adaptedContent: row.adaptedContent,
-    adaptationMode: asAdaptationMode(row.adaptationMode),
-    preferredVariant: asVariant(row.preferredVariant),
-    sourceUrl: row.sourceUrl,
-    repository: row.repository,
-    sourcePath: row.sourcePath,
-    sourceRef: row.sourceRef,
-    license: row.license,
-    digest: row.digest,
-    trust: "curated",
-    metrics: asRecord(row.metrics),
-    metadata: asRecord(row.metadata),
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
 }
 
 function catalogEntry(row: MarketEntryRow): MarketCatalogEntry {
@@ -220,9 +176,9 @@ function assertGithubSource(sourceUrl: string, repository: string): void {
       message: "Market v1 accepts curated sources only from https://github.com.",
     });
   }
-  const expected = "/" + repository.toLowerCase();
+  const expected = `/${repository.toLowerCase()}`;
   const path = url.pathname.toLowerCase().replace(/\/+$/, "");
-  if (path !== expected && !path.startsWith(expected + "/")) {
+  if (path !== expected && !path.startsWith(`${expected}/`)) {
     throw new ORPCError("BAD_REQUEST", {
       message: "Market sourceUrl does not match the declared GitHub repository.",
     });
@@ -484,34 +440,8 @@ export function createMarketService(
         limit: number;
       },
     ): Promise<MarketResolverPlan> {
-      const [resolverRows, skillRows] = await Promise.all([
-        prisma.marketEntry.findMany({
-          where: {
-            spaceId: actor.spaceId,
-            userId: actor.userId,
-            kind: "resolver",
-            tags: { has: input.semanticKey },
-          },
-          orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-          take: 100,
-        }),
-        prisma.marketEntry.findMany({
-          where: {
-            spaceId: actor.spaceId,
-            userId: actor.userId,
-            kind: "skill",
-          },
-          orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-          take: 2_000,
-        }),
-      ]);
-
       try {
-        return resolveMarketResolverPlanFromEntries(
-          resolverRows.map(mapMarketEntry),
-          skillRows.map(mapMarketEntry),
-          input,
-        );
+        return await readOwnedMarketResolverPlan(prisma, actor, input);
       } catch (error) {
         if (!(error instanceof MarketResolverPlanResolutionError)) throw error;
         if (error.code === "resolver_not_found") {
@@ -558,12 +488,7 @@ export function createMarketService(
         limit: number;
       },
     ): Promise<MarketResolverPreparedResearch> {
-      const selection = await this.select(actor, input);
-      const entry =
-        selection.status === "ready" && selection.skill
-          ? mapMarketEntry(await owned(prisma, actor, selection.skill.entryId))
-          : undefined;
-      return prepareMarketResolverResearch(selection, entry, new Date().toISOString());
+      return readOwnedMarketPreparedResearch(prisma, actor, input);
     },
 
     async importGithub(
@@ -799,3 +724,5 @@ export function createMarketService(
 }
 
 export type MarketService = ReturnType<typeof createMarketService>;
+
+type MarketEntryRow = Parameters<typeof mapMarketEntry>[0];

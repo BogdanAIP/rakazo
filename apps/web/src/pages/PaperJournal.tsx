@@ -37,6 +37,7 @@ function eventId(event: TradingPaperLedgerEvent) {
 
 export function PaperJournalPage() {
   const selectedLedger = useRef<string | null>(null);
+  const journalEpoch = useRef(0);
   const [refreshId, setRefreshId] = useState(0);
   const [list, setList] = useState<TradingPaperJournalListOutput | null>(null);
   const [ledgerId, setLedgerId] = useState<string | null>(null);
@@ -78,6 +79,8 @@ export function PaperJournalPage() {
       return;
     }
     let active = true;
+    journalEpoch.current += 1;
+    let initialPage = true;
     setPending(true);
     setError(null);
     setJournal(null);
@@ -98,14 +101,21 @@ export function PaperJournalPage() {
               (event) => !result.events.some((fresh) => fresh.eventId === event.eventId),
             ),
           ]);
-          setCursor((current) => current ?? result.nextBeforeSequence);
+          if (initialPage) {
+            setCursor(result.nextBeforeSequence);
+            initialPage = false;
+          }
         } else {
+          journalEpoch.current += 1;
+          initialPage = true;
           setEvents([]);
           setCursor(null);
         }
         setError(null);
       } catch {
         if (active) {
+          journalEpoch.current += 1;
+          initialPage = true;
           setJournal(null);
           setEvents([]);
           setCursor(null);
@@ -127,18 +137,20 @@ export function PaperJournalPage() {
   async function loadMore() {
     if (!ledgerId || cursor === null || morePending) return;
     const requestedLedger = ledgerId;
+    const requestedEpoch = journalEpoch.current;
     setMorePending(true);
     try {
       const page = await rpc.trading.journalRead({ ledgerId, beforeSequence: cursor });
-      if (selectedLedger.current !== requestedLedger) return;
+      if (selectedLedger.current !== requestedLedger || requestedEpoch !== journalEpoch.current)
+        return;
       if (page.status !== "verified") {
         // Never retain previously shown money after an integrity failure.
+        journalEpoch.current += 1;
         setJournal(page);
         setEvents([]);
         setCursor(null);
         return;
       }
-      setJournal(page);
       setEvents((old) => [
         ...old,
         ...page.events.filter(

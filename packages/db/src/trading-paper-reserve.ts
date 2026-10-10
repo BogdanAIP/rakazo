@@ -10,6 +10,7 @@ import { Prisma } from "./client.js";
 import { tradingPaperDatabaseNow } from "./trading-paper-clock.js";
 import { lockAndVerifyTradingPaperEntrySessionInTransaction } from "./trading-paper-entry-session.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
+import { verifyManagedTradingPaperMarketInTransaction } from "./trading-paper-managed-market.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
 import {
   evaluateTradingPaperReservationInTransaction,
@@ -498,6 +499,17 @@ export async function reserveApprovedTradingPaperSignal(
         );
         if (evaluated.status === "deny") return evaluated;
         const signal = evaluated.signal;
+        if (
+          resolvedResearch &&
+          !(await verifyManagedTradingPaperMarketInTransaction(
+            tx,
+            owner,
+            ledgerId,
+            signal.market,
+            new Date(decisionNow),
+          ))
+        )
+          return deny(evaluated, "paper_resolved_research_unapproved");
         const approval = await verifyCurrentTradingPaperEnableAuditInTransaction(
           tx,
           owner,

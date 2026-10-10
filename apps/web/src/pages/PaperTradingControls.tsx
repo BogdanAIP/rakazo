@@ -1,4 +1,8 @@
-import type { TradingPaperWorkspaceCommand, TradingPaperWorkspaceStatus } from "@rakazo/contracts";
+import type {
+  TradingPaperMarketPreparation,
+  TradingPaperWorkspaceCommand,
+  TradingPaperWorkspaceStatus,
+} from "@rakazo/contracts";
 import { Button, Input } from "@rakazo/ui-web";
 import { useEffect, useState } from "react";
 import { rpc } from "../lib/rpc";
@@ -34,6 +38,8 @@ export function PaperTradingControls({
   const [symbol, setSymbol] = useState("BTC-USDT");
   const [duration, setDuration] = useState(60);
   const [reviewing, setReviewing] = useState(false);
+  const [researchMode, setResearchMode] = useState<"market" | "baseline">("market");
+  const [prepared, setPrepared] = useState<TradingPaperMarketPreparation | null>(null);
   useEffect(() => {
     let active = true;
     let refreshing = false;
@@ -47,7 +53,14 @@ export function PaperTradingControls({
       try {
         const result = await rpc.trading.workspaceRead({ ledgerId });
         if (active) {
-          setStatus(result);
+          setStatus((current) =>
+            current?.status === "verified" &&
+            result.status === "verified" &&
+            (current.sessionRevision > result.sessionRevision ||
+              current.protectionRevision > result.protectionRevision)
+              ? current
+              : result,
+          );
           setError(null);
         }
       } catch {
@@ -88,8 +101,38 @@ export function PaperTradingControls({
       setPending(false);
     }
   }
+  async function reviewStart() {
+    if (!ledgerId || pending) return;
+    setPending(true);
+    setError(null);
+    setPrepared(null);
+    try {
+      if (researchMode === "market") {
+        const result = await rpc.trading.marketPrepare({ ledgerId, venue });
+        if (result.status !== "ready") {
+          setError(
+            result.reason === "model_not_configured"
+              ? "Настройте модель в настройках Rakazo."
+              : "Установите и настройте Market Skill для поиска торговых сигналов.",
+          );
+          return;
+        }
+        setPrepared(result);
+      }
+      setReviewing(true);
+    } catch {
+      setError("Не удалось проверить источник исследования. Повторите проверку.");
+    } finally {
+      setPending(false);
+    }
+  }
   async function command(action: TradingPaperWorkspaceCommand["action"]) {
-    if (!verified || pending) return;
+    if (
+      !verified ||
+      pending ||
+      (action === "start" && researchMode === "market" && prepared?.status !== "ready")
+    )
+      return;
     setPending(true);
     setError(null);
     const base = {
@@ -99,7 +142,17 @@ export function PaperTradingControls({
     };
     const input: TradingPaperWorkspaceCommand =
       action === "start"
-        ? { ...base, action, venue, symbol, durationMinutes: duration }
+        ? {
+            ...base,
+            action,
+            venue,
+            symbol,
+            durationMinutes: duration,
+            researchSource:
+              researchMode === "market" && prepared?.status === "ready"
+                ? { kind: "market", scope: prepared.scope }
+                : { kind: "baseline" },
+          }
         : action === "protect"
           ? {
               ...base,
@@ -184,9 +237,11 @@ export function PaperTradingControls({
           </p>
           {verified.phase === "attention_required" && (
             <p role="alert" className="text-sm text-destructive">
-              {verified.protectionStatus === "expired"
-                ? "Срок защиты истёк. Продлите наблюдение за открытыми позициями."
-                : "Новые входы остановлены. Для открытых позиций включите защиту отдельно."}
+              {verified.runtimeError
+                ? "Не удалось выполнить проверку рынка. Новые входы приостановлены. Проверьте источник исследования и подключение."
+                : verified.protectionStatus === "expired"
+                  ? "Срок защиты истёк. Продлите наблюдение за открытыми позициями."
+                  : "Новые входы остановлены. Для открытых позиций включите защиту отдельно."}
             </p>
           )}
           {verified.phase === "protection_only" && (
@@ -201,13 +256,34 @@ export function PaperTradingControls({
             verified.openPositions === 0 &&
             verified.openReservations === 0 && (
               <>
+                <label className="space-y-1 text-sm">
+                  <span>Исследование</span>
+                  <select
+                    className="w-full rounded-md border border-border bg-background p-2"
+                    value={researchMode}
+                    disabled={pending}
+                    onChange={(e) => {
+                      setResearchMode(e.target.value as "market" | "baseline");
+                      setReviewing(false);
+                      setPrepared(null);
+                    }}
+                  >
+                    <option value="market">Market Resolver · Skill</option>
+                    <option value="baseline">Учебный пробой 20 свечей</option>
+                  </select>
+                </label>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <label className="space-y-1 text-sm">
                     <span>Источник котировок</span>
                     <select
                       className="w-full rounded-md border border-border bg-background p-2"
                       value={venue}
-                      onChange={(e) => setVenue(e.target.value as "okx" | "bingx")}
+                      disabled={pending}
+                      onChange={(e) => {
+                        setVenue(e.target.value as "okx" | "bingx");
+                        setReviewing(false);
+                        setPrepared(null);
+                      }}
                     >
                       <option value="okx">OKX</option>
                       <option value="bingx">BingX</option>
@@ -218,7 +294,11 @@ export function PaperTradingControls({
                     <Input
                       id="paper-symbol"
                       value={symbol}
-                      onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                      disabled={pending}
+                      onChange={(e) => {
+                        setSymbol(e.target.value.toUpperCase());
+                        setReviewing(false);
+                      }}
                     />
                   </label>
                   <label htmlFor="paper-duration" className="space-y-1 text-sm">
@@ -229,20 +309,32 @@ export function PaperTradingControls({
                       min={15}
                       max={240}
                       value={duration}
-                      onChange={(e) => setDuration(Number(e.target.value))}
+                      disabled={pending}
+                      onChange={(e) => {
+                        setDuration(Number(e.target.value));
+                        setReviewing(false);
+                      }}
                     />
                   </label>
                 </div>
                 {!reviewing ? (
-                  <Button onClick={() => setReviewing(true)} disabled={pending}>
+                  <Button onClick={() => void reviewStart()} disabled={pending}>
                     Запустить сессию
                   </Button>
                 ) : (
                   <div className="space-y-3 rounded-lg border border-border p-4">
                     <p className="text-sm">
-                      {venue.toUpperCase()} · {symbol} · {duration} мин · пробой 20 часовых свечей.
-                      Проверка каждые 5 минут.
+                      {venue.toUpperCase()} · {symbol} · {duration} мин ·{" "}
+                      {researchMode === "market" && prepared?.status === "ready"
+                        ? `${prepared.name} · ${prepared.variant}`
+                        : "пробой 20 часовых свечей"}
+                      . Проверка каждые 5 минут.
                     </p>
+                    {researchMode === "market" && (
+                      <p className="text-sm text-muted-foreground">
+                        Исследование использует настроенную модель Rakazo и публичные данные рынка.
+                      </p>
+                    )}
                     <p className="text-sm">
                       Разрешить автоматические покупки и продажи только на виртуальном счёте. Риск
                       на сделку: {verified.policy.maxPerIdeaRiskQuote} USDT; дневной предел:{" "}

@@ -2950,6 +2950,16 @@ export function ShellPage() {
             name="sidebar-search"
           />
         </InputGroup>
+        <Button
+          variant="ghost"
+          className="mx-2.5 justify-start"
+          onClick={() => {
+            setMobileSidebarOpen(false);
+            navigate("/app/paper-journal");
+          }}
+        >
+          Виртуальные счета · PAPER
+        </Button>
         <div className="rk-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
           {showSpaceSearch ? (
             <SpaceSearchResults

@@ -507,6 +507,7 @@ export async function createApp(
   reconciler?.start();
 
   const router = createRouter({
+    resolvePaperResearchModel: (scope) => executor.resolveModel(scope),
     cloudAgent,
     codexCatalog,
     prisma,

@@ -6,15 +6,19 @@ import type {
 import { TradingPaperWorkspaceCommandSchema } from "@rakazo/contracts";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { readOwnedMarketPreparedResearch } from "./market-research-read.js";
 import {
   applyApprovedTradingPaperEntrySessionControl,
   readVerifiedTradingPaperEntrySession,
 } from "./trading-paper-entry-session.js";
 import { auditTradingPaperLifecycle } from "./trading-paper-lifecycle-audit.js";
+import { tradingPaperMarketScope } from "./trading-paper-market-choice.js";
 import {
   applyApprovedTradingPaperProtectionControl,
   readVerifiedTradingPaperProtectionLease,
 } from "./trading-paper-protection-lease.js";
+import { applyApprovedTradingPaperResolvedResearchFillControl } from "./trading-paper-resolved-research-fill-gate.js";
+import { applyApprovedTradingPaperResolvedResearchControl } from "./trading-paper-resolved-research-gate.js";
 import {
   applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,
@@ -244,31 +248,69 @@ export async function commandOwnedTradingPaperWorkspace(
               }),
             ),
           );
-          const signal = requireOk(
-            await applyApprovedTradingPaperWorkerSignalControl(
-              db,
-              owner,
-              await approve("paper_worker_signal_control", {
-                action: "enable",
-                ledger_id: ledgerId,
-                expected_gate_revision: worker.gateRevision,
-                strategy_id: "breakout_20_1h_v1",
-              }),
-            ),
-          );
-          requireOk(
-            await applyApprovedTradingPaperWorkerFillControl(
-              db,
-              owner,
-              await approve("paper_worker_fill_control", {
-                action: "enable",
-                ledger_id: ledgerId,
-                expected_gate_revision: worker.gateRevision,
-                expected_signal_revision: signal.signalRevision,
-                strategy_id: "breakout_20_1h_v1",
-              }),
-            ),
-          );
+          const researchSource = input.researchSource ?? { kind: "baseline" as const };
+          if (researchSource.kind === "market") {
+            const prepared = await readOwnedMarketPreparedResearch(db, owner, {
+              semanticKey: researchSource.scope.semanticKey,
+              resolverKey: researchSource.scope.resolverKey,
+              expectedDigest: researchSource.scope.resolverDigest,
+              limit: 50,
+            });
+            const scope = tradingPaperMarketScope(prepared, input.venue);
+            if (JSON.stringify(scope) !== JSON.stringify(researchSource.scope))
+              throw new Error("PAPER Market selection changed; review the current Skill");
+            const gate = requireOk(
+              await applyApprovedTradingPaperResolvedResearchControl(
+                db,
+                owner,
+                await approve("paper_resolved_research_control", {
+                  action: "enable",
+                  ledger_id: ledgerId,
+                  expected_gate_revision: worker.gateRevision,
+                  scope,
+                }),
+              ),
+            );
+            requireOk(
+              await applyApprovedTradingPaperResolvedResearchFillControl(
+                db,
+                owner,
+                await approve("paper_resolved_research_fill_control", {
+                  action: "enable",
+                  ledger_id: ledgerId,
+                  expected_gate_revision: worker.gateRevision,
+                  expected_research_revision: gate.researchRevision,
+                  scope,
+                }),
+              ),
+            );
+          } else {
+            const signal = requireOk(
+              await applyApprovedTradingPaperWorkerSignalControl(
+                db,
+                owner,
+                await approve("paper_worker_signal_control", {
+                  action: "enable",
+                  ledger_id: ledgerId,
+                  expected_gate_revision: worker.gateRevision,
+                  strategy_id: "breakout_20_1h_v1",
+                }),
+              ),
+            );
+            requireOk(
+              await applyApprovedTradingPaperWorkerFillControl(
+                db,
+                owner,
+                await approve("paper_worker_fill_control", {
+                  action: "enable",
+                  ledger_id: ledgerId,
+                  expected_gate_revision: worker.gateRevision,
+                  expected_signal_revision: signal.signalRevision,
+                  strategy_id: "breakout_20_1h_v1",
+                }),
+              ),
+            );
+          }
           requireOk(
             await applyApprovedTradingPaperWorkerRecurrenceControl(
               db,
@@ -312,6 +354,7 @@ export async function commandOwnedTradingPaperWorkspace(
             data: {
               stopEffectId: stopEffectId.id,
               sessionRevision: started.revision,
+              researchSource: JSON.parse(JSON.stringify(researchSource)) as Prisma.InputJsonValue,
               runtimeError: null,
             },
           });
@@ -382,9 +425,14 @@ export async function pauseOwnedTradingPaperWorkspaceAfterRestart(
   prisma: PrismaClient,
   owner: Owner,
   ledgerId: string,
+  expectedRevision?: number,
 ): Promise<void> {
   const workspace = await prisma.tradingPaperWorkspace.findUnique({ where: { ledgerId } });
-  if (!workspace?.stopEffectId) return;
+  if (
+    !workspace?.stopEffectId ||
+    (expectedRevision !== undefined && workspace.sessionRevision !== expectedRevision)
+  )
+    return;
   const session = await readVerifiedTradingPaperEntrySession(prisma, owner, ledgerId);
   if (session.status !== "active" || session.revision !== workspace.sessionRevision) return;
   await applyApprovedTradingPaperEntrySessionControl(prisma, owner, workspace.stopEffectId);
@@ -412,11 +460,10 @@ export async function readOwnedTradingPaperWorkspace(
           const policy = await readVerifiedTradingPaperRiskPolicy(db, owner, ledgerId);
           await auditTradingPaperLifecycle(db, owner, ledgerId);
           const state = await readVerifiedTradingPaperLedger(db, owner, ledgerId);
-          const phase =
-            session.status === "active"
-              ? workspace.runtimeError
-                ? "attention_required"
-                : "active"
+          const phase = workspace.runtimeError
+            ? "attention_required"
+            : session.status === "active"
+              ? "active"
               : state.reservations.length
                 ? "settling"
                 : state.positions.length

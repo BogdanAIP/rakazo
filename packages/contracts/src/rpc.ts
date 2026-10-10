@@ -123,6 +123,7 @@ import {
   TradingPaperJournalReadInputSchema,
   TradingPaperJournalReadOutputSchema,
 } from "./trading-paper-journal.js";
+import { TradingPaperMarketPreparationSchema } from "./trading-paper-workspace.js";
 import {
   WindowsHostBrowserRequestSchema,
   WindowsHostBrowserResultSchema,
@@ -225,6 +226,9 @@ import {
 
 export const appContract = {
   trading: {
+    marketPrepare: oc
+      .input(z.object({ ledgerId: z.string().min(1).max(128), venue: z.enum(["okx", "bingx"]) }))
+      .output(TradingPaperMarketPreparationSchema),
     accountCreate: oc
       .input(TradingPaperAccountCreateInputSchema)
       .output(z.object({ ledgerId: z.string() })),

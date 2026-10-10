@@ -20,7 +20,7 @@ import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import { deliverMessagingOutbound, mirrorMessagingOutbound } from "./messaging-delivery.js";
 import { enqueueAuthorizedPaperProtectionSuccessor } from "./paper-protection-only-scheduler.js";
 import { handlePaperProtectionOnlyWake } from "./paper-protection-only-wake.js";
-import { handlePaperWorkerPreflightWithSuccessor } from "./paper-worker-recurring-handler.js";
+import { handleManagedPaperWorkerWake } from "./paper-workspace-market.js";
 import type { EncryptedSecretStore } from "./secrets.js";
 import { expireTaughtSkillTeaching } from "./teaching-session.js";
 
@@ -101,8 +101,13 @@ export function createBackgroundJobHandlers(deps: {
     },
     "paper.worker-preflight": async (payload) => {
       if (payload.sessionRevision === undefined) return;
-      await handlePaperWorkerPreflightWithSuccessor(
-        { prisma: deps.prisma, jobs: deps.jobs },
+      await handleManagedPaperWorkerWake(
+        {
+          prisma: deps.prisma,
+          jobs: deps.jobs,
+          runtime: deps.runtime,
+          resolveModel: (scope) => deps.executor.resolveModel(scope),
+        },
         payload,
       );
     },

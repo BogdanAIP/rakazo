@@ -1,8 +1,5 @@
 import type { JobPublisher } from "@rakazo/adapter-kit";
-import type {
-  PaperProtectionSuccessorIntentResult,
-  PrismaClient,
-} from "@rakazo/db";
+import type { PaperProtectionSuccessorIntentResult, PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import { enqueueAuthorizedPaperProtectionSuccessor } from "./paper-protection-only-scheduler.js";
 
@@ -14,14 +11,15 @@ const payload = {
   leaseRevision: 3,
   scheduledFor: "2026-10-10T12:00:00.000Z",
 };
-const planned: Extract<PaperProtectionSuccessorIntentResult, { status: "prepared" | "duplicate" }> = {
-  status: "prepared",
-  mode: "paper_only",
-  ...payload,
-  sourceScheduledFor: payload.scheduledFor,
-  successorScheduledFor: "2026-10-10T12:15:00.000Z",
-  approvalEffectId: "owner-approved-protection",
-};
+const planned: Extract<PaperProtectionSuccessorIntentResult, { status: "prepared" | "duplicate" }> =
+  {
+    status: "prepared",
+    mode: "paper_only",
+    ...payload,
+    sourceScheduledFor: payload.scheduledFor,
+    successorScheduledFor: "2026-10-10T12:15:00.000Z",
+    approvalEffectId: "owner-approved-protection",
+  };
 
 describe("H2b2 protection successor scheduler", () => {
   it("persists owner-scoped protection-only intent before separately keyed queue publication", async () => {
