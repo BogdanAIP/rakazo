@@ -18,7 +18,7 @@ CREATE TABLE "trading_paper_protection_successor_intents" (
     CONSTRAINT "trading_paper_protection_successor_forward_chk"
       CHECK ("successorScheduledFor" > "sourceScheduledFor")
 );
-CREATE UNIQUE INDEX "trading_paper_protection_successor_intents_ledgerId_leaseRevision_sourceScheduledFor_key"
+CREATE UNIQUE INDEX "tp_protection_successor_scope_key"
     ON "trading_paper_protection_successor_intents" ("ledgerId","leaseRevision","sourceScheduledFor");
 CREATE INDEX "trading_paper_protection_successor_intents_spaceId_userId_idx"
     ON "trading_paper_protection_successor_intents" ("spaceId","userId");
