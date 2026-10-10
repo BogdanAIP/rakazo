@@ -22,6 +22,14 @@ const payloadSchemas = {
   "history.compact": z.object({ threadId: z.string().min(1) }),
   "messaging.deliver": z.object({ runId: z.string().min(1).optional() }),
   "cloud_agent.poll": z.object({ agentId: z.string().min(1) }),
+  "paper.protection-check": z.object({
+    ledgerId: z.string().min(1).max(128),
+    spaceId: z.string().min(1),
+    userId: z.string().min(1),
+    gateRevision: z.number().int().nonnegative().safe(),
+    leaseRevision: z.number().int().positive().safe(),
+    scheduledFor: z.string().datetime({ offset: true }),
+  }),
   "paper.worker-preflight": z.object({
     ledgerId: z.string().min(1).max(128),
     spaceId: z.string().min(1),
