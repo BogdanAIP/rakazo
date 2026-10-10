@@ -108,6 +108,23 @@ import { MessageReactionSchema } from "./reactions.js";
 import { RoutineHistorySchema, RoutineRunCursorSchema, RunsListOutputSchema } from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
 import {
+  TradingCandleResearchInputSchema,
+  TradingCatalogOutputSchema,
+  TradingPerpContextInputSchema,
+  TradingPerpContextSchema,
+  TradingResearchOutputSchema,
+  TradingScanOutputSchema,
+  TradingScanRequestSchema,
+  TradingSweepOutputSchema,
+  TradingSweepRequestSchema,
+} from "./trading.js";
+import {
+  TradingPaperJournalListOutputSchema,
+  TradingPaperJournalReadInputSchema,
+  TradingPaperJournalReadOutputSchema,
+} from "./trading-paper-journal.js";
+import { TradingPaperMarketPreparationSchema } from "./trading-paper-workspace.js";
+import {
   WindowsHostBrowserRequestSchema,
   WindowsHostBrowserResultSchema,
   WindowsHostCapabilitySchema,
@@ -201,7 +218,42 @@ const threadSendInput = threadTarget
     }
   });
 
+import {
+  TradingPaperAccountCreateInputSchema,
+  TradingPaperWorkspaceCommandSchema,
+  TradingPaperWorkspaceStatusSchema,
+} from "./trading-paper-workspace.js";
+
 export const appContract = {
+  trading: {
+    marketPrepare: oc
+      .input(z.object({ ledgerId: z.string().min(1).max(128), venue: z.enum(["okx", "bingx"]) }))
+      .output(TradingPaperMarketPreparationSchema),
+    accountCreate: oc
+      .input(TradingPaperAccountCreateInputSchema)
+      .output(z.object({ ledgerId: z.string() })),
+    workspaceRead: oc
+      .input(z.object({ ledgerId: z.string().min(1).max(128) }))
+      .output(TradingPaperWorkspaceStatusSchema),
+    workspaceCommand: oc
+      .input(TradingPaperWorkspaceCommandSchema)
+      .output(TradingPaperWorkspaceStatusSchema),
+    /** Public-market shortlist only; no private keys, order placement or account state. */
+    list: oc.input(TradingScanRequestSchema).output(TradingScanOutputSchema),
+    /** CEX spot, perpetual and dated-future public metadata, not private account instruments. */
+    catalog: oc.input(z.object({})).output(TradingCatalogOutputSchema),
+    /** Research-only reproducible proposal / NO_TRADE from confirmed candles. */
+    analyze: oc.input(TradingCandleResearchInputSchema).output(TradingResearchOutputSchema),
+    /** A capped public-market research sweep; no orders, account or key access. */
+    sweep: oc.input(TradingSweepRequestSchema).output(TradingSweepOutputSchema),
+    /** Authenticated owner-only, verified read-only PAPER journal dashboard. */
+    journalList: oc.input(z.object({})).output(TradingPaperJournalListOutputSchema),
+    journalRead: oc
+      .input(TradingPaperJournalReadInputSchema)
+      .output(TradingPaperJournalReadOutputSchema),
+    /** Public derivative context only; no collateral, leverage or order controls. */
+    perpContext: oc.input(TradingPerpContextInputSchema).output(TradingPerpContextSchema),
+  },
   aiConsent: {
     status: oc.input(AiConsentQuerySchema).output(AiConsentStatusSchema),
     allow: oc

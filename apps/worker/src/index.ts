@@ -40,6 +40,7 @@ import {
   RemoteWindowsHostCommandDispatcher,
   reconcileCloudAgents,
   reconcileComputerUpdates,
+  reconcileTradingPaperWorkspaces,
   resolveDeploymentModel,
   resolvePiSessionRoot,
   resolveSandboxProvider,
@@ -229,6 +230,7 @@ async function main() {
     cloudAgent,
   });
 
+  await reconcileTradingPaperWorkspaces({ prisma, jobs }, true);
   const jobHandlers = createBackgroundJobHandlers({
     executor,
     prisma,
@@ -271,6 +273,7 @@ async function main() {
     leadership: createPostgresReconciliationLeadership(pool),
     reconcileCloudAgents: () => reconcileCloudAgents({ prisma, jobs, cloudAgent }),
     reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
+    reconcilePaperWorkspaces: () => reconcileTradingPaperWorkspaces({ prisma, jobs }),
   });
   reconciler.start();
 

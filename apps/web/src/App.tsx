@@ -44,6 +44,9 @@ const WelcomePage = lazy(() =>
 const ArtifactsPage = lazy(() =>
   import("./pages/Artifacts").then((module) => ({ default: module.ArtifactsPage })),
 );
+const PaperJournalPage = lazy(() =>
+  import("./pages/PaperJournal").then((module) => ({ default: module.PaperJournalPage })),
+);
 
 export function App() {
   const loadRemoteImages = useSyncExternalStore(
@@ -154,6 +157,10 @@ function SessionApp() {
           <Route
             path="/app/g/:groupId"
             element={user ? <ShellPage /> : <Navigate to="/sign-in" replace />}
+          />
+          <Route
+            path="/app/paper-journal"
+            element={user ? <PaperJournalPage /> : <Navigate to="/sign-in" replace />}
           />
           <Route
             path="/app/artifacts"

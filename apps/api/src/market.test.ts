@@ -85,7 +85,7 @@ function setup() {
     create: vi.fn(async ({ data }: { data: Omit<Row, "id" | "createdAt" | "updatedAt"> }) => {
       const row: Row = {
         ...data,
-        id: "market-" + String(rows.length + 1),
+        id: `market-${String(rows.length + 1)}`,
         adaptedContent: data.adaptedContent ?? null,
         adaptationMode: data.adaptationMode ?? null,
         sourcePath: data.sourcePath ?? null,
@@ -107,7 +107,10 @@ function setup() {
   return {
     rows,
     marketEntry,
-    service: createMarketService({ marketEntry } as unknown as PrismaClient),
+    service: createMarketService({
+      marketEntry,
+      $transaction: async (action: (tx: unknown) => unknown) => action({ marketEntry }),
+    } as unknown as PrismaClient),
   };
 }
 
@@ -116,7 +119,7 @@ describe("Market Skills + Market Resolver service", () => {
     const { service, marketEntry } = setup();
     const input = {
       kind: "skill" as const,
-      key: "anthropics/claude-plugins-official:paper-analysis@" + sourceRef,
+      key: `anthropics/claude-plugins-official:paper-analysis@${sourceRef}`,
       tags: ["Research", "papers"],
       content: originalSkill(),
       sourceUrl:
@@ -164,7 +167,7 @@ describe("Market Skills + Market Resolver service", () => {
     const items = [
       {
         kind: "resolver" as const,
-        key: "market.data@" + sourceRef,
+        key: `market.data@${sourceRef}`,
         name: "Market data resolver",
         description: "Read-only market data routes.",
         content: JSON.stringify({
@@ -188,7 +191,7 @@ describe("Market Skills + Market Resolver service", () => {
       },
       {
         kind: "resolver" as const,
-        key: "market.risk@" + sourceRef,
+        key: `market.risk@${sourceRef}`,
         name: "Market risk resolver",
         description: "Read-only market risk routes.",
         content: JSON.stringify({
@@ -247,13 +250,12 @@ describe("Market Skills + Market Resolver service", () => {
 
     const entry = await service.importEntry(actor, {
       kind: "resolver",
-      key: "browser.semantic@" + sourceRef,
+      key: `browser.semantic@${sourceRef}`,
       name: "Browser semantic resolver",
       description: "Preferred implementations for semantic browser work.",
       tags: ["browser"],
       content: resolver,
-      sourceUrl:
-        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/docs/hybrid-computer-use.md",
+      sourceUrl: `https://github.com/BogdanAIP/rakazo/blob/${sourceRef}/docs/hybrid-computer-use.md`,
       repository: "BogdanAIP/rakazo",
       sourcePath: "docs/hybrid-computer-use.md",
       sourceRef,
@@ -270,7 +272,7 @@ describe("Market Skills + Market Resolver service", () => {
     const { service } = setup();
     const resolver = await service.importEntry(actor, {
       kind: "resolver",
-      key: "market.data@" + sourceRef,
+      key: `market.data@${sourceRef}`,
       name: "Market data resolver",
       description: "Ranked implementations for market data.",
       tags: ["trading", "market-data"],
@@ -303,8 +305,7 @@ describe("Market Skills + Market Resolver service", () => {
           },
         ],
       }),
-      sourceUrl:
-        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
+      sourceUrl: `https://github.com/BogdanAIP/rakazo/blob/${sourceRef}/market/resolver-seeds.v1.json`,
       repository: "BogdanAIP/rakazo",
       sourcePath: "market/resolver-seeds.v1.json",
       sourceRef,
@@ -376,7 +377,7 @@ describe("Market Skills + Market Resolver service", () => {
     const { service } = setup();
     const skill = await service.importEntry(actor, {
       kind: "skill",
-      key: "okx/agent-trade-kit:skills/okx-cex-market/SKILL.md@" + sourceRef,
+      key: `okx/agent-trade-kit:skills/okx-cex-market/SKILL.md@${sourceRef}`,
       tags: ["trading", "research-ready", "market-data"],
       content: originalSkill("okx-cex-market"),
       sourceUrl:
@@ -392,7 +393,7 @@ describe("Market Skills + Market Resolver service", () => {
     });
     const resolver = await service.importEntry(actor, {
       kind: "resolver",
-      key: "market.data@" + sourceRef,
+      key: `market.data@${sourceRef}`,
       name: "Market data resolver",
       description: "Resolver with one Market Skill implementation.",
       tags: ["market.data"],
@@ -409,8 +410,7 @@ describe("Market Skills + Market Resolver service", () => {
           },
         ],
       }),
-      sourceUrl:
-        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
+      sourceUrl: `https://github.com/BogdanAIP/rakazo/blob/${sourceRef}/market/resolver-seeds.v1.json`,
       repository: "BogdanAIP/rakazo",
       sourcePath: "market/resolver-seeds.v1.json",
       sourceRef,
@@ -448,11 +448,10 @@ describe("Market Skills + Market Resolver service", () => {
     const { service } = setup();
     const skill = await service.importEntry(actor, {
       kind: "skill",
-      key: "ccxt/ccxt:.claude/skills/ccxt-mcp/SKILL.md@" + sourceRef,
+      key: `ccxt/ccxt:.claude/skills/ccxt-mcp/SKILL.md@${sourceRef}`,
       tags: ["trading", "adapt-to-paper", "mcp", "market-data"],
       content: originalSkill("ccxt-mcp"),
-      sourceUrl:
-        "https://github.com/ccxt/ccxt/blob/" + sourceRef + "/.claude/skills/ccxt-mcp/SKILL.md",
+      sourceUrl: `https://github.com/ccxt/ccxt/blob/${sourceRef}/.claude/skills/ccxt-mcp/SKILL.md`,
       repository: "ccxt/ccxt",
       sourcePath: ".claude/skills/ccxt-mcp/SKILL.md",
       sourceRef,
@@ -462,7 +461,7 @@ describe("Market Skills + Market Resolver service", () => {
     });
     const resolver = await service.importEntry(actor, {
       kind: "resolver",
-      key: "market.data@" + sourceRef,
+      key: `market.data@${sourceRef}`,
       name: "Market data resolver",
       description: "Resolver with an MCP implementation and a separate usage Skill.",
       tags: ["market.data"],
@@ -480,8 +479,7 @@ describe("Market Skills + Market Resolver service", () => {
           },
         ],
       }),
-      sourceUrl:
-        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
+      sourceUrl: `https://github.com/BogdanAIP/rakazo/blob/${sourceRef}/market/resolver-seeds.v1.json`,
       repository: "BogdanAIP/rakazo",
       sourcePath: "market/resolver-seeds.v1.json",
       sourceRef,
@@ -518,11 +516,10 @@ describe("Market Skills + Market Resolver service", () => {
     const { service } = setup();
     const skill = await service.importEntry(actor, {
       kind: "skill",
-      key: "ccxt/ccxt:.claude/skills/ccxt-mcp/SKILL.md@" + sourceRef,
+      key: `ccxt/ccxt:.claude/skills/ccxt-mcp/SKILL.md@${sourceRef}`,
       tags: ["trading", "adapt-to-paper", "mcp", "market-data"],
       content: originalSkill("ccxt-mcp"),
-      sourceUrl:
-        "https://github.com/ccxt/ccxt/blob/" + sourceRef + "/.claude/skills/ccxt-mcp/SKILL.md",
+      sourceUrl: `https://github.com/ccxt/ccxt/blob/${sourceRef}/.claude/skills/ccxt-mcp/SKILL.md`,
       repository: "ccxt/ccxt",
       sourcePath: ".claude/skills/ccxt-mcp/SKILL.md",
       sourceRef,
@@ -532,7 +529,7 @@ describe("Market Skills + Market Resolver service", () => {
     });
     const resolver = await service.importEntry(actor, {
       kind: "resolver",
-      key: "market.data@" + sourceRef,
+      key: `market.data@${sourceRef}`,
       name: "Market data resolver",
       description: "Resolver selection fallback fixture.",
       tags: ["market.data"],
@@ -558,8 +555,7 @@ describe("Market Skills + Market Resolver service", () => {
           },
         ],
       }),
-      sourceUrl:
-        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
+      sourceUrl: `https://github.com/BogdanAIP/rakazo/blob/${sourceRef}/market/resolver-seeds.v1.json`,
       repository: "BogdanAIP/rakazo",
       sourcePath: "market/resolver-seeds.v1.json",
       sourceRef,
@@ -613,11 +609,10 @@ describe("Market Skills + Market Resolver service", () => {
     const skillContent = originalSkill("ccxt-mcp");
     const skill = await service.importEntry(actor, {
       kind: "skill",
-      key: "ccxt/ccxt:.claude/skills/ccxt-mcp/SKILL.md@" + sourceRef,
+      key: `ccxt/ccxt:.claude/skills/ccxt-mcp/SKILL.md@${sourceRef}`,
       tags: ["trading", "adapt-to-paper", "mcp", "market-data"],
       content: skillContent,
-      sourceUrl:
-        "https://github.com/ccxt/ccxt/blob/" + sourceRef + "/.claude/skills/ccxt-mcp/SKILL.md",
+      sourceUrl: `https://github.com/ccxt/ccxt/blob/${sourceRef}/.claude/skills/ccxt-mcp/SKILL.md`,
       repository: "ccxt/ccxt",
       sourcePath: ".claude/skills/ccxt-mcp/SKILL.md",
       sourceRef,
@@ -627,7 +622,7 @@ describe("Market Skills + Market Resolver service", () => {
     });
     const resolver = await service.importEntry(actor, {
       kind: "resolver",
-      key: "market.data@" + sourceRef,
+      key: `market.data@${sourceRef}`,
       name: "Market data resolver",
       description: "Prepared research fixture.",
       tags: ["market.data"],
@@ -645,8 +640,7 @@ describe("Market Skills + Market Resolver service", () => {
           },
         ],
       }),
-      sourceUrl:
-        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
+      sourceUrl: `https://github.com/BogdanAIP/rakazo/blob/${sourceRef}/market/resolver-seeds.v1.json`,
       repository: "BogdanAIP/rakazo",
       sourcePath: "market/resolver-seeds.v1.json",
       sourceRef,
@@ -773,18 +767,16 @@ describe("Market Skills + Market Resolver service", () => {
     });
     const first = await service.importEntry(actor, {
       kind: "resolver",
-      key: "market.data@one-" + sourceRef,
+      key: `market.data@one-${sourceRef}`,
       content,
-      sourceUrl:
-        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
+      sourceUrl: `https://github.com/BogdanAIP/rakazo/blob/${sourceRef}/market/resolver-seeds.v1.json`,
       ...shared,
     });
     await service.importEntry(actor, {
       kind: "resolver",
-      key: "market.data@two-" + sourceRef,
+      key: `market.data@two-${sourceRef}`,
       content,
-      sourceUrl:
-        "https://github.com/BogdanAIP/rakazo/blob/" + sourceRef + "/market/resolver-seeds.v1.json",
+      sourceUrl: `https://github.com/BogdanAIP/rakazo/blob/${sourceRef}/market/resolver-seeds.v1.json`,
       ...shared,
     });
 
@@ -818,7 +810,7 @@ describe("Market Skills + Market Resolver service", () => {
     const { service } = setup();
     const imported = await service.importEntry(actor, {
       kind: "skill",
-      key: "trusted:paper@" + sourceRef,
+      key: `trusted:paper@${sourceRef}`,
       tags: ["research"],
       content: originalSkill(),
       sourceUrl:
@@ -870,7 +862,7 @@ describe("Market Skills + Market Resolver service", () => {
     const { service } = setup();
     const imported = await service.importEntry(actor, {
       kind: "skill",
-      key: "trusted:paper@" + sourceRef,
+      key: `trusted:paper@${sourceRef}`,
       tags: [],
       content: originalSkill(),
       sourceUrl:
@@ -906,7 +898,7 @@ describe("Market Skills + Market Resolver service", () => {
     };
     await service.importEntry(actor, {
       kind: "skill",
-      key: "browser-investigation@" + sourceRef,
+      key: `browser-investigation@${sourceRef}`,
       tags: ["browser", "debug"],
       content: originalSkill("Browser Investigation"),
       sourceUrl:
@@ -919,7 +911,7 @@ describe("Market Skills + Market Resolver service", () => {
     });
     await service.importEntry(actor, {
       kind: "skill",
-      key: "paper-analysis@" + sourceRef,
+      key: `paper-analysis@${sourceRef}`,
       tags: ["research"],
       content: originalSkill(),
       sourceUrl:

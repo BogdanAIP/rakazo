@@ -30,7 +30,7 @@ describe("physical Windows browser session route", () => {
   });
 
   it("passes opaque session opens and close requests through the owner-scoped dispatcher", async () => {
-    const token = "501fa589-44e8-4c66-9c5d-e852933063d8";
+    const token = "501fa589-44e8-4d12-8127-bcc6d18d0029";
     const dispatch = vi
       .fn()
       .mockResolvedValueOnce({

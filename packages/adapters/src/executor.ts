@@ -95,6 +95,15 @@ import {
 } from "@rakazo/core/node/approval-effect-key";
 import {
   appendEventInTransaction,
+  applyApprovedTradingPaperControl,
+  applyApprovedTradingPaperProtectiveExitControl,
+  applyApprovedTradingPaperResolvedResearchControl,
+  applyApprovedTradingPaperResolvedResearchFillControl,
+  applyApprovedTradingPaperWorkerControl,
+  applyApprovedTradingPaperWorkerFillControl,
+  applyApprovedTradingPaperWorkerMarketTargetControl,
+  applyApprovedTradingPaperWorkerRecurrenceControl,
+  applyApprovedTradingPaperWorkerSignalControl,
   createSpaceForMember,
   createThreadMessageInTransaction,
   effectiveMemoryScope,
@@ -260,6 +269,7 @@ import {
   modelAcceptsImageInput,
   modelIdSupportsImages,
 } from "./model-vision.js";
+import { startPaperWorkerPreflightOnce } from "./paper-worker-start.js";
 import type { CodexLiveCatalog } from "./pi-codex-catalog.js";
 import { codexLiveListsModel } from "./pi-codex-catalog.js";
 import { toOAuthCredential } from "./pi-credentials.js";
@@ -5688,6 +5698,114 @@ export function createRunExecutor(deps: ExecutorDeps) {
               ok: true,
               result: String(args.task ?? "done."),
             };
+          }
+          if (name === "paper_worker_control") {
+            if (!applied || !claimedEffect) {
+              throw new Error("Paper worker control requires a claimed explicit approval.");
+            }
+            return applyApprovedTradingPaperWorkerControl(
+              deps.prisma,
+              { spaceId: run.spaceId, userId: run.userId },
+              applied.effect.id,
+            );
+          }
+          if (name === "paper_worker_start") {
+            if (!applied || !claimedEffect) {
+              throw new Error("Paper worker start requires a claimed explicit approval.");
+            }
+            return finish(
+              await startPaperWorkerPreflightOnce(
+                { prisma: deps.prisma, jobs: deps.jobs },
+                { spaceId: run.spaceId, userId: run.userId },
+                args,
+              ),
+            );
+          }
+          if (name === "paper_worker_recurrence_control") {
+            if (!applied || !claimedEffect) {
+              throw new Error(
+                "Paper worker recurrence control requires a claimed explicit approval.",
+              );
+            }
+            return applyApprovedTradingPaperWorkerRecurrenceControl(
+              deps.prisma,
+              { spaceId: run.spaceId, userId: run.userId },
+              applied.effect.id,
+            );
+          }
+          if (name === "paper_worker_market_target_control") {
+            if (!applied || !claimedEffect) {
+              throw new Error("Paper market target control requires a claimed explicit approval.");
+            }
+            return applyApprovedTradingPaperWorkerMarketTargetControl(
+              deps.prisma,
+              { spaceId: run.spaceId, userId: run.userId },
+              applied.effect.id,
+            );
+          }
+          if (name === "paper_worker_signal_control") {
+            if (!applied || !claimedEffect) {
+              throw new Error("Paper worker signal control requires a claimed explicit approval.");
+            }
+            return applyApprovedTradingPaperWorkerSignalControl(
+              deps.prisma,
+              { spaceId: run.spaceId, userId: run.userId },
+              applied.effect.id,
+            );
+          }
+          if (name === "paper_resolved_research_control") {
+            if (!applied || !claimedEffect) {
+              throw new Error(
+                "Resolved research PAPER control requires a claimed explicit approval.",
+              );
+            }
+            return applyApprovedTradingPaperResolvedResearchControl(
+              deps.prisma,
+              { spaceId: run.spaceId, userId: run.userId },
+              applied.effect.id,
+            );
+          }
+          if (name === "paper_resolved_research_fill_control") {
+            if (!applied || !claimedEffect) {
+              throw new Error(
+                "Resolved research PAPER fill control requires a claimed explicit approval.",
+              );
+            }
+            return applyApprovedTradingPaperResolvedResearchFillControl(
+              deps.prisma,
+              { spaceId: run.spaceId, userId: run.userId },
+              applied.effect.id,
+            );
+          }
+          if (name === "paper_worker_fill_control") {
+            if (!applied || !claimedEffect) {
+              throw new Error("Paper worker fill control requires a claimed explicit approval.");
+            }
+            return applyApprovedTradingPaperWorkerFillControl(
+              deps.prisma,
+              { spaceId: run.spaceId, userId: run.userId },
+              applied.effect.id,
+            );
+          }
+          if (name === "paper_position_control") {
+            if (!applied || !claimedEffect) {
+              throw new Error("Paper position control requires a claimed explicit approval.");
+            }
+            return applyApprovedTradingPaperProtectiveExitControl(
+              deps.prisma,
+              { spaceId: run.spaceId, userId: run.userId },
+              applied.effect.id,
+            );
+          }
+          if (name === "paper_trading_control") {
+            if (!applied || !claimedEffect) {
+              throw new Error("Paper trading control requires a claimed explicit approval.");
+            }
+            return applyApprovedTradingPaperControl(
+              deps.prisma,
+              { spaceId: run.spaceId, userId: run.userId },
+              applied.effect.id,
+            );
           }
           if (name === "create_space") {
             try {

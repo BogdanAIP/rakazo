@@ -4,6 +4,7 @@ import { implement, ORPCError } from "@orpc/server";
 import type {
   AdapterContext,
   AgentHomeStore,
+  AgentRunModel,
   ArtifactStore,
   ConnectorCall,
   ConnectorCatalogItem,
@@ -53,6 +54,7 @@ import {
   computerSupportsTerminal,
   computerSupportsUpdate,
   computerUpdateView,
+  controlTradingPaperWorkspace,
   createVoiceProvider,
   defaultCatalogModelId,
   deletePushToken,
@@ -61,6 +63,11 @@ import {
   displayBotWorkspacePath,
   enqueueTakeoverContinuation,
   expireComputerControl,
+  fetchBingxPublicSpotSnapshot,
+  fetchOkxClosedOneHourHistory,
+  fetchOkxPublicCatalog,
+  fetchOkxPublicPerpContext,
+  fetchOkxPublicSpotTickers,
   forgetBotSecret,
   getBotSecretMetadata,
   hasActiveComputerControl,
@@ -104,6 +111,7 @@ import {
   selectDefaultCredentialId,
   serializeModelSecret,
   storeBotSecret,
+  sweepOkxSpotResearch,
   takeoverLeaseMs,
   toComputerRef,
   touchRunningComputer,
@@ -132,6 +140,7 @@ import {
   foldComputerCommands,
   IntegrationProviderIdSchema,
   OPENAI_COMPATIBLE_PROVIDER_ID,
+  TradingPaperWorkspaceStatusSchema,
   usableModelId,
   WindowsHostCapabilitySchema,
 } from "@rakazo/contracts";
@@ -146,6 +155,8 @@ import {
   hasMixedOneShotSchedule,
   isOneShotRoutineCrons,
   nextCronDateAcrossStrict,
+  researchClosedHourBreakout,
+  scanTradingMarkets,
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
@@ -158,6 +169,7 @@ import {
   claimEmptySpaceDeletionForMember,
   createExternalConversationRepos,
   createGroupRepos,
+  createOwnedTradingPaperAccount,
   createRepos,
   createSpaceForMember,
   createThreadMessageInTransaction,
@@ -173,6 +185,7 @@ import {
   InvalidSpaceNameError,
   IsolationError,
   issueMessagingLinkCode,
+  listOwnedTradingPaperJournals,
   listWindowsHosts,
   lockOwnedGroup,
   newestModelCredentialOrder,
@@ -180,6 +193,9 @@ import {
   Prisma,
   parseComputerMode,
   pushSessionExpiresAt,
+  readOwnedMarketPreparedResearch,
+  readOwnedTradingPaperJournal,
+  readOwnedTradingPaperWorkspace,
   releaseSpaceDeletionClaim,
   renewSpaceDeletionClaim,
   restoreBotUnderComputerQuota,
@@ -192,6 +208,7 @@ import {
   selectSpaceModelPreference,
   selectSpaceVoicePreference,
   touchGroupUpdatedAt,
+  tradingPaperMarketScope,
   WindowsHostPairingError,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -695,6 +712,10 @@ function mcpAssignmentDto(row: {
 }
 
 export interface RouterDeps {
+  resolvePaperResearchModel?: (scope: {
+    spaceId: string;
+    userId: string;
+  }) => Promise<AgentRunModel>;
   cloudAgent?: CloudAgentConnection | null;
   prisma: PrismaClient;
   events: ThreadEvents;
@@ -917,6 +938,133 @@ export function createRouter(deps: RouterDeps) {
   });
 
   return os.router({
+    trading: {
+      marketPrepare: authed.trading.marketPrepare.handler(async ({ input, context }) => {
+        const owner = context.actor!;
+        const workspace = await readOwnedTradingPaperWorkspace(deps.prisma, owner, input.ledgerId);
+        if (workspace?.status !== "verified") throw new ORPCError("NOT_FOUND");
+        let prepared: Awaited<ReturnType<typeof readOwnedMarketPreparedResearch>>;
+        try {
+          prepared = await readOwnedMarketPreparedResearch(deps.prisma, owner, {
+            semanticKey: "signal.discovery",
+            limit: 50,
+          });
+          if (prepared.selection.status !== "ready" || !prepared.selection.skill)
+            return { status: "unavailable" as const, reason: "market_not_ready" as const };
+        } catch {
+          return { status: "unavailable" as const, reason: "market_not_ready" as const };
+        }
+        try {
+          if (!deps.resolvePaperResearchModel) throw new Error("Model unavailable");
+          await deps.resolvePaperResearchModel(owner);
+        } catch {
+          return { status: "unavailable" as const, reason: "model_not_configured" as const };
+        }
+        return {
+          status: "ready" as const,
+          name: prepared.selection.implementation.name,
+          variant: prepared.selection.skill.variant,
+          scope: tradingPaperMarketScope(prepared, input.venue),
+        };
+      }),
+      accountCreate: authed.trading.accountCreate.handler(({ context, input }) =>
+        createOwnedTradingPaperAccount(deps.prisma, context.actor, input),
+      ),
+      workspaceRead: authed.trading.workspaceRead.handler(async ({ context, input }) => {
+        const result = await readOwnedTradingPaperWorkspace(
+          deps.prisma,
+          context.actor,
+          input.ledgerId,
+        );
+        if (!result) throw new ORPCError("NOT_FOUND");
+        return TradingPaperWorkspaceStatusSchema.parse(result);
+      }),
+      workspaceCommand: authed.trading.workspaceCommand.handler(async ({ context, input }) => {
+        if (input.action === "start" && input.researchSource?.kind === "market") {
+          if (!deps.resolvePaperResearchModel) throw new ORPCError("CONFLICT");
+          await deps.resolvePaperResearchModel(context.actor!);
+        }
+        await controlTradingPaperWorkspace(
+          { prisma: deps.prisma, jobs: deps.jobs },
+          context.actor,
+          input,
+        );
+        const result = await readOwnedTradingPaperWorkspace(
+          deps.prisma,
+          context.actor,
+          input.ledgerId,
+        );
+        if (!result) throw new ORPCError("NOT_FOUND");
+        return TradingPaperWorkspaceStatusSchema.parse(result);
+      }),
+      // Dedicated authenticated read-only human UI. This cannot append/submit orders.
+      journalList: authed.trading.journalList.handler(({ context }) =>
+        listOwnedTradingPaperJournals(deps.prisma, context.actor),
+      ),
+      journalRead: authed.trading.journalRead.handler(async ({ context, input }) => {
+        const journal = await readOwnedTradingPaperJournal(
+          deps.prisma,
+          context.actor,
+          input.ledgerId,
+          input.beforeSequence,
+        );
+        if (!journal) throw new ORPCError("NOT_FOUND");
+        return journal;
+      }),
+      // User-invoked public GET requests only. No exchange keys, wallet or execution capability.
+      list: authed.trading.list.handler(async ({ input }) => {
+        if (input.venue === "okx") {
+          const catalog = await fetchOkxPublicCatalog();
+          const markets = catalog.markets.filter((market) => market.kind === "spot");
+          const tickers = await fetchOkxPublicSpotTickers(markets);
+          return {
+            fetchedAt: new Date().toISOString(),
+            ...scanTradingMarkets(markets, tickers, input, new Date()),
+          };
+        }
+        const snapshot = await fetchBingxPublicSpotSnapshot();
+        return {
+          fetchedAt: snapshot.fetchedAt,
+          ...scanTradingMarkets(snapshot.markets, snapshot.tickers, input, new Date()),
+        };
+      }),
+      catalog: authed.trading.catalog.handler(() => fetchOkxPublicCatalog()),
+      sweep: authed.trading.sweep.handler(({ input }) => sweepOkxSpotResearch(input)),
+      perpContext: authed.trading.perpContext.handler(async ({ input }) => {
+        const catalog = await fetchOkxPublicCatalog();
+        const market = catalog.markets.find(
+          (item) => item.kind === "perpetual" && item.symbol === input.symbol,
+        );
+        if (!market) throw new ORPCError("NOT_FOUND", { message: "OKX perpetual unavailable" });
+        return fetchOkxPublicPerpContext(market);
+      }),
+      analyze: authed.trading.analyze.handler(async ({ input }) => {
+        const catalog = await fetchOkxPublicCatalog();
+        const market = catalog.markets.find(
+          (candidate) => candidate.symbol === input.symbol && candidate.kind === input.kind,
+        );
+        if (!market)
+          throw new ORPCError("NOT_FOUND", { message: "Public OKX instrument not found" });
+        // Dated futures remain discovery-only pending independent contract sizing
+        // and instrument/risk validation. Fail closed as a NO_TRADE research result.
+        if (market.kind === "dated_future") {
+          const now = new Date();
+          return researchClosedHourBreakout({
+            market,
+            candles: [],
+            fetchedAt: now.toISOString(),
+            now,
+          });
+        }
+        const history = await fetchOkxClosedOneHourHistory(market);
+        return researchClosedHourBreakout({
+          market,
+          candles: history.candles,
+          fetchedAt: history.fetchedAt,
+          now: new Date(),
+        });
+      }),
+    },
     aiConsent: {
       status: authed.aiConsent.status.handler(({ context, input }) =>
         aiConsentStatus(deps, context.actor, input),

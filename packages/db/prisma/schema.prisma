@@ -45,6 +45,7 @@ model User {
   createdSpaces               Space[]                      @relation("SpaceCreator")
   botSecrets BotSecret[]
   agentSecrets               AgentSecret[]
+  tradingPaperLedgers         TradingPaperLedger[]
 
   @@unique([email])
   @@map("user")
@@ -219,6 +220,7 @@ model Space {
   botSecrets BotSecret[]
   externalConversations       ExternalConversation[]
   agentSecrets                AgentSecret[]
+  tradingPaperLedgers         TradingPaperLedger[]
 
   @@unique([id, organizationId])
   @@index([organizationId, createdAt])
@@ -1454,4 +1456,679 @@ model IntegrationProviderConfig {
   updatedAt  DateTime @updatedAt
 
   @@map("integration_provider_configs")
+}
+
+/**
+ * Inert PAPER-only ledger. There is no order/credential relation, RPC route or
+ * execution authority. All event append operations must be owner-space scoped.
+ */
+model TradingPaperWorkspace {
+ researchSource Json?
+ ledgerId String @id
+ ledger TradingPaperLedger @relation(fields:[ledgerId],references:[id],onDelete:Cascade)
+ name String
+ botId String
+ threadId String
+ stopEffectId String?
+ sessionRevision Int @default(0)
+ firstProtectionScheduledFor DateTime?
+ lastProtectionHandledFor DateTime?
+ runtimeError String?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@map("trading_paper_workspaces")
+}
+
+model TradingPaperLedger {
+ researchSnapshots TradingPaperResearchSnapshot[]
+ workspace TradingPaperWorkspace?
+  id                  String                    @id
+  spaceId             String
+  space               Space                     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  ownerUserId         String
+  owner               User                      @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  openedAt            DateTime
+  quoteCurrency       String
+  initialBalanceQuote String
+  version             Int                       @default(0)
+  projection          Json
+  projectionSha256    String
+  headSha256          String
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  events              TradingPaperLedgerEvent[]
+  riskPolicy          TradingPaperRiskPolicy?
+  quoteEvidence       TradingPaperQuoteEvidence[]
+  stopGuards          TradingPaperStopGuard[]
+  policyAudits        TradingPaperPolicyAudit[]
+  reservationDecisions TradingPaperReservationDecision[]
+  releaseAudits        TradingPaperReleaseAudit[]
+  fillDecisions         TradingPaperFillDecision[]
+  closeDecisions        TradingPaperCloseDecision[]
+  protectiveExitAuthorities TradingPaperProtectiveExitAuthority[]
+  workerGate            TradingPaperWorkerGate?
+  entrySession          TradingPaperEntrySession?
+  protectionLease       TradingPaperProtectionLease?
+  protectionSuccessorIntents TradingPaperProtectionSuccessorIntent[]
+  workerRecurrence      TradingPaperWorkerRecurrence?
+  workerSuccessorIntents TradingPaperWorkerSuccessorIntent[]
+  workerMarketTarget     TradingPaperWorkerMarketTarget?
+  workerResearchRuns     TradingPaperWorkerResearch[]
+  workerSignalGate       TradingPaperWorkerSignalGate?
+  resolvedResearchGate   TradingPaperResolvedResearchGate?
+  resolvedResearchReserveUses TradingPaperResolvedResearchReserveUse[]
+  resolvedResearchFillGate TradingPaperResolvedResearchFillGate?
+  resolvedResearchFillUses TradingPaperResolvedResearchFillUse[]
+  workerFillGate         TradingPaperWorkerFillGate?
+  workerFillUses         TradingPaperWorkerFillUse[]
+
+  @@index([spaceId, ownerUserId])
+  @@map("trading_paper_ledgers")
+}
+
+model TradingPaperLedgerEvent {
+  ledgerId      String
+  sequence      Int
+  eventId       String
+  kind          String
+  recordedAt    DateTime
+  payload       Json
+  payloadSha256 String
+  previousSha256 String
+  chainSha256   String
+  createdAt     DateTime @default(now())
+  ledger        TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  outbox        TradingPaperLedgerOutbox?
+
+  @@id([ledgerId, sequence])
+  @@unique([ledgerId, eventId])
+  @@map("trading_paper_ledger_events")
+}
+
+/** Durable inert notification only, NOT a broker order or an active dispatcher. */
+model TradingPaperLedgerOutbox {
+  ledgerId    String
+  sequence    Int
+  status      String @default("pending")
+  createdAt   DateTime @default(now())
+  event       TradingPaperLedgerEvent @relation(fields: [ledgerId, sequence], references: [ledgerId, sequence], onDelete: Cascade)
+
+  @@id([ledgerId, sequence])
+  @@map("trading_paper_ledger_outbox")
+}
+
+/** Default-disabled, owner-scoped paper-only risk envelope; no live execution authority. */
+model TradingPaperRiskPolicy {
+  ledgerId       String             @id
+  ledger         TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  revision       Int                @default(0)
+  policy         Json
+  policySha256   String
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@map("trading_paper_risk_policies")
+}
+
+
+/** Immutable owner/effect-bound audit of explicit PAPER capability toggles. */
+model TradingPaperPolicyAudit {
+  effectId      String             @id
+  ledgerId      String
+  ledger        TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId       String
+  userId        String
+  runId         String
+  action        String
+  fromRevision  Int
+  toRevision    Int
+  beforeSha256  String
+  afterSha256   String
+  createdAt     DateTime           @default(now())
+
+  @@index([ledgerId, createdAt])
+  @@unique([ledgerId, toRevision])
+  @@map("trading_paper_policy_audits")
+}
+
+/** Immutable audit of synthetic hold release; never an exchange close/order. */
+model TradingPaperReleaseAudit {
+  ledgerId       String
+  reservationId  String
+  ledger         TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  eventSequence  Int
+  eventId        String
+  reason         String
+  policyRevision Int
+  releasedQuote  String
+  releasedAt     DateTime
+  releaseSha256  String
+  createdAt      DateTime @default(now())
+
+  @@id([ledgerId, reservationId])
+  @@unique([ledgerId, eventId])
+  @@index([ledgerId, createdAt])
+  @@map("trading_paper_release_audits")
+}
+
+/** Durable idempotency/audit for an internal synthetic PAPER reserve only. */
+model TradingPaperSessionReservation {
+  ledgerId String
+  reservationId String
+  sessionRevision Int
+  sessionStartedAt DateTime
+  approvalEffectId String
+  attributionSha256 String
+  decision TradingPaperReservationDecision @relation(fields: [ledgerId, reservationId], references: [ledgerId, reservationId], onDelete: Cascade)
+
+  @@id([ledgerId, reservationId])
+  @@index([ledgerId, sessionStartedAt])
+  @@map("trading_paper_session_reservations")
+}
+
+model TradingPaperReservationDecision {
+  sessionAttribution TradingPaperSessionReservation?
+  ledgerId               String
+  signalId               String
+  ledger                 TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  requestSha256          String
+  decisionSha256         String
+  evidenceId             String
+  policyApprovalEffectId String
+  policyRevision         Int
+  ledgerRevisionBefore   Int
+  eventSequence          Int
+  eventId                String
+  reservationId          String
+  quantityBase           String
+  heldQuote              String
+  worstCaseStopRiskQuote String
+  stopPriceQuote         String
+  conservativeEntryQuote String
+  conservativeStopQuote  String
+  expiresAt              DateTime
+  createdAt              DateTime @default(now())
+
+  @@id([ledgerId, signalId])
+  @@unique([ledgerId, eventId])
+  @@unique([ledgerId, reservationId])
+  @@index([ledgerId, createdAt])
+  @@map("trading_paper_reservation_decisions")
+}
+
+/** Durable idempotency/audit for a synthetic full PAPER buy fill only. */
+model TradingPaperFillDecision {
+  ledgerId               String
+  reservationId          String
+  ledger                 TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  requestSha256          String
+  decisionSha256         String
+  evidenceId             String
+  policyApprovalEffectId String
+  policyRevision         Int
+  reserveEventSequence   Int
+  fillEventSequence      Int
+  fillEventId            String
+  quantityBase           String
+  executedPriceQuote     String
+  feeQuote               String
+  stopPriceQuote         String
+  filledAt               DateTime
+  createdAt              DateTime @default(now())
+
+  @@id([ledgerId, reservationId])
+  @@unique([ledgerId, fillEventId])
+  @@index([ledgerId, createdAt])
+  @@map("trading_paper_fill_decisions")
+}
+
+/** Durable idempotency/audit for a synthetic stop-triggered PAPER close only. */
+model TradingPaperCloseDecision {
+  ledgerId               String
+  positionId             String
+  ledger                 TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  requestSha256          String
+  decisionSha256         String
+  evidenceId             String
+  policyApprovalEffectId String
+  policyRevision         Int
+  buyFillEventSequence   Int
+  closeEventSequence     Int
+  closeEventId           String
+  quantityBase           String
+  executedPriceQuote     String
+  feeQuote               String
+  stopPriceQuote         String
+  closedAt               DateTime
+  createdAt              DateTime @default(now())
+
+  @@id([ledgerId, positionId])
+  @@unique([ledgerId, closeEventId])
+  @@index([ledgerId, createdAt])
+  @@map("trading_paper_close_decisions")
+}
+
+/** Short-lived owner-approved authority for one protective synthetic PAPER exit.
+ * Creating this row never closes a position and never enables new entries. */
+model TradingPaperProtectiveExitAuthority {
+  effectId             String             @id
+  ledgerId             String
+  ledger               TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId              String
+  userId               String
+  runId                String
+  positionId           String
+  policyRevision       Int
+  buyFillEventSequence Int
+  stopPriceQuote       String
+  authorizedAt         DateTime
+  expiresAt            DateTime
+  authoritySha256      String
+  createdAt            DateTime           @default(now())
+
+  @@index([ledgerId, positionId, expiresAt])
+  @@map("trading_paper_protective_exit_authorities")
+}
+
+/** Default-deny owner-approved gate for a future deterministic PAPER worker.
+ * This row is permission/config only; it does not enqueue or execute work. */
+model TradingPaperWorkerGate {
+  ledgerId          String             @id
+  ledger            TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId           String
+  userId            String
+  enabled           Boolean            @default(false)
+  cadenceMinutes    Int?
+  policyRevision    Int
+  gateRevision      Int                @default(0)
+  approvalEffectId  String
+  gateSha256        String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([spaceId, userId])
+  @@map("trading_paper_worker_gates")
+}
+
+/**
+ * H1 — separately approved finite PAPER entry-session lease.
+ * No default row = no entry-session authority; no queue or orders.
+ * Revocation is revision-fenced and does not disable protective stops.
+ */
+model TradingPaperEntrySession {
+  ledgerId           String             @id
+  ledger             TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId            String
+  userId             String
+  status             String
+  revision           Int                @default(0)
+  workerGateRevision Int
+  startedAt          DateTime
+  expiresAt          DateTime
+  approvalEffectId   String
+  sessionSha256      String
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([spaceId, userId])
+  @@map("trading_paper_entry_sessions")
+}
+
+/** H2b: separate finite owner-approved supervision of already-open PAPER positions.
+ * Never grants new-entry, reserve, buy, sell or broker/order permissions. */
+model TradingPaperProtectionLease {
+  ledgerId           String             @id
+  ledger             TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId            String
+  userId             String
+  enabled            Boolean            @default(false)
+  revision           Int
+  workerGateRevision Int
+  entryRevision      Int
+  cadenceMinutes     Int
+  startedAt          DateTime
+  expiresAt          DateTime
+  approvalEffectId   String
+  leaseSha256        String
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([spaceId, userId])
+  @@map("trading_paper_protection_leases")
+}
+
+/** Durable, immutable version-scoped protection-only successor plan.
+ * It does not authorize a new trade or create a queue job on its own. */
+model TradingPaperProtectionSuccessorIntent {
+  id                      String             @id
+  ledgerId                String
+  ledger                  TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId                 String
+  userId                  String
+  leaseRevision           Int
+  gateRevision            Int
+  sourceScheduledFor      DateTime
+  successorScheduledFor   DateTime
+  approvalEffectId        String
+  intentSha256            String
+  createdAt               DateTime           @default(now())
+
+  @@unique([ledgerId, leaseRevision, sourceScheduledFor], map: "tp_protection_successor_scope_key")
+  @@index([spaceId, userId])
+  @@map("trading_paper_protection_successor_intents")
+}
+
+/** Explicit owner-approved permission for recurring read-only PAPER preflights.
+ * This row never schedules, enqueues or executes work by itself. */
+model TradingPaperWorkerRecurrence {
+  ledgerId             String             @id
+  ledger               TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId              String
+  userId               String
+  enabled              Boolean            @default(false)
+  gateRevision         Int
+  recurrenceRevision   Int                @default(0)
+  approvalEffectId     String
+  recurrenceSha256     String
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([spaceId, userId])
+  @@map("trading_paper_worker_recurrences")
+}
+
+/** Immutable deterministic intent for one recurring read-only PAPER preflight successor.
+ * Persisting an intent never enqueues or executes work. */
+model TradingPaperWorkerSuccessorIntent {
+  ledgerId                    String
+  sourceScheduledFor          DateTime
+  gateRevision                Int
+  recurrenceRevision          Int
+  ledger                      TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId                     String
+  userId                      String
+  recurrenceApprovalEffectId  String
+  workerApprovalEffectId      String
+  paperApprovalEffectId       String
+  successorScheduledFor       DateTime
+  intentSha256                String
+  createdAt                   DateTime           @default(now())
+
+  @@id([ledgerId, sourceScheduledFor, gateRevision, recurrenceRevision])
+  @@index([spaceId, userId, createdAt])
+  @@map("trading_paper_worker_successor_intents")
+}
+
+/** Explicit owner-approved market-observation target only.
+ * This row has no credentials, model invocation, trading writer or order authority. */
+model TradingPaperWorkerMarketTarget {
+  ledgerId          String             @id
+  ledger            TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId           String
+  userId            String
+  enabled           Boolean            @default(false)
+  venue             String?
+  symbol            String?
+  gateRevision      Int
+  targetRevision    Int                @default(0)
+  approvalEffectId  String
+  targetSha256      String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([spaceId, userId])
+  @@map("trading_paper_worker_market_targets")
+}
+
+/** Explicit owner-approved authority boundary for future automatic PAPER signal use.
+ * Permission only: this row cannot reserve, fill or submit any exchange order. */
+model TradingPaperWorkerSignalGate {
+  ledgerId          String             @id
+  ledger            TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId           String
+  userId            String
+  enabled           Boolean            @default(false)
+  strategyId        String?
+  policyRevision    Int
+  gateRevision      Int
+  signalRevision    Int                @default(0)
+  approvalEffectId  String
+  gateSha256        String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([spaceId, userId])
+  @@map("trading_paper_worker_signal_gates")
+}
+
+/** Explicit owner-approved permission for one normalized Resolver/Skill research scope.
+ * Permission only: this row cannot reserve, fill, close or submit any exchange order. */
+model TradingPaperResolvedResearchGate {
+  ledgerId          String             @id
+  ledger            TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId           String
+  userId            String
+  enabled           Boolean            @default(false)
+  policyRevision    Int
+  gateRevision      Int
+  researchRevision  Int                @default(0)
+  approvalEffectId  String
+  scope             Json?
+  gateSha256        String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([spaceId, userId])
+  @@index([approvalEffectId])
+  @@map("trading_paper_resolved_research_gates")
+}
+
+/** Separate explicit permission for a future synthetic fill of a G2 reservation.
+ * Permission only: this row cannot fill, close or submit any exchange order. */
+model TradingPaperResolvedResearchFillGate {
+  ledgerId          String             @id
+  ledger            TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId           String
+  userId            String
+  enabled           Boolean            @default(false)
+  scope             Json?
+  policyRevision    Int
+  gateRevision      Int
+  researchRevision  Int
+  fillRevision      Int                @default(0)
+  approvalEffectId  String
+  gateSha256        String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([spaceId, userId])
+  @@index([approvalEffectId])
+  @@map("trading_paper_resolved_research_fill_gates")
+}
+
+/** Immutable provenance for one G3-authorized synthetic PAPER fill.
+ * This row is historical audit evidence only and grants no future authority. */
+model TradingPaperResolvedResearchFillUse {
+  ledgerId                 String
+  reservationId            String
+  ledger                   TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId                  String
+  userId                   String
+  signalId                 String
+  fillApprovalEffectId     String
+  researchApprovalEffectId String
+  scope                    Json
+  policyRevision           Int
+  gateRevision             Int
+  researchRevision         Int
+  fillRevision             Int
+  reserveEvidenceId        String
+  evidenceId               String
+  reserveEventSequence     Int
+  fillEventSequence        Int
+  actedAt                  DateTime
+  useSha256                String
+  createdAt                DateTime @default(now())
+
+  @@id([ledgerId, reservationId])
+  @@unique([ledgerId, fillEventSequence])
+  @@index([fillApprovalEffectId])
+  @@index([researchApprovalEffectId])
+  @@index([reserveEvidenceId])
+  @@index([evidenceId])
+  @@map("trading_paper_resolved_research_fill_uses")
+}
+
+/** Immutable provenance for a G1-authorized synthetic PAPER reserve.
+ * This row is audit evidence only and never grants fill/live execution authority. */
+model TradingPaperResolvedResearchReserveUse {
+  ledgerId                 String
+  reservationId            String
+  ledger                   TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId                  String
+  userId                   String
+  signalId                 String
+  researchApprovalEffectId String
+  scope                    Json
+  policyRevision           Int
+  gateRevision             Int
+  researchRevision         Int
+  evidenceId               String
+  reserveEventSequence     Int
+  actedAt                  DateTime
+  useSha256                String
+  createdAt                DateTime @default(now())
+
+  @@id([ledgerId, reservationId])
+  @@unique([ledgerId, signalId])
+  @@index([researchApprovalEffectId])
+  @@index([ledgerId, reserveEventSequence])
+  @@map("trading_paper_resolved_research_reserve_uses")
+}
+
+/** Explicit owner-approved authority boundary for future automatic synthetic PAPER fills.
+ * Permission only: this row cannot fill a reservation or submit any exchange order. */
+model TradingPaperWorkerFillGate {
+  ledgerId          String             @id
+  ledger            TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId           String
+  userId            String
+  enabled           Boolean            @default(false)
+  strategyId        String?
+  policyRevision    Int
+  gateRevision      Int
+  signalRevision    Int
+  fillRevision      Int                @default(0)
+  approvalEffectId  String
+  gateSha256        String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([spaceId, userId])
+  @@map("trading_paper_worker_fill_gates")
+}
+
+/** Immutable audit provenance for one automatic synthetic PAPER fill.
+ * This row is historical evidence only and grants no execution authority. */
+model TradingPaperWorkerFillUse {
+  ledgerId               String
+  reservationId          String
+  ledger                 TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId                String
+  userId                 String
+  signalId               String
+  fillApprovalEffectId   String
+  targetApprovalEffectId String
+  strategyId             String
+  venue                  String
+  symbol                 String
+  policyRevision         Int
+  gateRevision           Int
+  signalRevision         Int
+  fillRevision           Int
+  targetRevision         Int
+  evidenceId             String
+  reserveEventSequence   Int
+  fillEventSequence      Int
+  actedAt                DateTime
+  useSha256              String
+  createdAt              DateTime @default(now())
+
+  @@id([ledgerId, reservationId])
+  @@unique([ledgerId, fillEventSequence])
+  @@index([fillApprovalEffectId])
+  @@index([targetApprovalEffectId])
+  @@index([evidenceId])
+  @@map("trading_paper_worker_fill_uses")
+}
+
+/** Durable deterministic research output only; never an order or risk approval. */
+model TradingPaperWorkerResearch {
+  ledgerId           String
+  sourceScheduledFor DateTime
+  gateRevision       Int
+  targetRevision     Int
+  ledger             TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  spaceId            String
+  userId             String
+  quoteEvidenceId    String
+  algorithm          String
+  signalId           String
+  signalKind         String
+  output             Json
+  outputSha256       String
+  createdAt          DateTime @default(now())
+
+  @@id([ledgerId, sourceScheduledFor, gateRevision, targetRevision])
+  @@index([spaceId, userId, createdAt])
+  @@index([ledgerId, signalId])
+  @@map("trading_paper_worker_research")
+}
+
+/** Evidence only: no broker data, account keys or risk approval.
+ * Stores separately labeled offline fixtures and public-adapter observations;
+ * neither is an approval or authenticated exchange attestation. */
+model TradingPaperQuoteEvidence {
+  id            String             @id
+  ledgerId      String
+  ledger        TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  source        String
+  payload       Json
+  market        Json?
+  payloadSha256 String
+  observedAt    DateTime
+  fetchedAt     DateTime
+  receivedAt    DateTime           @default(now())
+
+  @@index([ledgerId, receivedAt])
+  @@map("trading_paper_quote_evidence")
+}
+
+/** Durable stop metadata for a synthetic open paper position. No broker order authority. */
+model TradingPaperStopGuard {
+  ledgerId       String
+  positionId     String
+  ledger         TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  signalId       String
+  symbol         String
+  quantityBase   String
+  stopPriceQuote String
+  openedSequence Int
+  guardSha256    String
+  createdAt      DateTime @default(now())
+
+  @@id([ledgerId, positionId])
+  @@map("trading_paper_stop_guards")
+}
+
+model TradingPaperResearchSnapshot {
+ ledgerId String
+ sessionRevision Int
+ scheduledFor DateTime
+ envelope Json
+ envelopeSha256 String
+ createdAt DateTime @default(now())
+ ledger TradingPaperLedger @relation(fields:[ledgerId],references:[id],onDelete:Cascade)
+ @@id([ledgerId,sessionRevision,scheduledFor])
+ @@map("trading_paper_research_snapshots")
 }

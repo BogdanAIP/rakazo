@@ -22,6 +22,22 @@ const payloadSchemas = {
   "history.compact": z.object({ threadId: z.string().min(1) }),
   "messaging.deliver": z.object({ runId: z.string().min(1).optional() }),
   "cloud_agent.poll": z.object({ agentId: z.string().min(1) }),
+  "paper.protection-check": z.object({
+    ledgerId: z.string().min(1).max(128),
+    spaceId: z.string().min(1),
+    userId: z.string().min(1),
+    gateRevision: z.number().int().nonnegative().safe(),
+    leaseRevision: z.number().int().positive().safe(),
+    scheduledFor: z.string().datetime({ offset: true }),
+  }),
+  "paper.worker-preflight": z.object({
+    ledgerId: z.string().min(1).max(128),
+    spaceId: z.string().min(1),
+    userId: z.string().min(1),
+    gateRevision: z.number().int().nonnegative(),
+    sessionRevision: z.number().int().positive().safe().optional(),
+    scheduledFor: z.string().datetime({ offset: true }),
+  }),
 } satisfies { [Name in BackgroundJobName]: z.ZodType<BackgroundJobPayloads[Name]> };
 
 export function parseBackgroundJob(name: string, payload: unknown): BackgroundJob {
@@ -138,6 +154,69 @@ export function historyCompactJob(threadId: string): BackgroundJob {
     payload: { threadId },
     replaceKey: historyCompactJobKey(threadId),
     maxAttempts: HISTORY_COMPACT_MAX_ATTEMPTS,
+  };
+}
+
+export const PAPER_PROTECTION_MAX_ATTEMPTS = 3;
+
+export function paperProtectionCheckJobKey(ledgerId: string): string {
+  return `paper.protection-check:${ledgerId}`;
+}
+
+/** Builds a finite lease-fenced stop-only job. Does not enqueue it. */
+export function paperProtectionCheckJob(input: {
+  ledgerId: string;
+  spaceId: string;
+  userId: string;
+  gateRevision: number;
+  leaseRevision: number;
+  scheduledFor: Date;
+}): BackgroundJob {
+  return {
+    name: "paper.protection-check",
+    payload: {
+      ledgerId: input.ledgerId,
+      spaceId: input.spaceId,
+      userId: input.userId,
+      gateRevision: input.gateRevision,
+      leaseRevision: input.leaseRevision,
+      scheduledFor: input.scheduledFor.toISOString(),
+    },
+    availableAt: input.scheduledFor,
+    replaceKey: paperProtectionCheckJobKey(input.ledgerId),
+    maxAttempts: PAPER_PROTECTION_MAX_ATTEMPTS,
+  };
+}
+
+export const PAPER_WORKER_PREFLIGHT_MAX_ATTEMPTS = 3;
+
+export function paperWorkerPreflightJobKey(ledgerId: string): string {
+  return `paper.worker-preflight:${ledgerId}`;
+}
+
+/** Typed read-only worker validation job. Merely constructing this value does
+ * not enqueue it; no production caller wires it to JobPublisher in P11D-2. */
+export function paperWorkerPreflightJob(input: {
+  ledgerId: string;
+  spaceId: string;
+  userId: string;
+  gateRevision: number;
+  sessionRevision?: number;
+  scheduledFor: Date;
+}): BackgroundJob {
+  return {
+    name: "paper.worker-preflight",
+    payload: {
+      ledgerId: input.ledgerId,
+      spaceId: input.spaceId,
+      userId: input.userId,
+      gateRevision: input.gateRevision,
+      ...(input.sessionRevision ? { sessionRevision: input.sessionRevision } : {}),
+      scheduledFor: input.scheduledFor.toISOString(),
+    },
+    availableAt: input.scheduledFor,
+    replaceKey: paperWorkerPreflightJobKey(input.ledgerId),
+    maxAttempts: PAPER_WORKER_PREFLIGHT_MAX_ATTEMPTS,
   };
 }
 

@@ -33,7 +33,19 @@ const APPROVAL_REQUIRED_BUILTIN_TOOLS = new Set([
   "cloud_agent_reply",
   "cloud_agent_cancel",
 ]);
-const EXPLICIT_APPROVAL_BUILTIN_TOOLS = new Set(["create_space"]);
+const EXPLICIT_APPROVAL_BUILTIN_TOOLS = new Set([
+  "create_space",
+  "paper_trading_control",
+  "paper_position_control",
+  "paper_worker_control",
+  "paper_worker_start",
+  "paper_worker_recurrence_control",
+  "paper_worker_market_target_control",
+  "paper_worker_signal_control",
+  "paper_resolved_research_control",
+  "paper_resolved_research_fill_control",
+  "paper_worker_fill_control",
+]);
 
 const UNATTENDED_SAFE_BUILTIN_TOOLS = new Set([
   "browser_snapshot",

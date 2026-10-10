@@ -90,6 +90,11 @@ export * from "./none-sandbox.js";
 export * from "./openai-compatible-url.js";
 export * from "./openai-voice.js";
 export * from "./page-browser-session.js";
+export * from "./paper-workspace.js";
+export {
+  handleManagedPaperWorkerWake,
+  invokePaperMarketSkillResearch,
+} from "./paper-workspace-market.js";
 export * from "./pi-catalog-availability.js";
 export * from "./pi-codex-catalog.js";
 export * from "./pi-credentials.js";
@@ -122,6 +127,13 @@ export * from "./task-catalog.js";
 export * from "./teaching-session.js";
 export * from "./team-chat-messaging.js";
 export * from "./third-party-connector-emulator.js";
+export * from "./trading-bingx-history.js";
+export * from "./trading-bingx-public.js";
+export * from "./trading-history-dataset.js";
+export * from "./trading-okx-history.js";
+export * from "./trading-okx-perp.js";
+export * from "./trading-okx-public.js";
+export * from "./trading-okx-sweep.js";
 export * from "./voice-factory.js";
 export * from "./wakeup.js";
 export * from "./web-limits.js";

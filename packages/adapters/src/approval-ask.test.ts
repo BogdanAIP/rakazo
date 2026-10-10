@@ -51,6 +51,237 @@ describe("buildApprovalAskBlock", () => {
     expect(block.detail).toContain("to: person@example.test");
   });
 
+  it("uses one-time paper controls and never offers always allow", () => {
+    const enable = buildApprovalAskBlock(
+      "effect-paper-enable",
+      "paper_trading_control",
+      { action: "enable", ledger_id: "paper-1", expected_policy_revision: 2 },
+      [],
+    );
+    expect(enable).toMatchObject({
+      kind: "ask",
+      text: "Enable paper-only trading for “paper-1”?",
+      actions: [
+        { id: "allow", label: "Enable paper only" },
+        { id: "deny", label: "Cancel" },
+      ],
+    });
+    expect(JSON.stringify(enable)).not.toContain("Always allow");
+    if (enable.kind !== "ask") throw new Error("expected ask block");
+    expect(enable.detail).toContain("does not authorize live orders");
+    expect(enable.detail).toContain("expected policy revision: 2");
+  });
+
+  it("uses one-time protective paper position authorization with no always allow", () => {
+    const block = buildApprovalAskBlock(
+      "effect-paper-exit",
+      "paper_position_control",
+      {
+        action: "authorize_protective_stop_exit",
+        ledger_id: "paper-1",
+        position_id: "position-1",
+        expected_policy_revision: 4,
+      },
+      [],
+    );
+    expect(block).toMatchObject({
+      kind: "ask",
+      text: "Authorize protective paper exit for “position-1” on “paper-1”?",
+      actions: [
+        { id: "allow", label: "Authorize protective paper exit" },
+        { id: "deny", label: "Cancel" },
+      ],
+    });
+    expect(JSON.stringify(block)).not.toContain("Always allow");
+    if (block.kind !== "ask") throw new Error("expected ask block");
+    expect(block.detail).toContain("does not close the position now");
+    expect(block.detail).toContain("position: position-1");
+    expect(block.detail).toContain("expected policy revision: 4");
+  });
+
+  it("uses one-time paper worker control and never offers always allow", () => {
+    const block = buildApprovalAskBlock(
+      "effect-paper-worker",
+      "paper_worker_control",
+      {
+        action: "enable",
+        ledger_id: "paper-1",
+        expected_policy_revision: 5,
+        cadence_minutes: 15,
+      },
+      [],
+    );
+    expect(block).toMatchObject({
+      kind: "ask",
+      text: "Enable background paper-worker gate for “paper-1”?",
+      actions: [
+        { id: "allow", label: "Enable paper worker" },
+        { id: "deny", label: "Cancel" },
+      ],
+    });
+    expect(JSON.stringify(block)).not.toContain("Always allow");
+    if (block.kind !== "ask") throw new Error("expected ask block");
+    expect(block.detail).toContain("does not create a schedule or enqueue work");
+    expect(block.detail).toContain("expected policy revision: 5");
+    expect(block.detail).toContain("cadence minutes: 15");
+  });
+
+  it("uses one-time paper worker start approval with no recurrence or always allow", () => {
+    const block = buildApprovalAskBlock(
+      "effect-paper-worker-start",
+      "paper_worker_start",
+      { ledger_id: "paper-1", expected_gate_revision: 7 },
+      [],
+    );
+    expect(block).toMatchObject({
+      kind: "ask",
+      text: "Schedule one read-only paper preflight for “paper-1”?",
+      actions: [
+        { id: "allow", label: "Schedule one paper preflight" },
+        { id: "deny", label: "Cancel" },
+      ],
+    });
+    expect(JSON.stringify(block)).not.toContain("Always allow");
+    if (block.kind !== "ask") throw new Error("expected ask block");
+    expect(block.detail).toContain("exactly one delayed read-only PAPER preflight");
+    expect(block.detail).toContain("does not schedule recurrence");
+    expect(block.detail).toContain("expected worker gate revision: 7");
+  });
+
+  it("uses explicit recurrence permission approval with no always allow", () => {
+    const enable = buildApprovalAskBlock(
+      "effect-paper-worker-recurrence",
+      "paper_worker_recurrence_control",
+      { action: "enable", ledger_id: "paper-1", expected_gate_revision: 7 },
+      [],
+    );
+    expect(enable).toMatchObject({
+      kind: "ask",
+      text: "Authorize recurring read-only paper preflights for “paper-1”?",
+      actions: [
+        { id: "allow", label: "Authorize recurring paper preflights" },
+        { id: "deny", label: "Cancel" },
+      ],
+    });
+    expect(JSON.stringify(enable)).not.toContain("Always allow");
+    if (enable.kind !== "ask") throw new Error("expected ask block");
+    expect(enable.detail).toContain("does not enqueue a job or activate recurrence by itself");
+    expect(enable.detail).toContain("expected worker gate revision: 7");
+  });
+
+  it("uses one-time market-target approval with no always allow", () => {
+    const block = buildApprovalAskBlock(
+      "effect-paper-market",
+      "paper_worker_market_target_control",
+      {
+        action: "enable",
+        ledger_id: "paper-1",
+        expected_gate_revision: 7,
+        venue: "okx",
+        symbol: "SOL-USDT",
+      },
+      [],
+    );
+    expect(block).toMatchObject({
+      kind: "ask",
+      text: "Approve OKX SOL-USDT paper market target for “paper-1”?",
+      actions: [
+        { id: "allow", label: "Approve paper market target" },
+        { id: "deny", label: "Cancel" },
+      ],
+    });
+    expect(JSON.stringify(block)).not.toContain("Always allow");
+    if (block.kind !== "ask") throw new Error("expected ask block");
+    expect(block.detail).toContain("does not fetch market data");
+    expect(block.detail).toContain("venue: okx");
+    expect(block.detail).toContain("symbol: SOL-USDT");
+  });
+
+  it("uses one-time automatic PAPER reservation approval with no always allow", () => {
+    const block = buildApprovalAskBlock(
+      "effect-paper-signal",
+      "paper_worker_signal_control",
+      {
+        action: "enable",
+        ledger_id: "paper-1",
+        expected_gate_revision: 7,
+        strategy_id: "breakout_20_1h_v1",
+      },
+      [],
+    );
+    expect(block).toMatchObject({
+      kind: "ask",
+      text: "Enable automatic PAPER reservations for “paper-1”?",
+      actions: [
+        { id: "allow", label: "Enable automatic PAPER reservations" },
+        { id: "deny", label: "Cancel" },
+      ],
+    });
+    expect(JSON.stringify(block)).not.toContain("Always allow");
+    if (block.kind !== "ask") throw new Error("expected ask block");
+    expect(block.detail).toContain("synthetic B7 reservation path");
+    expect(block.detail).toContain("strategy: breakout_20_1h_v1");
+  });
+
+  it("uses one-time automatic PAPER fill approval with no always allow", () => {
+    const block = buildApprovalAskBlock(
+      "effect-paper-fill",
+      "paper_worker_fill_control",
+      {
+        action: "enable",
+        ledger_id: "paper-1",
+        expected_gate_revision: 7,
+        expected_signal_revision: 3,
+        strategy_id: "breakout_20_1h_v1",
+      },
+      [],
+    );
+    expect(block).toMatchObject({
+      kind: "ask",
+      text: "Enable automatic PAPER fills for “paper-1”?",
+      actions: [
+        { id: "allow", label: "Enable automatic PAPER fills" },
+        { id: "deny", label: "Cancel" },
+      ],
+    });
+    expect(JSON.stringify(block)).not.toContain("Always allow");
+    if (block.kind !== "ask") throw new Error("expected ask block");
+    expect(block.detail).toContain("does not fetch a quote or fill now");
+    expect(block.detail).toContain("expected signal revision: 3");
+  });
+
+  it.each([
+    ["paper_resolved_research_control", "Authorize PAPER research scope once"],
+    ["paper_resolved_research_fill_control", "Authorize PAPER fill scope once"],
+  ])("never offers permanent approval for %s", (tool, label) => {
+    const block = buildApprovalAskBlock(
+      "effect-scope",
+      tool,
+      {
+        action: "enable",
+        ledger_id: "paper-1",
+        expected_gate_revision: 9,
+        scope: {
+          schemaVersion: "trading-resolved-research-scope-v2",
+          skillVariant: "rccl",
+          skillContentSha256: "a".repeat(64),
+        },
+      },
+      [],
+    );
+    expect(block).toMatchObject({
+      kind: "ask",
+      actions: [
+        { id: "allow", label },
+        { id: "deny", label: "Cancel" },
+      ],
+    });
+    expect(JSON.stringify(block)).not.toContain("Always allow");
+    expect(JSON.stringify(block)).toContain("trading-resolved-research-scope-v2");
+    expect(JSON.stringify(block)).toContain("rccl");
+    expect(JSON.stringify(block)).toContain("Fresh owner confirmation");
+  });
+
   it("uses a one-time create or cancel choice for a new security boundary", () => {
     const block = buildApprovalAskBlock(
       "effect-1",
