@@ -57,18 +57,40 @@ export function openCliAvailable(config = loadOpenCliConfiguration()): boolean {
   return Boolean(path.isAbsolute(config.entry) && existsSync(config.entry));
 }
 
+/**
+ * Isolate an OpenCLI browser invocation from a stale global OPENCLI_PROFILE.
+ * Rakazo uses --profile only when the owner explicitly sets
+ * RAKAZO_OPENCLI_PROFILE; otherwise OpenCLI should select its connected
+ * default or fail on ambiguity, not silently reuse an outdated environment ID.
+ */
+export function openCliChildEnvironment(
+  argv: string[],
+  source: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const childEnv: NodeJS.ProcessEnv = {
+    ...source,
+    OPENCLI_BROWSER_COMMAND_TIMEOUT: "10",
+    // Keep automation visible to the owner; close only owned sessions after tasks.
+    OPENCLI_WINDOW: source.RAKAZO_OPENCLI_WINDOW?.trim() || "foreground",
+  };
+  const profileArgument = argv.indexOf("--profile");
+  if (profileArgument >= 0) {
+    const selected = argv[profileArgument + 1]?.trim();
+    if (!selected) throw new Error("Missing explicitly configured OpenCLI profile");
+    childEnv.OPENCLI_PROFILE = selected;
+  } else {
+    delete childEnv.OPENCLI_PROFILE;
+  }
+  return childEnv;
+}
+
 export async function runOpenCliProcess(entry: string, argv: string[]): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const child = spawn(process.execPath, [entry, ...argv], {
       windowsHide: true,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        ...process.env,
-        OPENCLI_BROWSER_COMMAND_TIMEOUT: "10",
-        // Keep automation visible to the owner; close only owned sessions after tasks.
-        OPENCLI_WINDOW: process.env.RAKAZO_OPENCLI_WINDOW?.trim() || "foreground",
-      },
+      env: openCliChildEnvironment(argv),
     });
     let output = "";
     let errors = "";
