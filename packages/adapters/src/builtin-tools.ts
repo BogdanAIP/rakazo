@@ -4,9 +4,15 @@ import {
   botSecretDestinationSchema,
   SecretAskPurpose,
   SecretHttpRequest,
+  TradingResolvedResearchApprovalScopeSchema,
 } from "@rakazo/contracts";
 import { z } from "zod";
 import { allowPrivateHttpSecretOrigins } from "./bot-secrets.js";
+
+// Keep both explicit-approval tool inputs aligned with the canonical v1/v2 scope contract.
+const resolvedResearchApprovalScopeJsonSchema = z.toJSONSchema(
+  TradingResolvedResearchApprovalScopeSchema,
+);
 
 // The owner flag can land in process.env after static imports run (loadRootEnv
 // parses .env once the entry module is already executing), so the model-facing
@@ -1035,64 +1041,7 @@ export const builtinAgentTools: ConnectorTool[] = [
             action: { type: "string", const: "enable" },
             ledger_id: { type: "string", minLength: 1, maxLength: 128 },
             expected_gate_revision: { type: "integer", minimum: 0 },
-            scope: {
-              type: "object",
-              properties: {
-                schemaVersion: {
-                  type: "string",
-                  const: "trading-resolved-research-scope-v1",
-                },
-                semanticKey: {
-                  type: "string",
-                  pattern: "^[a-z][a-z0-9._-]*$",
-                  minLength: 3,
-                  maxLength: 80,
-                },
-                resolverKey: { type: "string", minLength: 1, maxLength: 200 },
-                resolverDigest: { type: "string", pattern: "^[a-f0-9]{64}$" },
-                implementationReference: { type: "string", minLength: 1, maxLength: 500 },
-                skillSourceDigest: {
-                  anyOf: [{ type: "string", pattern: "^[a-f0-9]{64}$" }, { type: "null" }],
-                },
-                strategyId: { type: "string", minLength: 1 },
-                strategyVersion: { type: "string", minLength: 1, maxLength: 128 },
-                venue: {
-                  anyOf: [{ type: "string", minLength: 1, maxLength: 80 }, { type: "null" }],
-                },
-                marketKind: {
-                  anyOf: [
-                    {
-                      type: "string",
-                      enum: ["spot", "perpetual", "dated_future", "dex_swap"],
-                    },
-                    { type: "null" },
-                  ],
-                },
-                action: {
-                  anyOf: [
-                    {
-                      type: "string",
-                      enum: ["spot_buy", "spot_sell", "long", "short", "reduce", "close"],
-                    },
-                    { type: "null" },
-                  ],
-                },
-              },
-              required: [
-                "schemaVersion",
-                "semanticKey",
-                "resolverKey",
-                "resolverDigest",
-                "implementationReference",
-                "skillSourceDigest",
-                "strategyId",
-                "strategyVersion",
-                "venue",
-                "marketKind",
-                "action",
-              ],
-              additionalProperties: false,
-            },
+            scope: resolvedResearchApprovalScopeJsonSchema,
           },
           required: ["action", "ledger_id", "expected_gate_revision", "scope"],
           additionalProperties: false,
@@ -1123,64 +1072,7 @@ export const builtinAgentTools: ConnectorTool[] = [
             ledger_id: { type: "string", minLength: 1, maxLength: 128 },
             expected_gate_revision: { type: "integer", minimum: 0 },
             expected_research_revision: { type: "integer", minimum: 1 },
-            scope: {
-              type: "object",
-              properties: {
-                schemaVersion: {
-                  type: "string",
-                  const: "trading-resolved-research-scope-v1",
-                },
-                semanticKey: {
-                  type: "string",
-                  pattern: "^[a-z][a-z0-9._-]*$",
-                  minLength: 3,
-                  maxLength: 80,
-                },
-                resolverKey: { type: "string", minLength: 1, maxLength: 200 },
-                resolverDigest: { type: "string", pattern: "^[a-f0-9]{64}$" },
-                implementationReference: { type: "string", minLength: 1, maxLength: 500 },
-                skillSourceDigest: {
-                  anyOf: [{ type: "string", pattern: "^[a-f0-9]{64}$" }, { type: "null" }],
-                },
-                strategyId: { type: "string", minLength: 1 },
-                strategyVersion: { type: "string", minLength: 1, maxLength: 128 },
-                venue: {
-                  anyOf: [{ type: "string", minLength: 1, maxLength: 80 }, { type: "null" }],
-                },
-                marketKind: {
-                  anyOf: [
-                    {
-                      type: "string",
-                      enum: ["spot", "perpetual", "dated_future", "dex_swap"],
-                    },
-                    { type: "null" },
-                  ],
-                },
-                action: {
-                  anyOf: [
-                    {
-                      type: "string",
-                      enum: ["spot_buy", "spot_sell", "long", "short", "reduce", "close"],
-                    },
-                    { type: "null" },
-                  ],
-                },
-              },
-              required: [
-                "schemaVersion",
-                "semanticKey",
-                "resolverKey",
-                "resolverDigest",
-                "implementationReference",
-                "skillSourceDigest",
-                "strategyId",
-                "strategyVersion",
-                "venue",
-                "marketKind",
-                "action",
-              ],
-              additionalProperties: false,
-            },
+            scope: resolvedResearchApprovalScopeJsonSchema,
           },
           required: [
             "action",
