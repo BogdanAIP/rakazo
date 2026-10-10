@@ -18,6 +18,8 @@ import type { createRunExecutor } from "./executor.js";
 import { compactHistory } from "./history-compaction.js";
 import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import { deliverMessagingOutbound, mirrorMessagingOutbound } from "./messaging-delivery.js";
+import { handlePaperProtectionOnlyWake } from "./paper-protection-only-wake.js";
+import { enqueueAuthorizedPaperProtectionSuccessor } from "./paper-protection-only-scheduler.js";
 import { handlePaperWorkerPreflightWithSuccessor } from "./paper-worker-recurring-handler.js";
 import type { EncryptedSecretStore } from "./secrets.js";
 import { expireTaughtSkillTeaching } from "./teaching-session.js";
@@ -73,6 +75,14 @@ export function createBackgroundJobHandlers(deps: {
     },
     "routine.wakeup": async (payload) => {
       await deps.executor.wakeRoutine(payload.routineId, payload.scheduledFor);
+    },
+    "paper.protection-check": async (payload) => {
+      const stop = await handlePaperProtectionOnlyWake(deps.prisma, payload);
+      if (stop.status === "deny") return;
+      await enqueueAuthorizedPaperProtectionSuccessor(
+        { prisma: deps.prisma, jobs: deps.jobs },
+        payload,
+      );
     },
     "paper.worker-preflight": async (payload) => {
       await handlePaperWorkerPreflightWithSuccessor(
