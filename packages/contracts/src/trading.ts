@@ -15,6 +15,16 @@ export const TradingPositiveDecimalSchema = TradingDecimalSchema.refine(
 export const TradingMarketKindSchema = z.enum(["spot", "perpetual", "dated_future", "dex_swap"]);
 export type TradingMarketKind = z.infer<typeof TradingMarketKindSchema>;
 
+export const TradingActionSchema = z.enum([
+  "spot_buy",
+  "spot_sell",
+  "long",
+  "short",
+  "reduce",
+  "close",
+]);
+export type TradingAction = z.infer<typeof TradingActionSchema>;
+
 export const TradingInstrumentSchema = z
   .object({
     venue: z.string().trim().min(1).max(80),
@@ -71,7 +81,7 @@ export const TradingSignalSchema = z
       /** A proposal is not an order and grants no execution authority. */
       executionStatus: z.literal("research_only"),
       market: TradingInstrumentSchema,
-      action: z.enum(["spot_buy", "spot_sell", "long", "short", "reduce", "close"]),
+      action: TradingActionSchema,
       entryTrigger: TradingPositiveDecimalSchema,
       stopLoss: TradingPositiveDecimalSchema,
       takeProfit: z.array(TradingPositiveDecimalSchema).min(1).max(8),
@@ -117,6 +127,109 @@ export const TradingSignalSchema = z
     }
   });
 export type TradingSignal = z.infer<typeof TradingSignalSchema>;
+
+/**
+ * Provenance for one Resolver-selected read-only research implementation.
+ *
+ * This is deliberately data-only. A selected Market Resolver route or Skill
+ * never carries PAPER or live execution authority into Trading Core.
+ */
+export const TradingResolvedResearchImplementationSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  kind: z.enum(["mcp", "api", "cli", "browser", "computer", "native", "skill"]),
+  reference: z.string().trim().min(1).max(500),
+  priority: z.number().int().min(1).max(10_000),
+  readOnly: z.literal(true),
+});
+
+export const TradingResolvedResearchSkillProvenanceSchema = z.object({
+  marketEntryId: Id,
+  marketKey: z.string().trim().min(1).max(200),
+  sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  variant: z.enum(["original", "rccl", "wrapped", "hybrid"]),
+  /** SHA-256 of the exact selected instruction TEXT, not of the Market source revision.
+   * Optional only for archived pre-G9 research envelopes. The G7 Market bridge
+   * always adds it. Adapted variants cannot receive v1 PAPER approvals. */
+  contentSha256: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
+});
+
+export const TradingResolvedResearchProvenanceSchema = z.object({
+  semanticKey: z
+    .string()
+    .trim()
+    .min(3)
+    .max(80)
+    .regex(/^[a-z][a-z0-9._-]*$/),
+  resolverKey: z.string().trim().min(1).max(200),
+  resolverDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  implementation: TradingResolvedResearchImplementationSchema,
+  skill: TradingResolvedResearchSkillProvenanceSchema.nullable(),
+  resolvedAt: IsoDate,
+});
+export type TradingResolvedResearchProvenance = z.infer<
+  typeof TradingResolvedResearchProvenanceSchema
+>;
+
+/**
+ * Normalized boundary between Market Resolver/Skills and Trading Core.
+ *
+ * The envelope can carry a proposal or explicit NO_TRADE, but it is always
+ * research-only and grants no reserve/fill/close authority. A later explicit
+ * strategy/risk gate must independently approve any PAPER state transition.
+ */
+export const TradingResolvedResearchEnvelopeSchema = z.object({
+  schemaVersion: z.literal("trading-resolved-research-v1"),
+  mode: z.literal("research_only"),
+  executionAuthority: z.literal("none"),
+  provenance: TradingResolvedResearchProvenanceSchema,
+  signal: TradingSignalSchema,
+});
+export type TradingResolvedResearchEnvelope = z.infer<typeof TradingResolvedResearchEnvelopeSchema>;
+
+/**
+ * Immutable research-source identity that a later explicit PAPER strategy gate
+ * may approve. It intentionally omits a signal's price levels and evidence so
+ * approval cannot be confused with an order or one specific fill.
+ */
+const TradingResolvedResearchApprovalScopeV1Schema = z.object({
+  schemaVersion: z.literal("trading-resolved-research-scope-v1"),
+  semanticKey: TradingResolvedResearchProvenanceSchema.shape.semanticKey,
+  resolverKey: TradingResolvedResearchProvenanceSchema.shape.resolverKey,
+  resolverDigest: TradingResolvedResearchProvenanceSchema.shape.resolverDigest,
+  implementationReference: TradingResolvedResearchImplementationSchema.shape.reference,
+  skillSourceDigest: TradingResolvedResearchSkillProvenanceSchema.shape.sourceDigest.nullable(),
+  strategyId: Id,
+  strategyVersion: z.string().trim().min(1).max(128),
+  venue: z.string().trim().min(1).max(80).nullable(),
+  marketKind: TradingMarketKindSchema.nullable(),
+  action: TradingActionSchema.nullable(),
+});
+
+/**
+ * G9: an explicit owner approval for a Market Skill MUST bind the chosen
+ * original/RCCL/wrapped/hybrid version AND SHA-256 of the actual instructions.
+ *
+ * V1 is retained strictly for replay/verification of existing historic grants.
+ * Parsing and hashing stored v1 JSON must remain stable. G7 research with
+ * pinned selected Skill content derives v2, never upgrades a v1 grant.
+ */
+const TradingResolvedResearchApprovalScopeV2Schema =
+  TradingResolvedResearchApprovalScopeV1Schema.omit({ schemaVersion: true }).extend({
+    schemaVersion: z.literal("trading-resolved-research-scope-v2"),
+    skillVariant: TradingResolvedResearchSkillProvenanceSchema.shape.variant,
+    skillContentSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  });
+
+export const TradingResolvedResearchApprovalScopeSchema = z.discriminatedUnion("schemaVersion", [
+  TradingResolvedResearchApprovalScopeV1Schema,
+  TradingResolvedResearchApprovalScopeV2Schema,
+]);
+export type TradingResolvedResearchApprovalScope = z.infer<
+  typeof TradingResolvedResearchApprovalScopeSchema
+>;
 
 /** Read-only, user-invoked market prefilter. It creates no orders or buy/sell signals. */
 export const TradingScanRequestSchema = z.object({

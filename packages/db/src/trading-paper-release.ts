@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { TradingPaperLedgerState } from "@rakazo/contracts";
 import type { Prisma } from "./client.js";
+import { verifyTradingPaperSessionSettlingAuthorityInTransaction } from "./trading-paper-entry-session.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
 import {
   appendTradingPaperLedgerEventInTransaction,
@@ -8,7 +9,7 @@ import {
 } from "./trading-paper-store.js";
 
 type Owner = { spaceId: string; userId: string };
-export type PaperReleaseReason = "expired" | "kill_switch";
+export type PaperReleaseReason = "expired" | "kill_switch" | "session_end";
 
 function digest(value: {
   ledgerId: string;
@@ -57,6 +58,16 @@ export async function releaseTradingPaperReservationsInTransaction(
   if (!Number.isFinite(nowMs) || !Number.isSafeInteger(policyRevision) || policyRevision < 0) {
     throw new PaperReleaseIntegrityError("Invalid trusted release clock or policy revision");
   }
+  if (reason === "session_end") {
+    const permitted = await verifyTradingPaperSessionSettlingAuthorityInTransaction(
+      tx,
+      owner,
+      ledgerId,
+    );
+    if (Math.abs(permitted.checkedAt.getTime() - nowMs) > 2_000) {
+      throw new PaperReleaseIntegrityError("Normal session release requires the trusted DB clock");
+    }
+  }
   await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date(nowMs));
   const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
   const lastEvent = recovered.events.at(-1);
@@ -65,7 +76,12 @@ export async function releaseTradingPaperReservationsInTransaction(
     throw new PaperReleaseIntegrityError("Paper journal is future-dated relative to release clock");
   }
   const candidates = recovered.state.reservations
-    .filter((reservation) => reason === "kill_switch" || Date.parse(reservation.expiresAt) <= nowMs)
+    .filter(
+      (reservation) =>
+        reason === "kill_switch" ||
+        reason === "session_end" ||
+        Date.parse(reservation.expiresAt) <= nowMs,
+    )
     .sort((a, b) => a.reservationId.localeCompare(b.reservationId));
   let state = recovered.state;
   let released = 0;

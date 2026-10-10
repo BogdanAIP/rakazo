@@ -4,7 +4,9 @@ import {
   closeTradingPaperPositionOnStop,
   type PrismaClient,
   readTradingPaperWorkerWakePreflight,
+  readVerifiedTradingPaperResolvedResearchAutomaticStopCandidates,
   readVerifiedTradingPaperWorkerAutomaticStopCandidates,
+  type TradingPaperResolvedResearchAutomaticStopCandidate,
   type TradingPaperWorkerAutomaticStopCandidate,
 } from "@rakazo/db";
 import {
@@ -14,6 +16,8 @@ import {
 
 type ReadWake = typeof readTradingPaperWorkerWakePreflight;
 type ReadCandidates = typeof readVerifiedTradingPaperWorkerAutomaticStopCandidates;
+type ReadResolvedCandidates =
+  typeof readVerifiedTradingPaperResolvedResearchAutomaticStopCandidates;
 type CaptureEvidence = typeof capturePublicPaperSpotEvidence;
 type ClosePosition = typeof closeTradingPaperPositionOnStop;
 type WakePreflight = Awaited<ReturnType<ReadWake>>;
@@ -34,6 +38,7 @@ export type PaperWorkerAutomaticStopHandlingResult =
         | "queued_gate_revision_stale"
         | "worker_scope_changed"
         | "candidate_scope_changed"
+        | "unsupported_candidate_market"
         | "close_denied";
       checkedPositions: number;
       positionId?: string;
@@ -83,6 +88,53 @@ function sameCandidate(
   );
 }
 
+function sameResolvedCandidate(
+  left: TradingPaperResolvedResearchAutomaticStopCandidate,
+  right: TradingPaperResolvedResearchAutomaticStopCandidate,
+): boolean {
+  return (
+    left.ledgerId === right.ledgerId &&
+    left.positionId === right.positionId &&
+    left.signalId === right.signalId &&
+    left.venue === right.venue &&
+    left.symbol === right.symbol &&
+    left.quantityBase === right.quantityBase &&
+    left.stopPriceQuote === right.stopPriceQuote &&
+    JSON.stringify(left.scope) === JSON.stringify(right.scope) &&
+    left.policyRevision === right.policyRevision &&
+    left.gateRevision === right.gateRevision &&
+    left.researchRevision === right.researchRevision &&
+    left.fillRevision === right.fillRevision &&
+    left.fillApprovalEffectId === right.fillApprovalEffectId &&
+    left.researchApprovalEffectId === right.researchApprovalEffectId &&
+    left.fillEventSequence === right.fillEventSequence
+  );
+}
+
+function resolvedStopEvidenceId(
+  payload: BackgroundJobPayloads["paper.worker-preflight"],
+  candidate: TradingPaperResolvedResearchAutomaticStopCandidate,
+): string {
+  const digest = createHash("sha256")
+    .update(
+      JSON.stringify([
+        "paper-resolved-stop-v1",
+        payload.ledgerId,
+        payload.scheduledFor,
+        payload.gateRevision,
+        candidate.positionId,
+        candidate.fillEventSequence,
+        candidate.researchRevision,
+        candidate.fillRevision,
+        candidate.fillApprovalEffectId,
+        candidate.researchApprovalEffectId,
+      ]),
+      "utf8",
+    )
+    .digest("hex");
+  return `paper-worker:${digest}`;
+}
+
 function stopEvidenceId(
   payload: BackgroundJobPayloads["paper.worker-preflight"],
   candidate: TradingPaperWorkerAutomaticStopCandidate,
@@ -107,10 +159,11 @@ function stopEvidenceId(
 
 /** P11F-5 PAPER-only automatic protective-stop bridge.
  *
- * This handles only open positions proven by F4 to originate from an F3
- * automatic fill. Before each synthetic close attempt it requires a current D2
- * worker authority, captures fresh keyless public evidence for the position's
- * own historical venue/symbol, then rechecks both D2 and F4 scope. The existing
+ * This handles open positions proven by F4/G5 to originate from either an F3
+ * worker fill or a G4 Resolver/Skill fill. Before each synthetic close attempt
+ * it requires a current D2 worker authority, captures fresh keyless public
+ * evidence for the position's own historical venue/symbol, then rechecks D2
+ * and the exact fill provenance. The existing
  * C2 close transaction remains the money boundary and independently requires an
  * enabled PAPER policy with the kill switch unlatched.
  *
@@ -127,6 +180,7 @@ export async function handleVerifiedPaperWorkerAutomaticStops(
   readCandidates: ReadCandidates = readVerifiedTradingPaperWorkerAutomaticStopCandidates,
   capture: CaptureEvidence = capturePublicPaperSpotEvidence,
   closePosition: ClosePosition = closeTradingPaperPositionOnStop,
+  readResolvedCandidates: ReadResolvedCandidates = readVerifiedTradingPaperResolvedResearchAutomaticStopCandidates,
 ): Promise<PaperWorkerAutomaticStopHandlingResult> {
   if (!Number.isFinite(now.getTime())) {
     throw new Error("Invalid automatic PAPER stop handler clock");
@@ -152,22 +206,59 @@ export async function handleVerifiedPaperWorkerAutomaticStops(
     };
   }
 
-  const candidates = await readCandidates(prisma, owner, payload.ledgerId, now);
+  const [workerCandidates, resolvedCandidates] = await Promise.all([
+    readCandidates(prisma, owner, payload.ledgerId, now),
+    readResolvedCandidates(prisma, owner, payload.ledgerId, now),
+  ]);
+  const candidates = [
+    ...workerCandidates.positions.map((candidate) => ({
+      provenance: "worker_f3" as const,
+      candidate,
+    })),
+    ...resolvedCandidates.positions.map((candidate) => ({
+      provenance: "resolved_g4" as const,
+      candidate,
+    })),
+  ].sort((left, right) => left.candidate.fillEventSequence - right.candidate.fillEventSequence);
+
+  const positionIds = new Set<string>();
+  for (const entry of candidates) {
+    if (positionIds.has(entry.candidate.positionId)) {
+      throw new Error("Automatic PAPER stop candidate has conflicting fill provenance");
+    }
+    positionIds.add(entry.candidate.positionId);
+  }
+
   let checkedPositions = 0;
 
-  for (const candidate of candidates.positions) {
+  for (const entry of candidates) {
     checkedPositions += 1;
-    const evidenceId = stopEvidenceId(payload, candidate);
+    const { candidate } = entry;
+    if (candidate.venue !== "okx" && candidate.venue !== "bingx") {
+      return {
+        status: "stop",
+        ledgerId: payload.ledgerId,
+        reason: "unsupported_candidate_market",
+        checkedPositions,
+        positionId: candidate.positionId,
+      };
+    }
+    const evidenceId =
+      entry.provenance === "worker_f3"
+        ? stopEvidenceId(payload, entry.candidate)
+        : resolvedStopEvidenceId(payload, entry.candidate);
     const target: PublicPaperSpotTarget = {
       venue: candidate.venue,
       symbol: candidate.symbol,
     };
     await capture(prisma, owner, payload.ledgerId, target, evidenceId);
 
-    const [confirmedWake, confirmedCandidates] = await Promise.all([
-      readWake(prisma, owner, payload.ledgerId, now),
-      readCandidates(prisma, owner, payload.ledgerId, now),
-    ]);
+    const [confirmedWake, confirmedWorkerCandidates, confirmedResolvedCandidates] =
+      await Promise.all([
+        readWake(prisma, owner, payload.ledgerId, now),
+        readCandidates(prisma, owner, payload.ledgerId, now),
+        readResolvedCandidates(prisma, owner, payload.ledgerId, now),
+      ]);
     if (
       confirmedWake.status !== "ready" ||
       confirmedWake.gateRevision !== payload.gateRevision ||
@@ -183,10 +274,21 @@ export async function handleVerifiedPaperWorkerAutomaticStops(
       };
     }
 
-    const confirmedCandidate = confirmedCandidates.positions.find(
-      (entry) => entry.positionId === candidate.positionId,
-    );
-    if (!confirmedCandidate || !sameCandidate(candidate, confirmedCandidate)) {
+    const candidateMatches =
+      entry.provenance === "worker_f3"
+        ? (() => {
+            const confirmed = confirmedWorkerCandidates.positions.find(
+              (item) => item.positionId === entry.candidate.positionId,
+            );
+            return confirmed ? sameCandidate(entry.candidate, confirmed) : false;
+          })()
+        : (() => {
+            const confirmed = confirmedResolvedCandidates.positions.find(
+              (item) => item.positionId === entry.candidate.positionId,
+            );
+            return confirmed ? sameResolvedCandidate(entry.candidate, confirmed) : false;
+          })();
+    if (!candidateMatches) {
       return {
         status: "stop",
         ledgerId: payload.ledgerId,

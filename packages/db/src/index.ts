@@ -15,10 +15,14 @@ export * from "./repos.js";
 export * from "./scope.js";
 export * from "./spaces.js";
 export { closeTradingPaperPositionOnStop } from "./trading-paper-close.js";
+export * from "./trading-paper-entry-session.js";
 export {
+  fillApprovedResolvedTradingPaperReservation,
   fillApprovedTradingPaperReservation,
   type TradingPaperFillResult,
 } from "./trading-paper-fill.js";
+export * from "./trading-paper-protection-lease.js";
+export * from "./trading-paper-protection-successor.js";
 export { applyApprovedTradingPaperProtectiveExitControl } from "./trading-paper-protective-exit-authority.js";
 export {
   PaperQuoteEvidenceError,
@@ -31,16 +35,59 @@ export * from "./trading-paper-reservation-preflight.js";
 export {
   PaperReservationConflictError,
   PaperReservationDecisionIntegrityError,
+  reserveApprovedResolvedTradingPaperSignal,
   reserveApprovedTradingPaperSignal,
   type TradingPaperReserveResult,
   type TradingPaperWorkerSignalReserveAuthority,
 } from "./trading-paper-reserve.js";
+export {
+  applyApprovedTradingPaperResolvedResearchFillControl,
+  assessTradingPaperResolvedResearchFillPreflightInTransaction,
+  type HistoricalTradingPaperResolvedResearchFillScope,
+  type PaperResolvedResearchFillControlResult,
+  PaperResolvedResearchFillGateIntegrityError,
+  readTradingPaperResolvedResearchFillPreflight,
+  readVerifiedTradingPaperResolvedResearchFillGate,
+  recordTradingPaperResolvedResearchFillUseInTransaction,
+  type TradingPaperResolvedResearchFillAuthority,
+  type TradingPaperResolvedResearchFillGateStatus,
+  type TradingPaperResolvedResearchFillPreflight,
+  verifyHistoricalTradingPaperResolvedResearchFillApprovalInTransaction,
+  verifyTradingPaperResolvedResearchFillAuthorityInTransaction,
+} from "./trading-paper-resolved-research-fill-gate.js";
+export {
+  applyApprovedTradingPaperResolvedResearchControl,
+  assessTradingPaperResolvedResearchPreflightInTransaction,
+  assessTradingPaperResolvedResearchScopeAuthorityInTransaction,
+  type HistoricalTradingPaperResolvedResearchReserveScope,
+  type PaperResolvedResearchControlResult,
+  PaperResolvedResearchGateIntegrityError,
+  readTradingPaperResolvedResearchPreflight,
+  readVerifiedTradingPaperResolvedResearchGate,
+  recordTradingPaperResolvedResearchReserveUseInTransaction,
+  type TradingPaperResolvedResearchAuthority,
+  type TradingPaperResolvedResearchGateStatus,
+  type TradingPaperResolvedResearchPreflight,
+  type TradingPaperResolvedResearchScopeAuthority,
+  type TradingPaperResolvedResearchScopeIdentity,
+  verifyHistoricalTradingPaperResolvedResearchReserveApprovalInTransaction,
+  verifyTradingPaperResolvedResearchAuthorityInTransaction,
+  verifyTradingPaperResolvedResearchReserveUseInTransaction,
+  verifyTradingPaperResolvedResearchReserveUseScopeInTransaction,
+} from "./trading-paper-resolved-research-gate.js";
+export {
+  PaperResolvedResearchAutomaticStopPreflightIntegrityError,
+  readVerifiedTradingPaperResolvedResearchAutomaticStopCandidates,
+  type TradingPaperResolvedResearchAutomaticStopCandidate,
+  type TradingPaperResolvedResearchAutomaticStopPreflight,
+} from "./trading-paper-resolved-research-stop-preflight.js";
 export {
   applyApprovedTradingPaperControl,
   createDisabledTradingPaperRiskPolicy,
   PaperRiskPolicyIntegrityError,
   readVerifiedTradingPaperRiskPolicy,
 } from "./trading-paper-risk-policy.js";
+export * from "./trading-paper-session-settlement.js";
 export {
   appendTradingPaperLedgerEvent,
   createTradingPaperLedger,

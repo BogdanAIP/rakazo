@@ -1,8 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
-import { type TradingSignal, TradingSignalSchema } from "@rakazo/contracts";
+import {
+  type TradingResolvedResearchEnvelope,
+  type TradingSignal,
+  TradingSignalSchema,
+} from "@rakazo/contracts";
 import { estimateExactPaperSpotCapacity } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { lockAndVerifyTradingPaperEntrySessionInTransaction } from "./trading-paper-entry-session.js";
 import {
   auditTradingPaperLifecycleInTransaction,
   PaperLifecycleAuditError,
@@ -13,6 +18,12 @@ import {
   type TradingPaperReservationDeny,
   type TradingPaperReservationDenyReason,
 } from "./trading-paper-reservation-evaluation.js";
+import {
+  recordTradingPaperResolvedResearchReserveUseInTransaction,
+  type TradingPaperResolvedResearchAuthority,
+  verifyTradingPaperResolvedResearchAuthorityInTransaction,
+  verifyTradingPaperResolvedResearchReserveUseInTransaction,
+} from "./trading-paper-resolved-research-gate.js";
 import {
   lockTradingPaperRiskPolicyInTransaction,
   verifyCurrentTradingPaperEnableAuditInTransaction,
@@ -50,6 +61,8 @@ type ReserveDenyReason =
   | TradingPaperReservationDenyReason
   | "paper_capability_unapproved"
   | "paper_worker_signal_unapproved"
+  | "paper_resolved_research_unapproved"
+  | "paper_entry_session_inactive"
   | "price_not_tick_aligned"
   | "capacity_unrepresentable"
   | "capacity_no_capacity"
@@ -80,6 +93,11 @@ export type TradingPaperWorkerSignalReserveAuthority = Extract<
   TradingPaperWorkerSignalPreflight,
   { status: "ready" }
 >;
+
+type TradingPaperResolvedResearchReserveAuthority = {
+  envelope: TradingResolvedResearchEnvelope;
+  authority: TradingPaperResolvedResearchAuthority;
+};
 
 function sameWorkerSignalAuthority(
   left: TradingPaperWorkerSignalReserveAuthority,
@@ -342,6 +360,8 @@ export async function reserveApprovedTradingPaperSignal(
   proposedSignal: unknown,
   evidenceId: string,
   workerSignalAuthority?: TradingPaperWorkerSignalReserveAuthority,
+  resolvedResearch?: TradingPaperResolvedResearchReserveAuthority,
+  expectedSessionRevision?: number,
 ): Promise<TradingPaperReserveResult> {
   const parsed = TradingSignalSchema.safeParse(proposedSignal);
   const proposal = parsed.success && parsed.data.kind === "proposal" ? parsed.data : null;
@@ -355,6 +375,51 @@ export async function reserveApprovedTradingPaperSignal(
         await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         const currentPolicy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         const decisionNow = Date.now();
+        if (workerSignalAuthority || resolvedResearch || expectedSessionRevision !== undefined) {
+          const session = await lockAndVerifyTradingPaperEntrySessionInTransaction(
+            tx,
+            owner,
+            ledgerId,
+            expectedSessionRevision,
+          );
+          if (session.status !== "ready" && session.status !== "legacy_absent") {
+            const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
+            return deny(
+              { ledgerRevision: recovered.row.version, policyRevision: currentPolicy.revision },
+              "paper_entry_session_inactive",
+            );
+          }
+        }
+        if (workerSignalAuthority && resolvedResearch) {
+          throw new PaperReservationDecisionIntegrityError(
+            "A PAPER reserve cannot use legacy and resolved-research authorities together",
+          );
+        }
+        let currentResolvedAuthority: TradingPaperResolvedResearchAuthority | null = null;
+        if (resolvedResearch) {
+          if (
+            !proposal ||
+            JSON.stringify(proposal) !== JSON.stringify(resolvedResearch.envelope.signal)
+          ) {
+            throw new PaperReservationDecisionIntegrityError(
+              "Resolved research envelope differs from the proposed PAPER signal",
+            );
+          }
+          currentResolvedAuthority = await verifyTradingPaperResolvedResearchAuthorityInTransaction(
+            tx,
+            owner,
+            resolvedResearch.authority,
+            resolvedResearch.envelope,
+            new Date(decisionNow),
+          );
+          if (!currentResolvedAuthority) {
+            const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
+            return deny(
+              { ledgerRevision: recovered.row.version, policyRevision: currentPolicy.revision },
+              "paper_resolved_research_unapproved",
+            );
+          }
+        }
         if (workerSignalAuthority) {
           const currentAuthority = await assessTradingPaperWorkerSignalPreflightInTransaction(
             tx,
@@ -375,7 +440,27 @@ export async function reserveApprovedTradingPaperSignal(
         }
         if (proposal) {
           const existing = await readExistingDecision(tx, owner, ledgerId, proposal, evidenceId);
-          if (existing) return existing;
+          if (existing) {
+            if (currentResolvedAuthority) {
+              const verifiedUse = await verifyTradingPaperResolvedResearchReserveUseInTransaction(
+                tx,
+                owner,
+                currentResolvedAuthority,
+                {
+                  reservationId: existing.reservationId,
+                  signalId: existing.signalId,
+                  evidenceId,
+                  reserveEventSequence: existing.eventSequence,
+                },
+              );
+              if (!verifiedUse) {
+                throw new PaperReservationConflictError(
+                  "Existing reserve lacks matching G2 approval provenance",
+                );
+              }
+            }
+            return existing;
+          }
           if (
             Date.parse(proposal.expiresAt) <= decisionNow ||
             Date.parse(proposal.createdAt) > decisionNow + 2_000
@@ -494,7 +579,8 @@ export async function reserveApprovedTradingPaperSignal(
             signalId: signal.signalId,
             requestSha256,
             evidenceId,
-            policyApprovalEffectId: approval.effectId,
+            policyApprovalEffectId:
+              currentResolvedAuthority?.researchApprovalEffectId ?? approval.effectId,
             policyRevision: evaluated.policyRevision,
             ledgerRevisionBefore: evaluated.ledgerRevision,
             eventSequence,
@@ -515,6 +601,20 @@ export async function reserveApprovedTradingPaperSignal(
               decisionSha256: decisionDigest(normalized),
             },
           });
+          if (currentResolvedAuthority) {
+            await recordTradingPaperResolvedResearchReserveUseInTransaction(
+              tx,
+              owner,
+              currentResolvedAuthority,
+              {
+                reservationId,
+                signalId: signal.signalId,
+                evidenceId,
+                reserveEventSequence: eventSequence,
+                actedAt: event.recordedAt,
+              },
+            );
+          }
           await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
           return {
             status: "reserved",
@@ -552,10 +652,57 @@ export async function reserveApprovedTradingPaperSignal(
           await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
           const existing = await readExistingDecision(tx, owner, ledgerId, proposal, evidenceId);
           if (!existing) throw error;
+          if (resolvedResearch) {
+            const currentAuthority = await verifyTradingPaperResolvedResearchAuthorityInTransaction(
+              tx,
+              owner,
+              resolvedResearch.authority,
+              resolvedResearch.envelope,
+              new Date(),
+            );
+            if (!currentAuthority) throw error;
+            const verifiedUse = await verifyTradingPaperResolvedResearchReserveUseInTransaction(
+              tx,
+              owner,
+              currentAuthority,
+              {
+                reservationId: existing.reservationId,
+                signalId: existing.signalId,
+                evidenceId,
+                reserveEventSequence: existing.eventSequence,
+              },
+            );
+            if (!verifiedUse) throw error;
+          }
           return existing;
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       ),
     );
   }
+}
+
+/** G2 PAPER-only bridge from one explicitly approved Resolver/Skill proposal
+ * into the existing B7 synthetic reserve/risk transaction. It revalidates G1
+ * in the same serializable transaction and records immutable approval
+ * provenance. It cannot fill the reservation or contact an exchange. */
+export async function reserveApprovedResolvedTradingPaperSignal(
+  prisma: PaperDb,
+  owner: Owner,
+  ledgerId: string,
+  envelope: TradingResolvedResearchEnvelope,
+  evidenceId: string,
+  authority: TradingPaperResolvedResearchAuthority,
+  expectedSessionRevision?: number,
+): Promise<TradingPaperReserveResult> {
+  return reserveApprovedTradingPaperSignal(
+    prisma,
+    owner,
+    ledgerId,
+    envelope.signal,
+    evidenceId,
+    undefined,
+    { envelope, authority },
+    expectedSessionRevision,
+  );
 }

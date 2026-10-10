@@ -995,6 +995,188 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    name: "paper_resolved_research_control",
+    description:
+      "Propose enabling or disabling one exact Market Resolver/Skill research scope for PAPER-only use. This always requires fresh owner confirmation and cannot be auto-reviewed or permanently allowed. It records permission only: it cannot reserve or spend virtual funds, fill or close a position, contact private exchange APIs, sign or broadcast a transaction, place an exchange order, or authorize live trading.",
+    inputSchema: {
+      oneOf: [
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "enable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+            scope: {
+              type: "object",
+              properties: {
+                schemaVersion: {
+                  type: "string",
+                  const: "trading-resolved-research-scope-v1",
+                },
+                semanticKey: {
+                  type: "string",
+                  pattern: "^[a-z][a-z0-9._-]*$",
+                  minLength: 3,
+                  maxLength: 80,
+                },
+                resolverKey: { type: "string", minLength: 1, maxLength: 200 },
+                resolverDigest: { type: "string", pattern: "^[a-f0-9]{64}$" },
+                implementationReference: { type: "string", minLength: 1, maxLength: 500 },
+                skillSourceDigest: {
+                  anyOf: [{ type: "string", pattern: "^[a-f0-9]{64}$" }, { type: "null" }],
+                },
+                strategyId: { type: "string", minLength: 1 },
+                strategyVersion: { type: "string", minLength: 1, maxLength: 128 },
+                venue: {
+                  anyOf: [{ type: "string", minLength: 1, maxLength: 80 }, { type: "null" }],
+                },
+                marketKind: {
+                  anyOf: [
+                    {
+                      type: "string",
+                      enum: ["spot", "perpetual", "dated_future", "dex_swap"],
+                    },
+                    { type: "null" },
+                  ],
+                },
+                action: {
+                  anyOf: [
+                    {
+                      type: "string",
+                      enum: ["spot_buy", "spot_sell", "long", "short", "reduce", "close"],
+                    },
+                    { type: "null" },
+                  ],
+                },
+              },
+              required: [
+                "schemaVersion",
+                "semanticKey",
+                "resolverKey",
+                "resolverDigest",
+                "implementationReference",
+                "skillSourceDigest",
+                "strategyId",
+                "strategyVersion",
+                "venue",
+                "marketKind",
+                "action",
+              ],
+              additionalProperties: false,
+            },
+          },
+          required: ["action", "ledger_id", "expected_gate_revision", "scope"],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "disable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+          },
+          required: ["action", "ledger_id", "expected_gate_revision"],
+          additionalProperties: false,
+        },
+      ],
+    },
+  },
+  {
+    name: "paper_resolved_research_fill_control",
+    description:
+      "Propose enabling or disabling a separate owner-approved permission for a future synthetic PAPER fill of G2 reservations from one exact Market Resolver/Skill research scope. This always requires fresh owner confirmation and cannot be auto-reviewed or permanently allowed. It records permission only: it does not fill any reservation, fetch market data, contact private exchange APIs, sign or broadcast a transaction, place an exchange order, or authorize live trading.",
+    inputSchema: {
+      oneOf: [
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "enable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+            expected_research_revision: { type: "integer", minimum: 1 },
+            scope: {
+              type: "object",
+              properties: {
+                schemaVersion: {
+                  type: "string",
+                  const: "trading-resolved-research-scope-v1",
+                },
+                semanticKey: {
+                  type: "string",
+                  pattern: "^[a-z][a-z0-9._-]*$",
+                  minLength: 3,
+                  maxLength: 80,
+                },
+                resolverKey: { type: "string", minLength: 1, maxLength: 200 },
+                resolverDigest: { type: "string", pattern: "^[a-f0-9]{64}$" },
+                implementationReference: { type: "string", minLength: 1, maxLength: 500 },
+                skillSourceDigest: {
+                  anyOf: [{ type: "string", pattern: "^[a-f0-9]{64}$" }, { type: "null" }],
+                },
+                strategyId: { type: "string", minLength: 1 },
+                strategyVersion: { type: "string", minLength: 1, maxLength: 128 },
+                venue: {
+                  anyOf: [{ type: "string", minLength: 1, maxLength: 80 }, { type: "null" }],
+                },
+                marketKind: {
+                  anyOf: [
+                    {
+                      type: "string",
+                      enum: ["spot", "perpetual", "dated_future", "dex_swap"],
+                    },
+                    { type: "null" },
+                  ],
+                },
+                action: {
+                  anyOf: [
+                    {
+                      type: "string",
+                      enum: ["spot_buy", "spot_sell", "long", "short", "reduce", "close"],
+                    },
+                    { type: "null" },
+                  ],
+                },
+              },
+              required: [
+                "schemaVersion",
+                "semanticKey",
+                "resolverKey",
+                "resolverDigest",
+                "implementationReference",
+                "skillSourceDigest",
+                "strategyId",
+                "strategyVersion",
+                "venue",
+                "marketKind",
+                "action",
+              ],
+              additionalProperties: false,
+            },
+          },
+          required: [
+            "action",
+            "ledger_id",
+            "expected_gate_revision",
+            "expected_research_revision",
+            "scope",
+          ],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "disable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+            expected_research_revision: { type: "integer", minimum: 0 },
+          },
+          required: ["action", "ledger_id", "expected_gate_revision", "expected_research_revision"],
+          additionalProperties: false,
+        },
+      ],
+    },
+  },
+  {
     name: "paper_worker_fill_control",
     description:
       "Propose enabling or disabling a separate owner-approved permission for the PAPER worker to automatically attempt a synthetic full fill of an already reserved B7 PAPER hold produced under the exact approved breakout_20_1h_v1 signal-gate revision. This always requires fresh owner confirmation and cannot be auto-reviewed or permanently allowed. Enabling this permission does not fill any reservation, fetch market data, place an exchange order, use private APIs, or authorize live trading.",

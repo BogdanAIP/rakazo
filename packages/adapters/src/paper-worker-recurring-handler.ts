@@ -24,6 +24,7 @@ import {
   type PaperWorkerResearchResult,
   researchObservedPaperWorkerMarket,
 } from "./paper-worker-research.js";
+import type { PaperWorkerResolvedResearchFlowResult } from "./paper-worker-resolved-research-flow.js";
 import {
   type PaperWorkerSignalReservationResult,
   reservePersistedPaperWorkerProposal,
@@ -36,6 +37,11 @@ type ResearchMarket = typeof researchObservedPaperWorkerMarket;
 type ReserveSignal = typeof reservePersistedPaperWorkerProposal;
 type FillSignal = typeof fillReservedPaperWorkerProposal;
 type HandleAutomaticStops = typeof handleVerifiedPaperWorkerAutomaticStops;
+type HandleResolvedResearch = (
+  prisma: PrismaClient,
+  payload: BackgroundJobPayloads["paper.worker-preflight"],
+  now: Date,
+) => Promise<PaperWorkerResolvedResearchFlowResult>;
 type ReadyPreflight = Extract<PaperWorkerPreflightJobResult, { status: "ready" }>;
 type StoppedObservation = Extract<PaperWorkerMarketObservationResult, { status: "stop" }>;
 type CompletedObservation = Extract<PaperWorkerMarketObservationResult, { status: "observed" }>;
@@ -60,6 +66,12 @@ export type PaperWorkerRecurringHandlerResult =
       observation: StoppedObservation;
     }
   | {
+      status: "resolved";
+      preflight: ReadyPreflight;
+      resolvedResearch: PaperWorkerResolvedResearchFlowResult;
+      successor: AuthorizedPaperWorkerSuccessorScheduleResult;
+    }
+  | {
       status: "ready";
       preflight: ReadyPreflight;
       observation: CompletedObservation;
@@ -69,18 +81,20 @@ export type PaperWorkerRecurringHandlerResult =
       successor: AuthorizedPaperWorkerSuccessorScheduleResult;
     };
 
-/** P11F-5 production PAPER wake composition. D2 revalidates the worker gate,
- * then F4/F5 service at most one verified automatic position stop before any
- * new research or exposure. Only when no protective action blocks the wake do
- * E1/E3, E5/E6, F0/F1 and F2/F3 run. C2 remains the synthetic close money
- * boundary and independently requires enabled PAPER with an unlatched kill
- * switch. D11/D12 schedule the successor. No private exchange API, broker
- * dispatcher or live order exists in this path. */
+/** PAPER wake composition. D2 revalidates the worker gate, then F4/G5
+ * service at most one verified automatic protective stop before any new
+ * exposure. When a G6 resolved-research runner is explicitly injected, it
+ * replaces the legacy E1/E3 -> E5/E6 -> F0/F1 -> F2/F3 research path for that
+ * wake and uses the generic G1-G4 PAPER boundaries instead. Without that
+ * injection the legacy deterministic path remains unchanged. C2 remains the
+ * synthetic close money boundary. D11/D12 schedule the successor. No private
+ * exchange API, broker dispatcher or live order exists in either path. */
 export async function handlePaperWorkerPreflightWithSuccessor(
   deps: {
     prisma: PrismaClient;
     jobs: Pick<JobPublisher, "enqueue">;
     handleAutomaticStops?: HandleAutomaticStops;
+    handleResolvedResearch?: HandleResolvedResearch;
   },
   payload: BackgroundJobPayloads["paper.worker-preflight"],
   now: Date = new Date(),
@@ -109,6 +123,17 @@ export async function handlePaperWorkerPreflightWithSuccessor(
       stage: "protective_stop",
       preflight,
       protectiveStop,
+      successor,
+    };
+  }
+
+  if (deps.handleResolvedResearch) {
+    const resolvedResearch = await deps.handleResolvedResearch(deps.prisma, payload, now);
+    const successor = await enqueueSuccessor(deps, payload, now);
+    return {
+      status: "resolved",
+      preflight,
+      resolvedResearch,
       successor,
     };
   }

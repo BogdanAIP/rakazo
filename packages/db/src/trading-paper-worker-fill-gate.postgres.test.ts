@@ -1,8 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb, type Prisma } from "./client.js";
+import { closeTradingPaperPositionOnStop } from "./trading-paper-close.js";
+import { applyApprovedTradingPaperEntrySessionControl } from "./trading-paper-entry-session.js";
 import { fillApprovedTradingPaperReservation } from "./trading-paper-fill.js";
 import { auditTradingPaperLifecycle } from "./trading-paper-lifecycle-audit.js";
+import {
+  applyApprovedTradingPaperProtectionControl,
+  readTradingPaperProtectionWakePreflight,
+  readVerifiedTradingPaperProtectionLease,
+} from "./trading-paper-protection-lease.js";
+import { prepareTradingPaperProtectionSuccessorIntent } from "./trading-paper-protection-successor.js";
 import { recordPublicAdapterPaperQuoteEvidence } from "./trading-paper-quote-evidence.js";
 import { reserveApprovedTradingPaperSignal } from "./trading-paper-reserve.js";
 import {
@@ -103,7 +111,9 @@ describePostgres("paper worker fill gate PostgreSQL authorization", () => {
       | "paper_worker_control"
       | "paper_worker_signal_control"
       | "paper_worker_fill_control"
-      | "paper_worker_market_target_control",
+      | "paper_worker_market_target_control"
+      | "paper_session_control"
+      | "paper_protection_control",
     label: string,
     request: Prisma.InputJsonValue,
   ) => {
@@ -469,6 +479,166 @@ describePostgres("paper worker fill gate PostgreSQL authorization", () => {
         fillDecisions: 1,
       },
     );
+
+    // H2b genuine F3 PAPER position: stop permission is separate from new entries.
+    const entryStart = await makeEffect("paper_session_control", "h2b-entry-start", {
+      action: "start",
+      ledger_id: ledgerId,
+      expected_revision: 0,
+      duration_minutes: 30,
+    });
+    expect(
+      await applyApprovedTradingPaperEntrySessionControl(first.prisma, owner, entryStart.id),
+    ).toMatchObject({ ok: true, status: "active", revision: 1 });
+    const entryPause = await makeEffect("paper_session_control", "h2b-entry-pause", {
+      action: "pause",
+      ledger_id: ledgerId,
+      expected_revision: 1,
+    });
+    expect(
+      await applyApprovedTradingPaperEntrySessionControl(second.prisma, owner, entryPause.id),
+    ).toMatchObject({ ok: true, status: "paused", revision: 2 });
+
+    const protectionStart = await makeEffect("paper_protection_control", "h2b-protection-start", {
+      action: "start",
+      ledger_id: ledgerId,
+      expected_revision: 0,
+      cadence_minutes: 15,
+      duration_minutes: 30,
+    });
+    const granted = await applyApprovedTradingPaperProtectionControl(
+      first.prisma,
+      owner,
+      protectionStart.id,
+    );
+    expect(granted).toMatchObject({
+      ok: true,
+      status: "active",
+      revision: 1,
+      workerGateRevision: 1,
+      entryRevision: 2,
+    });
+    expect(
+      await readVerifiedTradingPaperProtectionLease(second.prisma, owner, ledgerId),
+    ).toMatchObject({ status: "active", revision: 1 });
+    expect(
+      await readTradingPaperProtectionWakePreflight(second.prisma, owner, ledgerId, 1, 1),
+    ).toMatchObject({ status: "ready", revision: 1 });
+
+    // H2b2 independent protective recurrence: one exact durable intent
+    // must survive retry without recomputing a later scheduled tick.
+    const sourceScheduledFor = new Date().toISOString();
+    const successorRequest = {
+      ledgerId,
+      leaseRevision: 1,
+      gateRevision: 1,
+      sourceScheduledFor,
+    };
+    const firstSuccessor = await prepareTradingPaperProtectionSuccessorIntent(
+      first.prisma,
+      owner,
+      successorRequest,
+    );
+    expect(firstSuccessor).toMatchObject({
+      status: "prepared",
+      mode: "paper_only",
+      leaseRevision: 1,
+      gateRevision: 1,
+    });
+    const retrySuccessor = await prepareTradingPaperProtectionSuccessorIntent(
+      second.prisma,
+      owner,
+      successorRequest,
+    );
+    expect(retrySuccessor).toMatchObject({
+      status: "duplicate",
+      successorScheduledFor: firstSuccessor.status === "prepared"
+        ? firstSuccessor.successorScheduledFor
+        : "",
+    });
+    expect(
+      await first.prisma.tradingPaperProtectionSuccessorIntent.count({
+        where: { ledgerId },
+      }),
+    ).toBe(1);
+
+    // Old unscoped F4 must not bypass the independently approved lease.
+    await expect(
+      closeTradingPaperPositionOnStop(
+        first.prisma,
+        owner,
+        ledgerId,
+        reserved.reservationId,
+        fillEvidence.id,
+      ),
+    ).resolves.toMatchObject({ status: "deny", reason: "protection_lease_inactive" });
+
+    // A correct lease allows *only* a stop-triggered C2 close, not a general sell.
+    await expect(
+      closeTradingPaperPositionOnStop(
+        first.prisma,
+        owner,
+        ledgerId,
+        reserved.reservationId,
+        fillEvidence.id,
+        { revision: 1, gateRevision: 1 },
+      ),
+    ).resolves.toMatchObject({ status: "deny", reason: "stop_not_triggered" });
+
+    const closeAt = new Date().toISOString();
+    const stopEvidence = await recordPublicAdapterPaperQuoteEvidence(
+      first.prisma,
+      owner,
+      ledgerId,
+      market,
+      {
+        venue: "okx",
+        kind: "spot",
+        symbol: "SOL-USDT",
+        observedAt: closeAt,
+        fetchedAt: closeAt,
+        bid: "94",
+        ask: "94.01",
+        quoteVolume24h: "100000",
+      },
+    );
+    const closed = await closeTradingPaperPositionOnStop(
+      second.prisma,
+      owner,
+      ledgerId,
+      reserved.reservationId,
+      stopEvidence.id,
+      { revision: 1, gateRevision: 1 },
+    );
+    expect(closed).toMatchObject({ status: "closed", mode: "paper_only" });
+    expect(
+      await first.prisma.tradingPaperLedgerEvent.count({
+        where: { ledgerId, kind: "fill_sell" },
+      }),
+    ).toBe(1);
+    expect(await auditTradingPaperLifecycle(second.prisma, owner, ledgerId)).resolves.toMatchObject(
+      { openPositions: 0 },
+    );
+
+    expect(
+      await prepareTradingPaperProtectionSuccessorIntent(
+        second.prisma,
+        owner,
+        successorRequest,
+      ),
+    ).toMatchObject({ status: "stop", reason: "no_open_positions" });
+
+    const protectionEnd = await makeEffect("paper_protection_control", "h2b-protection-end", {
+      action: "end",
+      ledger_id: ledgerId,
+      expected_revision: 1,
+    });
+    expect(
+      await applyApprovedTradingPaperProtectionControl(second.prisma, owner, protectionEnd.id),
+    ).toMatchObject({ ok: true, status: "ended", revision: 2 });
+    expect(
+      await readTradingPaperProtectionWakePreflight(first.prisma, owner, ledgerId, 1, 1),
+    ).toMatchObject({ status: "deny", reason: "protection_not_active" });
   });
 
   it("requires separate fill permission and invalidates it when the signal gate changes", async () => {

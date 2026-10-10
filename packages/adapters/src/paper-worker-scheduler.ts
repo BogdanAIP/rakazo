@@ -1,6 +1,9 @@
 import { type JobPublisher, paperWorkerPreflightJob } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
-import { readTradingPaperWorkerWakePreflight } from "@rakazo/db";
+import {
+  readTradingPaperWorkerWakePreflight,
+  readVerifiedTradingPaperEntrySession,
+} from "@rakazo/db";
 
 type ReadPreflight = typeof readTradingPaperWorkerWakePreflight;
 
@@ -23,6 +26,7 @@ export async function enqueuePaperWorkerPreflightOnce(
     userId: string;
     ledgerId: string;
     expectedGateRevision: number;
+    expectedSessionRevision?: number;
     now?: Date;
   },
   readPreflight: ReadPreflight = readTradingPaperWorkerWakePreflight,
@@ -52,12 +56,28 @@ export async function enqueuePaperWorkerPreflightOnce(
   }
 
   const scheduledFor = new Date(now.getTime() + preflight.cadenceMinutes * 60_000);
+  if (input.expectedSessionRevision !== undefined) {
+    const session = await readVerifiedTradingPaperEntrySession(
+      deps.prisma,
+      { spaceId: input.spaceId, userId: input.userId },
+      input.ledgerId,
+    );
+    if (
+      session.status !== "active" ||
+      session.revision !== input.expectedSessionRevision ||
+      session.workerGateRevision !== input.expectedGateRevision ||
+      scheduledFor.getTime() >= Date.parse(session.expiresAt)
+    ) {
+      return { status: "deny", ledgerId: input.ledgerId, reason: "entry_session_inactive" };
+    }
+  }
   await deps.jobs.enqueue(
     paperWorkerPreflightJob({
       ledgerId: input.ledgerId,
       spaceId: input.spaceId,
       userId: input.userId,
       gateRevision: preflight.gateRevision,
+      ...(input.expectedSessionRevision ? { sessionRevision: input.expectedSessionRevision } : {}),
       scheduledFor,
     }),
   );

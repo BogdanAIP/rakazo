@@ -49,6 +49,50 @@ const candidatePreflight = {
   positions: [candidate],
 };
 
+const emptyResolvedPreflight = {
+  status: "ready" as const,
+  mode: "paper_only" as const,
+  ledgerId: "paper-1",
+  positions: [],
+};
+const noResolvedCandidates = async () => emptyResolvedPreflight;
+const resolvedCandidate = {
+  mode: "paper_only" as const,
+  ledgerId: "paper-1",
+  positionId: "resolved-position-1",
+  signalId: "resolved-signal-1",
+  venue: "okx",
+  symbol: "SOL-USDT",
+  quantityBase: "1",
+  stopPriceQuote: "95",
+  scope: {
+    schemaVersion: "trading-resolved-research-scope-v1" as const,
+    semanticKey: "signal.discovery",
+    resolverKey: "signal.discovery",
+    resolverDigest: "a".repeat(64),
+    implementationReference: "market:ccxt/ccxt:trading-signal",
+    skillSourceDigest: "b".repeat(64),
+    strategyId: "resolver_signal_v1",
+    strategyVersion: "1",
+    venue: "okx",
+    marketKind: "spot" as const,
+    action: "spot_buy" as const,
+  },
+  policyRevision: 3,
+  gateRevision: 7,
+  researchRevision: 2,
+  fillRevision: 4,
+  fillApprovalEffectId: "resolved-fill-approval",
+  researchApprovalEffectId: "resolved-research-approval",
+  fillEventSequence: 12,
+};
+const resolvedCandidatePreflight = {
+  status: "ready" as const,
+  mode: "paper_only" as const,
+  ledgerId: "paper-1",
+  positions: [resolvedCandidate],
+};
+
 describe("handleVerifiedPaperWorkerAutomaticStops", () => {
   it("rejects an invalid trusted clock before any authority or market read", async () => {
     const readWake = vi.fn();
@@ -65,6 +109,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
         readCandidates,
         capture,
         close,
+        noResolvedCandidates,
       ),
     ).rejects.toThrow("Invalid automatic PAPER stop handler clock");
     expect(readWake).not.toHaveBeenCalled();
@@ -93,6 +138,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
         readCandidates,
         capture,
         close,
+        noResolvedCandidates,
       ),
     ).resolves.toEqual({
       status: "stop",
@@ -125,6 +171,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
         readCandidates,
         capture,
         close,
+        noResolvedCandidates,
       ),
     ).resolves.toEqual({
       status: "continue",
@@ -160,6 +207,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
         readCandidates,
         capture,
         close,
+        noResolvedCandidates,
       ),
     ).resolves.toEqual({
       status: "continue",
@@ -223,6 +271,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
       readCandidates,
       capture,
       close,
+      noResolvedCandidates,
     );
     expect(result).toMatchObject({
       status: "close_result",
@@ -257,6 +306,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
         readCandidates,
         capture,
         close,
+        noResolvedCandidates,
       ),
     ).resolves.toEqual({
       status: "stop",
@@ -292,6 +342,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
         readCandidates,
         capture,
         close,
+        noResolvedCandidates,
       ),
     ).resolves.toEqual({
       status: "stop",
@@ -300,6 +351,90 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
       checkedPositions: 1,
       positionId: "position-1",
     });
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it("services a verified G4 Resolver/Skill position through the same bounded C2 stop path", async () => {
+    const readWake = vi.fn().mockResolvedValueOnce(readyWake).mockResolvedValueOnce(readyWake);
+    const readCandidates = vi.fn(async () => ({
+      ...candidatePreflight,
+      positions: [],
+    }));
+    const readResolved = vi
+      .fn()
+      .mockResolvedValueOnce(resolvedCandidatePreflight)
+      .mockResolvedValueOnce(resolvedCandidatePreflight);
+    const capture = vi.fn(async (..._args: Parameters<typeof capturePublicPaperSpotEvidence>) => ({
+      id: `paper-worker:${"f".repeat(64)}`,
+      source: "public_adapter_observation" as const,
+    }));
+    const close = vi.fn(async () => ({
+      status: "deny" as const,
+      mode: "paper_only" as const,
+      reason: "stop_not_triggered" as const,
+    }));
+
+    await expect(
+      handleVerifiedPaperWorkerAutomaticStops(
+        prisma,
+        payload,
+        now,
+        readWake,
+        readCandidates,
+        capture,
+        close,
+        readResolved,
+      ),
+    ).resolves.toEqual({
+      status: "continue",
+      ledgerId: "paper-1",
+      checkedPositions: 1,
+    });
+    expect(capture).toHaveBeenCalledTimes(1);
+    const evidenceId = capture.mock.calls[0]?.[4];
+    expect(capture).toHaveBeenCalledWith(
+      prisma,
+      owner,
+      "paper-1",
+      { venue: "okx", symbol: "SOL-USDT" },
+      evidenceId,
+    );
+    expect(evidenceId).toMatch(/^paper-worker:[0-9a-f]{64}$/u);
+    expect(close).toHaveBeenCalledWith(prisma, owner, "paper-1", "resolved-position-1", evidenceId);
+  });
+
+  it("fails closed before public capture for a G4 venue without a trusted stop adapter", async () => {
+    const readWake = vi.fn(async () => readyWake);
+    const readCandidates = vi.fn(async () => ({
+      ...candidatePreflight,
+      positions: [],
+    }));
+    const readResolved = vi.fn(async () => ({
+      ...resolvedCandidatePreflight,
+      positions: [{ ...resolvedCandidate, venue: "coinbase" }],
+    }));
+    const capture = vi.fn();
+    const close = vi.fn();
+
+    await expect(
+      handleVerifiedPaperWorkerAutomaticStops(
+        prisma,
+        payload,
+        now,
+        readWake,
+        readCandidates,
+        capture,
+        close,
+        readResolved,
+      ),
+    ).resolves.toEqual({
+      status: "stop",
+      ledgerId: "paper-1",
+      reason: "unsupported_candidate_market",
+      checkedPositions: 1,
+      positionId: "resolved-position-1",
+    });
+    expect(capture).not.toHaveBeenCalled();
     expect(close).not.toHaveBeenCalled();
   });
 
@@ -328,6 +463,7 @@ describe("handleVerifiedPaperWorkerAutomaticStops", () => {
         readCandidates,
         capture,
         close,
+        noResolvedCandidates,
       ),
     ).resolves.toEqual({
       status: "stop",

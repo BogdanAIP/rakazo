@@ -41,6 +41,10 @@ describe("toolRequiresApproval", () => {
     expect(toolRequiresExplicitApproval("paper_worker_market_target_control")).toBe(true);
     expect(toolRequiresApproval("paper_worker_signal_control", false)).toBe(true);
     expect(toolRequiresExplicitApproval("paper_worker_signal_control")).toBe(true);
+    expect(toolRequiresApproval("paper_resolved_research_control", false)).toBe(true);
+    expect(toolRequiresExplicitApproval("paper_resolved_research_control")).toBe(true);
+    expect(toolRequiresApproval("paper_resolved_research_fill_control", false)).toBe(true);
+    expect(toolRequiresExplicitApproval("paper_resolved_research_fill_control")).toBe(true);
     expect(toolRequiresApproval("paper_worker_fill_control", false)).toBe(true);
     expect(toolRequiresExplicitApproval("paper_worker_fill_control")).toBe(true);
     expect(toolRequiresExplicitApproval("archive_bot")).toBe(false);

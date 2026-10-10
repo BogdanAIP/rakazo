@@ -8,13 +8,21 @@ import {
 type Owner = { spaceId: string; userId: string };
 type Schedule = typeof enqueuePaperWorkerPreflightOnce;
 
-function parseStartArgs(value: unknown): { ledgerId: string; expectedGateRevision: number } {
+function parseStartArgs(value: unknown): {
+  ledgerId: string;
+  expectedGateRevision: number;
+  expectedSessionRevision?: number;
+} {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Invalid paper worker start payload");
   }
   const row = value as Record<string, unknown>;
   const keys = Object.keys(row).sort();
-  if (JSON.stringify(keys) !== JSON.stringify(["expected_gate_revision", "ledger_id"])) {
+  if (
+    JSON.stringify(keys) !== JSON.stringify(["expected_gate_revision", "ledger_id"]) &&
+    JSON.stringify(keys) !==
+      JSON.stringify(["expected_gate_revision", "expected_session_revision", "ledger_id"])
+  ) {
     throw new Error("Unexpected paper worker start fields");
   }
   const ledgerId = row.ledger_id;
@@ -28,7 +36,20 @@ function parseStartArgs(value: unknown): { ledgerId: string; expectedGateRevisio
   ) {
     throw new Error("Invalid paper worker start payload");
   }
-  return { ledgerId, expectedGateRevision: revision as number };
+  const sessionRevision = row.expected_session_revision;
+  if (
+    sessionRevision !== undefined &&
+    (!Number.isSafeInteger(sessionRevision) || (sessionRevision as number) < 1)
+  ) {
+    throw new Error("Invalid expected PAPER entry-session revision");
+  }
+  return {
+    ledgerId,
+    expectedGateRevision: revision as number,
+    ...(sessionRevision !== undefined
+      ? { expectedSessionRevision: sessionRevision as number }
+      : {}),
+  };
 }
 
 /** Explicit-approval caller for exactly one D3 read-only preflight enqueue.
@@ -45,5 +66,8 @@ export async function startPaperWorkerPreflightOnce(
     userId: owner.userId,
     ledgerId: request.ledgerId,
     expectedGateRevision: request.expectedGateRevision,
+    ...(request.expectedSessionRevision
+      ? { expectedSessionRevision: request.expectedSessionRevision }
+      : {}),
   });
 }

@@ -1,6 +1,9 @@
 import type { BackgroundJobPayloads } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
-import { readTradingPaperWorkerWakePreflight } from "@rakazo/db";
+import {
+  readTradingPaperWorkerWakePreflight,
+  readVerifiedTradingPaperEntrySession,
+} from "@rakazo/db";
 
 export type PaperWorkerPreflightJobResult =
   | { status: "ready"; gateRevision: number; cadenceMinutes: number }
@@ -27,6 +30,21 @@ export async function handlePaperWorkerPreflight(
   }
   if (preflight.gateRevision !== payload.gateRevision) {
     return { status: "stale_gate_revision" };
+  }
+
+  if (payload.sessionRevision !== undefined) {
+    const session = await readVerifiedTradingPaperEntrySession(
+      prisma,
+      { spaceId: payload.spaceId, userId: payload.userId },
+      payload.ledgerId,
+    );
+    if (
+      session.status !== "active" ||
+      session.revision !== payload.sessionRevision ||
+      session.workerGateRevision !== payload.gateRevision
+    ) {
+      return { status: "deny", reason: "entry_session_inactive" };
+    }
   }
   return {
     status: "ready",

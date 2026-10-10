@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { lockAndVerifyTradingPaperEntrySessionInTransaction } from "./trading-paper-entry-session.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
 import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
@@ -8,6 +9,12 @@ import {
   PaperReservationDecisionIntegrityError,
   verifyTradingPaperReservationDecisionInTransaction,
 } from "./trading-paper-reserve.js";
+import {
+  recordTradingPaperResolvedResearchFillUseInTransaction,
+  type TradingPaperResolvedResearchFillAuthority,
+  verifyTradingPaperResolvedResearchFillAuthorityInTransaction,
+} from "./trading-paper-resolved-research-fill-gate.js";
+import { verifyTradingPaperResolvedResearchReserveUseScopeInTransaction } from "./trading-paper-resolved-research-gate.js";
 import {
   lockTradingPaperRiskPolicyInTransaction,
   verifyCurrentTradingPaperEnableAuditInTransaction,
@@ -79,6 +86,9 @@ export type TradingPaperFillResult =
         | "paper_capability_unapproved"
         | "paper_worker_fill_unapproved"
         | "paper_worker_target_unapproved"
+        | "paper_resolved_fill_unapproved"
+        | "paper_resolved_reserve_unapproved"
+        | "paper_entry_session_inactive"
         | "trusted_market_snapshot_unavailable"
         | "market_snapshot_stale"
         | "market_snapshot_mismatch"
@@ -382,6 +392,8 @@ export async function fillApprovedTradingPaperReservation(
   evidenceId: string,
   workerFillAuthority?: TradingPaperWorkerFillAuthority,
   workerTargetAuthority?: TradingPaperWorkerMarketTargetAuthority,
+  resolvedFillAuthority?: TradingPaperResolvedResearchFillAuthority,
+  expectedSessionRevision?: number,
 ): Promise<TradingPaperFillResult> {
   const operation = async (): Promise<TradingPaperFillResult> =>
     prisma.$transaction(
@@ -391,12 +403,43 @@ export async function fillApprovedTradingPaperReservation(
         const prior = await readExistingFill(tx, owner, ledgerId, reservationId, evidenceId);
         if (prior) return prior;
 
+        if (workerFillAuthority || resolvedFillAuthority || expectedSessionRevision !== undefined) {
+          const session = await lockAndVerifyTradingPaperEntrySessionInTransaction(
+            tx,
+            owner,
+            ledgerId,
+            expectedSessionRevision,
+          );
+          if (session.status !== "ready" && session.status !== "legacy_absent") {
+            return { status: "deny", mode: "paper_only", reason: "paper_entry_session_inactive" };
+          }
+        }
+
+        if (
+          resolvedFillAuthority &&
+          (workerFillAuthority !== undefined || workerTargetAuthority !== undefined)
+        ) {
+          throw new PaperFillIntegrityError(
+            "A PAPER fill cannot use legacy F2 and resolved-research G3 authorities together",
+          );
+        }
         if (Boolean(workerFillAuthority) !== Boolean(workerTargetAuthority)) {
           throw new PaperFillIntegrityError(
             "Automatic paper fill requires both F2 and market-target authorities",
           );
         }
         const authorityNow = new Date();
+        const currentResolvedFillAuthority = resolvedFillAuthority
+          ? await verifyTradingPaperResolvedResearchFillAuthorityInTransaction(
+              tx,
+              owner,
+              resolvedFillAuthority,
+              authorityNow,
+            )
+          : null;
+        if (resolvedFillAuthority && !currentResolvedFillAuthority) {
+          return { status: "deny", mode: "paper_only", reason: "paper_resolved_fill_unapproved" };
+        }
         const currentWorkerAuthority = workerFillAuthority
           ? await verifyTradingPaperWorkerFillAuthorityInTransaction(
               tx,
@@ -446,6 +489,31 @@ export async function fillApprovedTradingPaperReservation(
         if (reservation.policyRevision !== policy.revision) {
           return { status: "deny", mode: "paper_only", reason: "policy_revision_changed" };
         }
+        if (currentResolvedFillAuthority) {
+          const reserveApproved =
+            await verifyTradingPaperResolvedResearchReserveUseScopeInTransaction(
+              tx,
+              owner,
+              currentResolvedFillAuthority,
+              {
+                reservationId,
+                signalId: reservation.signalId,
+                evidenceId: reservation.evidenceId,
+                reserveEventSequence: reservation.reserveEventSequence,
+              },
+            );
+          if (
+            !reserveApproved ||
+            reservation.policyApprovalEffectId !==
+              currentResolvedFillAuthority.researchApprovalEffectId
+          ) {
+            return {
+              status: "deny",
+              mode: "paper_only",
+              reason: "paper_resolved_reserve_unapproved",
+            };
+          }
+        }
         if (
           currentTargetAuthority &&
           (reservation.market.venue !== currentTargetAuthority.venue ||
@@ -460,7 +528,11 @@ export async function fillApprovedTradingPaperReservation(
           policy.revision,
           policy.policy,
         );
-        if (!approval || approval.effectId !== reservation.policyApprovalEffectId) {
+        if (
+          !approval ||
+          (!currentResolvedFillAuthority &&
+            approval.effectId !== reservation.policyApprovalEffectId)
+        ) {
           return { status: "deny", mode: "paper_only", reason: "paper_capability_unapproved" };
         }
 
@@ -597,7 +669,10 @@ export async function fillApprovedTradingPaperReservation(
           reservationId,
           requestSha256,
           evidenceId,
-          policyApprovalEffectId: currentWorkerAuthority?.fillApprovalEffectId ?? approval.effectId,
+          policyApprovalEffectId:
+            currentResolvedFillAuthority?.fillApprovalEffectId ??
+            currentWorkerAuthority?.fillApprovalEffectId ??
+            approval.effectId,
           policyRevision: policy.revision,
           reserveEventSequence: reservation.reserveEventSequence,
           fillEventSequence,
@@ -631,6 +706,22 @@ export async function fillApprovedTradingPaperReservation(
             },
           );
         }
+        if (currentResolvedFillAuthority) {
+          await recordTradingPaperResolvedResearchFillUseInTransaction(
+            tx,
+            owner,
+            currentResolvedFillAuthority,
+            {
+              reservationId,
+              signalId: reservation.signalId,
+              reserveEvidenceId: reservation.evidenceId,
+              evidenceId,
+              reserveEventSequence: reservation.reserveEventSequence,
+              fillEventSequence,
+              actedAt: filledAt,
+            },
+          );
+        }
         await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         return {
           status: "filled",
@@ -650,4 +741,29 @@ export async function fillApprovedTradingPaperReservation(
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   return withTransactionRetry(operation);
+}
+
+/** G4 PAPER-only fill bridge for one verified G2 reservation. The G3 authority
+ * is revalidated inside the same serializable synthetic fill transaction.
+ * No exchange account, private endpoint, signing function or live order exists. */
+export async function fillApprovedResolvedTradingPaperReservation(
+  prisma: PaperDb,
+  owner: Owner,
+  ledgerId: string,
+  reservationId: string,
+  evidenceId: string,
+  authority: TradingPaperResolvedResearchFillAuthority,
+  expectedSessionRevision?: number,
+): Promise<TradingPaperFillResult> {
+  return fillApprovedTradingPaperReservation(
+    prisma,
+    owner,
+    ledgerId,
+    reservationId,
+    evidenceId,
+    undefined,
+    undefined,
+    authority,
+    expectedSessionRevision,
+  );
 }

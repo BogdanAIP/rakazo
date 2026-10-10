@@ -186,6 +186,73 @@ describe("handlePaperWorkerPreflightWithSuccessor", () => {
     );
   });
 
+  it("uses the injected G6 Resolver/Skill flow instead of the legacy hard-coded research path", async () => {
+    const resolvedResearch = {
+      status: "reserved" as const,
+      ledgerId: "paper-1",
+      signalId: "resolved-signal-1",
+      reservation: {
+        status: "reserved" as const,
+        mode: "paper_only" as const,
+        signalId: "resolved-signal-1",
+        reservationId: "paper-resv:resolved-1",
+        eventId: "paper-event:resolved-1",
+        eventSequence: 8,
+        policyRevision: 3,
+        quantityBase: "1",
+        heldQuote: "101",
+        worstCaseStopRiskQuote: "6",
+        stopPriceQuote: "95",
+        expiresAt: "2026-10-05T12:02:00.000Z",
+      },
+    };
+    const handleResolvedResearch = vi.fn(async () => resolvedResearch);
+    const localDeps = { ...deps, handleResolvedResearch };
+    const observe = vi.fn();
+    const research = vi.fn();
+    const reserveSignal = vi.fn();
+    const fillSignal = vi.fn();
+    const enqueue = vi.fn(async () => ({
+      status: "enqueued" as const,
+      ledgerId: "paper-1",
+      gateRevision: 7,
+      scheduledFor: "2026-10-05T12:15:00.000Z",
+    }));
+
+    await expect(
+      handlePaperWorkerPreflightWithSuccessor(
+        localDeps,
+        payload,
+        now,
+        vi.fn(async () => readyPreflight),
+        enqueue,
+        observe,
+        research,
+        reserveSignal,
+        fillSignal,
+      ),
+    ).resolves.toEqual({
+      status: "resolved",
+      preflight: readyPreflight,
+      resolvedResearch,
+      successor: {
+        status: "enqueued",
+        ledgerId: "paper-1",
+        gateRevision: 7,
+        scheduledFor: "2026-10-05T12:15:00.000Z",
+      },
+    });
+    expect(handleResolvedResearch).toHaveBeenCalledWith(deps.prisma, payload, now);
+    expect(observe).not.toHaveBeenCalled();
+    expect(research).not.toHaveBeenCalled();
+    expect(reserveSignal).not.toHaveBeenCalled();
+    expect(fillSignal).not.toHaveBeenCalled();
+    expect(enqueue).toHaveBeenCalledWith(localDeps, payload, now);
+    expect(handleResolvedResearch.mock.invocationCallOrder[0]).toBeLessThan(
+      enqueue.mock.invocationCallOrder[0]!,
+    );
+  });
+
   it("stops before research, signal reserve and recurrence when the approved market target is unavailable", async () => {
     const handle = vi.fn(async () => readyPreflight);
     const observation = {

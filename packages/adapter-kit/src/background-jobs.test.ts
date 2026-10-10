@@ -5,7 +5,10 @@ import {
   historyCompactJob,
   historyCompactJobKey,
   messagingDeliverJob,
+  PAPER_PROTECTION_MAX_ATTEMPTS,
   PAPER_WORKER_PREFLIGHT_MAX_ATTEMPTS,
+  paperProtectionCheckJob,
+  paperProtectionCheckJobKey,
   paperWorkerPreflightJob,
   paperWorkerPreflightJobKey,
   parseBackgroundJob,
@@ -23,6 +26,7 @@ function handlers(): BackgroundJobHandlers {
     "history.compact": vi.fn(async () => undefined),
     "messaging.deliver": vi.fn(async () => undefined),
     "cloud_agent.poll": vi.fn(async () => undefined),
+    "paper.protection-check": vi.fn(async () => undefined),
     "paper.worker-preflight": vi.fn(async () => undefined),
   };
 }
@@ -86,6 +90,33 @@ describe("background job contracts", () => {
   });
 });
 
+describe("H2b2 PAPER protection-only job contract", () => {
+  it("builds a separate finite protection wake and validates required owner revisions", async () => {
+    const scheduledFor = new Date("2026-10-10T12:00:00.000Z");
+    const job = paperProtectionCheckJob({
+      ledgerId: "paper-1",
+      spaceId: "space-1",
+      userId: "user-1",
+      gateRevision: 7,
+      leaseRevision: 12,
+      scheduledFor,
+    });
+    expect(job.name).toBe("paper.protection-check");
+    expect(job.payload).toMatchObject({ gateRevision: 7, leaseRevision: 12 });
+    expect(job.replaceKey).toBe(paperProtectionCheckJobKey("paper-1"));
+    expect(job.replaceKey).not.toBe(paperWorkerPreflightJobKey("paper-1"));
+    expect(job.maxAttempts).toBe(PAPER_PROTECTION_MAX_ATTEMPTS);
+    const target = handlers();
+    await dispatchBackgroundJob(target, job.name, job.payload);
+    expect(target["paper.protection-check"]).toHaveBeenCalledWith(job.payload);
+    for (const revision of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() =>
+        parseBackgroundJob(job.name, { ...job.payload, leaseRevision: revision }),
+      ).toThrow();
+    }
+  });
+});
+
 describe("paperWorkerPreflightJob", () => {
   it("builds and dispatches a typed read-only job without a recurrence contract", async () => {
     const scheduledFor = new Date("2026-10-05T12:00:00.000Z");
@@ -114,6 +145,32 @@ describe("paperWorkerPreflightJob", () => {
     const target = handlers();
     await dispatchBackgroundJob(target, job.name, job.payload);
     expect(target["paper.worker-preflight"]).toHaveBeenCalledWith(job.payload);
+  });
+
+  it("pins an explicitly started PAPER session revision to each queued wake", () => {
+    const scheduledFor = new Date("2026-10-08T19:15:00.000Z");
+    const job = paperWorkerPreflightJob({
+      ledgerId: "paper-1",
+      spaceId: "space-1",
+      userId: "user-1",
+      gateRevision: 7,
+      sessionRevision: 12,
+      scheduledFor,
+    });
+    const verified = parseBackgroundJob(job.name, job.payload);
+    expect(verified.payload).toMatchObject({
+      ledgerId: "paper-1",
+      gateRevision: 7,
+      sessionRevision: 12,
+    });
+    for (const invalid of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() =>
+        parseBackgroundJob("paper.worker-preflight", {
+          ...job.payload,
+          sessionRevision: invalid,
+        }),
+      ).toThrow();
+    }
   });
 
   it("rejects malformed worker scope before dispatch", () => {
