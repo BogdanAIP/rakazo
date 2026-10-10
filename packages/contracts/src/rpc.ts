@@ -101,6 +101,11 @@ import {
   TradingSweepRequestSchema,
 } from "./trading.js";
 import {
+  TradingPaperJournalListOutputSchema,
+  TradingPaperJournalReadInputSchema,
+  TradingPaperJournalReadOutputSchema,
+} from "./trading-paper-journal.js";
+import {
   WindowsHostBrowserRequestSchema,
   WindowsHostBrowserResultSchema,
   WindowsHostCapabilitySchema,
@@ -176,6 +181,11 @@ export const appContract = {
     analyze: oc.input(TradingCandleResearchInputSchema).output(TradingResearchOutputSchema),
     /** A capped public-market research sweep; no orders, account or key access. */
     sweep: oc.input(TradingSweepRequestSchema).output(TradingSweepOutputSchema),
+    /** Authenticated owner-only, verified read-only PAPER journal dashboard. */
+    journalList: oc.input(z.object({})).output(TradingPaperJournalListOutputSchema),
+    journalRead: oc
+      .input(TradingPaperJournalReadInputSchema)
+      .output(TradingPaperJournalReadOutputSchema),
     /** Public derivative context only; no collateral, leverage or order controls. */
     perpContext: oc.input(TradingPerpContextInputSchema).output(TradingPerpContextSchema),
   },
