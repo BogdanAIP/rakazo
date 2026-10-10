@@ -21,9 +21,10 @@ export {
   fillApprovedTradingPaperReservation,
   type TradingPaperFillResult,
 } from "./trading-paper-fill.js";
+export * from "./trading-paper-journal-read.js";
+export { auditTradingPaperLifecycle } from "./trading-paper-lifecycle-audit.js";
 export * from "./trading-paper-protection-lease.js";
 export * from "./trading-paper-protection-successor.js";
-export * from "./trading-paper-journal-read.js";
 export { applyApprovedTradingPaperProtectiveExitControl } from "./trading-paper-protective-exit-authority.js";
 export {
   PaperQuoteEvidenceError,
@@ -155,6 +156,7 @@ export {
   readVerifiedTradingPaperWorkerSuccessorIntent,
   type TradingPaperWorkerSuccessorIntentResult,
 } from "./trading-paper-worker-successor-intent.js";
+export * from "./trading-paper-workspace.js";
 export * from "./transaction-retry.js";
 export * from "./voice-credentials.js";
 export * from "./windows-hosts.js";

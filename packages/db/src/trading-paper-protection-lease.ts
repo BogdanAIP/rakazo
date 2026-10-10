@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { tradingPaperDatabaseNow as dbNow } from "./trading-paper-clock.js";
 import { verifyTradingPaperSessionSettlingAuthorityInTransaction } from "./trading-paper-entry-session.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
 import { readTradingPaperResolvedResearchFillUseInTransaction } from "./trading-paper-resolved-research-fill-gate.js";
@@ -146,17 +147,6 @@ function digest(v: Omit<Row, "leaseSha256">): string {
       "utf8",
     )
     .digest("hex");
-}
-
-async function dbNow(tx: Prisma.TransactionClient): Promise<Date> {
-  const rows = await tx.$queryRaw<Array<{ db_now: Date }>>(
-    Prisma.sql`SELECT clock_timestamp() AS db_now`,
-  );
-  const now = rows[0]?.db_now;
-  if (!(now instanceof Date) || !Number.isFinite(now.getTime())) {
-    throw new PaperProtectionLeaseIntegrityError("Trusted database clock unavailable");
-  }
-  return now;
 }
 
 async function readInTransaction(
@@ -427,7 +417,12 @@ export async function applyApprovedTradingPaperProtectionControl(
         if (request.expectedRevision !== previous.revision) return deny("stale_revision");
         if (request.action === "start" && previous.status === "active")
           return deny("already_active");
-        if (request.action === "end" && previous.status !== "active") return deny("not_active");
+        if (
+          request.action === "end" &&
+          previous.status !== "active" &&
+          previous.status !== "expired"
+        )
+          return deny("not_active");
 
         const report = await auditTradingPaperLifecycleInTransaction(
           tx,

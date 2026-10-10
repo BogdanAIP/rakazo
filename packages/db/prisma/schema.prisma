@@ -1374,7 +1374,24 @@ model IntegrationProviderConfig {
  * Inert PAPER-only ledger. There is no order/credential relation, RPC route or
  * execution authority. All event append operations must be owner-space scoped.
  */
+model TradingPaperWorkspace {
+ ledgerId String @id
+ ledger TradingPaperLedger @relation(fields:[ledgerId],references:[id],onDelete:Cascade)
+ name String
+ botId String
+ threadId String
+ stopEffectId String?
+ sessionRevision Int @default(0)
+ firstProtectionScheduledFor DateTime?
+ lastProtectionHandledFor DateTime?
+ runtimeError String?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@map("trading_paper_workspaces")
+}
+
 model TradingPaperLedger {
+ workspace TradingPaperWorkspace?
   id                  String                    @id
   spaceId             String
   space               Space                     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
@@ -1505,7 +1522,22 @@ model TradingPaperReleaseAudit {
 }
 
 /** Durable idempotency/audit for an internal synthetic PAPER reserve only. */
+model TradingPaperSessionReservation {
+  ledgerId String
+  reservationId String
+  sessionRevision Int
+  sessionStartedAt DateTime
+  approvalEffectId String
+  attributionSha256 String
+  decision TradingPaperReservationDecision @relation(fields: [ledgerId, reservationId], references: [ledgerId, reservationId], onDelete: Cascade)
+
+  @@id([ledgerId, reservationId])
+  @@index([ledgerId, sessionStartedAt])
+  @@map("trading_paper_session_reservations")
+}
+
 model TradingPaperReservationDecision {
+  sessionAttribution TradingPaperSessionReservation?
   ledgerId               String
   signalId               String
   ledger                 TradingPaperLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)

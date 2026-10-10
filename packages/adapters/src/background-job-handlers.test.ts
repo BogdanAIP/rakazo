@@ -94,9 +94,14 @@ describe("createBackgroundJobHandlers", () => {
       spaceId: "space-1",
       userId: "user-1",
       gateRevision: 7,
+      sessionRevision: 3,
       scheduledFor: "2026-10-05T12:00:00.000Z",
     };
 
+    vi.mocked(handlePaperWorkerPreflightWithSuccessor).mockClear();
+    const { sessionRevision: _revision, ...legacyPayload } = payload;
+    await handlers["paper.worker-preflight"](legacyPayload);
+    expect(handlePaperWorkerPreflightWithSuccessor).not.toHaveBeenCalled();
     await handlers["paper.worker-preflight"](payload);
 
     expect(handlePaperWorkerPreflightWithSuccessor).toHaveBeenCalledWith({ prisma, jobs }, payload);

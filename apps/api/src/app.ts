@@ -58,6 +58,7 @@ import {
   pushTokenPath,
   reconcileCloudAgents,
   reconcileComputerUpdates,
+  reconcileTradingPaperWorkspaces,
   removePiUserSessions,
   ScriptedAgentRuntime,
   SmtpEmailProvider,
@@ -471,6 +472,7 @@ export async function createApp(
     cloudAgent,
   });
   if (inMemoryJobs) {
+    await reconcileTradingPaperWorkspaces({ prisma, jobs }, true);
     await inMemoryJobs.start(jobHandlers);
   }
   const reconciler = inMemoryJobs
@@ -479,6 +481,7 @@ export async function createApp(
         jobs,
         reconcileCloudAgents: () => reconcileCloudAgents({ prisma, jobs, cloudAgent }),
         reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
+        reconcilePaperWorkspaces: () => reconcileTradingPaperWorkspaces({ prisma, jobs }),
       })
     : undefined;
   reconciler?.start();

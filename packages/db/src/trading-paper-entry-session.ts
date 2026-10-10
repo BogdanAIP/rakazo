@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { tradingPaperDatabaseNow as databaseNow } from "./trading-paper-clock.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
 import { assessTradingPaperWorkerWakePreflightInTransaction } from "./trading-paper-worker-gate.js";
 import { withTransactionRetry } from "./transaction-retry.js";
@@ -81,6 +82,7 @@ export type PaperEntrySessionEntryPreflight =
       mode: "paper_only";
       ledgerId: string;
       sessionRevision: number;
+      startedAt: string;
       workerGateRevision: number;
       expiresAt: string;
       approvalEffectId: string;
@@ -176,17 +178,6 @@ function checked(row: Persisted, owner: Owner, ledgerId: string): Persisted & { 
     throw new PaperEntrySessionIntegrityError();
   }
   return row as Persisted & { status: Status };
-}
-
-async function databaseNow(tx: Prisma.TransactionClient): Promise<Date> {
-  const rows = await tx.$queryRaw<Array<{ db_now: Date }>>(
-    Prisma.sql`SELECT clock_timestamp() AS db_now`,
-  );
-  const now = rows[0]?.db_now;
-  if (!(now instanceof Date) || !Number.isFinite(now.getTime())) {
-    throw new PaperEntrySessionIntegrityError("Trusted database clock unavailable");
-  }
-  return now;
 }
 
 /** Readers never trust a user-supplied session status or an app-host clock. */
@@ -301,6 +292,7 @@ export async function assessTradingPaperEntrySessionInTransaction(
     mode: "paper_only",
     ledgerId,
     sessionRevision: status.revision,
+    startedAt: status.startedAt,
     workerGateRevision: status.workerGateRevision,
     expiresAt: status.expiresAt,
     approvalEffectId: status.approvalEffectId,
@@ -367,7 +359,12 @@ export async function verifyTradingPaperSessionSettlingAuthorityInTransaction(
   tx: Prisma.TransactionClient,
   owner: Owner,
   ledgerId: string,
-): Promise<{ sessionRevision: number; checkedAt: Date; status: "paused" | "ended" | "expired" }> {
+): Promise<{
+  sessionRevision: number;
+  sessionStartedAt: string;
+  checkedAt: Date;
+  status: "paused" | "ended" | "expired";
+}> {
   const checkedAt = await databaseNow(tx);
   const session = await readInTransaction(tx, owner, ledgerId, checkedAt);
   if (session.status !== "paused" && session.status !== "ended" && session.status !== "expired") {
@@ -375,7 +372,12 @@ export async function verifyTradingPaperSessionSettlingAuthorityInTransaction(
       "An active or absent entry session cannot authorize normal settling releases",
     );
   }
-  return { sessionRevision: session.revision, checkedAt, status: session.status };
+  return {
+    sessionRevision: session.revision,
+    sessionStartedAt: session.startedAt,
+    checkedAt,
+    status: session.status,
+  };
 }
 
 /** H1 permission writer: ALL calls require a claimed, owner-approved effect.

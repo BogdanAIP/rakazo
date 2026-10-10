@@ -171,8 +171,23 @@ const threadSendInput = threadTarget
     }
   });
 
+import {
+  TradingPaperAccountCreateInputSchema,
+  TradingPaperWorkspaceCommandSchema,
+  TradingPaperWorkspaceStatusSchema,
+} from "./trading-paper-workspace.js";
+
 export const appContract = {
   trading: {
+    accountCreate: oc
+      .input(TradingPaperAccountCreateInputSchema)
+      .output(z.object({ ledgerId: z.string() })),
+    workspaceRead: oc
+      .input(z.object({ ledgerId: z.string().min(1).max(128) }))
+      .output(TradingPaperWorkspaceStatusSchema),
+    workspaceCommand: oc
+      .input(TradingPaperWorkspaceCommandSchema)
+      .output(TradingPaperWorkspaceStatusSchema),
     /** Public-market shortlist only; no private keys, order placement or account state. */
     list: oc.input(TradingScanRequestSchema).output(TradingScanOutputSchema),
     /** CEX spot, perpetual and dated-future public metadata, not private account instruments. */

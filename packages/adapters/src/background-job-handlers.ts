@@ -18,8 +18,8 @@ import type { createRunExecutor } from "./executor.js";
 import { compactHistory } from "./history-compaction.js";
 import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import { deliverMessagingOutbound, mirrorMessagingOutbound } from "./messaging-delivery.js";
-import { handlePaperProtectionOnlyWake } from "./paper-protection-only-wake.js";
 import { enqueueAuthorizedPaperProtectionSuccessor } from "./paper-protection-only-scheduler.js";
+import { handlePaperProtectionOnlyWake } from "./paper-protection-only-wake.js";
 import { handlePaperWorkerPreflightWithSuccessor } from "./paper-worker-recurring-handler.js";
 import type { EncryptedSecretStore } from "./secrets.js";
 import { expireTaughtSkillTeaching } from "./teaching-session.js";
@@ -83,8 +83,24 @@ export function createBackgroundJobHandlers(deps: {
         { prisma: deps.prisma, jobs: deps.jobs },
         payload,
       );
+      await deps.prisma.tradingPaperWorkspace.updateMany({
+        where: {
+          ledgerId: payload.ledgerId,
+          ledger: {
+            spaceId: payload.spaceId,
+            ownerUserId: payload.userId,
+            protectionLease: { revision: payload.leaseRevision },
+          },
+          OR: [
+            { lastProtectionHandledFor: null },
+            { lastProtectionHandledFor: { lt: new Date(payload.scheduledFor) } },
+          ],
+        },
+        data: { lastProtectionHandledFor: new Date(payload.scheduledFor) },
+      });
     },
     "paper.worker-preflight": async (payload) => {
+      if (payload.sessionRevision === undefined) return;
       await handlePaperWorkerPreflightWithSuccessor(
         { prisma: deps.prisma, jobs: deps.jobs },
         payload,

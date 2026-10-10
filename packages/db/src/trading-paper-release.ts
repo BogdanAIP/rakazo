@@ -3,6 +3,7 @@ import type { TradingPaperLedgerState } from "@rakazo/contracts";
 import type { Prisma } from "./client.js";
 import { verifyTradingPaperSessionSettlingAuthorityInTransaction } from "./trading-paper-entry-session.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
+import { verifyTradingPaperSessionReservationsInTransaction } from "./trading-paper-session-reservation.js";
 import {
   appendTradingPaperLedgerEventInTransaction,
   recoverTradingPaperLedgerInTransaction,
@@ -58,11 +59,18 @@ export async function releaseTradingPaperReservationsInTransaction(
   if (!Number.isFinite(nowMs) || !Number.isSafeInteger(policyRevision) || policyRevision < 0) {
     throw new PaperReleaseIntegrityError("Invalid trusted release clock or policy revision");
   }
+  let sessionReservationIds: Set<string> | null = null;
   if (reason === "session_end") {
     const permitted = await verifyTradingPaperSessionSettlingAuthorityInTransaction(
       tx,
       owner,
       ledgerId,
+    );
+    const links = await verifyTradingPaperSessionReservationsInTransaction(tx, owner, ledgerId);
+    sessionReservationIds = new Set(
+      links
+        .filter((row) => row.sessionStartedAt.toISOString() === permitted.sessionStartedAt)
+        .map((row) => row.reservationId),
     );
     if (Math.abs(permitted.checkedAt.getTime() - nowMs) > 2_000) {
       throw new PaperReleaseIntegrityError("Normal session release requires the trusted DB clock");
@@ -76,11 +84,10 @@ export async function releaseTradingPaperReservationsInTransaction(
     throw new PaperReleaseIntegrityError("Paper journal is future-dated relative to release clock");
   }
   const candidates = recovered.state.reservations
-    .filter(
-      (reservation) =>
-        reason === "kill_switch" ||
-        reason === "session_end" ||
-        Date.parse(reservation.expiresAt) <= nowMs,
+    .filter((reservation) =>
+      reason === "session_end"
+        ? sessionReservationIds!.has(reservation.reservationId)
+        : reason === "kill_switch" || Date.parse(reservation.expiresAt) <= nowMs,
     )
     .sort((a, b) => a.reservationId.localeCompare(b.reservationId));
   let state = recovered.state;

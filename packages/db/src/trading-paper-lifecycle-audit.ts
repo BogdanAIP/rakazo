@@ -6,6 +6,7 @@ import { Prisma } from "./client.js";
 import { verifyHistoricalTradingPaperProtectiveExitApprovalInTransaction } from "./trading-paper-protective-exit-authority.js";
 import { verifyHistoricalTradingPaperResolvedResearchFillApprovalInTransaction } from "./trading-paper-resolved-research-fill-gate.js";
 import { verifyHistoricalTradingPaperResolvedResearchReserveApprovalInTransaction } from "./trading-paper-resolved-research-gate.js";
+import { verifyTradingPaperSessionReservationsInTransaction } from "./trading-paper-session-reservation.js";
 import { verifyTradingPaperStopGuardsInTransaction } from "./trading-paper-stop-guard.js";
 import { recoverTradingPaperLedgerInTransaction } from "./trading-paper-store.js";
 import { verifyHistoricalTradingPaperWorkerFillApprovalInTransaction } from "./trading-paper-worker-fill-gate.js";
@@ -61,6 +62,7 @@ export async function auditTradingPaperLifecycleInTransaction(
   assert(Number.isFinite(now.getTime()), "Invalid audit clock");
   const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
   const { row, events, state } = recovered;
+  await verifyTradingPaperSessionReservationsInTransaction(tx, owner, ledgerId);
   const [reservations, fills, releases, closes, outbox, stopRows] = await Promise.all([
     tx.tradingPaperReservationDecision.findMany({ where: { ledgerId } }),
     tx.tradingPaperFillDecision.findMany({ where: { ledgerId } }),

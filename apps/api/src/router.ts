@@ -49,6 +49,7 @@ import {
   computerSupportsTerminal,
   computerSupportsUpdate,
   computerUpdateView,
+  controlTradingPaperWorkspace,
   createVoiceProvider,
   defaultCatalogModelId,
   deletePushToken,
@@ -126,6 +127,7 @@ import {
   foldComputerCommands,
   IntegrationProviderIdSchema,
   OPENAI_COMPATIBLE_PROVIDER_ID,
+  TradingPaperWorkspaceStatusSchema,
   usableModelId,
   WindowsHostCapabilitySchema,
 } from "@rakazo/contracts";
@@ -153,6 +155,7 @@ import {
   claimEmptySpaceDeletionForMember,
   createExternalConversationRepos,
   createGroupRepos,
+  createOwnedTradingPaperAccount,
   createRepos,
   createSpaceForMember,
   createThreadMessageInTransaction,
@@ -176,6 +179,7 @@ import {
   Prisma,
   parseComputerMode,
   readOwnedTradingPaperJournal,
+  readOwnedTradingPaperWorkspace,
   releaseSpaceDeletionClaim,
   renewSpaceDeletionClaim,
   restoreBotUnderComputerQuota,
@@ -671,6 +675,32 @@ export function createRouter(deps: RouterDeps) {
 
   return os.router({
     trading: {
+      accountCreate: authed.trading.accountCreate.handler(({ context, input }) =>
+        createOwnedTradingPaperAccount(deps.prisma, context.actor, input),
+      ),
+      workspaceRead: authed.trading.workspaceRead.handler(async ({ context, input }) => {
+        const result = await readOwnedTradingPaperWorkspace(
+          deps.prisma,
+          context.actor,
+          input.ledgerId,
+        );
+        if (!result) throw new ORPCError("NOT_FOUND");
+        return TradingPaperWorkspaceStatusSchema.parse(result);
+      }),
+      workspaceCommand: authed.trading.workspaceCommand.handler(async ({ context, input }) => {
+        await controlTradingPaperWorkspace(
+          { prisma: deps.prisma, jobs: deps.jobs },
+          context.actor,
+          input,
+        );
+        const result = await readOwnedTradingPaperWorkspace(
+          deps.prisma,
+          context.actor,
+          input.ledgerId,
+        );
+        if (!result) throw new ORPCError("NOT_FOUND");
+        return TradingPaperWorkspaceStatusSchema.parse(result);
+      }),
       // Dedicated authenticated read-only human UI. This cannot append/submit orders.
       journalList: authed.trading.journalList.handler(({ context }) =>
         listOwnedTradingPaperJournals(deps.prisma, context.actor),

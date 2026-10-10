@@ -7,11 +7,9 @@ import {
 import { estimateExactPaperSpotCapacity } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { tradingPaperDatabaseNow } from "./trading-paper-clock.js";
 import { lockAndVerifyTradingPaperEntrySessionInTransaction } from "./trading-paper-entry-session.js";
-import {
-  auditTradingPaperLifecycleInTransaction,
-  PaperLifecycleAuditError,
-} from "./trading-paper-lifecycle-audit.js";
+import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
 import {
   evaluateTradingPaperReservationInTransaction,
@@ -29,6 +27,7 @@ import {
   verifyCurrentTradingPaperEnableAuditInTransaction,
   verifyTradingPaperRiskPolicyInTransaction,
 } from "./trading-paper-risk-policy.js";
+import { recordTradingPaperSessionReservationInTransaction } from "./trading-paper-session-reservation.js";
 import {
   appendTradingPaperLedgerEventInTransaction,
   recoverTradingPaperLedgerInTransaction,
@@ -374,7 +373,12 @@ export async function reserveApprovedTradingPaperSignal(
         await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
         const currentPolicy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
-        const decisionNow = Date.now();
+        const decisionNow = (await tradingPaperDatabaseNow(tx)).getTime();
+        let sessionForReserve: {
+          sessionRevision: number;
+          startedAt: string;
+          approvalEffectId: string;
+        } | null = null;
         if (workerSignalAuthority || resolvedResearch || expectedSessionRevision !== undefined) {
           const session = await lockAndVerifyTradingPaperEntrySessionInTransaction(
             tx,
@@ -382,6 +386,7 @@ export async function reserveApprovedTradingPaperSignal(
             ledgerId,
             expectedSessionRevision,
           );
+          if (session.status === "ready") sessionForReserve = session;
           if (session.status !== "ready" && session.status !== "legacy_absent") {
             const recovered = await recoverTradingPaperLedgerInTransaction(tx, owner, ledgerId);
             return deny(
@@ -399,7 +404,8 @@ export async function reserveApprovedTradingPaperSignal(
         if (resolvedResearch) {
           if (
             !proposal ||
-            JSON.stringify(proposal) !== JSON.stringify(resolvedResearch.envelope.signal)
+            JSON.stringify(proposal) !==
+              JSON.stringify(TradingSignalSchema.parse(resolvedResearch.envelope.signal))
           ) {
             throw new PaperReservationDecisionIntegrityError(
               "Resolved research envelope differs from the proposed PAPER signal",
@@ -501,143 +507,153 @@ export async function reserveApprovedTradingPaperSignal(
         );
         if (!approval) return deny(evaluated, "paper_capability_unapproved");
 
-        try {
-          const tick = signal.market.priceIncrement;
-          const lot = signal.market.quantityIncrement;
-          if (
-            tick === null ||
-            lot === null ||
-            units(signal.entryTrigger) % units(tick) !== 0n ||
-            units(signal.stopLoss) % units(tick) !== 0n
-          ) {
-            return deny(evaluated, "price_not_tick_aligned");
-          }
-          const remainingDaily = remaining(
-            evaluated.policy.maxDailyLossQuote,
-            evaluated.risk.realizedLossTodayQuote,
-          );
-          const remainingOpen = remaining(
-            evaluated.policy.maxOpenRiskQuote,
-            evaluated.openStopRiskQuote,
-          );
-          const remainingExposure = remaining(
-            evaluated.policy.maxTotalExposureQuote,
-            evaluated.risk.openExposureQuote,
-          );
-          if (!remainingDaily || !remainingOpen || !remainingExposure) {
-            return deny(evaluated, "capacity_no_capacity");
-          }
-          const perIdea =
-            signal.riskBudgetQuote === null
-              ? evaluated.policy.maxPerIdeaRiskQuote
-              : smaller(evaluated.policy.maxPerIdeaRiskQuote, signal.riskBudgetQuote);
-          const capacity = estimateExactPaperSpotCapacity({
-            availableQuote: evaluated.state.availableQuote,
-            askQuote: evaluated.evidence.ticker.ask,
-            stopQuote: signal.stopLoss,
-            quantityIncrement: lot,
-            minNotionalQuote: signal.market.minNotional,
-            maxPerIdeaRiskQuote: perIdea,
-            maxDailyLossQuote: remainingDaily,
-            maxOpenRiskQuote: remainingOpen,
-            maxTotalExposureQuote: remainingExposure,
-            assumedFeeBpsPerSide: evaluated.policy.assumedFeeBpsPerSide,
-            assumedSlippageBpsPerSide: evaluated.policy.assumedSlippageBpsPerSide,
-          });
-          if (capacity.status === "deny") {
-            return deny(evaluated, `capacity_${capacity.reason}` as ReserveDenyReason);
-          }
-          const signalExpiry = Date.parse(signal.expiresAt);
-          const expiresAtMs = Math.min(signalExpiry, evaluated.decisionNow + RESERVATION_TTL_MS);
-          if (expiresAtMs - evaluated.decisionNow < 1_000) {
-            return deny(evaluated, "signal_expired");
-          }
-          const expiresAt = new Date(expiresAtMs).toISOString();
-          const eventSequence = evaluated.ledgerRevision + 1;
-          const event = {
-            ledgerId,
-            eventId,
-            kind: "reserve" as const,
-            sequence: eventSequence,
-            recordedAt: new Date(evaluated.decisionNow).toISOString(),
-            reservationId,
-            signalId: signal.signalId,
-            market: signal.market,
-            quantityBase: capacity.quantityBase,
-            maxSpendQuote: capacity.heldQuote,
-            expiresAt,
-          };
-          const appended = await appendTradingPaperLedgerEventInTransaction(tx, owner, event);
-          if (appended.status !== "appended") {
-            throw new PaperReservationDecisionIntegrityError(
-              "Fresh B7 event unexpectedly duplicated",
-            );
-          }
-          const requestSha256 = requestDigest(owner, ledgerId, signal, evidenceId);
-          const normalized: DecisionDigestInput = {
-            ledgerId,
-            signalId: signal.signalId,
-            requestSha256,
-            evidenceId,
-            policyApprovalEffectId:
-              currentResolvedAuthority?.researchApprovalEffectId ?? approval.effectId,
-            policyRevision: evaluated.policyRevision,
-            ledgerRevisionBefore: evaluated.ledgerRevision,
-            eventSequence,
-            eventId,
-            reservationId,
-            quantityBase: capacity.quantityBase,
-            heldQuote: capacity.heldQuote,
-            worstCaseStopRiskQuote: capacity.worstCaseStopRiskQuote,
-            stopPriceQuote: signal.stopLoss,
-            conservativeEntryQuote: capacity.conservativeEntryQuote,
-            conservativeStopQuote: capacity.conservativeStopQuote,
-            expiresAt,
-          };
-          await tx.tradingPaperReservationDecision.create({
-            data: {
-              ...normalized,
-              expiresAt: new Date(expiresAt),
-              decisionSha256: decisionDigest(normalized),
-            },
-          });
-          if (currentResolvedAuthority) {
-            await recordTradingPaperResolvedResearchReserveUseInTransaction(
-              tx,
-              owner,
-              currentResolvedAuthority,
-              {
-                reservationId,
-                signalId: signal.signalId,
-                evidenceId,
-                reserveEventSequence: eventSequence,
-                actedAt: event.recordedAt,
-              },
-            );
-          }
-          await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
-          return {
-            status: "reserved",
-            mode: "paper_only",
-            signalId: signal.signalId,
-            reservationId,
-            eventId,
-            eventSequence,
-            policyRevision: evaluated.policyRevision,
-            quantityBase: capacity.quantityBase,
-            heldQuote: capacity.heldQuote,
-            worstCaseStopRiskQuote: capacity.worstCaseStopRiskQuote,
-            stopPriceQuote: signal.stopLoss,
-            expiresAt,
-          };
-        } catch (error) {
-          if (
-            error instanceof PaperReservationDecisionIntegrityError ||
-            error instanceof PaperLifecycleAuditError
-          )
-            throw error;
-          return deny(evaluated, "capacity_unrepresentable");
+        const tick = signal.market.priceIncrement;
+        const lot = signal.market.quantityIncrement;
+        if (
+          tick === null ||
+          lot === null ||
+          units(signal.entryTrigger) % units(tick) !== 0n ||
+          units(signal.stopLoss) % units(tick) !== 0n
+        ) {
+          return deny(evaluated, "price_not_tick_aligned");
         }
+        const remainingDaily = remaining(
+          evaluated.policy.maxDailyLossQuote,
+          evaluated.risk.realizedLossTodayQuote,
+        );
+        const remainingOpen = remaining(
+          evaluated.policy.maxOpenRiskQuote,
+          evaluated.openStopRiskQuote,
+        );
+        const remainingExposure = remaining(
+          evaluated.policy.maxTotalExposureQuote,
+          evaluated.risk.openExposureQuote,
+        );
+        if (!remainingDaily || !remainingOpen || !remainingExposure) {
+          return deny(evaluated, "capacity_no_capacity");
+        }
+        const perIdea =
+          signal.riskBudgetQuote === null
+            ? evaluated.policy.maxPerIdeaRiskQuote
+            : smaller(evaluated.policy.maxPerIdeaRiskQuote, signal.riskBudgetQuote);
+        const capacity = estimateExactPaperSpotCapacity({
+          availableQuote: evaluated.state.availableQuote,
+          askQuote: evaluated.evidence.ticker.ask,
+          stopQuote: signal.stopLoss,
+          quantityIncrement: lot,
+          minNotionalQuote: signal.market.minNotional,
+          maxPerIdeaRiskQuote: perIdea,
+          maxDailyLossQuote: remainingDaily,
+          maxOpenRiskQuote: remainingOpen,
+          maxTotalExposureQuote: remainingExposure,
+          assumedFeeBpsPerSide: evaluated.policy.assumedFeeBpsPerSide,
+          assumedSlippageBpsPerSide: evaluated.policy.assumedSlippageBpsPerSide,
+        });
+        if (capacity.status === "deny") {
+          return deny(evaluated, `capacity_${capacity.reason}` as ReserveDenyReason);
+        }
+        const signalExpiry = Date.parse(signal.expiresAt);
+        const expiresAtMs = Math.min(signalExpiry, evaluated.decisionNow + RESERVATION_TTL_MS);
+        if (expiresAtMs - evaluated.decisionNow < 1_000) {
+          return deny(evaluated, "signal_expired");
+        }
+        const expiresAt = new Date(expiresAtMs).toISOString();
+        const eventSequence = evaluated.ledgerRevision + 1;
+        const event = {
+          ledgerId,
+          eventId,
+          kind: "reserve" as const,
+          sequence: eventSequence,
+          recordedAt: new Date(evaluated.decisionNow).toISOString(),
+          reservationId,
+          signalId: signal.signalId,
+          market: signal.market,
+          quantityBase: capacity.quantityBase,
+          maxSpendQuote: capacity.heldQuote,
+          expiresAt,
+        };
+        if (sessionForReserve) {
+          const finalSession = await lockAndVerifyTradingPaperEntrySessionInTransaction(
+            tx,
+            owner,
+            ledgerId,
+            sessionForReserve.sessionRevision,
+          );
+          if (finalSession.status !== "ready")
+            return deny(evaluated, "paper_entry_session_inactive");
+        }
+        const appended = await appendTradingPaperLedgerEventInTransaction(tx, owner, event);
+        if (appended.status !== "appended") {
+          throw new PaperReservationDecisionIntegrityError(
+            "Fresh B7 event unexpectedly duplicated",
+          );
+        }
+        const requestSha256 = requestDigest(owner, ledgerId, signal, evidenceId);
+        const normalized: DecisionDigestInput = {
+          ledgerId,
+          signalId: signal.signalId,
+          requestSha256,
+          evidenceId,
+          policyApprovalEffectId:
+            currentResolvedAuthority?.researchApprovalEffectId ?? approval.effectId,
+          policyRevision: evaluated.policyRevision,
+          ledgerRevisionBefore: evaluated.ledgerRevision,
+          eventSequence,
+          eventId,
+          reservationId,
+          quantityBase: capacity.quantityBase,
+          heldQuote: capacity.heldQuote,
+          worstCaseStopRiskQuote: capacity.worstCaseStopRiskQuote,
+          stopPriceQuote: signal.stopLoss,
+          conservativeEntryQuote: capacity.conservativeEntryQuote,
+          conservativeStopQuote: capacity.conservativeStopQuote,
+          expiresAt,
+        };
+        await tx.tradingPaperReservationDecision.create({
+          data: {
+            ...normalized,
+            expiresAt: new Date(expiresAt),
+            decisionSha256: decisionDigest(normalized),
+          },
+        });
+        if (sessionForReserve) {
+          await recordTradingPaperSessionReservationInTransaction(tx, {
+            ledgerId,
+            reservationId,
+            sessionRevision: sessionForReserve.sessionRevision,
+            sessionStartedAt: new Date(sessionForReserve.startedAt),
+            approvalEffectId: sessionForReserve.approvalEffectId,
+          });
+        }
+        if (currentResolvedAuthority) {
+          await recordTradingPaperResolvedResearchReserveUseInTransaction(
+            tx,
+            owner,
+            currentResolvedAuthority,
+            {
+              reservationId,
+              signalId: signal.signalId,
+              evidenceId,
+              reserveEventSequence: eventSequence,
+              actedAt: event.recordedAt,
+            },
+          );
+        }
+        await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
+        return {
+          status: "reserved",
+          mode: "paper_only",
+          signalId: signal.signalId,
+          reservationId,
+          eventId,
+          eventSequence,
+          policyRevision: evaluated.policyRevision,
+          quantityBase: capacity.quantityBase,
+          heldQuote: capacity.heldQuote,
+          worstCaseStopRiskQuote: capacity.worstCaseStopRiskQuote,
+          stopPriceQuote: signal.stopLoss,
+          expiresAt,
+        };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );

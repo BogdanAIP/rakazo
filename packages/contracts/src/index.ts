@@ -21,6 +21,7 @@ export * from "./trading-history-dataset.js";
 export * from "./trading-paper.js";
 export * from "./trading-paper-journal.js";
 export * from "./trading-paper-ledger.js";
+export * from "./trading-paper-workspace.js";
 export * from "./trading-replay.js";
 export * from "./trading-walkforward.js";
 export * from "./windows-host.js";

@@ -3,9 +3,10 @@ import type {
   TradingPaperJournalReadOutput,
   TradingPaperLedgerEvent,
 } from "@rakazo/contracts";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { rpc } from "../lib/rpc";
+import { PaperTradingControls } from "./PaperTradingControls";
 
 const dateTime = (iso: string) => new Date(iso).toLocaleString("ru-RU");
 const kinds: Record<TradingPaperLedgerEvent["kind"], string> = {
@@ -35,8 +36,11 @@ function eventId(event: TradingPaperLedgerEvent) {
 }
 
 export function PaperJournalPage() {
+  const selectedLedger = useRef<string | null>(null);
+  const [refreshId, setRefreshId] = useState(0);
   const [list, setList] = useState<TradingPaperJournalListOutput | null>(null);
   const [ledgerId, setLedgerId] = useState<string | null>(null);
+  selectedLedger.current = ledgerId;
   const [journal, setJournal] = useState<TradingPaperJournalReadOutput | null>(null);
   const [events, setEvents] = useState<TradingPaperLedgerEvent[]>([]);
   const [cursor, setCursor] = useState<number | null>(null);
@@ -64,7 +68,7 @@ export function PaperJournalPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshId]);
 
   useEffect(() => {
     if (!ledgerId) {
@@ -79,32 +83,54 @@ export function PaperJournalPage() {
     setJournal(null);
     setEvents([]);
     setCursor(null);
-    void rpc.trading
-      .journalRead({ ledgerId })
-      .then((result) => {
+    let fetching = false;
+    const refresh = async () => {
+      if (fetching) return;
+      fetching = true;
+      try {
+        const result = await rpc.trading.journalRead({ ledgerId });
         if (!active) return;
         setJournal(result);
         if (result.status === "verified") {
-          setEvents(result.events);
-          setCursor(result.nextBeforeSequence);
+          setEvents((old) => [
+            ...result.events,
+            ...old.filter(
+              (event) => !result.events.some((fresh) => fresh.eventId === event.eventId),
+            ),
+          ]);
+          setCursor((current) => current ?? result.nextBeforeSequence);
+        } else {
+          setEvents([]);
+          setCursor(null);
         }
-      })
-      .catch(() => {
-        if (active) setError("Не удалось проверить журнал. Повторите попытку.");
-      })
-      .finally(() => {
+        setError(null);
+      } catch {
+        if (active) {
+          setJournal(null);
+          setEvents([]);
+          setCursor(null);
+          setError("Не удалось проверить журнал. Повторите попытку.");
+        }
+      } finally {
+        fetching = false;
         if (active) setPending(false);
-      });
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 5000);
     return () => {
       active = false;
+      window.clearInterval(timer);
     };
-  }, [ledgerId]);
+  }, [ledgerId, refreshId]);
 
   async function loadMore() {
     if (!ledgerId || cursor === null || morePending) return;
+    const requestedLedger = ledgerId;
     setMorePending(true);
     try {
       const page = await rpc.trading.journalRead({ ledgerId, beforeSequence: cursor });
+      if (selectedLedger.current !== requestedLedger) return;
       if (page.status !== "verified") {
         // Never retain previously shown money after an integrity failure.
         setJournal(page);
@@ -113,7 +139,12 @@ export function PaperJournalPage() {
         return;
       }
       setJournal(page);
-      setEvents((old) => [...old, ...page.events]);
+      setEvents((old) => [
+        ...old,
+        ...page.events.filter(
+          (event) => !old.some((existing) => existing.eventId === event.eventId),
+        ),
+      ]);
       setCursor(page.nextBeforeSequence);
     } catch {
       setError("Не удалось загрузить более ранние записи.");
@@ -134,7 +165,7 @@ export function PaperJournalPage() {
             </Link>
             <h1 className="mt-2 text-2xl font-semibold">Журнал PAPER-сделок</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Только просмотр · виртуальные средства · без доступа к реальным ордерам
+              Виртуальные средства · торговые сессии по вашему запуску
             </p>
           </div>
           <button
@@ -146,6 +177,15 @@ export function PaperJournalPage() {
           </button>
         </header>
 
+        <PaperTradingControls
+          key={ledgerId ?? "create"}
+          ledgerId={ledgerId}
+          onCreated={(id) => {
+            setLedgerId(id);
+            setRefreshId((n) => n + 1);
+          }}
+          onChanged={() => setRefreshId((n) => n + 1)}
+        />
         <section className="rounded-2xl border border-border bg-card p-5">
           <label htmlFor="paper-ledger" className="mb-2 block text-sm font-medium">
             Выберите журнал

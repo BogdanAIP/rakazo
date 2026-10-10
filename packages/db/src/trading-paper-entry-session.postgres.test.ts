@@ -368,6 +368,9 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
       ledgerId,
       signal,
       quote.id,
+      undefined,
+      undefined,
+      4,
     );
     expect(held.status).toBe("reserved");
     expect(
@@ -408,16 +411,47 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
       releasedReservations: 0,
       remainingReservations: 0,
     });
+    // A new session with an unrelated manual hold must leave that hold untouched.
+    const nextStart = await effect("paper_session_control", {
+      action: "start",
+      ledger_id: ledgerId,
+      expected_revision: 5,
+      duration_minutes: 15,
+    });
+    expect(
+      await applyApprovedTradingPaperEntrySessionControl(first.prisma, owner, nextStart.id),
+    ).toMatchObject({ ok: true, revision: 6 });
+    const manual = await reserveApprovedTradingPaperSignal(
+      first.prisma,
+      owner,
+      ledgerId,
+      { ...signal, signalId: `manual-${suffix}` },
+      quote.id,
+    );
+    expect(manual.status, JSON.stringify(manual)).toBe("reserved");
+    const nextPause = await effect("paper_session_control", {
+      action: "pause",
+      ledger_id: ledgerId,
+      expected_revision: 6,
+    });
+    expect(
+      await applyApprovedTradingPaperEntrySessionControl(first.prisma, owner, nextPause.id),
+    ).toMatchObject({ ok: true, revision: 7 });
+    expect(
+      await settleVerifiedTradingPaperSessionReservations(second.prisma, owner, ledgerId),
+    ).toMatchObject({ releasedReservations: 0, remainingReservations: 1, sessionRevision: 7 });
     const audited = await auditTradingPaperLifecycle(first.prisma, owner, ledgerId);
-    expect(audited.openReservations).toBe(0);
+    expect(audited.openReservations).toBe(1);
     const rows = await first.prisma.tradingPaperReleaseAudit.findMany({ where: { ledgerId } });
     expect(rows).toHaveLength(1);
     expect(rows[0]?.reason).toBe("session_end");
     const state = await readVerifiedTradingPaperLedger(second.prisma, owner, ledgerId);
-    expect(state.reservations).toHaveLength(0);
+    expect(state.reservations).toHaveLength(1);
+    if (manual.status === "reserved")
+      expect(state.reservations[0]?.reservationId).toBe(manual.reservationId);
     expect(state.positions).toHaveLength(0);
-    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(2);
-    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(2);
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(3);
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(3);
     await expect(
       settleVerifiedTradingPaperSessionReservations(
         second.prisma,
@@ -452,7 +486,7 @@ describePostgres("H1 finite PAPER entry session PostgreSQL owner/fence", () => {
       currentRevision: 0,
     });
     expect(await first.prisma.tradingPaperProtectionLease.count({ where: { ledgerId } })).toBe(0);
-    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(2);
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(3);
 
     const end = await effect("paper_protection_control", {
       action: "end",

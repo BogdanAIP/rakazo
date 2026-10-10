@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { tradingPaperDatabaseNow } from "./trading-paper-clock.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
 import { assessTradingPaperProtectionWakePreflightInTransaction } from "./trading-paper-protection-lease.js";
 import { withTransactionRetry } from "./transaction-retry.js";
@@ -82,13 +83,7 @@ export async function prepareTradingPaperProtectionSuccessorIntent(
   return withTransactionRetry(() =>
     prisma.$transaction(
       async (tx): Promise<PaperProtectionSuccessorIntentResult> => {
-        const clock = await tx.$queryRaw<Array<{ db_now: Date }>>(
-          Prisma.sql`SELECT clock_timestamp() AS db_now`,
-        );
-        const now = clock[0]?.db_now;
-        if (!(now instanceof Date) || !Number.isFinite(now.getTime())) {
-          throw new PaperProtectionSuccessorIntegrityError("Trusted DB clock unavailable");
-        }
+        const now = await tradingPaperDatabaseNow(tx);
         const authority = await assessTradingPaperProtectionWakePreflightInTransaction(
           tx,
           owner,

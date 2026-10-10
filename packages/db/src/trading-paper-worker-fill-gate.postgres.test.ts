@@ -300,7 +300,8 @@ describePostgres("paper worker fill gate PostgreSQL authorization", () => {
       reserveEvidence.id,
       signalAuthority,
     );
-    if (reserved.status !== "reserved") throw new Error("expected F1 reservation");
+    if (reserved.status !== "reserved")
+      throw new Error(`expected F1 reservation: ${JSON.stringify(reserved)}`);
 
     const fillAt = new Date().toISOString();
     const fillEvidence = await recordPublicAdapterPaperQuoteEvidence(
@@ -552,9 +553,8 @@ describePostgres("paper worker fill gate PostgreSQL authorization", () => {
     );
     expect(retrySuccessor).toMatchObject({
       status: "duplicate",
-      successorScheduledFor: firstSuccessor.status === "prepared"
-        ? firstSuccessor.successorScheduledFor
-        : "",
+      successorScheduledFor:
+        firstSuccessor.status === "prepared" ? firstSuccessor.successorScheduledFor : "",
     });
     expect(
       await first.prisma.tradingPaperProtectionSuccessorIntent.count({
@@ -616,16 +616,14 @@ describePostgres("paper worker fill gate PostgreSQL authorization", () => {
         where: { ledgerId, kind: "fill_sell" },
       }),
     ).toBe(1);
-    expect(await auditTradingPaperLifecycle(second.prisma, owner, ledgerId)).resolves.toMatchObject(
-      { openPositions: 0 },
+    await expect(auditTradingPaperLifecycle(second.prisma, owner, ledgerId)).resolves.toMatchObject(
+      {
+        openPositions: 0,
+      },
     );
 
     expect(
-      await prepareTradingPaperProtectionSuccessorIntent(
-        second.prisma,
-        owner,
-        successorRequest,
-      ),
+      await prepareTradingPaperProtectionSuccessorIntent(second.prisma, owner, successorRequest),
     ).toMatchObject({ status: "stop", reason: "no_open_positions" });
 
     const protectionEnd = await makeEffect("paper_protection_control", "h2b-protection-end", {
