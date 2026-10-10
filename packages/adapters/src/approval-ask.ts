@@ -125,11 +125,11 @@ export function buildApprovalAskBlock(
                                 { id: "allow", label: "Authorize PAPER fill scope once" },
                                 { id: "deny", label: "Cancel" },
                               ]
-                        : [
-                            { id: "allow", label: "Allow once" },
-                            { id: "always", label: "Always allow this tool" },
-                            { id: "deny", label: "Deny" },
-                          ],
+                            : [
+                                { id: "allow", label: "Allow once" },
+                                { id: "always", label: "Always allow this tool" },
+                                { id: "deny", label: "Deny" },
+                              ],
   };
 }
 
@@ -196,7 +196,9 @@ function describeApprovalAction(toolName: string, args: Record<string, unknown>)
   ) {
     const verb = args.action === "disable" ? "Revoke" : "Authorize";
     const operation =
-      toolName === "paper_resolved_research_fill_control" ? "PAPER fill scope" : "PAPER research scope";
+      toolName === "paper_resolved_research_fill_control"
+        ? "PAPER fill scope"
+        : "PAPER research scope";
     return `${verb} ${operation} for “${String(args.ledger_id ?? "unknown ledger")}”`;
   }
   const target = pickScopeLabel(args);
