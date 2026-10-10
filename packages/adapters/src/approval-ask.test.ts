@@ -250,6 +250,38 @@ describe("buildApprovalAskBlock", () => {
     expect(block.detail).toContain("expected signal revision: 3");
   });
 
+  it.each([
+    ["paper_resolved_research_control", "Authorize PAPER research scope once"],
+    ["paper_resolved_research_fill_control", "Authorize PAPER fill scope once"],
+  ])("never offers permanent approval for %s", (tool, label) => {
+    const block = buildApprovalAskBlock(
+      "effect-scope",
+      tool,
+      {
+        action: "enable",
+        ledger_id: "paper-1",
+        expected_gate_revision: 9,
+        scope: {
+          schemaVersion: "trading-resolved-research-scope-v2",
+          skillVariant: "rccl",
+          skillContentSha256: "a".repeat(64),
+        },
+      },
+      [],
+    );
+    expect(block).toMatchObject({
+      kind: "ask",
+      actions: [
+        { id: "allow", label },
+        { id: "deny", label: "Cancel" },
+      ],
+    });
+    expect(JSON.stringify(block)).not.toContain("Always allow");
+    expect(JSON.stringify(block)).toContain("trading-resolved-research-scope-v2");
+    expect(JSON.stringify(block)).toContain("rccl");
+    expect(JSON.stringify(block)).toContain("Fresh owner confirmation");
+  });
+
   it("uses a one-time create or cancel choice for a new security boundary", () => {
     const block = buildApprovalAskBlock(
       "effect-1",
