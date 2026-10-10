@@ -5,6 +5,9 @@ import {
   historyCompactJob,
   historyCompactJobKey,
   messagingDeliverJob,
+  PAPER_PROTECTION_MAX_ATTEMPTS,
+  paperProtectionCheckJob,
+  paperProtectionCheckJobKey,
   PAPER_WORKER_PREFLIGHT_MAX_ATTEMPTS,
   paperWorkerPreflightJob,
   paperWorkerPreflightJobKey,
@@ -23,6 +26,7 @@ function handlers(): BackgroundJobHandlers {
     "history.compact": vi.fn(async () => undefined),
     "messaging.deliver": vi.fn(async () => undefined),
     "cloud_agent.poll": vi.fn(async () => undefined),
+    "paper.protection-check": vi.fn(async () => undefined),
     "paper.worker-preflight": vi.fn(async () => undefined),
   };
 }
@@ -83,6 +87,33 @@ describe("background job contracts", () => {
       computerId: "computer-1",
       leaseId: "lease-1",
     });
+  });
+});
+
+describe("H2b2 PAPER protection-only job contract", () => {
+  it("builds a separate finite protection wake and validates required owner revisions", async () => {
+    const scheduledFor = new Date("2026-10-10T12:00:00.000Z");
+    const job = paperProtectionCheckJob({
+      ledgerId: "paper-1",
+      spaceId: "space-1",
+      userId: "user-1",
+      gateRevision: 7,
+      leaseRevision: 12,
+      scheduledFor,
+    });
+    expect(job.name).toBe("paper.protection-check");
+    expect(job.payload).toMatchObject({ gateRevision: 7, leaseRevision: 12 });
+    expect(job.replaceKey).toBe(paperProtectionCheckJobKey("paper-1"));
+    expect(job.replaceKey).not.toBe(paperWorkerPreflightJobKey("paper-1"));
+    expect(job.maxAttempts).toBe(PAPER_PROTECTION_MAX_ATTEMPTS);
+    const target = handlers();
+    await dispatchBackgroundJob(target, job.name, job.payload);
+    expect(target["paper.protection-check"]).toHaveBeenCalledWith(job.payload);
+    for (const revision of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() =>
+        parseBackgroundJob(job.name, { ...job.payload, leaseRevision: revision }),
+      ).toThrow();
+    }
   });
 });
 
