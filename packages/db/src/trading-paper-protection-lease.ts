@@ -472,7 +472,10 @@ export async function applyApprovedTradingPaperProtectionControl(
           );
           if (worker.status !== "ready") return deny("worker_denied");
           const guards = await verifyTradingPaperStopGuardsInTransaction(
-            tx, request.ledgerId, recovered.events, recovered.state,
+            tx,
+            request.ledgerId,
+            recovered.events,
+            recovered.state,
           );
           if (report.openPositions === 0 || guards?.length !== report.openPositions) {
             return deny("no_protectable_positions");
@@ -480,10 +483,16 @@ export async function applyApprovedTradingPaperProtectionControl(
           for (const position of recovered.state.positions) {
             const [workerFill, resolvedFill] = await Promise.all([
               readTradingPaperWorkerFillUseInTransaction(
-                tx, owner, request.ledgerId, position.positionId,
+                tx,
+                owner,
+                request.ledgerId,
+                position.positionId,
               ),
               readTradingPaperResolvedResearchFillUseInTransaction(
-                tx, owner, request.ledgerId, position.positionId,
+                tx,
+                owner,
+                request.ledgerId,
+                position.positionId,
               ),
             ]);
             if (Boolean(workerFill) === Boolean(resolvedFill)) {
@@ -497,11 +506,17 @@ export async function applyApprovedTradingPaperProtectionControl(
           expiresAt = new Date(now.getTime() + request.durationMinutes! * 60_000);
         }
         const next = {
-          ledgerId: request.ledgerId, spaceId: owner.spaceId, userId: owner.userId,
+          ledgerId: request.ledgerId,
+          spaceId: owner.spaceId,
+          userId: owner.userId,
           enabled: request.action === "start",
           revision: previous.revision + 1,
-          workerGateRevision: gateRevision, entryRevision,
-          cadenceMinutes: cadence, startedAt, expiresAt, approvalEffectId: effectId,
+          workerGateRevision: gateRevision,
+          entryRevision,
+          cadenceMinutes: cadence,
+          startedAt,
+          expiresAt,
+          approvalEffectId: effectId,
         };
         await tx.tradingPaperProtectionLease.upsert({
           where: { ledgerId: request.ledgerId },
@@ -509,12 +524,16 @@ export async function applyApprovedTradingPaperProtectionControl(
           update: { ...next, leaseSha256: digest(next) },
         });
         return complete({
-          ok: true, mode: "paper_only",
-          ledgerId: request.ledgerId, action: request.action,
+          ok: true,
+          mode: "paper_only",
+          ledgerId: request.ledgerId,
+          action: request.action,
           revision: next.revision,
           status: next.enabled ? "active" : "ended",
           workerGateRevision: gateRevision,
-          entryRevision, cadenceMinutes: cadence, expiresAt: expiresAt.toISOString(),
+          entryRevision,
+          cadenceMinutes: cadence,
+          expiresAt: expiresAt.toISOString(),
         });
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
