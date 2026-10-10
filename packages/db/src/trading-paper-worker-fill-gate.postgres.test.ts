@@ -10,6 +10,7 @@ import {
   readTradingPaperProtectionWakePreflight,
   readVerifiedTradingPaperProtectionLease,
 } from "./trading-paper-protection-lease.js";
+import { prepareTradingPaperProtectionSuccessorIntent } from "./trading-paper-protection-successor.js";
 import { recordPublicAdapterPaperQuoteEvidence } from "./trading-paper-quote-evidence.js";
 import { reserveApprovedTradingPaperSignal } from "./trading-paper-reserve.js";
 import {
@@ -524,6 +525,43 @@ describePostgres("paper worker fill gate PostgreSQL authorization", () => {
       await readTradingPaperProtectionWakePreflight(second.prisma, owner, ledgerId, 1, 1),
     ).toMatchObject({ status: "ready", revision: 1 });
 
+    // H2b2 independent protective recurrence: one exact durable intent
+    // must survive retry without recomputing a later scheduled tick.
+    const sourceScheduledFor = new Date().toISOString();
+    const successorRequest = {
+      ledgerId,
+      leaseRevision: 1,
+      gateRevision: 1,
+      sourceScheduledFor,
+    };
+    const firstSuccessor = await prepareTradingPaperProtectionSuccessorIntent(
+      first.prisma,
+      owner,
+      successorRequest,
+    );
+    expect(firstSuccessor).toMatchObject({
+      status: "prepared",
+      mode: "paper_only",
+      leaseRevision: 1,
+      gateRevision: 1,
+    });
+    const retrySuccessor = await prepareTradingPaperProtectionSuccessorIntent(
+      second.prisma,
+      owner,
+      successorRequest,
+    );
+    expect(retrySuccessor).toMatchObject({
+      status: "duplicate",
+      successorScheduledFor: firstSuccessor.status === "prepared"
+        ? firstSuccessor.successorScheduledFor
+        : "",
+    });
+    expect(
+      await first.prisma.tradingPaperProtectionSuccessorIntent.count({
+        where: { ledgerId },
+      }),
+    ).toBe(1);
+
     // Old unscoped F4 must not bypass the independently approved lease.
     await expect(
       closeTradingPaperPositionOnStop(
@@ -581,6 +619,14 @@ describePostgres("paper worker fill gate PostgreSQL authorization", () => {
     expect(await auditTradingPaperLifecycle(second.prisma, owner, ledgerId)).resolves.toMatchObject(
       { openPositions: 0 },
     );
+
+    expect(
+      await prepareTradingPaperProtectionSuccessorIntent(
+        second.prisma,
+        owner,
+        successorRequest,
+      ),
+    ).toMatchObject({ status: "stop", reason: "no_open_positions" });
 
     const protectionEnd = await makeEffect("paper_protection_control", "h2b-protection-end", {
       action: "end",
