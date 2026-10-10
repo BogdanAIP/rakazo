@@ -22,6 +22,7 @@ export {
   type TradingPaperFillResult,
 } from "./trading-paper-fill.js";
 export * from "./trading-paper-protection-lease.js";
+export * from "./trading-paper-protection-successor.js";
 export { applyApprovedTradingPaperProtectiveExitControl } from "./trading-paper-protective-exit-authority.js";
 export {
   PaperQuoteEvidenceError,
