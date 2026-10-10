@@ -119,6 +119,44 @@ export async function prepareTradingPaperProtectionSuccessorIntent(
           };
         }
 
+        const lease = await tx.tradingPaperProtectionLease.findUniqueOrThrow({
+          where: { ledgerId: input.ledgerId },
+          select: { approvalEffectId: true },
+        });
+        const where = {
+          ledgerId_leaseRevision_sourceScheduledFor: {
+            ledgerId: input.ledgerId,
+            leaseRevision: input.leaseRevision,
+            sourceScheduledFor: source,
+          },
+        };
+        const existing = await tx.tradingPaperProtectionSuccessorIntent.findUnique({ where });
+        if (existing) {
+          const previous: Planned = {
+            ledgerId: existing.ledgerId,
+            spaceId: existing.spaceId,
+            userId: existing.userId,
+            leaseRevision: existing.leaseRevision,
+            gateRevision: existing.gateRevision,
+            sourceScheduledFor: existing.sourceScheduledFor.toISOString(),
+            successorScheduledFor: existing.successorScheduledFor.toISOString(),
+            approvalEffectId: existing.approvalEffectId,
+          };
+          if (
+            previous.spaceId !== owner.spaceId ||
+            previous.userId !== owner.userId ||
+            previous.leaseRevision !== input.leaseRevision ||
+            previous.gateRevision !== authority.gateRevision ||
+            previous.approvalEffectId !== lease.approvalEffectId ||
+            existing.intentSha256 !== checksum(previous) ||
+            Date.parse(previous.successorScheduledFor) <= source.getTime() ||
+            Date.parse(previous.successorScheduledFor) >= Date.parse(authority.expiresAt)
+          ) {
+            throw new PaperProtectionSuccessorIntegrityError("Persisted successor intent changed");
+          }
+          return { status: "duplicate", mode: "paper_only", ...previous };
+        }
+
         const cadenceMs = authority.cadenceMinutes * 60_000;
         const intervals = Math.max(
           1,
@@ -133,10 +171,7 @@ export async function prepareTradingPaperProtectionSuccessorIntent(
             reason: "next_after_expiry",
           };
         }
-        const row = await tx.tradingPaperProtectionLease.findUniqueOrThrow({
-          where: { ledgerId: input.ledgerId },
-          select: { approvalEffectId: true },
-        });
+
         const planned: Planned = {
           ledgerId: input.ledgerId,
           spaceId: owner.spaceId,
@@ -145,30 +180,9 @@ export async function prepareTradingPaperProtectionSuccessorIntent(
           gateRevision: authority.gateRevision,
           sourceScheduledFor: source.toISOString(),
           successorScheduledFor: successor.toISOString(),
-          approvalEffectId: row.approvalEffectId,
+          approvalEffectId: lease.approvalEffectId,
         };
-        const where = {
-          ledgerId_leaseRevision_sourceScheduledFor: {
-            ledgerId: input.ledgerId,
-            leaseRevision: input.leaseRevision,
-            sourceScheduledFor: source,
-          },
-        };
-        const existing = await tx.tradingPaperProtectionSuccessorIntent.findUnique({ where });
         const expectedChecksum = checksum(planned);
-        if (existing) {
-          if (
-            existing.spaceId !== owner.spaceId ||
-            existing.userId !== owner.userId ||
-            existing.gateRevision !== planned.gateRevision ||
-            existing.successorScheduledFor.toISOString() !== planned.successorScheduledFor ||
-            existing.approvalEffectId !== planned.approvalEffectId ||
-            existing.intentSha256 !== expectedChecksum
-          ) {
-            throw new PaperProtectionSuccessorIntegrityError("Persisted successor intent changed");
-          }
-          return { status: "duplicate", mode: "paper_only", ...planned };
-        }
         await tx.tradingPaperProtectionSuccessorIntent.create({
           data: {
             id: `paper-protection-successor:${expectedChecksum}`,
