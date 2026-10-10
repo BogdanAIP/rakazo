@@ -27,7 +27,9 @@ export function buildApprovalAskBlock(
           toolName === "paper_worker_recurrence_control" ||
           toolName === "paper_worker_market_target_control" ||
           toolName === "paper_worker_signal_control" ||
-          toolName === "paper_worker_fill_control"
+          toolName === "paper_worker_fill_control" ||
+          toolName === "paper_resolved_research_control" ||
+          toolName === "paper_resolved_research_fill_control"
           ? `${summary}?`
           : `Review before ${summary}`,
         secrets,
@@ -113,6 +115,16 @@ export function buildApprovalAskBlock(
                             },
                             { id: "deny", label: "Cancel" },
                           ]
+                        : toolName === "paper_resolved_research_control"
+                          ? [
+                              { id: "allow", label: "Authorize PAPER research scope once" },
+                              { id: "deny", label: "Cancel" },
+                            ]
+                          : toolName === "paper_resolved_research_fill_control"
+                            ? [
+                                { id: "allow", label: "Authorize PAPER fill scope once" },
+                                { id: "deny", label: "Cancel" },
+                              ]
                         : [
                             { id: "allow", label: "Allow once" },
                             { id: "always", label: "Always allow this tool" },
@@ -177,6 +189,15 @@ function describeApprovalAction(toolName: string, args: Record<string, unknown>)
     const verb = args.action === "disable" ? "Disable" : "Enable";
     const ledger = args.ledger_id ? String(args.ledger_id) : "unknown ledger";
     return `${verb} automatic PAPER fills for “${ledger}”`;
+  }
+  if (
+    toolName === "paper_resolved_research_control" ||
+    toolName === "paper_resolved_research_fill_control"
+  ) {
+    const verb = args.action === "disable" ? "Revoke" : "Authorize";
+    const operation =
+      toolName === "paper_resolved_research_fill_control" ? "PAPER fill scope" : "PAPER research scope";
+    return `${verb} ${operation} for “${String(args.ledger_id ?? "unknown ledger")}”`;
   }
   const target = pickScopeLabel(args);
   return target ? `${toolName} → ${target}` : toolName;
@@ -261,6 +282,24 @@ function formatApprovalDetail(
       `expected signal revision: ${String(args.expected_signal_revision ?? "")}`,
       ...(args.action === "enable" ? [`strategy: ${String(args.strategy_id ?? "")}`] : []),
     );
+  }
+  if (
+    toolName === "paper_resolved_research_control" ||
+    toolName === "paper_resolved_research_fill_control"
+  ) {
+    lines.push(
+      "Fresh owner confirmation is required for this exact PAPER-only scope. This does not place live orders or grant permanent permission.",
+      `ledger: ${String(args.ledger_id ?? "")}`,
+      `expected gate revision: ${String(args.expected_gate_revision ?? "")}`,
+    );
+    if (args.scope && typeof args.scope === "object") {
+      const scope = args.scope as Record<string, unknown>;
+      lines.push(
+        `scope version: ${String(scope.schemaVersion ?? "")}`,
+        `market skill variant: ${String(scope.skillVariant ?? "")}`,
+        `market skill content SHA-256: ${String(scope.skillContentSha256 ?? "")}`,
+      );
+    }
   }
   for (const key of ["collection", "title", "to", "subject", "amount", "body"]) {
     const value = args[key];
