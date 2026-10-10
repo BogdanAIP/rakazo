@@ -549,6 +549,14 @@ export interface BackgroundJobPayloads {
   /** Reconcile durable remote-agent intent; scope is loaded from the database. */
   "cloud_agent.poll": { agentId: string };
   /** Read-only PAPER worker wake validation; no trading action is carried in the payload. */
+  "paper.protection-check": {
+    ledgerId: string;
+    spaceId: string;
+    userId: string;
+    gateRevision: number;
+    leaseRevision: number;
+    scheduledFor: string;
+  };
   "paper.worker-preflight": {
     ledgerId: string;
     spaceId: string;
