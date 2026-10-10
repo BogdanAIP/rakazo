@@ -1691,7 +1691,7 @@ model TradingPaperProtectionSuccessorIntent {
   intentSha256            String
   createdAt               DateTime           @default(now())
 
-  @@unique([ledgerId, leaseRevision, sourceScheduledFor])
+  @@unique([ledgerId, leaseRevision, sourceScheduledFor], map: "tp_protection_successor_scope_key")
   @@index([spaceId, userId])
   @@map("trading_paper_protection_successor_intents")
 }
