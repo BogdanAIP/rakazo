@@ -352,3 +352,41 @@ job. Durable, owner-scoped protection-only job intent, restart recovery,
 expiry escalation, and a positive PostgreSQL F3/G4 live-position test
 remain unimplemented. Do not portray H2b as automatically monitoring
 positions after session expiry until those pieces are in place.
+
+
+## H2b2 — independently queued, finite protection-only successor (2026-10-10)
+
+Introduces a distinct typed `paper.protection-check` job with a
+separate `replaceKey`, `leaseRevision`, D2 gate revision, exact
+owner scope, fixed 3-attempt maximum and strict job parser.
+`createBackgroundJobHandlers` now routes only this job to the
+existing H2b stop-only adapter (F4/G5 -> C2), then attempts to
+persist and enqueue a successor. It does **not** call research,
+new-signal generation, quote reserve, virtual buy, entry worker,
+Market Skill execution or an exchange order API.
+
+H2b2 records immutable, hashed
+`TradingPaperProtectionSuccessorIntent` rows with a unique key
+(ledger, lease revision, original scheduled time). Its transactional
+planner rechecks the independently owner-approved protection lease,
+trusted DB time, paused/ended/expired H1 entry lease, D2 authority,
+and verified open PAPER positions. No position, revoked authority or
+next tick on/after lease expiry -> stop. Replay uses the
+**same persisted successor time**, never a newly calculated one.
+The job publisher runs only after committing the immutable intent;
+a queue failure propagates so the parent job may retry. A queued stale
+wake remains fail-closed at H2b and C2.
+
+**Remaining before safe unattended operation:** the very FIRST
+`paper.protection-check` job must be scheduled only from an
+authenticated, explicitly owner-approved protection Start. An
+independent restart reconciler must identify persisted intents
+whose corresponding durable queue job is missing and re-enqueue
+only after fresh lease/position verification. Graceful expiry must
+produce a visible user escalation when positions remain open
+(protection is NOT guaranteed after expiry). Test actual restart,
+late queue delivery, mid-close lease revocation and concurrently
+running wakes. These are not implemented by adding a dispatcher.
+H2a mixed manual hold attribution and strict legacy auto-entry
+cutover also remain blockers. All code is still in draft PR #38;
+nothing has been activated or deployed.
