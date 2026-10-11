@@ -295,10 +295,7 @@ export function replayPerpetualPaperLedger(
         if (event.kind === "liquidate" && !mustLiquidate(p)) {
           throw new Error("Liquidation must have verified preceding distressed mark");
         }
-        if (
-          event.kind === "liquidate" &&
-          (p.side === "long" ? exit > p.mark : exit < p.mark)
-        ) {
+        if (event.kind === "liquidate" && (p.side === "long" ? exit > p.mark : exit < p.mark)) {
           throw new Error("PAPER liquidation cannot use a favorable stale price");
         }
         const change = ((p.side === "long" ? exit - p.entry : p.entry - exit) * p.quantity) / SCALE;
