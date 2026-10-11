@@ -3,7 +3,11 @@ import type {
   TradingPaperWorkspaceCommand,
   TradingPaperWorkspaceStatus,
 } from "@rakazo/contracts";
-import { getPaperExperimentPreset, PAPER_EXPERIMENT_STRATEGIES, type PaperExperimentStrategy } from "@rakazo/core";
+import {
+  getPaperExperimentPreset,
+  PAPER_EXPERIMENT_STRATEGIES,
+  type PaperExperimentStrategy,
+} from "@rakazo/core";
 import { Button, Input } from "@rakazo/ui-web";
 import { useEffect, useState } from "react";
 import { rpc } from "../lib/rpc";
@@ -223,8 +227,8 @@ export function PaperTradingControls({
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              Шаблоны пока заполняют только лимиты нового спотового счёта. Фьючерсы,
-              плечо и хеджирование не включаются до отдельной проверки.
+              Шаблоны пока заполняют только лимиты нового спотового счёта. Фьючерсы, плечо и
+              хеджирование не включаются до отдельной проверки.
             </p>
           </div>
           {[
