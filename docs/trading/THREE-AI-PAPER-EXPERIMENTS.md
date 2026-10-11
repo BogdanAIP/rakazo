@@ -1,14 +1,22 @@
 # Three AI-managed PAPER experiments — integration and safety status
 
-**Target**: conservative, moderate and aggressive AI-directed, independent 1,000-USDT virtual accounts; multiple USDT perpetual pairs, isolated hedged long and short legs, bounded leverage, reproducible 14-day comparison. This is a development plan, **not a declaration that derivatives PAPER trading or the trial is running**.
+**Target**: one owner-controlled account in normal operation, with a selectable strategy. During evaluation, compare conservative, moderate and aggressive AI strategies in three independent 1,000-USDT virtual portfolios on equivalent market data; multiple USDT perpetual pairs, separate hedge legs, explicit margin semantics, configurable bounded leverage and a reproducible 14-day comparison. This is a development plan, **not a declaration that derivatives PAPER trading or the trial is running**.
 
 ## Accepted execution engine — 2026-10-11
 
 Owner decision: **use NautilusTrader** for futures PAPER execution. This supersedes the custom futures simulator implementation steps below.
 
+### Strategy comparison and leverage clarification
+
+Owner clarification: the three strategies are experimental alternatives for comparison, not a requirement for three exchange accounts in normal operation. Each PAPER strategy has an independent virtual 1,000-USDT budget so one strategy's trades do not consume another strategy's test capital. Normal operation uses one account and a selected strategy. The experiment should use the same market timeline and record strategy/version, decisions, risk limits, costs and start/end timestamps.
+
+Owner requests higher leverage. The previous 1x/2x/3x caps are historical defaults and are not the new target. Exact maximum leverage is pending the owner's numeric choice (one common ceiling or separate ceilings per strategy). The AI may choose lower leverage per trade within that ceiling. Risk profiles remain defined by loss budgets, sizing and exposure, rather than leverage alone. Do not infer unlimited leverage or increase risk budgets automatically.
+
+
+
 - NautilusTrader owns order matching, order lifecycle, positions, fees, funding and account balances. Rakazo owns human Start/Pause/End, finite sessions, model selection, Market research provenance, independent deterministic permission/risk checks and the existing Spot/Futures journal.
 - The journal is an idempotent projection of engine events. There must be one authoritative account balance; Rakazo must not independently recalculate a competing simulated wallet.
-- Preserve three independent 1,000-USDT accounts, multiple pairs, separate long/short hedge positions and profile leverage caps 1x/2x/3x. Selecting an engine does not grant permission to start a trading session.
+- Preserve three independent 1,000-USDT virtual portfolios for comparison, a single-account normal mode, multiple pairs, separate long/short hedge positions and configurable leverage ceilings. Selecting an engine does not grant permission to start a trading session.
 - Pin the tested native Rust/PyO3 engine API and package version. Current qualification used NautilusTrader 1.231.0 on native Windows/Python 3.12. Do not mix its legacy Cython sandbox API with native engine capabilities, or stable 1.x with documentation examples for 2.x.
 - Five offline synthetic qualification scenarios verified hedge, two instruments, leverage 1/2/3, partial reduce-only close, fees, funding settlement and crash liquidation. These are component tests, not evidence of a completed integration or trading profitability.
 - Margin semantics remain an integration requirement: the tested account-wide configuration offsets hedge exposure and is different from the current custom isolated-lot accounting. Verify supported margin configuration and explicit gross-risk limits before mapping available balance or liquidation into the journal. Do not silently retain isolated-margin labels for account-wide results.
