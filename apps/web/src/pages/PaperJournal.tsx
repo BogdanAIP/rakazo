@@ -7,8 +7,8 @@ import { Button } from "@rakazo/ui-web";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { rpc } from "../lib/rpc";
-import { PaperTradingControls } from "./PaperTradingControls";
 import { PaperPerpetualJournalPanel } from "./PaperPerpetualJournalPanel";
+import { PaperTradingControls } from "./PaperTradingControls";
 
 const ModelSettingsOverlay = lazy(() =>
   import("./ModelSettingsOverlay").then((module) => ({ default: module.ModelSettingsOverlay })),
@@ -204,7 +204,7 @@ export function PaperJournalPage() {
             type="button"
             role="tab"
             aria-selected={activeTab === "spot"}
-            aria-controls="paper-journal-spot-panel"
+            aria-controls="paper-spot-controls-panel"
             onClick={() => setActiveTab("spot")}
             className={`rounded-lg px-5 py-2 text-sm font-medium ${activeTab === "spot" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/60"}`}
           >
@@ -222,9 +222,9 @@ export function PaperJournalPage() {
             Фьючерсы
           </button>
         </div>
-        {activeTab === "spot" ? (
-          <div className="space-y-6" id="paper-journal-spot-panel" role="tabpanel" aria-labelledby="paper-journal-spot-tab">
-        <PaperTradingControls
+
+        <div id="paper-spot-controls-panel" role="tabpanel" aria-labelledby="paper-journal-spot-tab" hidden={activeTab !== "spot"}>
+          <PaperTradingControls
           key={ledgerId ?? "create"}
           ledgerId={ledgerId}
           onCreated={(id) => {
@@ -232,8 +232,12 @@ export function PaperJournalPage() {
             setRefreshId((n) => n + 1);
           }}
           onChanged={() => setRefreshId((n) => n + 1)}
-        />
-        <section className="rounded-2xl border border-border bg-card p-5">
+          />
+        </div>
+        <section
+          hidden={activeTab !== "spot"}
+          className="rounded-2xl border border-border bg-card p-5"
+        >
           <label htmlFor="paper-ledger" className="mb-2 block text-sm font-medium">
             Выберите журнал
           </label>
@@ -258,19 +262,19 @@ export function PaperJournalPage() {
           </p>
         </section>
 
-        {error && (
+        {activeTab === "spot" && error && (
           <p role="alert" className="rounded-xl border border-destructive/50 p-4 text-sm">
             {error}
           </p>
         )}
-        {pending && <p className="text-muted-foreground">Проверка журнала…</p>}
-        {journal?.status === "integrity_blocked" && (
+        {activeTab === "spot" && pending && <p className="text-muted-foreground">Проверка журнала…</p>}
+        {activeTab === "spot" && journal?.status === "integrity_blocked" && (
           <p role="alert" className="rounded-xl border border-destructive p-5">
             Проверка целостности журнала не пройдена. Баланс, позиции и история скрыты. Никаких
             исправлений или сделок не выполнялось.
           </p>
         )}
-        {verified && (
+        {activeTab === "spot" && verified && (
           <>
             <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {[
@@ -380,10 +384,7 @@ export function PaperJournalPage() {
             </section>
           </>
         )}
-          </div>
-        ) : (
-          <PaperPerpetualJournalPanel />
-        )}
+        {activeTab === "futures" && <PaperPerpetualJournalPanel />}
       </div>
       {modelSettingsOpen && (
         <Suspense fallback={null}>
