@@ -111,9 +111,9 @@ export async function fetchBingxPublicSpotSnapshot(
   const fetchedAt = (options.now ?? new Date()).toISOString();
 
   const markets: TradingInstrument[] = symbols
-    // Delisted aliases and one-character assets are outside the canonical
-    // supported spot-symbol contract. They must not block another target.
-    .filter((entry) => /^[A-Z0-9]{2,40}-[A-Z0-9]{2,40}$/.test(entry.symbol))
+    // Delisted aliases are outside the canonical supported spot-symbol
+    // contract. Keep valid one-character assets and exclude unsupported aliases.
+    .filter((entry) => /^[A-Z0-9]{1,40}-[A-Z0-9]{1,40}$/.test(entry.symbol))
     .map((entry) => {
       const parts = entry.symbol.split("-");
       const base = parts[0];

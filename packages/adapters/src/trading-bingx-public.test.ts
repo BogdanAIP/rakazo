@@ -138,15 +138,14 @@ describe("BingX catalog lifecycle and JSON float representation", () => {
     expect(snapshot.markets.filter((m) => m.status === "active").map((m) => m.symbol)).toEqual([
       "SOL-USDT",
       "DOGE-USDT",
+      "S-USDT",
     ]);
     expect(
       snapshot.markets.filter((m) =>
         ["FUTURE-USDT", "PAUSED-USDT", "OTHER-USDT"].includes(m.symbol),
       ),
     ).toHaveLength(3);
-    expect(snapshot.markets.some((m) => m.symbol.includes("_OLD") || m.symbol === "S-USDT")).toBe(
-      false,
-    );
+    expect(snapshot.markets.some((m) => m.symbol.includes("_OLD"))).toBe(false);
   });
 
   it("preserves exponent notation as exact canonical decimals for metadata and quotes", async () => {
@@ -178,5 +177,27 @@ describe("BingX catalog lifecycle and JSON float representation", () => {
     await expect(callWith([symbols, { code: 0, data: [empty, tickers.data[0]] }])).rejects.toThrow(
       "Duplicate",
     );
+  });
+});
+
+describe("BingX canonical single-character assets", () => {
+  it("retains both the catalog market and executable quote for S-USDT", async () => {
+    const snapshot = await callWith([
+      {
+        code: 0,
+        data: {
+          symbols: [{ ...symbols.data.symbols[0], symbol: "S-USDT", status: 1 }],
+        },
+      },
+      { code: 0, data: [{ ...tickers.data[0], symbol: "S-USDT" }] },
+    ]);
+    expect(snapshot.markets).toHaveLength(1);
+    expect(snapshot.markets[0]).toMatchObject({
+      symbol: "S-USDT",
+      base: "S",
+      quote: "USDT",
+      status: "active",
+    });
+    expect(snapshot.tickers.map((ticker) => ticker.symbol)).toEqual(["S-USDT"]);
   });
 });
