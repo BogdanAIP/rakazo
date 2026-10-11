@@ -29,12 +29,12 @@ export {
   type TradingPaperFillResult,
 } from "./trading-paper-fill.js";
 export * from "./trading-paper-journal-read.js";
+export { auditTradingPaperLifecycle } from "./trading-paper-lifecycle-audit.js";
+export { tradingPaperMarketScope } from "./trading-paper-market-choice.js";
 export {
   listOwnedPerpetualPaperJournals,
   readOwnedPerpetualPaperJournal,
 } from "./trading-paper-perpetual-store.js";
-export { auditTradingPaperLifecycle } from "./trading-paper-lifecycle-audit.js";
-export { tradingPaperMarketScope } from "./trading-paper-market-choice.js";
 export * from "./trading-paper-protection-lease.js";
 export * from "./trading-paper-protection-successor.js";
 export { applyApprovedTradingPaperProtectiveExitControl } from "./trading-paper-protective-exit-authority.js";
