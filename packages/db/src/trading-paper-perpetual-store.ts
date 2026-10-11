@@ -383,7 +383,7 @@ export async function readOwnedPerpetualPaperJournal(
           ledgerId,
           openedAt: scoped.openedAt.toISOString(),
           updatedAt: scoped.updatedAt.toISOString(),
-          state,
+          state: { ...state, openPositions: state.openPositions.map((position) => ({ ...position })) },
           events: [...page].reverse(),
           nextBeforeSequence: oldest !== undefined && eligible.length > page.length ? oldest : null,
         };
