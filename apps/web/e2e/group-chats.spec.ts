@@ -121,6 +121,7 @@ test("create group from + and see two bots in one transcript", async ({ page }, 
   await expect(desktopSettings.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
   await page.unroute("**/rpc/groups/update");
   await desktopSettings.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(desktopSettings).toHaveAttribute("data-panel", "closed");
 
   await page
     .getByRole("combobox", { name: "Message Draft team" })
