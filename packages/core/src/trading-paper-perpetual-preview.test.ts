@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { previewPaperPerpetualProposal, type PaperPerpetualProposalInput } from "./trading-paper-perpetual-preview.js";
+import {
+  type PaperPerpetualProposalInput,
+  previewPaperPerpetualProposal,
+} from "./trading-paper-perpetual-preview.js";
 
 const fixture: PaperPerpetualProposalInput = {
   strategy: "moderate",
@@ -24,8 +27,16 @@ const fixture: PaperPerpetualProposalInput = {
   maintenanceMarginBps: 50,
 };
 
+function expectDenial(overrides: Partial<PaperPerpetualProposalInput>, reason: string) {
+  expect(previewPaperPerpetualProposal({ ...fixture, ...overrides })).toMatchObject({
+    status: "deny",
+    mode: "paper_only",
+    reason,
+  });
+}
+
 describe("inert, risk-bounded PAPER perpetual proposals", () => {
-  it("previews a long without exposing any order submission authority", () => {
+  it("previews a long without exposing order authority", () => {
     const result = previewPaperPerpetualProposal(fixture);
     expect(result.status).toBe("inert_preview");
     if (result.status !== "inert_preview") return;
@@ -40,7 +51,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
     expect("orderId" in result || "execute" in result || "approval" in result).toBe(false);
   });
 
-  it("keeps simultaneous long and short for the same symbol in independent hedge buckets", () => {
+  it("separates hedged long and short legs and multiple markets", () => {
     const long = previewPaperPerpetualProposal(fixture);
     const short = previewPaperPerpetualProposal({
       ...fixture,
@@ -52,7 +63,6 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
     expect(short.status).toBe("inert_preview");
     if (long.status !== "inert_preview" || short.status !== "inert_preview") return;
     expect(long.positionBucket).not.toBe(short.positionBucket);
-    expect(long.side).toBe("long");
     expect(short.side).toBe("short");
     expect(Number(short.worstCaseStopLossQuote)).toBeGreaterThan(0);
     const ether = previewPaperPerpetualProposal({
@@ -60,73 +70,67 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
       instrument: "ETH-USDT-SWAP",
     });
     expect(ether.status).toBe("inert_preview");
-    if (ether.status !== "inert_preview") {
-      return;
+    if (ether.status === "inert_preview") {
+      expect(ether.positionBucket).not.toBe(long.positionBucket);
     }
-    expect(ether.positionBucket).not.toBe(long.positionBucket);
   });
 
-  it("blocks leverage beyond the selected account preset", () => {
-    expect(previewPaperPerpetualProposal({ ...fixture, strategy: "conservative", leverage: 2 }))
-      .toMatchObject({ status: "deny", reason: "leverage_exceeded" });
-    expect(previewPaperPerpetualProposal({ ...fixture, strategy: "moderate", leverage: 3 }))
-      .toMatchObject({ status: "deny", reason: "leverage_exceeded" });
-    expect(previewPaperPerpetualProposal({ ...fixture, strategy: "aggressive", leverage: 3 })
-      .status).toBe("inert_preview");
-  });
-
-  it("rejects stops/targets on the wrong side of entry and spot instruments", () => {
-    expect(previewPaperPerpetualProposal({ ...fixture, stopPriceQuote: "101" }))
-      .toMatchObject({ status: "deny", reason: "invalid_exit_prices" });
-    expect(previewPaperPerpetualProposal({ ...fixture, takeProfitPriceQuote: "98" }))
-      .toMatchObject({ status: "deny", reason: "invalid_exit_prices" });
-    expect(previewPaperPerpetualProposal({ ...fixture, side: "short", stopPriceQuote: "95" }))
-      .toMatchObject({ status: "deny", reason: "invalid_exit_prices" });
-    expect(previewPaperPerpetualProposal({ ...fixture, instrument: "BTC-USDT" }))
-      .toMatchObject({ status: "deny", reason: "unsupported_market" });
-  });
-
-  it("rejects liquidation-prone proposals even when the position fits a nominal idea budget", () => {
-    const result = previewPaperPerpetualProposal({
+  it("rejects leverage above each preset", () => {
+    expectDenial({ strategy: "conservative", leverage: 2 }, "leverage_exceeded");
+    expectDenial({ strategy: "moderate", leverage: 3 }, "leverage_exceeded");
+    const allowed = previewPaperPerpetualProposal({
       ...fixture,
       strategy: "aggressive",
       leverage: 3,
-      quantityBase: "0.3",
-      stopPriceQuote: "65",
-      takeProfitPriceQuote: "120",
     });
-    expect(result).toMatchObject({ status: "deny", reason: "liquidation_before_stop" });
+    expect(allowed.status).toBe("inert_preview");
   });
 
-  it("checks available collateral, total notional, open risk, daily loss and concurrent slots", () => {
-    expect(previewPaperPerpetualProposal({ ...fixture, availableQuote: "1" }))
-      .toMatchObject({ status: "deny", reason: "insufficient_margin" });
-    expect(previewPaperPerpetualProposal({
-      ...fixture,
-      portfolio: { ...fixture.portfolio, openNotionalQuote: "999" },
-    })).toMatchObject({ status: "deny", reason: "notional_exceeded" });
-    expect(previewPaperPerpetualProposal({
-      ...fixture,
-      portfolio: { ...fixture.portfolio, openStopRiskQuote: "19.9" },
-    })).toMatchObject({ status: "deny", reason: "risk_budget_exceeded" });
-    expect(previewPaperPerpetualProposal({
-      ...fixture,
-      portfolio: { ...fixture.portfolio, realizedLossTodayQuote: "30" },
-    })).toMatchObject({ status: "deny", reason: "risk_budget_exceeded" });
-    expect(previewPaperPerpetualProposal({
-      ...fixture,
-      portfolio: { ...fixture.portfolio, openPositions: 3 },
-    })).toMatchObject({ status: "deny", reason: "position_count_exceeded" });
+  it("rejects invalid exits and unsupported spot symbols", () => {
+    expectDenial({ stopPriceQuote: "101" }, "invalid_exit_prices");
+    expectDenial({ takeProfitPriceQuote: "98" }, "invalid_exit_prices");
+    expectDenial({ side: "short", stopPriceQuote: "95" }, "invalid_exit_prices");
+    expectDenial({ instrument: "BTC-USDT" }, "unsupported_market");
   });
 
-  it("never accepts negative, exponent, imprecise prices, impossible fees or NaN", () => {
+  it("rejects a stop beyond approximate maintenance collateral", () => {
+    expectDenial(
+      {
+        strategy: "aggressive",
+        leverage: 3,
+        quantityBase: "0.3",
+        stopPriceQuote: "65",
+        takeProfitPriceQuote: "120",
+      },
+      "liquidation_before_stop",
+    );
+  });
+
+  it("checks cash, exposure, risk, daily loss and position slots", () => {
+    expectDenial({ availableQuote: "1" }, "insufficient_margin");
+    expectDenial(
+      { portfolio: { ...fixture.portfolio, openNotionalQuote: "999" } },
+      "notional_exceeded",
+    );
+    expectDenial(
+      { portfolio: { ...fixture.portfolio, openStopRiskQuote: "19.9" } },
+      "risk_budget_exceeded",
+    );
+    expectDenial(
+      { portfolio: { ...fixture.portfolio, realizedLossTodayQuote: "30" } },
+      "risk_budget_exceeded",
+    );
+    expectDenial(
+      { portfolio: { ...fixture.portfolio, openPositions: 3 } },
+      "position_count_exceeded",
+    );
+  });
+
+  it("fails closed on malformed prices and fee/maintenance inputs", () => {
     for (const value of ["-1", "1e3", "0.000000001", "NaN", ""]) {
-      expect(previewPaperPerpetualProposal({ ...fixture, entryPriceQuote: value }))
-        .toMatchObject({ status: "deny", reason: "invalid_input" });
+      expectDenial({ entryPriceQuote: value }, "invalid_input");
     }
-    expect(previewPaperPerpetualProposal({ ...fixture, assumedFeeBpsPerSide: Number.NaN }))
-      .toMatchObject({ status: "deny", reason: "invalid_input" });
-    expect(previewPaperPerpetualProposal({ ...fixture, maintenanceMarginBps: 0 }))
-      .toMatchObject({ status: "deny", reason: "invalid_input" });
+    expectDenial({ assumedFeeBpsPerSide: Number.NaN }, "invalid_input");
+    expectDenial({ maintenanceMarginBps: 0 }, "invalid_input");
   });
 });
