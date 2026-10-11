@@ -385,8 +385,7 @@ export async function readOwnedPerpetualPaperJournal(
           updatedAt: scoped.updatedAt.toISOString(),
           state,
           events: [...page].reverse(),
-          nextBeforeSequence:
-            oldest !== undefined && eligible.length > page.length ? oldest : null,
+          nextBeforeSequence: oldest !== undefined && eligible.length > page.length ? oldest : null,
         };
       } catch {
         // Fail closed: no balances or events if replay, hashes or membership fail.
