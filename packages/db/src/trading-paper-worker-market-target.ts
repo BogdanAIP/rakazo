@@ -105,7 +105,7 @@ function sameTargetAuthority(
   );
 }
 
-const SYMBOL = /^[A-Z0-9]{2,40}-[A-Z0-9]{2,40}$/u;
+const SYMBOL = /^[A-Z0-9]{1,40}-[A-Z0-9]{1,40}$/u;
 
 function parseRequest(value: unknown): TargetRequest {
   if (!value || typeof value !== "object" || Array.isArray(value)) {

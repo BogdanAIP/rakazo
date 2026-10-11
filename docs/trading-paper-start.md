@@ -3,6 +3,13 @@
 Open **Виртуальные счета · PAPER** from the Rakazo sidebar, or visit
 `/app/paper-journal` in the authenticated web/Electron application.
 
+Use **Модели** in the journal to open the shared connection settings, including
+before completing general onboarding. A connected Codex subscription shows the
+models available to that account from its live catalog. Choose a model and apply
+it with **Use this model** (the label follows the interface language). Each scheduled
+Market research check uses the current default model, including during an active
+session. The deterministic breakout does not use a model.
+
 1. Create an account with a virtual USDT balance and risk limits.
 2. Choose a public quote source, a spot instrument and a session duration
    (15–240 minutes).

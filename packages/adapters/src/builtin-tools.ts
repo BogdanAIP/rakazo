@@ -981,7 +981,7 @@ export const builtinAgentTools: ConnectorTool[] = [
             ledger_id: { type: "string", minLength: 1, maxLength: 128 },
             expected_gate_revision: { type: "integer", minimum: 0 },
             venue: { type: "string", enum: ["okx", "bingx"] },
-            symbol: { type: "string", pattern: "^[A-Z0-9]{2,40}-[A-Z0-9]{2,40}$" },
+            symbol: { type: "string", pattern: "^[A-Z0-9]{1,40}-[A-Z0-9]{1,40}$" },
           },
           required: ["action", "ledger_id", "expected_gate_revision", "venue", "symbol"],
           additionalProperties: false,

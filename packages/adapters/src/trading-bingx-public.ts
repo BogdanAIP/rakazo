@@ -9,19 +9,40 @@ import * as z from "zod";
  */
 const BINGX_ORIGIN = "https://open-api.bingx.com";
 const MAX_RESPONSE_CHARS = 8 * 1024 * 1024;
-const rawDecimal = z.union([z.string(), z.number().finite()]).transform(String);
+// Expand exponent notation from exchange JSON floats without rounding. The
+// shared decimal contracts still enforce sign, size and precision afterward.
+function decimalText(value: string | number): string {
+  const text = String(value);
+  const match = /^(-?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/.exec(text);
+  if (!match) return text;
+  const integer = match[2]!;
+  const digits = integer + (match[3] ?? "");
+  const exponent = Number(match[4]);
+  if (!Number.isSafeInteger(exponent) || Math.abs(exponent) > 80) return text;
+  const point = integer.length + exponent;
+  const plain =
+    point <= 0
+      ? "0." + "0".repeat(-point) + digits
+      : point >= digits.length
+        ? digits + "0".repeat(point - digits.length)
+        : digits.slice(0, point) + "." + digits.slice(point);
+  return match[1] + plain;
+}
+const rawDecimal = z.union([z.string(), z.number().finite()]).transform(decimalText);
 const rawOptionalDecimal = rawDecimal.nullish();
 const rawMarket = z.object({
   symbol: z.string(),
-  status: z.union([z.literal(0), z.literal(1), z.literal("0"), z.literal("1")]),
+  // Only the documented status 1 is active. Other numeric lifecycle states
+  // remain inactive instead of invalidating the complete public catalog.
+  status: z.union([z.number().int().nonnegative(), z.string().regex(/^\d+$/)]),
   tickSize: rawOptionalDecimal,
   stepSize: rawOptionalDecimal,
   minNotional: rawOptionalDecimal,
 });
 const rawTicker = z.object({
   symbol: z.string(),
-  bidPrice: rawDecimal,
-  askPrice: rawDecimal,
+  bidPrice: rawOptionalDecimal,
+  askPrice: rawOptionalDecimal,
   quoteVolume: rawDecimal,
   closeTime: z.number().int().nonnegative(),
 });
@@ -89,32 +110,42 @@ export async function fetchBingxPublicSpotSnapshot(
   // incorrectly treating a later exchange observation as future data.
   const fetchedAt = (options.now ?? new Date()).toISOString();
 
-  const markets: TradingInstrument[] = symbols.map((entry) => {
-    if (!/^[A-Z0-9]+-[A-Z0-9]+$/.test(entry.symbol)) {
-      throw new Error("BingX returned invalid spot symbol");
-    }
-    const parts = entry.symbol.split("-");
-    const base = parts[0];
-    const quote = parts[1];
-    if (!base || !quote) throw new Error("Invalid BingX symbol");
-    return TradingInstrumentSchema.parse({
-      venue: "bingx",
-      kind: "spot",
-      symbol: entry.symbol,
-      base,
-      quote,
-      status: String(entry.status) === "1" ? "active" : "inactive",
-      priceIncrement: entry.tickSize ?? null,
-      quantityIncrement: entry.stepSize ?? null,
-      minNotional: entry.minNotional ?? null,
-      expiryAt: null,
+  const markets: TradingInstrument[] = symbols
+    // Delisted aliases are outside the canonical supported spot-symbol
+    // contract. Keep valid one-character assets and exclude unsupported aliases.
+    .filter((entry) => /^[A-Z0-9]{1,40}-[A-Z0-9]{1,40}$/.test(entry.symbol))
+    .map((entry) => {
+      const parts = entry.symbol.split("-");
+      const base = parts[0];
+      const quote = parts[1];
+      if (!base || !quote) throw new Error("Invalid BingX symbol");
+      return TradingInstrumentSchema.parse({
+        venue: "bingx",
+        kind: "spot",
+        symbol: entry.symbol,
+        base,
+        quote,
+        status: String(entry.status) === "1" ? "active" : "inactive",
+        priceIncrement: entry.tickSize ?? null,
+        quantityIncrement: entry.stepSize ?? null,
+        minNotional: entry.minNotional ?? null,
+        expiryAt: null,
+      });
     });
-  });
   const known = new Set(markets.map((market) => market.symbol));
   if (known.size !== markets.length) throw new Error("Duplicate BingX spot symbol");
 
-  const tickers: TradingTicker[] = rawTickers
-    .filter((entry) => known.has(entry.symbol))
+  const relevantTickers = rawTickers.filter((entry) => known.has(entry.symbol));
+  if (new Set(relevantTickers.map((entry) => entry.symbol)).size !== relevantTickers.length) {
+    throw new Error("Duplicate BingX spot ticker");
+  }
+  const tickers: TradingTicker[] = relevantTickers
+    .filter(
+      (entry) =>
+        ![entry.bidPrice, entry.askPrice].some(
+          (price) => price == null || price === "" || /^0(?:\.0+)?$/.test(price),
+        ),
+    )
     .map((entry) => {
       if (!Number.isFinite(entry.closeTime) || !Number.isSafeInteger(entry.closeTime)) {
         throw new Error("Invalid BingX ticker time");
@@ -132,8 +163,5 @@ export async function fetchBingxPublicSpotSnapshot(
         quoteVolume24h: entry.quoteVolume,
       });
     });
-  if (new Set(tickers.map((ticker) => ticker.symbol)).size !== tickers.length) {
-    throw new Error("Duplicate BingX spot ticker");
-  }
   return { fetchedAt, markets, tickers };
 }

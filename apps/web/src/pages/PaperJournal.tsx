@@ -3,10 +3,15 @@ import type {
   TradingPaperJournalReadOutput,
   TradingPaperLedgerEvent,
 } from "@rakazo/contracts";
-import { useEffect, useRef, useState } from "react";
+import { Button } from "@rakazo/ui-web";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { rpc } from "../lib/rpc";
 import { PaperTradingControls } from "./PaperTradingControls";
+
+const ModelSettingsOverlay = lazy(() =>
+  import("./ModelSettingsOverlay").then((module) => ({ default: module.ModelSettingsOverlay })),
+);
 
 const dateTime = (iso: string) => new Date(iso).toLocaleString("ru-RU");
 const kinds: Record<TradingPaperLedgerEvent["kind"], string> = {
@@ -36,6 +41,7 @@ function eventId(event: TradingPaperLedgerEvent) {
 }
 
 export function PaperJournalPage() {
+  const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
   const selectedLedger = useRef<string | null>(null);
   const journalEpoch = useRef(0);
   const [refreshId, setRefreshId] = useState(0);
@@ -180,13 +186,14 @@ export function PaperJournalPage() {
               Виртуальные средства · торговые сессии по вашему запуску
             </p>
           </div>
-          <button
-            type="button"
-            onClick={downloadDesktopShortcut}
-            className="rounded-xl border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted"
-          >
-            Скачать ярлык для рабочего стола
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setModelSettingsOpen(true)}>
+              Модели
+            </Button>
+            <Button variant="outline" onClick={downloadDesktopShortcut}>
+              Скачать ярлык для рабочего стола
+            </Button>
+          </div>
         </header>
 
         <PaperTradingControls
@@ -346,6 +353,11 @@ export function PaperJournalPage() {
           </>
         )}
       </div>
+      {modelSettingsOpen && (
+        <Suspense fallback={null}>
+          <ModelSettingsOverlay onClose={() => setModelSettingsOpen(false)} />
+        </Suspense>
+      )}
     </main>
   );
 }

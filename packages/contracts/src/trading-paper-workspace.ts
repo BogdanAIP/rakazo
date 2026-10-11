@@ -50,7 +50,7 @@ export const TradingPaperWorkspaceCommandSchema = z.discriminatedUnion("action",
       ...Base,
       action: z.literal("start"),
       venue: z.enum(["okx", "bingx"]),
-      symbol: z.string().regex(/^[A-Z0-9]{2,20}-USDT$/),
+      symbol: z.string().regex(/^[A-Z0-9]{1,20}-USDT$/),
       durationMinutes: z.number().int().min(15).max(240),
       researchSource: TradingPaperResearchSourceSchema.optional(),
     })
