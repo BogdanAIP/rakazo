@@ -1,16 +1,16 @@
 import {
   getPaperExperimentPreset,
-  paperExperimentHedgeBucket,
   type PaperExperimentStrategy,
   type PaperExperimentVenue,
   type PaperHedgeSide,
+  paperExperimentHedgeBucket,
 } from "./trading-paper-experiments.js";
 
 const SCALE = 100_000_000n;
 const BPS = 10_000n;
-const POSITIVE = /^(?:0|[1-9]\\d{0,11})(?:\\.\\d{1,8})?$/;
+const POSITIVE = /^(?:0|[1-9]\d{0,11})(?:\.\d{1,8})?$/;
 const IDENTIFIER = /^[A-Za-z0-9_.:-]{1,128}$/;
-const ISO = /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/;
+const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 function exact(value: string): bigint {
   if (!POSITIVE.test(value)) throw new Error("Invalid exact USDT decimal");
