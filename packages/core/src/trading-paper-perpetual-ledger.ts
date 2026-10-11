@@ -210,14 +210,23 @@ export function replayPerpetualPaperLedger(
         side: event.side,
       });
       if (!hedgeBucket) throw new Error("Unsupported PAPER perpetual market");
-      if (!Number.isSafeInteger(event.leverage) || event.leverage < 1 ||
-          event.leverage > preset.maxLeverage) throw new Error("PAPER leverage limit");
-      if (!Number.isSafeInteger(event.maintenanceMarginBps) ||
-          event.maintenanceMarginBps < 1 || event.maintenanceMarginBps > 1000) {
+      if (
+        !Number.isSafeInteger(event.leverage) ||
+        event.leverage < 1 ||
+        event.leverage > preset.maxLeverage
+      )
+        throw new Error("PAPER leverage limit");
+      if (
+        !Number.isSafeInteger(event.maintenanceMarginBps) ||
+        event.maintenanceMarginBps < 1 ||
+        event.maintenanceMarginBps > 1000
+      ) {
         throw new Error("Missing trusted maintenance margin tier");
       }
-      if (positions.size >= preset.maxConcurrentPositions ||
-          [...positions.values()].some(mustLiquidate)) {
+      if (
+        positions.size >= preset.maxConcurrentPositions ||
+        [...positions.values()].some(mustLiquidate)
+      ) {
         throw new Error("Risk pause: positions need reduction or liquidation");
       }
       const quantity = exact(event.quantityBase);
@@ -286,8 +295,13 @@ export function replayPerpetualPaperLedger(
         if (event.kind === "liquidate" && !mustLiquidate(p)) {
           throw new Error("Liquidation must have verified preceding distressed mark");
         }
-        const change =
-          ((p.side === "long" ? exit - p.entry : p.entry - exit) * p.quantity) / SCALE;
+        if (
+          event.kind === "liquidate" &&
+          (p.side === "long" ? exit > p.mark : exit < p.mark)
+        ) {
+          throw new Error("PAPER liquidation cannot use a favorable stale price");
+        }
+        const change = ((p.side === "long" ? exit - p.entry : p.entry - exit) * p.quantity) / SCALE;
         const grossRelease = p.margin + change - exitFee;
         if (event.kind === "close" && grossRelease < 0n) {
           throw new Error("Bankrupt PAPER position needs liquidation event");
