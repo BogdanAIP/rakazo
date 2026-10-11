@@ -185,8 +185,8 @@ import {
   InvalidSpaceNameError,
   IsolationError,
   issueMessagingLinkCode,
-  listOwnedTradingPaperJournals,
   listOwnedPerpetualPaperJournals,
+  listOwnedTradingPaperJournals,
   listWindowsHosts,
   lockOwnedGroup,
   newestModelCredentialOrder,
@@ -195,8 +195,8 @@ import {
   parseComputerMode,
   pushSessionExpiresAt,
   readOwnedMarketPreparedResearch,
-  readOwnedTradingPaperJournal,
   readOwnedPerpetualPaperJournal,
+  readOwnedTradingPaperJournal,
   readOwnedTradingPaperWorkspace,
   releaseSpaceDeletionClaim,
   renewSpaceDeletionClaim,
@@ -1017,16 +1017,18 @@ export function createRouter(deps: RouterDeps) {
       perpetualJournalList: authed.trading.perpetualJournalList.handler(({ context }) =>
         listOwnedPerpetualPaperJournals(deps.prisma, context.actor),
       ),
-      perpetualJournalRead: authed.trading.perpetualJournalRead.handler(async ({ context, input }) => {
-        const journal = await readOwnedPerpetualPaperJournal(
-          deps.prisma,
-          context.actor,
-          input.ledgerId,
-          input.beforeSequence,
-        );
-        if (!journal) throw new ORPCError("NOT_FOUND");
-        return journal;
-      }),
+      perpetualJournalRead: authed.trading.perpetualJournalRead.handler(
+        async ({ context, input }) => {
+          const journal = await readOwnedPerpetualPaperJournal(
+            deps.prisma,
+            context.actor,
+            input.ledgerId,
+            input.beforeSequence,
+          );
+          if (!journal) throw new ORPCError("NOT_FOUND");
+          return journal;
+        },
+      ),
       // User-invoked public GET requests only. No exchange keys, wallet or execution capability.
       list: authed.trading.list.handler(async ({ input }) => {
         if (input.venue === "okx") {
