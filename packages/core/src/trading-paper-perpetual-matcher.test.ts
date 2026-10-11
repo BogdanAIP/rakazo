@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  previewPerpetualPaperOrderMatch,
   type PerpetualPaperOrder,
   type PerpetualPaperPublicBook,
+  previewPerpetualPaperOrderMatch,
 } from "./trading-paper-perpetual-matcher.js";
 
 const order: PerpetualPaperOrder = {
@@ -101,16 +101,14 @@ describe("non-executing USDT swap order matcher", () => {
   });
 
   it("supports independent short protective buy, long profit sell and multi-pair books", () => {
-    const shortStop = check(
-      {
-        positionSide: "short",
-        intent: "reduce_only",
-        action: "buy",
-        orderType: "stop_market",
-        triggerPriceQuote: "100",
-        positionAvailableBase: "1",
-      },
-    );
+    const shortStop = check({
+      positionSide: "short",
+      intent: "reduce_only",
+      action: "buy",
+      orderType: "stop_market",
+      triggerPriceQuote: "100",
+      positionAvailableBase: "1",
+    });
     expect(shortStop.status).toBe("inert_fill_preview");
     const profit = check(
       {
@@ -123,10 +121,9 @@ describe("non-executing USDT swap order matcher", () => {
       { bidQuote: "110", askQuote: "111" },
     );
     expect(profit.status).toBe("inert_fill_preview");
-    expect(check(
-      { instrument: "ETH-USDT-SWAP" },
-      { instrument: "ETH-USDT-SWAP" },
-    ).status).toBe("inert_fill_preview");
+    expect(check({ instrument: "ETH-USDT-SWAP" }, { instrument: "ETH-USDT-SWAP" }).status).toBe(
+      "inert_fill_preview",
+    );
   });
 
   it("rejects stale, future, expired and mismatched market evidence", () => {
