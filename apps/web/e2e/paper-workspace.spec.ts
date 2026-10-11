@@ -8,6 +8,7 @@ import {
   recordPublicAdapterPaperQuoteEvidence,
   reserveApprovedTradingPaperSignal,
 } from "../../../packages/db/src/index.js";
+import { createDisabledPerpetualPaperAccount, appendVerifiedPerpetualPaperEvent } from "../../../packages/db/src/trading-paper-perpetual-store.js";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
 
 for (const { venue, symbol } of [
@@ -180,4 +181,71 @@ test("PAPER exposes the shared Codex model picker before completing onboarding",
   await page.getByRole("button", { name: "Close model settings", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Журнал PAPER-сделок" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Создать счёт", exact: true })).toBeVisible();
+});
+
+
+test("PAPER spot and futures share one journal page with separate verified owner-scoped accounts", async ({
+  page,
+}) => {
+  await signup(page, `paper-tabs-${Date.now()}@rakazo.test`, "password12", "Journal Tabs");
+  await completeOnboarding(page);
+  await page.goto("/app/paper-journal");
+  await expect(page.getByRole("heading", { name: "Журнал PAPER-сделок" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Спот" })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("button", { name: "Создать счёт", exact: true }).click();
+  await page.getByRole("button", { name: "Создать виртуальный счёт", exact: true }).click();
+  await expect(page.getByLabel("Выберите журнал")).toBeVisible();
+  const spotId = await page.getByLabel("Выберите журнал").inputValue();
+  expect(spotId).toBeTruthy();
+
+  const db = createDb(process.env.DATABASE_URL!);
+  const futuresId = `paper-tabs-futures-${Date.now()}`;
+  try {
+    const spot = await db.prisma.tradingPaperLedger.findUniqueOrThrow({
+      where: { id: spotId },
+    });
+    const owner = { spaceId: spot.spaceId, userId: spot.ownerUserId };
+    const openedAt = new Date().toISOString();
+    await createDisabledPerpetualPaperAccount(db.prisma, owner, {
+      ledgerId: futuresId,
+      strategy: "conservative",
+      openedAt,
+    });
+    await appendVerifiedPerpetualPaperEvent(db.prisma, owner, {
+      ledgerId: futuresId,
+      eventId: "open-one",
+      sequence: 1,
+      recordedAt: new Date(Date.now() + 1000).toISOString(),
+      kind: "open",
+      positionId: "long-eth",
+      venue: "okx",
+      instrument: "ETH-USDT-SWAP",
+      side: "long",
+      leverage: 1,
+      quantityBase: "1",
+      entryPriceQuote: "100",
+      entryFeeQuote: "0.1",
+      maintenanceMarginBps: 50,
+    });
+  } finally {
+    await db.prisma.$disconnect();
+    await db.pool.end();
+  }
+
+  await page.getByRole("tab", { name: "Фьючерсы" }).click();
+  await expect(page.getByRole("tab", { name: "Фьючерсы" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("heading", { name: "Фьючерсы · PAPER" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Стратегия и виртуальный счёт" })).toHaveValue(
+    futuresId,
+  );
+  await expect(page.getByRole("heading", { name: "Открытые фьючерсные позиции" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "OKX · ETH-USDT-SWAP" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Long" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Открытие" })).toBeVisible();
+  await expect(page.getByRole("tabpanel", { name: "Фьючерсы" }).getByText("1000 USDT")).toBeVisible();
+  await expect(page.getByLabel("Выберите журнал")).toHaveCount(0);
+
+  await page.getByRole("tab", { name: "Спот" }).click();
+  await expect(page.getByLabel("Выберите журнал")).toHaveValue(spotId);
+  await expect(page.getByRole("cell", { name: "OKX · ETH-USDT-SWAP" })).toHaveCount(0);
 });
