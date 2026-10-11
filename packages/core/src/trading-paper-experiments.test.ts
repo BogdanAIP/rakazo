@@ -7,11 +7,7 @@ import {
 
 describe("three isolated 1000-USDT PAPER experiment presets", () => {
   it("allocates exactly three independent accounts with the same starting cash", () => {
-    expect(PAPER_EXPERIMENT_STRATEGIES).toEqual([
-      "conservative",
-      "moderate",
-      "aggressive",
-    ]);
+    expect(PAPER_EXPERIMENT_STRATEGIES).toEqual(["conservative", "moderate", "aggressive"]);
     const profiles = PAPER_EXPERIMENT_STRATEGIES.map(getPaperExperimentPreset);
     expect(new Set(profiles.map((p) => p.id)).size).toBe(3);
     expect(new Set(profiles.map((p) => p.accountName)).size).toBe(3);
@@ -47,9 +43,7 @@ describe("three isolated 1000-USDT PAPER experiment presets", () => {
     expect(long).not.toBe(
       paperExperimentHedgeBucket({ ...common, ledgerId: "paper.test.2", side: "long" }),
     );
-    expect(long).not.toBe(
-      paperExperimentHedgeBucket({ ...common, venue: "bingx", side: "long" }),
-    );
+    expect(long).not.toBe(paperExperimentHedgeBucket({ ...common, venue: "bingx", side: "long" }));
     expect(long).not.toBe(
       paperExperimentHedgeBucket({ ...common, instrument: "ETH-USDT-SWAP", side: "long" }),
     );
