@@ -36,6 +36,7 @@ const payloadSchemas = {
     userId: z.string().min(1),
     gateRevision: z.number().int().nonnegative(),
     sessionRevision: z.number().int().positive().safe().optional(),
+    marketKind: z.literal("perpetual").optional(),
     scheduledFor: z.string().datetime({ offset: true }),
   }),
 } satisfies { [Name in BackgroundJobName]: z.ZodType<BackgroundJobPayloads[Name]> };
@@ -202,6 +203,7 @@ export function paperWorkerPreflightJob(input: {
   userId: string;
   gateRevision: number;
   sessionRevision?: number;
+  marketKind?: "perpetual";
   scheduledFor: Date;
 }): BackgroundJob {
   return {
@@ -212,6 +214,7 @@ export function paperWorkerPreflightJob(input: {
       userId: input.userId,
       gateRevision: input.gateRevision,
       ...(input.sessionRevision ? { sessionRevision: input.sessionRevision } : {}),
+      ...(input.marketKind ? { marketKind: input.marketKind } : {}),
       scheduledFor: input.scheduledFor.toISOString(),
     },
     availableAt: input.scheduledFor,

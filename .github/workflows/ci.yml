@@ -148,6 +148,52 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:integration
 
+  test-native-futures:
+    name: Native PAPER futures
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: rakazo
+          POSTGRES_PASSWORD: rakazo
+          POSTGRES_DB: futures_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5432/futures_test
+      VERIFY_DATABASE: "1"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pnpm install --frozen-lockfile
+      - run: python -m venv .paper-engine
+      - run: .paper-engine/bin/python -m pip install -r packages/adapters/nautilus/requirements.txt
+      - run: pnpm db:generate
+      - run: pnpm --filter @rakazo/db migrate
+      - name: Native simulator conformance
+        run: .paper-engine/bin/python -m unittest discover -s packages/adapters/nautilus
+      - name: Native worker and recovery
+        run: >-
+          PAPER_NAUTILUS_PYTHON="$GITHUB_WORKSPACE/.paper-engine/bin/python"
+          pnpm exec vitest run --no-file-parallelism
+          packages/adapters/src/paper-perpetual-engine.postgres.test.ts
+          packages/adapters/src/paper-perpetual-workspace.postgres.test.ts
+
   test-e2e:
     name: Web E2E
     uses: ./.github/workflows/playwright.yml

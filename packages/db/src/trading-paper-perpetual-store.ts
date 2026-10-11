@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import type {
+  PaperPerpetualEngineBatch,
+  PaperPerpetualEngineSnapshot,
   TradingPaperPerpetualJournalListOutput,
   TradingPaperPerpetualJournalReadOutput,
 } from "@rakazo/contracts";
@@ -7,16 +9,18 @@ import {
   type PerpetualPaperEvent,
   type PerpetualPaperLedgerInput,
   type PerpetualPaperLedgerState,
+  projectPerpetualEngineSnapshot,
   replayPerpetualPaperLedger,
 } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { recoverPerpetualEngineInTransaction } from "./trading-paper-perpetual-engine.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 type Owner = { spaceId: string; userId: string };
 type Database = Pick<PrismaClient, "$transaction">;
 const VERSION = "isolated_perpetual_paper_v1";
-const MAX_EVENTS = 10_000;
+const MAX_EVENTS = 200_000;
 
 export class PerpetualPaperIntegrityError extends Error {
   constructor(message = "Perpetual PAPER journal integrity or access denied") {
@@ -103,6 +107,7 @@ function normalize(event: PerpetualPaperEvent): PerpetualPaperEvent {
         positionId: event.positionId,
         exitPriceQuote: event.exitPriceQuote,
         exitFeeQuote: event.exitFeeQuote,
+        ...(event.quantityBase === undefined ? {} : { quantityBase: event.quantityBase }),
       };
     default:
       throw new PerpetualPaperIntegrityError("Unknown perpetual event kind");
@@ -131,7 +136,7 @@ const header = (row: {
   events: [],
 });
 
-async function recover(
+export async function recoverPerpetualPaperInTransaction(
   tx: Prisma.TransactionClient,
   owner: Owner,
   ledgerId: string,
@@ -147,6 +152,19 @@ async function recover(
   if (!row) throw new PerpetualPaperIntegrityError("Owner-scoped perpetual ledger missing");
   if (row.quoteCurrency !== "USDT" || row.initialBalanceQuote !== "1000") {
     throw new PerpetualPaperIntegrityError("Perpetual journal currency or capital changed");
+  }
+  if (tx.tradingPaperPerpetualEngine) {
+    const engine = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId);
+    if (engine?.snapshot)
+      return {
+        row,
+        events: [],
+        state: projectPerpetualEngineSnapshot(
+          engine.effectiveConfig,
+          engine.snapshot,
+          row.strategy as PerpetualPaperLedgerInput["strategy"],
+        ),
+      };
   }
   const rows = await tx.tradingPaperPerpetualEvent.findMany({
     where: { ledgerId: row.id },
@@ -239,9 +257,12 @@ export async function readVerifiedPerpetualPaperAccount(
   ledgerId: string,
 ): Promise<PerpetualPaperLedgerState> {
   return withTransactionRetry(() =>
-    prisma.$transaction(async (tx) => (await recover(tx, owner, ledgerId)).state, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    }),
+    prisma.$transaction(
+      async (tx) => (await recoverPerpetualPaperInTransaction(tx, owner, ledgerId)).state,
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    ),
   );
 }
 
@@ -250,68 +271,82 @@ export async function readVerifiedPerpetualPaperAccount(
  * independent owner/session, read-only market provenance, risk and policy checks.
  * No public endpoint, broker dispatcher or background schedule is added.
  */
+export async function appendVerifiedPerpetualPaperEventInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: Owner,
+  raw: PerpetualPaperEvent,
+): Promise<{ status: "appended" | "duplicate"; state: PerpetualPaperLedgerState }> {
+  const event = normalize(raw);
+  if (
+    tx.tradingPaperPerpetualEngine &&
+    (await tx.tradingPaperPerpetualEngine.findUnique({ where: { ledgerId: event.ledgerId } }))
+  )
+    throw new Error("Custom money writer cannot operate on an engine account");
+  const { row, events, state } = await recoverPerpetualPaperInTransaction(
+    tx,
+    owner,
+    event.ledgerId,
+  );
+  const existing = events.find((item) => item.eventId === event.eventId);
+  if (existing) {
+    if (serialized(existing) !== serialized(event)) {
+      throw new PerpetualPaperConflictError("Conflicting idempotent event ID");
+    }
+    return { status: "duplicate" as const, state };
+  }
+  if (event.sequence !== row.version + 1 || row.version >= MAX_EVENTS) {
+    throw new PerpetualPaperConflictError("Perpetual event revision out of bounds");
+  }
+  const next = replayPerpetualPaperLedger({
+    ...header(row),
+    events: [...events, event],
+  });
+  const eventText = serialized(event);
+  const digest = sha(eventText);
+  const chain = link(row.headSha256, digest);
+  const changed = await tx.tradingPaperPerpetualLedger.updateMany({
+    where: {
+      id: row.id,
+      spaceId: owner.spaceId,
+      ownerUserId: owner.userId,
+      version: row.version,
+      headSha256: row.headSha256,
+    },
+    data: {
+      version: { increment: 1 },
+      projection: asJson(next),
+      projectionSha256: sha(JSON.stringify(next)),
+      headSha256: chain,
+    },
+  });
+  if (changed.count !== 1) {
+    throw new PerpetualPaperConflictError("Perpetual ledger concurrently advanced");
+  }
+  await tx.tradingPaperPerpetualEvent.create({
+    data: {
+      ledgerId: row.id,
+      sequence: event.sequence,
+      eventId: event.eventId,
+      kind: event.kind,
+      recordedAt: new Date(event.recordedAt),
+      payload: asJson(event),
+      payloadSha256: digest,
+      previousSha256: row.headSha256,
+      chainSha256: chain,
+    },
+  });
+  return { status: "appended" as const, state: next };
+}
+
 export async function appendVerifiedPerpetualPaperEvent(
   prisma: Database,
   owner: Owner,
   raw: PerpetualPaperEvent,
 ): Promise<{ status: "appended" | "duplicate"; state: PerpetualPaperLedgerState }> {
-  const event = normalize(raw);
   return withTransactionRetry(() =>
-    prisma.$transaction(
-      async (tx) => {
-        const { row, events, state } = await recover(tx, owner, event.ledgerId);
-        const existing = events.find((item) => item.eventId === event.eventId);
-        if (existing) {
-          if (serialized(existing) !== serialized(event)) {
-            throw new PerpetualPaperConflictError("Conflicting idempotent event ID");
-          }
-          return { status: "duplicate" as const, state };
-        }
-        if (event.sequence !== row.version + 1 || row.version >= MAX_EVENTS) {
-          throw new PerpetualPaperConflictError("Perpetual event revision out of bounds");
-        }
-        const next = replayPerpetualPaperLedger({
-          ...header(row),
-          events: [...events, event],
-        });
-        const eventText = serialized(event);
-        const digest = sha(eventText);
-        const chain = link(row.headSha256, digest);
-        const changed = await tx.tradingPaperPerpetualLedger.updateMany({
-          where: {
-            id: row.id,
-            spaceId: owner.spaceId,
-            ownerUserId: owner.userId,
-            version: row.version,
-            headSha256: row.headSha256,
-          },
-          data: {
-            version: { increment: 1 },
-            projection: asJson(next),
-            projectionSha256: sha(JSON.stringify(next)),
-            headSha256: chain,
-          },
-        });
-        if (changed.count !== 1) {
-          throw new PerpetualPaperConflictError("Perpetual ledger concurrently advanced");
-        }
-        await tx.tradingPaperPerpetualEvent.create({
-          data: {
-            ledgerId: row.id,
-            sequence: event.sequence,
-            eventId: event.eventId,
-            kind: event.kind,
-            recordedAt: new Date(event.recordedAt),
-            payload: asJson(event),
-            payloadSha256: digest,
-            previousSha256: row.headSha256,
-            chainSha256: chain,
-          },
-        });
-        return { status: "appended" as const, state: next };
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    ),
+    prisma.$transaction((tx) => appendVerifiedPerpetualPaperEventInTransaction(tx, owner, raw), {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    }),
   );
 }
 
@@ -334,6 +369,7 @@ export async function listOwnedPerpetualPaperJournals(
       updatedAt: true,
       quoteCurrency: true,
       version: true,
+      engine: { select: { sequence: true } },
     },
   });
   return {
@@ -344,7 +380,7 @@ export async function listOwnedPerpetualPaperJournals(
       openedAt: row.openedAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       quoteCurrency: "USDT",
-      eventsCount: row.version,
+      eventsCount: row.engine?.sequence ?? row.version,
     })),
   };
 }
@@ -370,7 +406,46 @@ export async function readOwnedPerpetualPaperJournal(
       });
       if (!scoped) return null;
       try {
-        const { events, state } = await recover(tx, owner, ledgerId);
+        const native = tx.tradingPaperPerpetualEngine
+          ? await recoverPerpetualEngineInTransaction(tx, owner, ledgerId)
+          : null;
+        if (native?.snapshot) {
+          const state = projectPerpetualEngineSnapshot(
+            native.effectiveConfig,
+            native.snapshot,
+            (await tx.tradingPaperPerpetualLedger.findUniqueOrThrow({ where: { id: ledgerId } }))
+              .strategy as PerpetualPaperLedgerInput["strategy"],
+          );
+          const records = await tx.tradingPaperPerpetualEngineBatch.findMany({
+            where: {
+              ledgerId,
+              ...(beforeSequence === undefined ? {} : { sequence: { lt: beforeSequence } }),
+            },
+            orderBy: { sequence: "desc" },
+            take: 101,
+          });
+          const page = records.slice(0, 100);
+          return {
+            status: "verified",
+            mode: "paper_only",
+            ledgerId,
+            openedAt: scoped.openedAt.toISOString(),
+            updatedAt: scoped.updatedAt.toISOString(),
+            state: { ...state, openPositions: [...state.openPositions] },
+            events: page.map((r) => ({
+              kind: "engine" as const,
+              ledgerId,
+              eventId: r.batchId,
+              positionId: "account",
+              sequence: r.sequence,
+              recordedAt: r.recordedAt.toISOString(),
+              input: r.input as unknown as PaperPerpetualEngineBatch,
+              output: r.output as unknown as PaperPerpetualEngineSnapshot,
+            })),
+            nextBeforeSequence: records.length > 100 ? page.at(-1)!.sequence : null,
+          };
+        }
+        const { events, state } = await recoverPerpetualPaperInTransaction(tx, owner, ledgerId);
         const eligible =
           beforeSequence === undefined
             ? events

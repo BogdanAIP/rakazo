@@ -4,6 +4,10 @@ import {
   TradingPaperLedgerEventSchema,
   TradingPaperLedgerStateSchema,
 } from "./trading-paper-ledger.js";
+import {
+  PaperPerpetualEngineBatchSchema,
+  PaperPerpetualEngineSnapshotSchema,
+} from "./trading-paper-perpetual-engine.js";
 
 const PaperLedgerIdSchema = z
   .string()
@@ -76,11 +80,16 @@ const PerpetualJournalEventBase = z.object({
 });
 const PerpetualJournalEventSchema = z.discriminatedUnion("kind", [
   PerpetualJournalEventBase.extend({
+    kind: z.literal("engine"),
+    input: PaperPerpetualEngineBatchSchema,
+    output: PaperPerpetualEngineSnapshotSchema,
+  }),
+  PerpetualJournalEventBase.extend({
     kind: z.literal("open"),
     venue: PerpetualVenueSchema,
     instrument: z.string().min(3).max(128),
     side: PerpetualSideSchema,
-    leverage: z.number().int().min(1).max(100),
+    leverage: z.number().int().positive().safe(),
     quantityBase: PerpetualDecimalSchema,
     entryPriceQuote: PerpetualDecimalSchema,
     entryFeeQuote: PerpetualDecimalSchema,
@@ -98,6 +107,7 @@ const PerpetualJournalEventSchema = z.discriminatedUnion("kind", [
     kind: z.literal("close"),
     exitPriceQuote: PerpetualDecimalSchema,
     exitFeeQuote: PerpetualDecimalSchema,
+    quantityBase: PerpetualDecimalSchema.optional(),
   }),
   PerpetualJournalEventBase.extend({
     kind: z.literal("liquidate"),
@@ -107,6 +117,8 @@ const PerpetualJournalEventSchema = z.discriminatedUnion("kind", [
 ]);
 
 const PerpetualJournalStateSchema = z.object({
+  marginMode: z.literal("account_wide").optional(),
+  engine: z.object({ id: z.string(), version: z.string() }).optional(),
   ledgerId: PaperLedgerIdSchema,
   strategy: PerpetualStrategySchema,
   initialBalanceQuote: PerpetualDecimalSchema,
@@ -127,11 +139,12 @@ const PerpetualJournalStateSchema = z.object({
         venue: PerpetualVenueSchema,
         instrument: z.string().min(3).max(128),
         side: PerpetualSideSchema,
-        leverage: z.number().int().min(1).max(100),
+        leverage: z.number().int().positive().safe(),
         quantityBase: PerpetualDecimalSchema,
         entryPriceQuote: PerpetualDecimalSchema,
         markPriceQuote: PerpetualDecimalSchema,
         isolatedMarginQuote: PerpetualDecimalSchema,
+        initialMarginQuote: PerpetualDecimalSchema.optional(),
         unrealizedPnlQuote: PerpetualDecimalSchema,
         maintenanceMarginQuote: PerpetualDecimalSchema,
         liquidationRequired: z.boolean(),

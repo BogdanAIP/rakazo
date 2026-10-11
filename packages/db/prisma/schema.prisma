@@ -1499,6 +1499,8 @@ model TradingPaperPerpetualLedger {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   events              TradingPaperPerpetualEvent[]
+  workspace           TradingPaperPerpetualWorkspace?
+  engine              TradingPaperPerpetualEngine?
 
   @@index([spaceId, ownerUserId, strategy], map: "trading_paper_perpetual_ledgers_owner_strategy_idx")
   @@map("trading_paper_perpetual_ledgers")
@@ -1521,6 +1523,53 @@ model TradingPaperPerpetualEvent {
   @@id([ledgerId, sequence])
   @@unique([ledgerId, eventId], map: "trading_paper_perpetual_events_idempotency_key")
   @@map("trading_paper_perpetual_events")
+}
+
+
+/** Explicit owner-approved finite futures session, separate from spot authority. */
+model TradingPaperPerpetualWorkspace {
+  ledgerId String @id
+  ledger TradingPaperPerpetualLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  revision Int @default(0)
+  control Json
+  controlSha256 String
+  nextScheduledFor DateTime?
+  botId String
+  threadId String
+  updatedAt DateTime @updatedAt
+  commands TradingPaperPerpetualCommand[]
+  ticks TradingPaperPerpetualTick[]
+  @@map("trading_paper_perpetual_workspaces")
+}
+model TradingPaperPerpetualCommand {
+  ledgerId String
+  commandId String
+  request Json
+  requestSha256 String
+  revision Int
+  recordedAt DateTime @default(now())
+  workspace TradingPaperPerpetualWorkspace @relation(fields: [ledgerId], references: [ledgerId], onDelete: Cascade)
+  @@id([ledgerId, commandId])
+  @@map("trading_paper_perpetual_commands")
+}
+/** Captured public observations and AI result are immutable per approved wake. */
+model TradingPaperPerpetualTick {
+  ledgerId String
+  revision Int
+  scheduledFor DateTime
+  stage String
+  recordedAt DateTime @default(now())
+  snapshot Json
+  snapshotSha256 String
+  decision Json
+  decisionSha256 String
+  modelProvider String?
+  modelId String?
+  outcome String?
+  committedAt DateTime?
+  workspace TradingPaperPerpetualWorkspace @relation(fields: [ledgerId], references: [ledgerId], onDelete: Cascade)
+  @@id([ledgerId, revision, scheduledFor, stage])
+  @@map("trading_paper_perpetual_ticks")
 }
 
 model TradingPaperLedger {
@@ -2175,4 +2224,36 @@ model TradingPaperResearchSnapshot {
  ledger TradingPaperLedger @relation(fields:[ledgerId],references:[id],onDelete:Cascade)
  @@id([ledgerId,sessionRevision,scheduledFor])
  @@map("trading_paper_research_snapshots")
+}
+
+/** Immutable simulator configuration and verified native wallet projection. */
+model TradingPaperPerpetualEngine {
+  ledgerId String @id
+  ledger TradingPaperPerpetualLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  config Json
+  configSha256 String
+  sequence Int @default(0)
+  headSha256 String
+  projection Json?
+  projectionSha256 String?
+  updatedAt DateTime @updatedAt
+  batches TradingPaperPerpetualEngineBatch[]
+  @@map("trading_paper_perpetual_engines")
+}
+/** One hash-chained input/result pair per simulator transition. No credentials. */
+model TradingPaperPerpetualEngineBatch {
+  ledgerId String
+  sequence Int
+  batchId String
+  input Json
+  output Json
+  inputSha256 String
+  outputSha256 String
+  previousSha256 String
+  chainSha256 String
+  recordedAt DateTime @default(now())
+  engine TradingPaperPerpetualEngine @relation(fields: [ledgerId], references: [ledgerId], onDelete: Cascade)
+  @@id([ledgerId, sequence])
+  @@unique([ledgerId, batchId])
+  @@map("trading_paper_perpetual_engine_batches")
 }

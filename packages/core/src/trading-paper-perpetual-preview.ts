@@ -48,6 +48,8 @@ export type PaperPerpetualProposalInput = Readonly<{
   instrument: string;
   side: PaperHedgeSide;
   leverage: number;
+  /** Trusted persisted owner setting; not part of the model proposal. */
+  ownerMaxLeverage?: number;
   quantityBase: string;
   entryPriceQuote: string;
   stopPriceQuote: string;
@@ -114,9 +116,11 @@ export function previewPaperPerpetualProposal(
   if (!positionBucket) return deny("unsupported_market");
   const preset = getPaperExperimentPreset(input.strategy);
   if (
+    !Number.isSafeInteger(input.ownerMaxLeverage ?? preset.maxLeverage) ||
+    (input.ownerMaxLeverage ?? preset.maxLeverage) < 1 ||
     !Number.isSafeInteger(input.leverage) ||
     input.leverage < 1 ||
-    input.leverage > preset.maxLeverage
+    input.leverage > (input.ownerMaxLeverage ?? preset.maxLeverage)
   )
     return deny("leverage_exceeded");
   try {

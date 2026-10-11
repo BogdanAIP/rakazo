@@ -24,7 +24,7 @@ describe("three isolated 1000-USDT PAPER experiment presets", () => {
     expect(strictlyAscending((p) => Number(p.maxDailyLossQuote))).toBe(true);
     expect(strictlyAscending((p) => Number(p.maxOpenRiskQuote))).toBe(true);
     expect(strictlyAscending((p) => Number(p.maxTotalExposureQuote))).toBe(true);
-    expect(strictlyAscending((p) => p.maxLeverage)).toBe(true);
+    expect(profiles.map((p) => p.maxLeverage)).toEqual([5, 10, 20]);
     expect(profiles.every((p) => Number(p.maxPerIdeaRiskQuote) < 1000)).toBe(true);
   });
 

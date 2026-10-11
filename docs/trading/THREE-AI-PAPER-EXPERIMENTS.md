@@ -1,6 +1,6 @@
 # Three AI-managed PAPER experiments — integration and safety status
 
-**Target**: one owner-controlled account in normal operation, with a selectable strategy. During evaluation, compare conservative, moderate and aggressive AI strategies in three independent 1,000-USDT virtual portfolios on equivalent market data; multiple USDT perpetual pairs, separate hedge legs, explicit margin semantics, configurable bounded leverage and a reproducible 14-day comparison. This is a development plan, **not a declaration that derivatives PAPER trading or the trial is running**.
+**Target**: one owner-controlled account in normal operation, with a selectable strategy. During evaluation, compare conservative, moderate and aggressive AI strategies in three independent 1,000-USDT virtual portfolios on equivalent market data; multiple USDT perpetual pairs, separate hedge legs, explicit margin semantics, configurable bounded leverage and a reproducible 14-day comparison. The source integration and offline qualification are described below. **No owner trading session or 14-day experiment has been started by development checks.**
 
 ## Accepted execution engine — 2026-10-11
 
@@ -18,7 +18,7 @@ Venue maximum is instrument- and margin/tier-specific, not a hard-coded universa
 
 Effective permissible leverage for each proposed entry is the minimum of the owner-approved ceiling and the fresh applicable venue maximum, also subject to independent risk and margin checks. Reject invalid/stale/missing venue limits and independently revalidate before execution. Never silently execute at a different leverage than the recorded proposal. Where several instruments are selected, show their individual ceilings and enforce each separately. The journal setting applies to subsequent entries; existing positions retain their recorded leverage unless a separately specified position-management action is implemented.
 
-Implementation status: these are accepted requirements. Existing source defaults and proposal/ledger schemas still need migration away from 1x/2x/3x; the owner UI is not yet implemented. The R execution connection is unavailable at this checkpoint, so no installed runtime setting has changed.
+Implementation status: the source implements one-account creation, optional three-profile comparison, 5x/10x/20x defaults, the journal leverage control and fresh contract/tier enforcement. Native engine execution is selected by trusted local process configuration; production refuses new futures Start when no engine is configured. Installed runtime rollout is tracked separately from source qualification.
 
 
 
@@ -26,9 +26,9 @@ Implementation status: these are accepted requirements. Existing source defaults
 - The journal is an idempotent projection of engine events. There must be one authoritative account balance; Rakazo must not independently recalculate a competing simulated wallet.
 - Preserve three independent 1,000-USDT virtual portfolios for comparison, a single-account normal mode, multiple pairs, separate long/short hedge positions and configurable leverage ceilings. Selecting an engine does not grant permission to start a trading session.
 - Pin the tested native Rust/PyO3 engine API and package version. Current qualification used NautilusTrader 1.231.0 on native Windows/Python 3.12. Do not mix its legacy Cython sandbox API with native engine capabilities, or stable 1.x with documentation examples for 2.x.
-- Five offline synthetic qualification scenarios verified hedge, two instruments, leverage 1/2/3, partial reduce-only close, fees, funding settlement and crash liquidation. These are component tests, not evidence of a completed integration or trading profitability.
-- Margin semantics remain an integration requirement: the tested account-wide configuration offsets hedge exposure and is different from the current custom isolated-lot accounting. Verify supported margin configuration and explicit gross-risk limits before mapping available balance or liquidation into the journal. Do not silently retain isolated-margin labels for account-wide results.
-- Next acceptance checks: real-time PAPER data delivery and funding; native engine event persistence and deterministic restart recovery; owner/revision/expiry fencing; independent risk denial; journal projection; full browser Start→worker→engine→journal→Pause/Close flow.
+- Native conformance verifies 5x/10x/20x, hedge legs, multiple instruments, partial reduce-only fills, fees, funding, liquidation, exact wire precision and new-contract registration/replay. PostgreSQL journeys exercise the actual workspace worker, journal, risk denial, funding-boundary blocking, owner leverage changes and recovery. These tests do not demonstrate trading profitability.
+- Native StandardMarginModel uses initial rate 1/leverage and the public maintenance rate without dividing maintenance by leverage. Its account-wide hedge/net maintenance and liquidation differ from OKX; the journal uses explicit simulator labels. Independent risk uses gross exposure and initial reserves for both legs.
+- The native inputs/results hash chain is the sole futures money journal. Queue retries and database rollback cannot create a second balance; native replay compares every committed output. The full browser Start→worker→engine→journal→Pause/Close journey uses offline model/public-market fixtures with the actual native engine.
 - Existing uncommitted custom-engine work is preserved for review and reusable orchestration/UI pieces; expansion of custom matching/accounting is paused. No runtime switch, merge or 14-day experiment start is implied by this decision.
 
 References: [NautilusTrader pinned release](https://github.com/nautechsystems/nautilus_trader/releases/tag/v1.231.0), [native liquidation example](https://github.com/nautechsystems/nautilus_trader/blob/v1.231.0/examples/backtest/liquidation_demo.py), [installation/version guidance](https://nautilustrader.io/docs/latest/getting_started/installation/).
@@ -51,9 +51,9 @@ We did **not** install packages or execute third-party Skill shell commands in t
 ## Already implemented and reused
 
 - `packages/core/src/trading-paper-experiments.ts`: three immutable 1,000-USDT strategy budgets and hedge bucket identities; the existing account-create screen preloads these. These are not automatic three-account provisioning.
-- Existing trusted spot PAPER ledger, approval gates, journal, worker scheduler, restart pause and protected exits remain the sole *live in-app* trading path. No spot behavior may be silently converted to derivatives.
+- Existing spot PAPER ledger, approval gates, journal, scheduler and protected exits remain separate. Futures use their own native-engine journal and owner-controlled sessions. Historical custom futures journals stay readable and cannot change accounting authority.
 - `packages/core/src/trading-paper-perpetual-preview.ts` (new): read-only BigInt fixed-point proposed long/short assessment for one owner ledger, venue, swap instrument and profile. Explicitly checks leverage, stop/take-profit direction, notional, exposure, account collateral, open position slots, daily and concurrent stop-risk budgets, slippage/fees and whether loss at stop would exhaust simulated isolated maintenance collateral. Opposite hedge legs get distinct bucket keys. An `inert_preview` **does not reserve margin, open a position, simulate funding, trigger liquidation, or submit any order**.
-- Historical source defaults currently use Conservative/Moderate/Aggressive maximum leverage 1x/2x/3x. The approved target is 5x/10x/20x with a journal setting and venue-specific enforcement as described above; source migration remains pending.
+- Conservative/Moderate/Aggressive defaults are 5x/10x/20x. Owner ceiling changes are revision-fenced, cancel pending entries and preserve the leverage of open positions. Native leverage changes require a flat account; a new flat session can register new pairs without resetting funds.
 
 ## Historical custom-engine plan — superseded by the accepted engine decision
 
@@ -68,4 +68,4 @@ A 14-day report may inform further PAPER iteration. Two weeks of outcomes are no
 
 ### Calculation scope caveat
 
-Current `previewPaperPerpetualProposal` uses a simplified **isolated margin assumption**, user-supplied (trusted-data-only) maintenance margin bps and static stop slippage. It deliberately rejects stops too close to the estimated maintenance threshold. This is a conservative **proposal gate**, not an accurate OKX/BingX liquidation price: actual contract multipliers, risk tiers, mark price, funding, fees, forced execution and gap/slippage vary. The future derivatives ledger must independently revalidate margin/liquidation using verified venue rules and never treat this preview as permission.
+Current `previewPaperPerpetualProposal` uses a simplified **isolated margin assumption**, user-supplied (trusted-data-only) maintenance margin bps and static stop slippage. It deliberately rejects stops too close to the estimated maintenance threshold. This is a conservative **proposal gate**, not an accurate OKX/BingX liquidation price: actual contract multipliers, risk tiers, mark price, funding, fees, forced execution and gap/slippage vary. The native execution boundary independently revalidates authority and risk using public contract evidence and committed native equity; the preview alone grants no permission.

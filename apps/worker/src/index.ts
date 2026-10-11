@@ -9,6 +9,7 @@ import {
   CodexCatalogCache,
   createBackgroundJobHandlers,
   createCloudAgentConnection,
+  createConfiguredPaperPerpetualEngine,
   createConnectorStack,
   createJobReconciler,
   createMessagingContextLoader,
@@ -94,6 +95,7 @@ async function main() {
   const events = createThreadEvents(prisma, realtime, {
     runSecretWriter: createRunSecretWriter(secrets),
   });
+  const perpetualPaperEngine = createConfiguredPaperPerpetualEngine();
   const dataDir = process.env.DATA_DIR ?? "./data";
   const runtime =
     process.env.AGENT_RUNTIME === "scripted"
@@ -230,7 +232,7 @@ async function main() {
     cloudAgent,
   });
 
-  await reconcileTradingPaperWorkspaces({ prisma, jobs }, true);
+  await reconcileTradingPaperWorkspaces({ prisma, jobs, engine: perpetualPaperEngine }, true);
   const jobHandlers = createBackgroundJobHandlers({
     executor,
     prisma,
@@ -239,6 +241,7 @@ async function main() {
     jobs,
     events,
     workerId: process.pid.toString(),
+    perpetualPaperEngine,
     runtime,
     secretStore: secrets,
     memoryProviders,
@@ -273,7 +276,8 @@ async function main() {
     leadership: createPostgresReconciliationLeadership(pool),
     reconcileCloudAgents: () => reconcileCloudAgents({ prisma, jobs, cloudAgent }),
     reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
-    reconcilePaperWorkspaces: () => reconcileTradingPaperWorkspaces({ prisma, jobs }),
+    reconcilePaperWorkspaces: () =>
+      reconcileTradingPaperWorkspaces({ prisma, jobs, engine: perpetualPaperEngine }),
   });
   reconciler.start();
 
@@ -285,6 +289,7 @@ async function main() {
       await reconciler.stop();
       await jobHost.stop();
       await jobs.close();
+      perpetualPaperEngine?.dispose();
       await realtime.close();
       await connector.stop();
       await mcp.close();

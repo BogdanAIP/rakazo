@@ -143,7 +143,7 @@ describe("isolated, exact, replayable perpetual PAPER ledger", () => {
   it("rejects incorrect leverage, unsupported symbols, excessive notional and unavailable collateral", () => {
     expect(() =>
       replayPerpetualPaperLedger(
-        account([tradeEvent(1, opened("p-one", "long", { leverage: 3 }))]),
+        account([tradeEvent(1, opened("p-one", "long", { leverage: 11 }))]),
       ),
     ).toThrow(/leverage limit/);
     expect(() =>
@@ -242,4 +242,38 @@ describe("isolated, exact, replayable perpetual PAPER ledger", () => {
       ),
     ).toThrow(/regression/);
   });
+});
+
+it("releases proportional margin on a partial close and preserves the opposite hedge lot", () => {
+  const events = [
+    tradeEvent(1, opened("long-part", "long")),
+    tradeEvent(2, opened("short-keep", "short")),
+    tradeEvent(3, { ...closing("close", "long-part", "105", "0.042"), quantityBase: "0.4" }),
+  ];
+  const partial = replayPerpetualPaperLedger(account(events));
+  expect(partial.openPositions.find((p) => p.positionId === "long-part")).toMatchObject({
+    quantityBase: "0.6",
+    isolatedMarginQuote: "30",
+  });
+  expect(partial.openPositions.find((p) => p.positionId === "short-keep")).toMatchObject({
+    quantityBase: "1",
+    isolatedMarginQuote: "50",
+  });
+  expect(partial.availableQuote).toBe("921.758");
+  expect(partial.bookBalanceQuote).toBe("1001.758");
+  expect(partial.closedPositions).toBe(0);
+  const finished = replayPerpetualPaperLedger(
+    account([...events, tradeEvent(4, closing("close", "long-part", "105", "0.063"))]),
+  );
+  expect(finished.closedPositions).toBe(1);
+  expect(finished.openPositions.map((p) => p.positionId)).toEqual(["short-keep"]);
+  expect(finished.bookBalanceQuote).toBe("1004.695");
+  expect(() =>
+    replayPerpetualPaperLedger(
+      account([
+        ...events,
+        tradeEvent(4, { ...closing("close", "long-part", "105"), quantityBase: "0.61" }),
+      ]),
+    ),
+  ).toThrow();
 });

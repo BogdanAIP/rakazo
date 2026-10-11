@@ -6,6 +6,12 @@ import {
   paperExperimentHedgeBucket,
 } from "./trading-paper-experiments.js";
 
+export {
+  exact as paperPerpetualAmount,
+  fmt as formatPaperPerpetualAmount,
+  notional as paperPerpetualNotional,
+};
+
 const SCALE = 100_000_000n;
 const BPS = 10_000n;
 const POSITIVE = /^(?:0|[1-9]\d{0,11})(?:\.\d{1,8})?$/;
@@ -78,6 +84,8 @@ export type PerpetualPaperEvent = BaseEvent &
         positionId: string;
         exitPriceQuote: string;
         exitFeeQuote: string;
+        /** Optional partial reduce-only close; omitted means the full lot. */
+        quantityBase?: string;
       }>
   );
 
@@ -100,11 +108,14 @@ export type PerpetualPaperPositionState = Readonly<{
   entryPriceQuote: string;
   markPriceQuote: string;
   isolatedMarginQuote: string;
+  initialMarginQuote?: string;
   unrealizedPnlQuote: string;
   maintenanceMarginQuote: string;
   liquidationRequired: boolean;
 }>;
 export type PerpetualPaperLedgerState = Readonly<{
+  marginMode?: "account_wide";
+  engine?: Readonly<{ id: string; version: string }>;
   ledgerId: string;
   strategy: PaperExperimentStrategy;
   initialBalanceQuote: string;
@@ -288,7 +299,17 @@ export function replayPerpetualPaperLedger(
         const exit = exact(event.exitPriceQuote);
         const exitFee = exact(event.exitFeeQuote);
         if (exit === 0n) throw new Error("Invalid close price");
-        const exitValue = notional(p.quantity, exit);
+        const closeQuantity =
+          event.quantityBase === undefined ? p.quantity : exact(event.quantityBase);
+        if (
+          closeQuantity === 0n ||
+          closeQuantity > p.quantity ||
+          (event.kind === "liquidate" && closeQuantity !== p.quantity)
+        )
+          throw new Error("Invalid reduce-only close quantity");
+        const releasedMargin =
+          closeQuantity === p.quantity ? p.margin : (p.margin * closeQuantity) / p.quantity;
+        const exitValue = notional(closeQuantity, exit);
         if (exitFee > ceil(exitValue * 100n, BPS)) {
           throw new Error("Untrusted PAPER exit fee");
         }
@@ -298,18 +319,24 @@ export function replayPerpetualPaperLedger(
         if (event.kind === "liquidate" && (p.side === "long" ? exit > p.mark : exit < p.mark)) {
           throw new Error("PAPER liquidation cannot use a favorable stale price");
         }
-        const change = ((p.side === "long" ? exit - p.entry : p.entry - exit) * p.quantity) / SCALE;
-        const grossRelease = p.margin + change - exitFee;
+        const change =
+          ((p.side === "long" ? exit - p.entry : p.entry - exit) * closeQuantity) / SCALE;
+        const grossRelease = releasedMargin + change - exitFee;
         if (event.kind === "close" && grossRelease < 0n) {
           throw new Error("Bankrupt PAPER position needs liquidation event");
         }
         const release = grossRelease > 0n ? grossRelease : 0n;
         if (grossRelease < 0n) bankruptcy += -grossRelease;
         free += release;
-        realized += release - p.margin;
+        realized += release - releasedMargin;
         fees += exitFee;
-        positions.delete(event.positionId);
-        closed++;
+        if (closeQuantity === p.quantity) {
+          positions.delete(event.positionId);
+          closed++;
+        } else {
+          p.quantity -= closeQuantity;
+          p.margin -= releasedMargin;
+        }
         if (event.kind === "liquidate") liquidations++;
       }
     }

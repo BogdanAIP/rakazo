@@ -1,7 +1,10 @@
+import { createHash } from "node:crypto";
 import { expect, test } from "@playwright/test";
+import { buildSkillMd } from "@rakazo/core";
 import {
   createDb,
   fillApprovedTradingPaperReservation,
+  readOwnedPerpetualWorkspace,
   readTradingPaperWorkerFillPreflight,
   readTradingPaperWorkerMarketTargetPreflight,
   readTradingPaperWorkerSignalPreflight,
@@ -197,8 +200,8 @@ test("PAPER spot and futures share one journal page with separate verified owner
   await page.getByRole("button", { name: "Создать счёт", exact: true }).click();
   await page.getByRole("button", { name: "Создать виртуальный счёт", exact: true }).click();
   await expect(page.getByLabel("Выберите журнал")).toBeVisible();
+  await expect(page.getByLabel("Выберите журнал")).not.toHaveValue("");
   const spotId = await page.getByLabel("Выберите журнал").inputValue();
-  expect(spotId).toBeTruthy();
 
   const db = createDb(process.env.DATABASE_URL!);
   const futuresId = `paper-tabs-futures-${Date.now()}`;
@@ -245,14 +248,166 @@ test("PAPER spot and futures share one journal page with separate verified owner
   );
   await expect(page.getByRole("heading", { name: "Открытые фьючерсные позиции" })).toBeVisible();
   await expect(page.getByRole("cell", { name: "OKX · ETH-USDT-SWAP" })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "Long" })).toBeVisible();
+  await expect(
+    page
+      .getByRole("table", { name: "Открытые фьючерсные позиции" })
+      .getByRole("cell", { name: "Long", exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("cell", { name: "Открытие" })).toBeVisible();
   await expect(
-    page.getByRole("tabpanel", { name: "Фьючерсы" }).getByText("1000 USDT"),
+    page.getByLabel("Фьючерсные показатели").getByText("1000 USDT", { exact: true }),
   ).toBeVisible();
   await expect(page.getByLabel("Выберите журнал")).toBeHidden();
 
   await page.getByRole("tab", { name: "Спот" }).click();
   await expect(page.getByLabel("Выберите журнал")).toHaveValue(spotId);
   await expect(page.getByRole("cell", { name: "OKX · ETH-USDT-SWAP" })).toHaveCount(0);
+});
+
+test("owner reviews futures Start, sees a worker fill, pauses and closes virtual positions on the shared page", async ({
+  page,
+}, testInfo) => {
+  await signup(
+    page,
+    "futures-browser-" + Date.now() + "@rakazo.test",
+    "password12",
+    "Futures Browser",
+  );
+  await completeOnboarding(page);
+  await page.goto("/app/paper-journal");
+  await page.getByRole("tab", { name: "Фьючерсы" }).click();
+  await page.getByRole("button", { name: "Создать три фьючерсных счёта", exact: true }).click();
+  await expect(page.getByLabel("Стратегия и виртуальный счёт")).not.toHaveValue("");
+  const ledgerId = await page.getByLabel("Стратегия и виртуальный счёт").inputValue();
+  const db = createDb(process.env.DATABASE_URL!);
+  try {
+    const ledger = await db.prisma.tradingPaperPerpetualLedger.findUniqueOrThrow({
+      where: { id: ledgerId },
+    });
+    const source = {
+      spaceId: ledger.spaceId,
+      userId: ledger.ownerUserId,
+      repository: "okx/agent-trade-kit",
+      sourceRef: "a".repeat(40),
+      sourceUrl: "https://github.com/okx/agent-trade-kit/blob/" + "a".repeat(40) + "/fixture",
+      license: "MIT",
+      trust: "curated",
+      metrics: {},
+      metadata: {},
+      preferredVariant: "original",
+    };
+    const original = buildSkillMd({
+      name: "perpetual-research",
+      description: "Public futures fixture",
+      body: "Research only the supplied public snapshot; no account or exchange order tools.",
+    });
+    await db.prisma.marketEntry.create({
+      data: {
+        ...source,
+        kind: "skill",
+        key: "okx/agent-trade-kit:skills/perpetual-research/SKILL.md@" + source.sourceRef,
+        name: "perpetual-research",
+        description: "Read-only",
+        tags: ["trading"],
+        sourcePath: "skills/perpetual-research/SKILL.md",
+        originalContent: original,
+        digest: createHash("sha256").update(original).digest("hex"),
+      },
+    });
+    const resolver = JSON.stringify({
+      semanticKey: "futures.data",
+      implementations: [
+        {
+          name: "Public OKX futures Skill",
+          kind: "api",
+          reference: "market:okx/agent-trade-kit:perpetual-research",
+          priority: 1,
+          readOnly: true,
+          constraints: ["Public data only"],
+        },
+      ],
+    });
+    await db.prisma.marketEntry.create({
+      data: {
+        ...source,
+        kind: "resolver",
+        key: "futures.data@" + source.sourceRef,
+        name: "Futures data",
+        description: "Read-only",
+        tags: ["futures.data"],
+        sourcePath: "resolver.json",
+        originalContent: resolver,
+        digest: createHash("sha256").update(resolver).digest("hex"),
+      },
+    });
+    expect(
+      await db.prisma.tradingPaperPerpetualLedger.count({
+        where: { spaceId: ledger.spaceId, ownerUserId: ledger.ownerUserId },
+      }),
+    ).toBe(3);
+    expect(await db.prisma.tradingPaperPerpetualEvent.count({ where: { ledgerId } })).toBe(0);
+    await page.getByRole("button", { name: "Создать три фьючерсных счёта", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Проверить запуск фьючерсов" })).toBeVisible();
+    expect(
+      await db.prisma.tradingPaperPerpetualLedger.count({
+        where: { spaceId: ledger.spaceId, ownerUserId: ledger.ownerUserId },
+      }),
+    ).toBe(3);
+    await page.getByRole("button", { name: "Проверить плечо", exact: true }).click();
+    await expect(page.getByLabel("Плечо", { exact: true })).toBeVisible();
+    await page.getByLabel("Плечо", { exact: true }).fill("21");
+    await expect(page.getByRole("button", { name: "Сохранить плечо" })).toBeDisabled();
+    await page.getByLabel("Плечо", { exact: true }).fill("3");
+    await page.getByRole("button", { name: "Сохранить плечо" }).click();
+    await expect(page.getByText("Плечо новых входов: до 3×", { exact: true })).toBeVisible();
+    expect(
+      await readOwnedPerpetualWorkspace(
+        db.prisma,
+        { spaceId: ledger.spaceId, userId: ledger.ownerUserId },
+        ledgerId,
+      ),
+    ).toMatchObject({ maxLeverage: 3 });
+    await captureScreenshot(page, testInfo, "futures-leverage-setting");
+    await page.getByLabel("Длительность новых входов").selectOption("15");
+    await page.getByRole("button", { name: "Проверить запуск фьючерсов" }).click();
+    await expect(page.getByLabel("Проверка запуска фьючерсов")).toBeVisible();
+    expect(await db.prisma.tradingPaperPerpetualEvent.count({ where: { ledgerId } })).toBe(0);
+    await captureScreenshot(page, testInfo, "futures-reviewed-start");
+    await page.getByRole("button", { name: "Запустить PAPER-фьючерсы", exact: true }).click();
+    await expect(
+      page
+        .getByRole("table", { name: "Открытые фьючерсные позиции" })
+        .getByRole("cell", { name: "Long", exact: true }),
+    ).toBeVisible();
+    if (process.env.PAPER_NAUTILUS_PYTHON) {
+      await expect(page.getByRole("cell", { name: "Открытие", exact: true })).toBeVisible();
+      await expect(
+        page.getByText("Симуляция общей маржи Nautilus; ликвидация может отличаться от OKX."),
+      ).toBeVisible();
+      expect(await db.prisma.tradingPaperPerpetualEngine.count({ where: { ledgerId } })).toBe(1);
+      expect(await db.prisma.tradingPaperPerpetualEvent.count({ where: { ledgerId } })).toBe(0);
+    } else await expect(page.getByRole("cell", { name: "Открытие", exact: true })).toBeVisible();
+    await expect(page.getByLabel("Последнее решение ИИ")).toContainText("Исполнено");
+    await expect(page.getByLabel("Сравнение фьючерсных профилей").getByRole("row")).toHaveCount(4);
+    await captureScreenshot(page, testInfo, "futures-worker-filled-journal");
+    await page.getByRole("button", { name: "Пауза новых фьючерсных входов" }).click();
+    await expect(page.getByRole("heading", { name: /Защита открытых позиций/ })).toBeVisible();
+    const paused = await readOwnedPerpetualWorkspace(
+      db.prisma,
+      { spaceId: ledger.spaceId, userId: ledger.ownerUserId },
+      ledgerId,
+    );
+    expect(paused).toMatchObject({ sessionStatus: "paused", openOrders: [] });
+    await page.getByRole("button", { name: "Закрыть все виртуальные позиции" }).click();
+    await page.getByRole("button", { name: "Подтвердить виртуальное закрытие" }).click();
+    if (!process.env.PAPER_NAUTILUS_PYTHON)
+      await expect(page.getByRole("cell", { name: "Закрытие", exact: true })).toBeVisible();
+    await expect(page.getByText("Открытых позиций нет.", { exact: true })).toBeVisible();
+    await captureScreenshot(page, testInfo, "futures-paused-and-closed");
+    await page.getByRole("tab", { name: "Спот" }).click();
+    await expect(page.getByLabel("Выберите журнал")).toHaveValue("");
+  } finally {
+    await db.prisma.$disconnect();
+    await db.pool.end();
+  }
 });

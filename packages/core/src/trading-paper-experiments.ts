@@ -17,7 +17,7 @@ export type PaperExperimentPreset = Readonly<{
   maxDailyLossQuote: string;
   maxOpenRiskQuote: string;
   maxTotalExposureQuote: string;
-  maxLeverage: 1 | 2 | 3;
+  maxLeverage: 5 | 10 | 20;
   maxConcurrentPositions: 2 | 3 | 4;
   /** Proposed future derivatives bookkeeping, not an exchange setting. */
   positionMode: "hedge";
@@ -34,7 +34,7 @@ const presets: Readonly<Record<PaperExperimentStrategy, PaperExperimentPreset>> 
     maxDailyLossQuote: "15",
     maxOpenRiskQuote: "10",
     maxTotalExposureQuote: "500",
-    maxLeverage: 1,
+    maxLeverage: 5,
     maxConcurrentPositions: 2,
     positionMode: "hedge",
     researchMode: "model_proposes",
@@ -47,7 +47,7 @@ const presets: Readonly<Record<PaperExperimentStrategy, PaperExperimentPreset>> 
     maxDailyLossQuote: "30",
     maxOpenRiskQuote: "20",
     maxTotalExposureQuote: "1000",
-    maxLeverage: 2,
+    maxLeverage: 10,
     maxConcurrentPositions: 3,
     positionMode: "hedge",
     researchMode: "model_proposes",
@@ -60,7 +60,7 @@ const presets: Readonly<Record<PaperExperimentStrategy, PaperExperimentPreset>> 
     maxDailyLossQuote: "50",
     maxOpenRiskQuote: "40",
     maxTotalExposureQuote: "1500",
-    maxLeverage: 3,
+    maxLeverage: 20,
     maxConcurrentPositions: 4,
     positionMode: "hedge",
     researchMode: "model_proposes",

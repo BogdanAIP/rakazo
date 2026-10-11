@@ -4,6 +4,7 @@ import path from "node:path";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import type { createApp } from "../../../../apps/api/src/app.ts";
+import { paperBrowserFixtures } from "../paper-browser-fixtures.js";
 import { runProcess } from "./process.js";
 
 loadRootEnv();
@@ -106,6 +107,8 @@ async function main() {
         "packages/db/src/space-membership.postgres.test.ts",
         "packages/db/src/messaging.postgres.test.ts",
         "packages/memory/src/commit.postgres.test.ts",
+        "packages/adapters/src/paper-workspace.postgres.test.ts",
+        "packages/adapters/src/paper-perpetual-workspace.postgres.test.ts",
         "packages/adapters/src/wakeup.postgres.test.ts",
         "packages/adapters/src/realtime.postgres.test.ts",
         "packages/adapters/src/job-reconciler.postgres.test.ts",
@@ -174,6 +177,7 @@ async function main() {
     );
     const email = new EmailEmulator();
     const handles = await createApp({
+      ...(agentRuntime === "scripted" ? paperBrowserFixtures() : {}),
       databaseUrl,
       prisma: undefined,
       composio: new ComposioEmulator(),

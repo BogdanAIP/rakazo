@@ -76,8 +76,8 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
   });
 
   it("rejects leverage above each preset", () => {
-    expectDenial({ strategy: "conservative", leverage: 2 }, "leverage_exceeded");
-    expectDenial({ strategy: "moderate", leverage: 3 }, "leverage_exceeded");
+    expectDenial({ strategy: "conservative", leverage: 6 }, "leverage_exceeded");
+    expectDenial({ strategy: "moderate", leverage: 11 }, "leverage_exceeded");
     const allowed = previewPaperPerpetualProposal({
       ...fixture,
       strategy: "aggressive",
