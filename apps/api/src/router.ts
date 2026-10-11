@@ -186,6 +186,7 @@ import {
   IsolationError,
   issueMessagingLinkCode,
   listOwnedTradingPaperJournals,
+  listOwnedPerpetualPaperJournals,
   listWindowsHosts,
   lockOwnedGroup,
   newestModelCredentialOrder,
@@ -195,6 +196,7 @@ import {
   pushSessionExpiresAt,
   readOwnedMarketPreparedResearch,
   readOwnedTradingPaperJournal,
+  readOwnedPerpetualPaperJournal,
   readOwnedTradingPaperWorkspace,
   releaseSpaceDeletionClaim,
   renewSpaceDeletionClaim,
@@ -1003,6 +1005,20 @@ export function createRouter(deps: RouterDeps) {
       ),
       journalRead: authed.trading.journalRead.handler(async ({ context, input }) => {
         const journal = await readOwnedTradingPaperJournal(
+          deps.prisma,
+          context.actor,
+          input.ledgerId,
+          input.beforeSequence,
+        );
+        if (!journal) throw new ORPCError("NOT_FOUND");
+        return journal;
+      }),
+      // Futures is a read-only tab within the same human PAPER journal.
+      perpetualJournalList: authed.trading.perpetualJournalList.handler(({ context }) =>
+        listOwnedPerpetualPaperJournals(deps.prisma, context.actor),
+      ),
+      perpetualJournalRead: authed.trading.perpetualJournalRead.handler(async ({ context, input }) => {
+        const journal = await readOwnedPerpetualPaperJournal(
           deps.prisma,
           context.actor,
           input.ledgerId,
