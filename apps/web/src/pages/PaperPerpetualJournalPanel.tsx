@@ -53,9 +53,12 @@ export function PaperPerpetualJournalPanel() {
         );
       })
       .catch(() => {
-        if (active) setError("Не удалось получить фьючерсные счета. Проверьте версию Rakazo и подключение.");
+        if (active)
+          setError("Не удалось получить фьючерсные счета. Проверьте версию Rakazo и подключение.");
       });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -79,7 +82,9 @@ export function PaperPerpetualJournalPanel() {
         if (result.status === "verified") {
           setEvents((previous) => [
             ...result.events,
-            ...previous.filter((event) => !result.events.some((fresh) => fresh.eventId === event.eventId)),
+            ...previous.filter(
+              (event) => !result.events.some((fresh) => fresh.eventId === event.eventId),
+            ),
           ]);
           if (firstPage) {
             setCursor(result.nextBeforeSequence);
@@ -134,7 +139,9 @@ export function PaperPerpetualJournalPanel() {
       }
       setEvents((old) => [
         ...old,
-        ...result.events.filter((event) => !old.some((existing) => existing.eventId === event.eventId)),
+        ...result.events.filter(
+          (event) => !old.some((existing) => existing.eventId === event.eventId),
+        ),
       ]);
       setCursor(result.nextBeforeSequence);
     } catch {
@@ -148,13 +155,18 @@ export function PaperPerpetualJournalPanel() {
 
   const verified = journal?.status === "verified" ? journal : null;
   return (
-    <div className="space-y-5" id="paper-journal-futures-panel" role="tabpanel" aria-labelledby="paper-journal-futures-tab">
+    <div
+      className="space-y-5"
+      id="paper-journal-futures-panel"
+      role="tabpanel"
+      aria-labelledby="paper-journal-futures-tab"
+    >
       <section className="rounded-2xl border border-border bg-card p-5">
         <h2 className="text-lg font-semibold">Фьючерсы · PAPER</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Long / Short · плечо и изолированная маржа · без реальных средств.
-          Эта вкладка показывает только проверенные виртуальные записи.
-          Запуск ИИ-стратегий и создание счетов подключаются отдельно после проверки.
+          Long / Short · плечо и изолированная маржа · без реальных средств. Эта вкладка показывает
+          только проверенные виртуальные записи. Запуск ИИ-стратегий и создание счетов подключаются
+          отдельно после проверки.
         </p>
         <label htmlFor="paper-perpetual-ledger" className="mb-2 mt-4 block text-sm font-medium">
           Стратегия и виртуальный счёт
@@ -177,7 +189,11 @@ export function PaperPerpetualJournalPanel() {
           ))}
         </select>
       </section>
-      {error && <p role="alert" className="rounded-xl border border-destructive/50 p-4 text-sm">{error}</p>}
+      {error && (
+        <p role="alert" className="rounded-xl border border-destructive/50 p-4 text-sm">
+          {error}
+        </p>
+      )}
       {pending && <p className="text-sm text-muted-foreground">Проверка фьючерсного журнала…</p>}
       {journal?.status === "integrity_blocked" && (
         <p role="alert" className="rounded-xl border border-destructive p-5">
@@ -186,7 +202,10 @@ export function PaperPerpetualJournalPanel() {
       )}
       {verified && (
         <>
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Фьючерсные показатели">
+          <section
+            className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+            aria-label="Фьючерсные показатели"
+          >
             {[
               ["Начальный капитал", verified.state.initialBalanceQuote],
               ["Доступно", verified.state.availableQuote],
@@ -204,10 +223,10 @@ export function PaperPerpetualJournalPanel() {
             ))}
           </section>
           <p className="text-xs text-muted-foreground">
-            {strategyName[verified.state.strategy]} · Позиции: {verified.state.openPositions.length} ·
-            Закрыто: {verified.state.closedPositions} · Ликвидации: {verified.state.liquidations} ·
-            Обновлено: {dateTime(verified.updatedAt)}.
-            Переоценка зависит от последних записанных котировок, не является непрерывным биржевым балансом.
+            {strategyName[verified.state.strategy]} · Позиции: {verified.state.openPositions.length}{" · "}
+              Закрыто: {verified.state.closedPositions} · Ликвидации: {verified.state.liquidations}{" · "}
+              Обновлено: {dateTime(verified.updatedAt)}. Переоценка зависит от последних записанных
+            котировок, не является непрерывным биржевым балансом.
           </p>
           <section className="rounded-2xl border border-border bg-card p-5">
             <h2 className="mb-4 text-lg font-semibold">Открытые фьючерсные позиции</h2>
@@ -216,27 +235,37 @@ export function PaperPerpetualJournalPanel() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead><tr className="border-b border-border">
-                    <th className="p-2">Пара</th>
-                    <th className="p-2">Сторона</th>
-                    <th className="p-2">Плечо</th>
-                    <th className="p-2">Объём</th>
-                    <th className="p-2">Вход / Mark</th>
-                    <th className="p-2">Маржа</th>
-                    <th className="p-2">PnL</th>
-                    <th className="p-2">Риск ликвидации</th>
-                  </tr></thead>
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="p-2">Пара</th>
+                      <th className="p-2">Сторона</th>
+                      <th className="p-2">Плечо</th>
+                      <th className="p-2">Объём</th>
+                      <th className="p-2">Вход / Mark</th>
+                      <th className="p-2">Маржа</th>
+                      <th className="p-2">PnL</th>
+                      <th className="p-2">Риск ликвидации</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {verified.state.openPositions.map((position) => (
                       <tr key={position.positionId} className="border-b border-border/60">
-                        <td className="p-2">{position.venue.toUpperCase()} · {position.instrument}</td>
+                        <td className="p-2">
+                          {position.venue.toUpperCase()} · {position.instrument}
+                        </td>
                         <td className="p-2">{position.side === "long" ? "Long" : "Short"}</td>
                         <td className="p-2">{position.leverage}×</td>
                         <td className="p-2 tabular-nums">{position.quantityBase}</td>
-                        <td className="p-2 tabular-nums">{position.entryPriceQuote} / {position.markPriceQuote}</td>
+                        <td className="p-2 tabular-nums">
+                          {position.entryPriceQuote} / {position.markPriceQuote}
+                        </td>
                         <td className="p-2 tabular-nums">{position.isolatedMarginQuote}</td>
                         <td className="p-2 tabular-nums">{position.unrealizedPnlQuote}</td>
-                        <td className="p-2">{position.liquidationRequired ? "Требуется защитное действие" : "Нет сигнала по текущей записи"}</td>
+                        <td className="p-2">
+                          {position.liquidationRequired
+                            ? "Требуется защитное действие"
+                            : "Нет сигнала по текущей записи"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -251,14 +280,16 @@ export function PaperPerpetualJournalPanel() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead><tr className="border-b border-border">
-                    <th className="p-2">Дата</th>
-                    <th className="p-2">Операция</th>
-                    <th className="p-2">Позиция / инструмент</th>
-                    <th className="p-2">Направление</th>
-                    <th className="p-2">Цена / Funding</th>
-                    <th className="p-2">Комиссия</th>
-                  </tr></thead>
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="p-2">Дата</th>
+                      <th className="p-2">Операция</th>
+                      <th className="p-2">Позиция / инструмент</th>
+                      <th className="p-2">Направление</th>
+                      <th className="p-2">Цена / Funding</th>
+                      <th className="p-2">Комиссия</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {events.map((event) => (
                       <tr key={event.eventId} className="border-b border-border/60">
