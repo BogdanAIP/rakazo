@@ -254,7 +254,9 @@ export const appContract = {
       .input(TradingPaperJournalReadInputSchema)
       .output(TradingPaperJournalReadOutputSchema),
     /** Futures is a tab of the same journal; both routes are read-only. */
-    perpetualJournalList: oc.input(z.object({})).output(TradingPaperPerpetualJournalListOutputSchema),
+    perpetualJournalList: oc
+      .input(z.object({}))
+      .output(TradingPaperPerpetualJournalListOutputSchema),
     perpetualJournalRead: oc
       .input(TradingPaperJournalReadInputSchema)
       .output(TradingPaperPerpetualJournalReadOutputSchema),
