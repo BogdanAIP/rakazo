@@ -1,4 +1,9 @@
-import { paperExperimentHedgeBucket, type PaperExperimentStrategy, type PaperExperimentVenue, type PaperHedgeSide } from "./trading-paper-experiments.js";
+import {
+  type PaperExperimentStrategy,
+  type PaperExperimentVenue,
+  type PaperHedgeSide,
+  paperExperimentHedgeBucket,
+} from "./trading-paper-experiments.js";
 
 const SCALE = 100_000_000n;
 const AMOUNT = /^(?:0|[1-9]\d{0,11})(?:\.\d{1,8})?$/;
@@ -52,7 +57,10 @@ export type PerpetualPaperPublicBook = Readonly<{
 }>;
 export type PerpetualPaperMatch =
   | { status: "deny"; reason: string }
-  | { status: "not_filled"; reason: "not_crossed" | "not_triggered" | "empty_book" | "expired" | "stale_quote" }
+  | {
+      status: "not_filled";
+      reason: "not_crossed" | "not_triggered" | "empty_book" | "expired" | "stale_quote";
+    }
   | {
       status: "inert_fill_preview";
       /** No ledger writer, broker route, order ID or execution grant. */
@@ -91,12 +99,10 @@ export function previewPerpetualPaperOrderMatch(
   if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(book.sourceId)) {
     return deny("missing_provenance");
   }
-  if (
-    order.action !==
-    (order.intent === "open"
-      ? order.positionSide === "long" ? "buy" : "sell"
-      : order.positionSide === "long" ? "sell" : "buy")
-  ) {
+  const actionShouldBuy =
+    (order.intent === "open" && order.positionSide === "long") ||
+    (order.intent === "reduce_only" && order.positionSide === "short");
+  if (order.action !== (actionShouldBuy ? "buy" : "sell")) {
     return deny("invalid_direction_or_reduce_only");
   }
   if (
@@ -122,9 +128,16 @@ export function previewPerpetualPaperOrderMatch(
     const ask = amount(book.askQuote);
     const bidDepth = amount(book.bidAvailableBase);
     const askDepth = amount(book.askAvailableBase);
-    if (qty === 0n || increment === 0n || bid === 0n || ask === 0n ||
-        bid > ask || done >= qty || qty % increment !== 0n ||
-        done % increment !== 0n) {
+    if (
+      qty === 0n ||
+      increment === 0n ||
+      bid === 0n ||
+      ask === 0n ||
+      bid > ask ||
+      done >= qty ||
+      qty % increment !== 0n ||
+      done % increment !== 0n
+    ) {
       return deny("invalid_quantity_or_order_book");
     }
     const remaining = qty - done;
@@ -138,7 +151,7 @@ export function previewPerpetualPaperOrderMatch(
     if (
       (order.orderType === "limit" && (limit === null || limit === 0n)) ||
       (order.orderType !== "limit" && limit !== null) ||
-      ((order.orderType === "stop_market" || order.orderType === "take_profit_market")
+      (order.orderType === "stop_market" || order.orderType === "take_profit_market"
         ? trigger === null || trigger === 0n
         : trigger !== null)
     ) {
