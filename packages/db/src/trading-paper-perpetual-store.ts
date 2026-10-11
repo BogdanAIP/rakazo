@@ -29,6 +29,16 @@ export class PerpetualPaperConflictError extends Error {
 const sha = (data: string): string => createHash("sha256").update(data, "utf8").digest("hex");
 const asJson = (data: unknown): Prisma.InputJsonValue =>
   JSON.parse(JSON.stringify(data)) as Prisma.InputJsonValue;
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value !== null && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.keys(record).sort().map((key) => [key, canonical(record[key])]),
+    );
+  }
+  return value;
+}
 const genesis = (input: PerpetualPaperLedgerInput, owner: Owner): string =>
   sha(JSON.stringify([VERSION, owner.spaceId, owner.userId, input.ledgerId, input.strategy, input.openedAt, input.initialBalanceQuote]));
 const link = (previous: string, digest: string): string =>
@@ -158,22 +168,10 @@ async function recover(
   const projectionText = JSON.stringify(state);
   if (
     row.projectionSha256 !== sha(projectionText) ||
-    JSON.stringify(row.projection) !== projectionText ||
+    JSON.stringify(canonical(row.projection)) !== JSON.stringify(canonical(state)) ||
     state.nextSequence !== row.version + 1
   ) {
-    // Projection JSONB field key ordering can differ; compare canonical
-    // own-replay representation after rebuilding an exact ordered state.
-    const stored = row.projection as unknown as Record<string, unknown>;
-    const canonical = Object.fromEntries(
-      Object.keys(state).map((key) => [key, stored[key]]),
-    );
-    if (
-      row.projectionSha256 !== sha(projectionText) ||
-      JSON.stringify(canonical) !== projectionText ||
-      state.nextSequence !== row.version + 1
-    ) {
-      throw new PerpetualPaperIntegrityError("Perpetual projection diverged from replay");
-    }
+    throw new PerpetualPaperIntegrityError("Perpetual projection diverged from replay");
   }
   return { row, events, state };
 }
