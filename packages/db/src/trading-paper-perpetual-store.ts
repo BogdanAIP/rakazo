@@ -1,4 +1,8 @@
 import { createHash } from "node:crypto";
+import type {
+  TradingPaperPerpetualJournalListOutput,
+  TradingPaperPerpetualJournalReadOutput,
+} from "@rakazo/contracts";
 import {
   type PerpetualPaperEvent,
   type PerpetualPaperLedgerInput,
@@ -308,5 +312,92 @@ export async function appendVerifiedPerpetualPaperEvent(
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
+  );
+}
+
+/**
+ * Read-only data for the Futures tab of the existing PAPER journal.
+ * Overview never contains unverified account balances or event payloads.
+ */
+export async function listOwnedPerpetualPaperJournals(
+  prisma: PrismaClient,
+  owner: Owner,
+): Promise<TradingPaperPerpetualJournalListOutput> {
+  const rows = await prisma.tradingPaperPerpetualLedger.findMany({
+    where: { spaceId: owner.spaceId, ownerUserId: owner.userId },
+    orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+    take: 50,
+    select: {
+      id: true,
+      strategy: true,
+      openedAt: true,
+      updatedAt: true,
+      quoteCurrency: true,
+      version: true,
+    },
+  });
+  return {
+    mode: "paper_only",
+    ledgers: rows.map((row) => ({
+      ledgerId: row.id,
+      strategy: row.strategy as PerpetualPaperLedgerInput["strategy"],
+      openedAt: row.openedAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+      quoteCurrency: "USDT",
+      eventsCount: row.version,
+    })),
+  };
+}
+
+/** Verify full owner-scoped hash chain before allowing this UI to see money. */
+export async function readOwnedPerpetualPaperJournal(
+  prisma: PrismaClient,
+  owner: Owner,
+  ledgerId: string,
+  beforeSequence?: number,
+): Promise<TradingPaperPerpetualJournalReadOutput | null> {
+  if (
+    beforeSequence !== undefined &&
+    (!Number.isSafeInteger(beforeSequence) || beforeSequence < 1)
+  ) {
+    throw new PerpetualPaperIntegrityError("Invalid futures journal page cursor");
+  }
+  return prisma.$transaction(
+    async (tx): Promise<TradingPaperPerpetualJournalReadOutput | null> => {
+      const scoped = await tx.tradingPaperPerpetualLedger.findFirst({
+        where: { id: ledgerId, spaceId: owner.spaceId, ownerUserId: owner.userId },
+        select: { id: true, openedAt: true, updatedAt: true },
+      });
+      if (!scoped) return null;
+      try {
+        const { events, state } = await recover(tx, owner, ledgerId);
+        const eligible =
+          beforeSequence === undefined
+            ? events
+            : events.filter((event) => event.sequence < beforeSequence);
+        const page = eligible.slice(-100);
+        const oldest = page[0]?.sequence;
+        return {
+          status: "verified",
+          mode: "paper_only",
+          ledgerId,
+          openedAt: scoped.openedAt.toISOString(),
+          updatedAt: scoped.updatedAt.toISOString(),
+          state,
+          events: [...page].reverse(),
+          nextBeforeSequence:
+            oldest !== undefined && eligible.length > page.length ? oldest : null,
+        };
+      } catch {
+        // Fail closed: no balances or events if replay, hashes or membership fail.
+        return {
+          status: "integrity_blocked",
+          mode: "paper_only",
+          ledgerId,
+          message: "Journal integrity verification failed",
+        };
+      }
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
 }
