@@ -82,13 +82,15 @@ export function getPaperExperimentPreset(id: PaperExperimentStrategy): PaperExpe
  * Opposite sides, accounts/strategies, venues and markets must remain distinct.
  * Must never be used as a database primary key without owner/ledger scope.
  */
-export function paperExperimentHedgeBucket(input: Readonly<{
-  strategy: PaperExperimentStrategy;
-  ledgerId: string;
-  venue: PaperExperimentVenue;
-  instrument: string;
-  side: PaperHedgeSide;
-}>): string | null {
+export function paperExperimentHedgeBucket(
+  input: Readonly<{
+    strategy: PaperExperimentStrategy;
+    ledgerId: string;
+    venue: PaperExperimentVenue;
+    instrument: string;
+    side: PaperHedgeSide;
+  }>,
+): string | null {
   if (!presets[input.strategy]) return null;
   if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(input.ledgerId)) return null;
   if (!/^[A-Z0-9]{1,20}-USDT-SWAP$/.test(input.instrument)) return null;
