@@ -91,7 +91,7 @@ function parseMarket(
       return exclude("incomplete_metadata");
     }
   }
-  if (!/^[A-Z0-9]{2,40}$/.test(base) || !/^[A-Z0-9]{2,40}$/.test(quote)) {
+  if (!/^[A-Z0-9]{1,40}$/.test(base) || !/^[A-Z0-9]{1,40}$/.test(quote)) {
     return exclude("incomplete_metadata");
   }
   let expiryAt: string | null = null;

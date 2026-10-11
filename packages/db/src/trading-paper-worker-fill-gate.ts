@@ -424,7 +424,7 @@ function normalizeFillUse(row: {
   if (
     strategyId !== STRATEGY_ID ||
     venue === null ||
-    !/^[A-Z0-9]{2,40}-[A-Z0-9]{2,40}$/u.test(row.symbol) ||
+    !/^[A-Z0-9]{1,40}-[A-Z0-9]{1,40}$/u.test(row.symbol) ||
     !row.evidenceId ||
     row.evidenceId.length > 128 ||
     !Number.isSafeInteger(row.policyRevision) ||

@@ -22,7 +22,7 @@ export async function capturePublicPaperSpotEvidence(
   target: PublicPaperSpotTarget,
   evidenceId?: string,
 ): Promise<{ id: string; source: "public_adapter_observation" }> {
-  if (!/^[A-Z0-9]{2,40}-[A-Z0-9]{2,40}$/.test(target.symbol)) {
+  if (!/^[A-Z0-9]{1,40}-[A-Z0-9]{1,40}$/.test(target.symbol)) {
     throw new Error("Invalid public spot symbol");
   }
   const snapshot =
