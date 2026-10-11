@@ -10,7 +10,15 @@ Owner decision: **use NautilusTrader** for futures PAPER execution. This superse
 
 Owner clarification: the three strategies are experimental alternatives for comparison, not a requirement for three exchange accounts in normal operation. Each PAPER strategy has an independent virtual 1,000-USDT budget so one strategy's trades do not consume another strategy's test capital. Normal operation uses one account and a selected strategy. The experiment should use the same market timeline and record strategy/version, decisions, risk limits, costs and start/end timestamps.
 
-Owner requests higher leverage. The previous 1x/2x/3x caps are historical defaults and are not the new target. Exact maximum leverage is pending the owner's numeric choice (one common ceiling or separate ceilings per strategy). The AI may choose lower leverage per trade within that ceiling. Risk profiles remain defined by loss budgets, sizing and exposure, rather than leverage alone. Do not infer unlimited leverage or increase risk budgets automatically.
+Owner-approved initial experiment leverage ceilings: **conservative 5x, moderate 10x, aggressive 20x**. The AI may choose lower leverage per trade within the currently owner-approved account ceiling. Existing loss budgets and exposure limits are not automatically increased.
+
+The Futures journal must expose an editable account leverage ceiling, initially populated with the strategy's 5x/10x/20x setting. Display the selected exchange, contract, margin mode, applicable position tier, current owner ceiling and current venue maximum. An owner may explicitly change the account ceiling through a reviewed, revision-fenced command; the configuration change must be journaled.
+
+Venue maximum is instrument- and margin/tier-specific, not a hard-coded universal exchange number. Source public contract metadata and position-tier limits from the selected exchange adapter (for OKX, public position tiers expose maxLever and maxSz). Enforce the relevant tier after including current and proposed exposure; when an exact account-specific maximum requires private data, do not claim that public metadata proves personal account eligibility. PAPER remains public-data-only.
+
+Effective permissible leverage for each proposed entry is the minimum of the owner-approved ceiling and the fresh applicable venue maximum, also subject to independent risk and margin checks. Reject invalid/stale/missing venue limits and independently revalidate before execution. Never silently execute at a different leverage than the recorded proposal. Where several instruments are selected, show their individual ceilings and enforce each separately. The journal setting applies to subsequent entries; existing positions retain their recorded leverage unless a separately specified position-management action is implemented.
+
+Implementation status: these are accepted requirements. Existing source defaults and proposal/ledger schemas still need migration away from 1x/2x/3x; the owner UI is not yet implemented. The R execution connection is unavailable at this checkpoint, so no installed runtime setting has changed.
 
 
 
@@ -45,7 +53,7 @@ We did **not** install packages or execute third-party Skill shell commands in t
 - `packages/core/src/trading-paper-experiments.ts`: three immutable 1,000-USDT strategy budgets and hedge bucket identities; the existing account-create screen preloads these. These are not automatic three-account provisioning.
 - Existing trusted spot PAPER ledger, approval gates, journal, worker scheduler, restart pause and protected exits remain the sole *live in-app* trading path. No spot behavior may be silently converted to derivatives.
 - `packages/core/src/trading-paper-perpetual-preview.ts` (new): read-only BigInt fixed-point proposed long/short assessment for one owner ledger, venue, swap instrument and profile. Explicitly checks leverage, stop/take-profit direction, notional, exposure, account collateral, open position slots, daily and concurrent stop-risk budgets, slippage/fees and whether loss at stop would exhaust simulated isolated maintenance collateral. Opposite hedge legs get distinct bucket keys. An `inert_preview` **does not reserve margin, open a position, simulate funding, trigger liquidation, or submit any order**.
-- Conservative/Moderate/Aggressive profile maximum leverage: 1x/2x/3x respectively. All are PAPER defaults, not adaptive AI permissions.
+- Historical source defaults currently use Conservative/Moderate/Aggressive maximum leverage 1x/2x/3x. The approved target is 5x/10x/20x with a journal setting and venue-specific enforcement as described above; source migration remains pending.
 
 ## Historical custom-engine plan — superseded by the accepted engine decision
 
