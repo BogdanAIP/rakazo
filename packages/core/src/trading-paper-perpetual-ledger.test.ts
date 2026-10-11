@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  replayPerpetualPaperLedger,
   type PerpetualPaperEvent,
   type PerpetualPaperLedgerInput,
+  replayPerpetualPaperLedger,
 } from "./trading-paper-perpetual-ledger.js";
 
 const openedAt = "2026-10-11T00:00:00.000Z";
@@ -23,7 +23,7 @@ function account(
 
 function tradeEvent(
   sequence: number,
-  event: Omit<PerpetualPaperEvent, "ledgerId" | "eventId" | "sequence" | "recordedAt">,
+  event: { kind: PerpetualPaperEvent["kind"]; [field: string]: unknown },
 ): PerpetualPaperEvent {
   return {
     ...event,
