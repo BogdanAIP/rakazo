@@ -8,7 +8,10 @@ import {
   recordPublicAdapterPaperQuoteEvidence,
   reserveApprovedTradingPaperSignal,
 } from "../../../packages/db/src/index.js";
-import { createDisabledPerpetualPaperAccount, appendVerifiedPerpetualPaperEvent } from "../../../packages/db/src/trading-paper-perpetual-store.js";
+import {
+  appendVerifiedPerpetualPaperEvent,
+  createDisabledPerpetualPaperAccount,
+} from "../../../packages/db/src/trading-paper-perpetual-store.js";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
 
 for (const { venue, symbol } of [
@@ -183,7 +186,6 @@ test("PAPER exposes the shared Codex model picker before completing onboarding",
   await expect(page.getByRole("button", { name: "Создать счёт", exact: true })).toBeVisible();
 });
 
-
 test("PAPER spot and futures share one journal page with separate verified owner-scoped accounts", async ({
   page,
 }) => {
@@ -233,7 +235,10 @@ test("PAPER spot and futures share one journal page with separate verified owner
   }
 
   await page.getByRole("tab", { name: "Фьючерсы" }).click();
-  await expect(page.getByRole("tab", { name: "Фьючерсы" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Фьючерсы" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await expect(page.getByRole("heading", { name: "Фьючерсы · PAPER" })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Стратегия и виртуальный счёт" })).toHaveValue(
     futuresId,
@@ -242,7 +247,9 @@ test("PAPER spot and futures share one journal page with separate verified owner
   await expect(page.getByRole("cell", { name: "OKX · ETH-USDT-SWAP" })).toBeVisible();
   await expect(page.getByRole("cell", { name: "Long" })).toBeVisible();
   await expect(page.getByRole("cell", { name: "Открытие" })).toBeVisible();
-  await expect(page.getByRole("tabpanel", { name: "Фьючерсы" }).getByText("1000 USDT")).toBeVisible();
+  await expect(
+    page.getByRole("tabpanel", { name: "Фьючерсы" }).getByText("1000 USDT"),
+  ).toBeVisible();
   await expect(page.getByLabel("Выберите журнал")).toHaveCount(0);
 
   await page.getByRole("tab", { name: "Спот" }).click();
