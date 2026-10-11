@@ -2,6 +2,21 @@
 
 **Target**: conservative, moderate and aggressive AI-directed, independent 1,000-USDT virtual accounts; multiple USDT perpetual pairs, isolated hedged long and short legs, bounded leverage, reproducible 14-day comparison. This is a development plan, **not a declaration that derivatives PAPER trading or the trial is running**.
 
+## Accepted execution engine — 2026-10-11
+
+Owner decision: **use NautilusTrader** for futures PAPER execution. This supersedes the custom futures simulator implementation steps below.
+
+- NautilusTrader owns order matching, order lifecycle, positions, fees, funding and account balances. Rakazo owns human Start/Pause/End, finite sessions, model selection, Market research provenance, independent deterministic permission/risk checks and the existing Spot/Futures journal.
+- The journal is an idempotent projection of engine events. There must be one authoritative account balance; Rakazo must not independently recalculate a competing simulated wallet.
+- Preserve three independent 1,000-USDT accounts, multiple pairs, separate long/short hedge positions and profile leverage caps 1x/2x/3x. Selecting an engine does not grant permission to start a trading session.
+- Pin the tested native Rust/PyO3 engine API and package version. Current qualification used NautilusTrader 1.231.0 on native Windows/Python 3.12. Do not mix its legacy Cython sandbox API with native engine capabilities, or stable 1.x with documentation examples for 2.x.
+- Five offline synthetic qualification scenarios verified hedge, two instruments, leverage 1/2/3, partial reduce-only close, fees, funding settlement and crash liquidation. These are component tests, not evidence of a completed integration or trading profitability.
+- Margin semantics remain an integration requirement: the tested account-wide configuration offsets hedge exposure and is different from the current custom isolated-lot accounting. Verify supported margin configuration and explicit gross-risk limits before mapping available balance or liquidation into the journal. Do not silently retain isolated-margin labels for account-wide results.
+- Next acceptance checks: real-time PAPER data delivery and funding; native engine event persistence and deterministic restart recovery; owner/revision/expiry fencing; independent risk denial; journal projection; full browser Start→worker→engine→journal→Pause/Close flow.
+- Existing uncommitted custom-engine work is preserved for review and reusable orchestration/UI pieces; expansion of custom matching/accounting is paused. No runtime switch, merge or 14-day experiment start is implied by this decision.
+
+References: [NautilusTrader pinned release](https://github.com/nautechsystems/nautilus_trader/releases/tag/v1.231.0), [native liquidation example](https://github.com/nautechsystems/nautilus_trader/blob/v1.231.0/examples/backtest/liquidation_demo.py), [installation/version guidance](https://nautilustrader.io/docs/latest/getting_started/installation/).
+
 ## Reuse-first audit (Market index, 2026-10-11)
 
 Before adding code, the existing owner-curated Market catalog was searched. The relevant *knowledge and market-data* routes already exist:
@@ -24,7 +39,7 @@ We did **not** install packages or execute third-party Skill shell commands in t
 - `packages/core/src/trading-paper-perpetual-preview.ts` (new): read-only BigInt fixed-point proposed long/short assessment for one owner ledger, venue, swap instrument and profile. Explicitly checks leverage, stop/take-profit direction, notional, exposure, account collateral, open position slots, daily and concurrent stop-risk budgets, slippage/fees and whether loss at stop would exhaust simulated isolated maintenance collateral. Opposite hedge legs get distinct bucket keys. An `inert_preview` **does not reserve margin, open a position, simulate funding, trigger liquidation, or submit any order**.
 - Conservative/Moderate/Aggressive profile maximum leverage: 1x/2x/3x respectively. All are PAPER defaults, not adaptive AI permissions.
 
-## Missing work before running the 14-day experiment
+## Historical custom-engine plan — superseded by the accepted engine decision
 
 1. **Read-only futures evidence adapter**: normalized contract mapping and versioned public quote/funding snapshots from the existing Market Resolver + selected Skill. No private exchange keys.
 2. **Append-only futures margin ledger**: long/short independent lots per owner/account/venue/symbol; isolated margin, reserved collateral, mark-to-market equity, realized/unrealized P&L, entry/exit fees, funding and maintenance-tier aware liquidation; deterministic restart/replay and accounting invariants.
