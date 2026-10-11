@@ -29,6 +29,10 @@ export {
   type TradingPaperFillResult,
 } from "./trading-paper-fill.js";
 export * from "./trading-paper-journal-read.js";
+export {
+  listOwnedPerpetualPaperJournals,
+  readOwnedPerpetualPaperJournal,
+} from "./trading-paper-perpetual-store.js";
 export { auditTradingPaperLifecycle } from "./trading-paper-lifecycle-audit.js";
 export { tradingPaperMarketScope } from "./trading-paper-market-choice.js";
 export * from "./trading-paper-protection-lease.js";
