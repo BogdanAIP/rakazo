@@ -46,6 +46,7 @@ model User {
   botSecrets BotSecret[]
   agentSecrets               AgentSecret[]
   tradingPaperLedgers         TradingPaperLedger[]
+  tradingPaperPerpetualLedgers TradingPaperPerpetualLedger[]
 
   @@unique([email])
   @@map("user")
@@ -221,6 +222,7 @@ model Space {
   externalConversations       ExternalConversation[]
   agentSecrets                AgentSecret[]
   tradingPaperLedgers         TradingPaperLedger[]
+  tradingPaperPerpetualLedgers TradingPaperPerpetualLedger[]
 
   @@unique([id, organizationId])
   @@index([organizationId, createdAt])
@@ -1477,6 +1479,48 @@ model TradingPaperWorkspace {
  createdAt DateTime @default(now())
  updatedAt DateTime @updatedAt
  @@map("trading_paper_workspaces")
+}
+
+/** Separate owner-scoped futures PAPER experiment. Never reuse the spot journal. */
+model TradingPaperPerpetualLedger {
+  id                  String @id
+  spaceId             String
+  space               Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  ownerUserId         String
+  owner               User @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  strategy            String
+  quoteCurrency       String @default("USDT")
+  openedAt            DateTime
+  initialBalanceQuote String @default("1000")
+  version             Int @default(0)
+  projection          Json
+  projectionSha256    String
+  headSha256          String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  events              TradingPaperPerpetualEvent[]
+
+  @@index([spaceId, ownerUserId, strategy])
+  @@map("trading_paper_perpetual_ledgers")
+}
+
+/** Hash-chained, immutable virtual long/short, funding and liquidation events. */
+model TradingPaperPerpetualEvent {
+  ledgerId       String
+  sequence       Int
+  eventId        String
+  kind           String
+  recordedAt     DateTime
+  payload        Json
+  payloadSha256  String
+  previousSha256 String
+  chainSha256    String
+  createdAt      DateTime @default(now())
+  ledger         TradingPaperPerpetualLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+
+  @@id([ledgerId, sequence])
+  @@unique([ledgerId, eventId])
+  @@map("trading_paper_perpetual_events")
 }
 
 model TradingPaperLedger {
