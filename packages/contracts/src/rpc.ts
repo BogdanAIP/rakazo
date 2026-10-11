@@ -122,6 +122,8 @@ import {
   TradingPaperJournalListOutputSchema,
   TradingPaperJournalReadInputSchema,
   TradingPaperJournalReadOutputSchema,
+  TradingPaperPerpetualJournalListOutputSchema,
+  TradingPaperPerpetualJournalReadOutputSchema,
 } from "./trading-paper-journal.js";
 import { TradingPaperMarketPreparationSchema } from "./trading-paper-workspace.js";
 import {
@@ -251,6 +253,11 @@ export const appContract = {
     journalRead: oc
       .input(TradingPaperJournalReadInputSchema)
       .output(TradingPaperJournalReadOutputSchema),
+    /** Futures is a tab of the same journal; both routes are read-only. */
+    perpetualJournalList: oc.input(z.object({})).output(TradingPaperPerpetualJournalListOutputSchema),
+    perpetualJournalRead: oc
+      .input(TradingPaperJournalReadInputSchema)
+      .output(TradingPaperPerpetualJournalReadOutputSchema),
     /** Public derivative context only; no collateral, leverage or order controls. */
     perpContext: oc.input(TradingPerpContextInputSchema).output(TradingPerpContextSchema),
   },
