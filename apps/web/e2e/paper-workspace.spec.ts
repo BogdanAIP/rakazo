@@ -250,7 +250,7 @@ test("PAPER spot and futures share one journal page with separate verified owner
   await expect(
     page.getByRole("tabpanel", { name: "Фьючерсы" }).getByText("1000 USDT"),
   ).toBeVisible();
-  await expect(page.getByLabel("Выберите журнал")).toHaveCount(0);
+  await expect(page.getByLabel("Выберите журнал")).toBeHidden();
 
   await page.getByRole("tab", { name: "Спот" }).click();
   await expect(page.getByLabel("Выберите журнал")).toHaveValue(spotId);
