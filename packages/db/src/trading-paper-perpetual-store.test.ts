@@ -210,7 +210,8 @@ describe("internal owner-scoped, hash-chained futures PAPER journal", () => {
     ).rejects.toBeInstanceOf(PerpetualPaperConflictError);
     expect(h.snapshot().events).toHaveLength(0);
     h.denyMember();
-    await expect(readVerifiedPerpetualPaperAccount(h.prisma, owner, ledgerId))
-      .rejects.toBeInstanceOf(PerpetualPaperIntegrityError);
+    await expect(
+      readVerifiedPerpetualPaperAccount(h.prisma, owner, ledgerId),
+    ).rejects.toBeInstanceOf(PerpetualPaperIntegrityError);
   });
 });
