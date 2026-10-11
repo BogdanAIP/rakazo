@@ -383,17 +383,19 @@ export async function commitPerpetualEngineWake(
               signed(beginning) -
               signed(state.realizedPnlQuote) -
               (signed(state.unrealizedPnlQuote) < 0n ? signed(state.unrealizedPnlQuote) : 0n);
+            const instrumentQuantity = state.openPositions
+              .filter((x) => x.instrument === p.instrument)
+              .reduce((sum, x) => sum + amount(x.quantityBase), 0n);
+            const registeredMaximum = amount(
+              effectiveConfig.instruments.find((i) => i.instrument === p.instrument)!.maximumBase,
+            );
             const lever = evaluatePaperLeverage({
               venue: "okx",
               instrument: p.instrument,
               marginMode: "cross",
               requestedLeverage: p.leverage,
               ownerMaxLeverage: ceiling,
-              existingQuantityBase: format(
-                state.openPositions
-                  .filter((x) => x.instrument === p.instrument)
-                  .reduce((sum, x) => sum + amount(x.quantityBase), 0n),
-              ),
+              existingQuantityBase: format(instrumentQuantity),
               proposedQuantityBase: p.quantityBase,
               limits: s.leverageLimits ?? null,
               now: now.toISOString(),
@@ -442,7 +444,8 @@ export async function commitPerpetualEngineWake(
             else if (
               amount(p.quantityBase) < amount(s.rules.minimumBase) ||
               amount(p.quantityBase) % amount(s.rules.lotIncrementBase) !== 0n ||
-              amount(p.quantityBase) > amount(s.rules.maxTierBase) ||
+              instrumentQuantity + amount(p.quantityBase) > amount(s.rules.maxTierBase) ||
+              instrumentQuantity + amount(p.quantityBase) > registeredMaximum ||
               (p.orderType === "limit" &&
                 (!entry || amount(entry) % amount(s.market.priceIncrement!) !== 0n))
             )

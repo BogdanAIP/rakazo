@@ -28,7 +28,10 @@ which is unsuitable for directly supplied OKX maintenance rates. Native
 account-wide hedge/net maintenance and liquidation are simulator semantics and
 do not reproduce all OKX cross or isolated-margin rules. Rakazo independently
 reserves gross initial margin and applies stop/daily-loss/exposure limits to
-both hedge legs. This reserve is a risk calculation, not another wallet.
+both hedge legs. New entries cannot exceed the registered first maintenance tier
+in gross BASE quantity, including opposite legs; crossing a tier with a fixed
+instrument maintenance rate would understate simulator requirements. This
+reserve is a risk calculation, not another wallet.
 
 Every wake cancels resting entries before fresh executable data, settles native
 marks/funding/protective exits, then validates any new entry against updated

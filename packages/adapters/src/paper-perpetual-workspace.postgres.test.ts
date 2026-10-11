@@ -41,6 +41,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
   let decision: PaperPerpetualDecision;
   let fundingNextAtOverride: string | null = null;
   let modelFails = false;
+  let tierMaximumBase = "100";
   let price = "100",
     depth = "100",
     funding: PaperPerpetualSnapshot["funding"] = [];
@@ -76,7 +77,23 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         marginMode: "cross",
         sourceId: "public-tier-fixture",
         observedAt: at,
-        tiers: [{ id: "1", minQuantityBase: "0", maxQuantityBase: "100", maxLeverage: 20 }],
+        tiers:
+          tierMaximumBase === "100"
+            ? [{ id: "1", minQuantityBase: "0", maxQuantityBase: "100", maxLeverage: 20 }]
+            : [
+                {
+                  id: "1",
+                  minQuantityBase: "0",
+                  maxQuantityBase: tierMaximumBase,
+                  maxLeverage: 20,
+                },
+                {
+                  id: "2",
+                  minQuantityBase: tierMaximumBase,
+                  maxQuantityBase: "100",
+                  maxLeverage: 20,
+                },
+              ],
       },
       book: {
         venue: "okx",
@@ -92,7 +109,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         basePerContract: "0.1",
         lotIncrementBase: "0.01",
         minimumBase: "0.01",
-        maxTierBase: "100",
+        maxTierBase: tierMaximumBase,
         maintenanceMarginBps: 50,
         maxLeverage: 20,
       },
@@ -145,6 +162,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     enqueue.mockClear();
     calls.length = 0;
     modelFails = false;
+    tierMaximumBase = "100";
     price = "100";
     depth = "100";
     funding = [];
@@ -571,6 +589,36 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id));
         expect((await state(id)).bookBalanceQuote).toBe("999.80000000");
         expect((await state(id)).fundingNetQuote).toBe("-0.10000000");
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "caps gross hedge quantity at the registered maintenance tier before native submission",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        tierMaximumBase = "1";
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine);
+        decision = { ...proposal("long"), leverage: 20, quantityBase: "1" };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await state(id)).openPositions).toHaveLength(1);
+        decision = { ...proposal("short"), leverage: 20, quantityBase: "1" };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
+          runtimeError: null,
+          lastDecision: { outcome: "denied_contract" },
+        });
+        expect((await state(id)).openPositions).toHaveLength(1);
+        expect((await state(id)).bookBalanceQuote).toBe("999.90000000");
       } finally {
         engine.dispose();
       }
