@@ -223,9 +223,11 @@ export function PaperPerpetualJournalPanel() {
             ))}
           </section>
           <p className="text-xs text-muted-foreground">
-            {strategyName[verified.state.strategy]} · Позиции: {verified.state.openPositions.length}{" · "}
-              Закрыто: {verified.state.closedPositions} · Ликвидации: {verified.state.liquidations}{" · "}
-              Обновлено: {dateTime(verified.updatedAt)}. Переоценка зависит от последних записанных
+            {strategyName[verified.state.strategy]} · Позиции: {verified.state.openPositions.length}
+            {" · "}
+            Закрыто: {verified.state.closedPositions} · Ликвидации: {verified.state.liquidations}
+            {" · "}
+            Обновлено: {dateTime(verified.updatedAt)}. Переоценка зависит от последних записанных
             котировок, не является непрерывным биржевым балансом.
           </p>
           <section className="rounded-2xl border border-border bg-card p-5">
@@ -295,7 +297,9 @@ export function PaperPerpetualJournalPanel() {
                       <tr key={event.eventId} className="border-b border-border/60">
                         <td className="whitespace-nowrap p-2">{dateTime(event.recordedAt)}</td>
                         <td className="p-2">{kindName[event.kind]}</td>
-                        <td className="p-2">{event.kind === "open" ? event.instrument : event.positionId}</td>
+                        <td className="p-2">
+                          {event.kind === "open" ? event.instrument : event.positionId}
+                        </td>
                         <td className="p-2">{event.kind === "open" ? event.side : "—"}</td>
                         <td className="p-2 tabular-nums">
                           {event.kind === "open"
