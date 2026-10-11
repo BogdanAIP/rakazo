@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
 import type { PerpetualPaperEvent } from "@rakazo/core";
+import { describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "./client.js";
 import {
   appendVerifiedPerpetualPaperEvent,
@@ -86,9 +86,11 @@ function harness() {
           ),
           create: vi.fn(async ({ data }: { data: Row }) => {
             if (
-              working.events.some((event) =>
-                event.ledgerId === data.ledgerId &&
-                (event.eventId === data.eventId || event.sequence === data.sequence))
+              working.events.some(
+                (event) =>
+                  event.ledgerId === data.ledgerId &&
+                  (event.eventId === data.eventId || event.sequence === data.sequence),
+              )
             ) {
               throw new Error("duplicate synthetic event");
             }
@@ -106,7 +108,9 @@ function harness() {
     prisma: { $transaction: transaction } as unknown as Pick<PrismaClient, "$transaction">,
     snapshot: () => structuredClone(state),
     tamper: (change: (current: Snapshot) => void) => change(state),
-    denyMember: () => { memberAccess = false; },
+    denyMember: () => {
+      memberAccess = false;
+    },
   };
 }
 const create = (h: ReturnType<typeof harness>) =>
@@ -120,8 +124,9 @@ describe("internal owner-scoped, hash-chained futures PAPER journal", () => {
   it("creates exactly 1000 virtual USDT and verifies empty ledger", async () => {
     const h = harness();
     expect((await create(h)).availableQuote).toBe("1000");
-    expect((await readVerifiedPerpetualPaperAccount(h.prisma, owner, ledgerId)).openPositions)
-      .toHaveLength(0);
+    expect(
+      (await readVerifiedPerpetualPaperAccount(h.prisma, owner, ledgerId)).openPositions,
+    ).toHaveLength(0);
     const row = h.snapshot().ledger;
     expect(row?.headSha256).toMatch(/^[0-9a-f]{64}$/);
     expect(row?.projectionSha256).toMatch(/^[0-9a-f]{64}$/);
@@ -135,8 +140,9 @@ describe("internal owner-scoped, hash-chained futures PAPER journal", () => {
     expect(opened.status).toBe("appended");
     expect(opened.state.availableQuote).toBe("949.9");
     expect(opened.state.openPositions).toHaveLength(1);
-    expect((await appendVerifiedPerpetualPaperEvent(h.prisma, owner, first)).status)
-      .toBe("duplicate");
+    expect((await appendVerifiedPerpetualPaperEvent(h.prisma, owner, first)).status).toBe(
+      "duplicate",
+    );
     const marked: PerpetualPaperEvent = {
       ledgerId,
       eventId: "event-2",
@@ -160,38 +166,48 @@ describe("internal owner-scoped, hash-chained futures PAPER journal", () => {
     });
     expect(finished.state.availableQuote).toBe("1004.8");
     expect(finished.state.closedPositions).toBe(1);
-    expect((await readVerifiedPerpetualPaperAccount(h.prisma, owner, ledgerId)).nextSequence)
-      .toBe(4);
+    expect((await readVerifiedPerpetualPaperAccount(h.prisma, owner, ledgerId)).nextSequence).toBe(
+      4,
+    );
     expect(h.snapshot().events).toHaveLength(3);
   });
 
   it("rejects stolen owner, hash tampering and conflicting duplicate IDs", async () => {
     const h = harness();
     await create(h);
-    await expect(readVerifiedPerpetualPaperAccount(
-      h.prisma, { spaceId: owner.spaceId, userId: "intruder" }, ledgerId,
-    )).rejects.toBeInstanceOf(PerpetualPaperIntegrityError);
+    await expect(
+      readVerifiedPerpetualPaperAccount(
+        h.prisma,
+        { spaceId: owner.spaceId, userId: "intruder" },
+        ledgerId,
+      ),
+    ).rejects.toBeInstanceOf(PerpetualPaperIntegrityError);
     await appendVerifiedPerpetualPaperEvent(h.prisma, owner, first);
-    await expect(appendVerifiedPerpetualPaperEvent(h.prisma, owner, {
-      ...first,
-      kind: "mark",
-      positionId: "btc-long",
-      markPriceQuote: "1",
-    } as PerpetualPaperEvent)).rejects.toBeInstanceOf(PerpetualPaperConflictError);
+    await expect(
+      appendVerifiedPerpetualPaperEvent(h.prisma, owner, {
+        ...first,
+        kind: "mark",
+        positionId: "btc-long",
+        markPriceQuote: "1",
+      } as PerpetualPaperEvent),
+    ).rejects.toBeInstanceOf(PerpetualPaperConflictError);
     h.tamper((data) => {
       if (data.events[0]) data.events[0].payloadSha256 = "0".repeat(64);
     });
-    await expect(readVerifiedPerpetualPaperAccount(h.prisma, owner, ledgerId))
-      .rejects.toBeInstanceOf(PerpetualPaperIntegrityError);
+    await expect(
+      readVerifiedPerpetualPaperAccount(h.prisma, owner, ledgerId),
+    ).rejects.toBeInstanceOf(PerpetualPaperIntegrityError);
   });
 
   it("rolls back an invalid event and denies inaccessible membership", async () => {
     const h = harness();
     await create(h);
-    await expect(appendVerifiedPerpetualPaperEvent(h.prisma, owner, {
-      ...first,
-      sequence: 2,
-    })).rejects.toBeInstanceOf(PerpetualPaperConflictError);
+    await expect(
+      appendVerifiedPerpetualPaperEvent(h.prisma, owner, {
+        ...first,
+        sequence: 2,
+      }),
+    ).rejects.toBeInstanceOf(PerpetualPaperConflictError);
     expect(h.snapshot().events).toHaveLength(0);
     h.denyMember();
     await expect(readVerifiedPerpetualPaperAccount(h.prisma, owner, ledgerId))
