@@ -1500,7 +1500,7 @@ model TradingPaperPerpetualLedger {
   updatedAt           DateTime @updatedAt
   events              TradingPaperPerpetualEvent[]
 
-  @@index([spaceId, ownerUserId, strategy])
+  @@index([spaceId, ownerUserId, strategy], map: "trading_paper_perpetual_ledgers_owner_strategy_idx")
   @@map("trading_paper_perpetual_ledgers")
 }
 
@@ -1519,7 +1519,7 @@ model TradingPaperPerpetualEvent {
   ledger         TradingPaperPerpetualLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
 
   @@id([ledgerId, sequence])
-  @@unique([ledgerId, eventId])
+  @@unique([ledgerId, eventId], map: "trading_paper_perpetual_events_idempotency_key")
   @@map("trading_paper_perpetual_events")
 }
 
