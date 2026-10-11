@@ -124,10 +124,7 @@ describe("isolated, exact, replayable perpetual PAPER ledger", () => {
     const state = replayPerpetualPaperLedger(
       account([
         tradeEvent(1, opened("p-one", "long")),
-        tradeEvent(
-          2,
-          opened("p-two", "short", { venue: "bingx", instrument: "ETH-USDT-SWAP" }),
-        ),
+        tradeEvent(2, opened("p-two", "short", { venue: "bingx", instrument: "ETH-USDT-SWAP" })),
       ]),
     );
     expect(state.openPositions[0]?.hedgeBucket).not.toBe(state.openPositions[1]?.hedgeBucket);
@@ -161,10 +158,7 @@ describe("isolated, exact, replayable perpetual PAPER ledger", () => {
     ).toThrow(/exposure limit/);
     expect(() =>
       replayPerpetualPaperLedger(
-        account(
-          [tradeEvent(1, opened("p-one", "long", { quantityBase: "8" }))],
-          "conservative",
-        ),
+        account([tradeEvent(1, opened("p-one", "long", { quantityBase: "8" }))], "conservative"),
       ),
     ).toThrow();
   });
@@ -183,11 +177,17 @@ describe("isolated, exact, replayable perpetual PAPER ledger", () => {
     expect(mark.openPositions[0]?.liquidationRequired).toBe(true);
     expect(() =>
       replayPerpetualPaperLedger(
-        account([tradeEvent(1, open), tradeEvent(2, closing("liquidate", "distressed", "60"))], "aggressive"),
+        account(
+          [tradeEvent(1, open), tradeEvent(2, closing("liquidate", "distressed", "60"))],
+          "aggressive",
+        ),
       ),
     ).toThrow(/preceding distressed mark/);
     const done = replayPerpetualPaperLedger(
-      account([...before, tradeEvent(3, closing("liquidate", "distressed", "59", "0.05"))], "aggressive"),
+      account(
+        [...before, tradeEvent(3, closing("liquidate", "distressed", "59", "0.05"))],
+        "aggressive",
+      ),
     );
     expect(done.openPositions).toHaveLength(0);
     expect(done.liquidations).toBe(1);
@@ -195,20 +195,24 @@ describe("isolated, exact, replayable perpetual PAPER ledger", () => {
     expect(Number(done.availableQuote)).toBeGreaterThanOrEqual(0);
     expect(done.markedEquityQuote).toBe(done.bookBalanceQuote);
     expect(done.availableQuote).toBe(done.bookBalanceQuote);
-    expect(Number(done.availableQuote) + Number(done.bankruptcyShortfallQuote))
-      .toBeGreaterThan(966);
+    expect(Number(done.availableQuote) + Number(done.bankruptcyShortfallQuote)).toBeGreaterThan(
+      966,
+    );
   });
 
   it("fails closed on cross-ledger events, duplicate conflicting IDs and sequence gaps", () => {
     const first = tradeEvent(1, opened("p-one", "long"));
+    expect(() => replayPerpetualPaperLedger(account([{ ...first, ledgerId: "other" }]))).toThrow(
+      /Cross-account/,
+    );
     expect(() =>
-      replayPerpetualPaperLedger(account([{ ...first, ledgerId: "other" }])),
-    ).toThrow(/Cross-account/);
-    expect(() =>
-      replayPerpetualPaperLedger(account([first, { ...first, quantityBase: "2" }])),
+      replayPerpetualPaperLedger(
+        account([first, tradeEvent(1, { kind: "mark", positionId: "p-one", markPriceQuote: "2" })]),
+      ),
     ).toThrow(/Conflicting/);
-    expect(() => replayPerpetualPaperLedger(account([tradeEvent(2, opened("x", "long"))])))
-      .toThrow(/sequence gap/);
+    expect(() => replayPerpetualPaperLedger(account([tradeEvent(2, opened("x", "long"))]))).toThrow(
+      /sequence gap/,
+    );
     expect(() =>
       replayPerpetualPaperLedger(account([first, tradeEvent(2, opened("p-one", "short"))])),
     ).toThrow(/Duplicate/);
@@ -231,7 +235,10 @@ describe("isolated, exact, replayable perpetual PAPER ledger", () => {
     const open = tradeEvent(1, opened("p-one", "long"));
     expect(() =>
       replayPerpetualPaperLedger(
-        account([open, { ...tradeEvent(2, closing("close", "p-one", "100")), recordedAt: openedAt }]),
+        account([
+          open,
+          { ...tradeEvent(2, closing("close", "p-one", "100")), recordedAt: openedAt },
+        ]),
       ),
     ).toThrow(/regression/);
   });
