@@ -225,6 +225,10 @@ export async function fetchOkxPublicSpotTickers(
     const row = rawTicker.parse(value);
     const epoch = Number(row.ts);
     if (!Number.isSafeInteger(epoch)) throw new Error("Invalid OKX ticker timestamp");
+    // An empty side is an unavailable book, not a usable execution price.
+    // Keep duplicate/time checks and reject other malformed positive quotes.
+    if ([row.bidPx, row.askPx].some((price) => price === "" || /^0(?:\.0+)?$/.test(price)))
+      continue;
     const observedAt = new Date(epoch).toISOString();
     tickers.push(
       TradingTickerSchema.parse({

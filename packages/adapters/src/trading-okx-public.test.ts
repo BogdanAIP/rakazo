@@ -159,7 +159,7 @@ describe("read-only OKX public catalog", () => {
     ).rejects.toThrow("spot markets only");
   });
 
-  it("rejects malformed known-market quotes and duplicate spot ticker observations", async () => {
+  it("excludes absent books and rejects duplicate spot ticker observations", async () => {
     const markets = (await run([wrap([spot()]), wrap([]), wrap([])])).markets;
     await expect(
       fetchOkxPublicSpotTickers(markets, {
@@ -177,7 +177,7 @@ describe("read-only OKX public catalog", () => {
           ]),
         ]).fetchImpl,
       }),
-    ).rejects.toThrow();
+    ).resolves.toEqual([]);
     const duplicate = {
       instType: "SPOT",
       instId: "SOL-USDT",
@@ -192,5 +192,56 @@ describe("read-only OKX public catalog", () => {
         fetchImpl: transport([wrap([duplicate, duplicate])]).fetchImpl,
       }),
     ).rejects.toThrow("Duplicate");
+  });
+});
+
+describe("OKX public book availability", () => {
+  it("keeps the selected market when another active instrument has an empty or zero book", async () => {
+    const markets = (
+      await run([
+        wrap([
+          spot(),
+          spot({ instId: "EMPTY-USDT", baseCcy: "EMPTY" }),
+          spot({ instId: "ZERO-USDT", baseCcy: "ZERO" }),
+        ]),
+        wrap([]),
+        wrap([]),
+      ])
+    ).markets;
+    const base = { instType: "SPOT", volCcy24h: "100", ts: String(now.getTime()) };
+    const result = await fetchOkxPublicSpotTickers(markets, {
+      now,
+      fetchImpl: transport([
+        wrap([
+          { ...base, instId: "EMPTY-USDT", bidPx: "", askPx: "" },
+          { ...base, instId: "ZERO-USDT", bidPx: "0", askPx: "0.00" },
+          { ...base, instId: "SOL-USDT", bidPx: "100", askPx: "100.1" },
+        ]),
+      ]).fetchImpl,
+    });
+    expect(result.map((ticker) => ticker.symbol)).toEqual(["SOL-USDT"]);
+  });
+
+  it("does not turn negative or malformed prices into an available quote", async () => {
+    const markets = (await run([wrap([spot()]), wrap([]), wrap([])])).markets;
+    for (const bidPx of ["-1", "not-a-price"]) {
+      await expect(
+        fetchOkxPublicSpotTickers(markets, {
+          now,
+          fetchImpl: transport([
+            wrap([
+              {
+                instType: "SPOT",
+                instId: "SOL-USDT",
+                bidPx,
+                askPx: "100.1",
+                volCcy24h: "100",
+                ts: String(now.getTime()),
+              },
+            ]),
+          ]).fetchImpl,
+        }),
+      ).rejects.toThrow();
+    }
   });
 });
