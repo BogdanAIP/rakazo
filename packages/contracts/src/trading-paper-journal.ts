@@ -119,23 +119,25 @@ const PerpetualJournalStateSchema = z.object({
   fundingNetQuote: PerpetualDecimalSchema,
   totalFeesQuote: PerpetualDecimalSchema,
   bankruptcyShortfallQuote: PerpetualDecimalSchema,
-  openPositions: z.array(
-    z.object({
-      positionId: PaperLedgerIdSchema,
-      hedgeBucket: z.string().min(1).max(500),
-      venue: PerpetualVenueSchema,
-      instrument: z.string().min(3).max(128),
-      side: PerpetualSideSchema,
-      leverage: z.number().int().min(1).max(100),
-      quantityBase: PerpetualDecimalSchema,
-      entryPriceQuote: PerpetualDecimalSchema,
-      markPriceQuote: PerpetualDecimalSchema,
-      isolatedMarginQuote: PerpetualDecimalSchema,
-      unrealizedPnlQuote: PerpetualDecimalSchema,
-      maintenanceMarginQuote: PerpetualDecimalSchema,
-      liquidationRequired: z.boolean(),
-    }),
-  ).max(100),
+  openPositions: z
+    .array(
+      z.object({
+        positionId: PaperLedgerIdSchema,
+        hedgeBucket: z.string().min(1).max(500),
+        venue: PerpetualVenueSchema,
+        instrument: z.string().min(3).max(128),
+        side: PerpetualSideSchema,
+        leverage: z.number().int().min(1).max(100),
+        quantityBase: PerpetualDecimalSchema,
+        entryPriceQuote: PerpetualDecimalSchema,
+        markPriceQuote: PerpetualDecimalSchema,
+        isolatedMarginQuote: PerpetualDecimalSchema,
+        unrealizedPnlQuote: PerpetualDecimalSchema,
+        maintenanceMarginQuote: PerpetualDecimalSchema,
+        liquidationRequired: z.boolean(),
+      }),
+    )
+    .max(100),
   closedPositions: z.number().int().nonnegative(),
   liquidations: z.number().int().nonnegative(),
   acceptedEvents: z.number().int().nonnegative(),
@@ -145,16 +147,18 @@ const PerpetualJournalStateSchema = z.object({
 
 export const TradingPaperPerpetualJournalListOutputSchema = z.object({
   mode: z.literal("paper_only"),
-  ledgers: z.array(
-    z.object({
-      ledgerId: PaperLedgerIdSchema,
-      strategy: PerpetualStrategySchema,
-      openedAt: IsoDate,
-      updatedAt: IsoDate,
-      quoteCurrency: z.literal("USDT"),
-      eventsCount: z.number().int().nonnegative(),
-    }),
-  ).max(50),
+  ledgers: z
+    .array(
+      z.object({
+        ledgerId: PaperLedgerIdSchema,
+        strategy: PerpetualStrategySchema,
+        openedAt: IsoDate,
+        updatedAt: IsoDate,
+        quoteCurrency: z.literal("USDT"),
+        eventsCount: z.number().int().nonnegative(),
+      }),
+    )
+    .max(50),
 });
 export type TradingPaperPerpetualJournalListOutput = z.infer<
   typeof TradingPaperPerpetualJournalListOutputSchema
