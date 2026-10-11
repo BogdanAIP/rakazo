@@ -198,7 +198,11 @@ export function PaperJournalPage() {
           </div>
         </header>
 
-        <div className="flex gap-2 border-b border-border pb-2" role="tablist" aria-label="Тип торговли">
+        <div
+          className="flex gap-2 border-b border-border pb-2"
+          role="tablist"
+          aria-label="Тип торговли"
+        >
           <button
             id="paper-journal-spot-tab"
             type="button"
@@ -206,7 +210,11 @@ export function PaperJournalPage() {
             aria-selected={activeTab === "spot"}
             aria-controls="paper-spot-controls-panel"
             onClick={() => setActiveTab("spot")}
-            className={`rounded-lg px-5 py-2 text-sm font-medium ${activeTab === "spot" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/60"}`}
+            className={`rounded-lg px-5 py-2 text-sm font-medium ${
+              activeTab === "spot"
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted/60"
+            }`}
           >
             Спот
           </button>
@@ -217,21 +225,30 @@ export function PaperJournalPage() {
             aria-selected={activeTab === "futures"}
             aria-controls="paper-journal-futures-panel"
             onClick={() => setActiveTab("futures")}
-            className={`rounded-lg px-5 py-2 text-sm font-medium ${activeTab === "futures" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/60"}`}
+            className={`rounded-lg px-5 py-2 text-sm font-medium ${
+              activeTab === "futures"
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted/60"
+            }`}
           >
             Фьючерсы
           </button>
         </div>
 
-        <div id="paper-spot-controls-panel" role="tabpanel" aria-labelledby="paper-journal-spot-tab" hidden={activeTab !== "spot"}>
+        <div
+          id="paper-spot-controls-panel"
+          role="tabpanel"
+          aria-labelledby="paper-journal-spot-tab"
+          hidden={activeTab !== "spot"}
+        >
           <PaperTradingControls
-          key={ledgerId ?? "create"}
-          ledgerId={ledgerId}
-          onCreated={(id) => {
-            setLedgerId(id);
-            setRefreshId((n) => n + 1);
-          }}
-          onChanged={() => setRefreshId((n) => n + 1)}
+            key={ledgerId ?? "create"}
+            ledgerId={ledgerId}
+            onCreated={(id) => {
+              setLedgerId(id);
+              setRefreshId((n) => n + 1);
+            }}
+            onChanged={() => setRefreshId((n) => n + 1)}
           />
         </div>
         <section
@@ -267,7 +284,9 @@ export function PaperJournalPage() {
             {error}
           </p>
         )}
-        {activeTab === "spot" && pending && <p className="text-muted-foreground">Проверка журнала…</p>}
+        {activeTab === "spot" && pending && (
+          <p className="text-muted-foreground">Проверка журнала…</p>
+        )}
         {activeTab === "spot" && journal?.status === "integrity_blocked" && (
           <p role="alert" className="rounded-xl border border-destructive p-5">
             Проверка целостности журнала не пройдена. Баланс, позиции и история скрыты. Никаких
