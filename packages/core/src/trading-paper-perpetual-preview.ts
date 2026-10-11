@@ -1,9 +1,9 @@
 import {
   getPaperExperimentPreset,
-  paperExperimentHedgeBucket,
   type PaperExperimentStrategy,
   type PaperExperimentVenue,
   type PaperHedgeSide,
+  paperExperimentHedgeBucket,
 } from "./trading-paper-experiments.js";
 
 /**
@@ -27,7 +27,7 @@ function fmt(value: bigint): string {
   const sign = value < 0n ? "-" : "";
   const abs = value < 0n ? -value : value;
   const frac = (abs % SCALE).toString().padStart(8, "0").replace(/0+$/, "");
-  return sign + (abs / SCALE).toString() + (frac ? "." + frac : "");
+  return sign + (abs / SCALE).toString() + (frac ? `.${frac}` : "");
 }
 function ceil(a: bigint, b: bigint): bigint {
   if (a < 0n || b <= 0n) throw new Error("Invalid unsigned PAPER division");
@@ -105,13 +105,20 @@ export type PaperPerpetualProposal =
 export function previewPaperPerpetualProposal(
   input: PaperPerpetualProposalInput,
 ): PaperPerpetualProposal {
-  const deny = (reason: Extract<PaperPerpetualProposal, { status: "deny" }>["reason"]) =>
-    ({ status: "deny" as const, mode: "paper_only" as const, reason });
+  const deny = (reason: Extract<PaperPerpetualProposal, { status: "deny" }>["reason"]) => ({
+    status: "deny" as const,
+    mode: "paper_only" as const,
+    reason,
+  });
   const positionBucket = paperExperimentHedgeBucket(input);
   if (!positionBucket) return deny("unsupported_market");
   const preset = getPaperExperimentPreset(input.strategy);
-  if (!Number.isSafeInteger(input.leverage) || input.leverage < 1 ||
-      input.leverage > preset.maxLeverage) return deny("leverage_exceeded");
+  if (
+    !Number.isSafeInteger(input.leverage) ||
+    input.leverage < 1 ||
+    input.leverage > preset.maxLeverage
+  )
+    return deny("leverage_exceeded");
   try {
     const fee = checkedBps(input.assumedFeeBpsPerSide, 1000);
     const slippage = checkedBps(input.assumedSlippageBpsPerSide, 1000);
@@ -129,25 +136,30 @@ export function previewPaperPerpetualProposal(
     const dailyCap = exact(preset.maxDailyLossQuote);
     const openCap = exact(preset.maxOpenRiskQuote);
     const exposureCap = exact(preset.maxTotalExposureQuote);
-    if ([qty, entry, stop, target, available].some((v) => v === 0n) ||
-        !Number.isSafeInteger(input.portfolio.openPositions) ||
-        input.portfolio.openPositions < 0) return deny("invalid_input");
+    if (
+      [qty, entry, stop, target, available].some((v) => v === 0n) ||
+      !Number.isSafeInteger(input.portfolio.openPositions) ||
+      input.portfolio.openPositions < 0
+    )
+      return deny("invalid_input");
     if (input.portfolio.openPositions >= preset.maxConcurrentPositions) {
       return deny("position_count_exceeded");
     }
-    if (input.side === "long"
-      ? (stop >= entry || target <= entry)
-      : (stop <= entry || target >= entry)) return deny("invalid_exit_prices");
+    if (input.side === "long" ? stop >= entry || target <= entry : stop <= entry || target >= entry)
+      return deny("invalid_exit_prices");
 
     // Adverse simulated prices including bounded entry/stop slippage.
-    const effectiveEntry = input.side === "long"
-      ? ceil(entry * (BPS + slippage), BPS)
-      : (entry * (BPS - slippage)) / BPS;
-    const effectiveStop = input.side === "long"
-      ? (stop * (BPS - slippage)) / BPS
-      : ceil(stop * (BPS + slippage), BPS);
-    if (effectiveEntry === 0n || effectiveStop === 0n ||
-        (input.side === "long" ? effectiveStop >= effectiveEntry : effectiveStop <= effectiveEntry)) {
+    const effectiveEntry =
+      input.side === "long"
+        ? ceil(entry * (BPS + slippage), BPS)
+        : (entry * (BPS - slippage)) / BPS;
+    const effectiveStop =
+      input.side === "long" ? (stop * (BPS - slippage)) / BPS : ceil(stop * (BPS + slippage), BPS);
+    if (
+      effectiveEntry === 0n ||
+      effectiveStop === 0n ||
+      (input.side === "long" ? effectiveStop >= effectiveEntry : effectiveStop <= effectiveEntry)
+    ) {
       return deny("invalid_exit_prices");
     }
     const notional = ceil(qty * effectiveEntry, SCALE);
@@ -155,9 +167,8 @@ export function previewPaperPerpetualProposal(
     const margin = ceil(notional, BigInt(input.leverage));
     const entryFee = ceil(notional * fee, BPS);
     const stopFee = ceil(closeNotional * fee, BPS);
-    const adverseDifference = input.side === "long"
-      ? effectiveEntry - effectiveStop
-      : effectiveStop - effectiveEntry;
+    const adverseDifference =
+      input.side === "long" ? effectiveEntry - effectiveStop : effectiveStop - effectiveEntry;
     const priceLoss = ceil(qty * adverseDifference, SCALE);
     const stopRisk = priceLoss + entryFee + stopFee;
     const maintenance = ceil((notional > closeNotional ? notional : closeNotional) * mmr, BPS);
@@ -168,8 +179,12 @@ export function previewPaperPerpetualProposal(
     if (leftAtStop <= maintenance) return deny("liquidation_before_stop");
     if (margin + entryFee > available) return deny("insufficient_margin");
     if (openNotional + notional > exposureCap) return deny("notional_exceeded");
-    if (dailyLoss >= dailyCap || stopRisk > min(perIdeaCap, dailyCap - dailyLoss) ||
-        openRisk + stopRisk > openCap) return deny("risk_budget_exceeded");
+    if (
+      dailyLoss >= dailyCap ||
+      stopRisk > min(perIdeaCap, dailyCap - dailyLoss) ||
+      openRisk + stopRisk > openCap
+    )
+      return deny("risk_budget_exceeded");
 
     const favorable = input.side === "long" ? target - effectiveEntry : effectiveEntry - target;
     if (favorable <= 0n) return deny("invalid_exit_prices");
