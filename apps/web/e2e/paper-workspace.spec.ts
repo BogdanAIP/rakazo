@@ -127,3 +127,34 @@ test("owner creates and starts a virtual account, sees an audited fill and pause
   await expect(page.getByRole("cell", { name: "Покупка", exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "paper-fill-paused-journal");
 });
+
+test("PAPER exposes the shared Codex model picker before completing onboarding", async ({
+  page,
+}, testInfo) => {
+  await signup(page, `paper-models-${Date.now()}@rakazo.test`, "password12", "PAPER Models");
+  await page.waitForURL(/\/(onboarding|app)(?:\/|$)/);
+  await page.goto("/app/paper-journal");
+  await expect(page.getByRole("heading", { name: "Журнал PAPER-сделок" })).toBeVisible();
+  await page.getByRole("button", { name: "Модели", exact: true }).click();
+  await page.getByPlaceholder("Search providers").fill("OpenAI Codex");
+  await page.getByRole("button").filter({ hasText: "OpenAI Codex" }).first().click();
+  await page.getByRole("combobox", { name: "Model", exact: true }).click();
+  for (const model of [
+    "GPT-6.1 Sol",
+    "GPT-6 Astra",
+    "GPT-6 Sol",
+    "GPT-6 Luna",
+    "GPT-5.6 Sol",
+    "GPT-5.6 Terra",
+    "GPT-5.6 Luna",
+  ]) {
+    await expect(page.getByRole("option", { name: model, exact: true })).toBeAttached();
+  }
+  await page.getByRole("combobox", { name: "Search models" }).fill("GPT-6.1 Sol");
+  await expect(page.getByRole("option", { name: "GPT-6.1 Sol", exact: true })).toBeVisible();
+  await captureScreenshot(page, testInfo, "paper-codex-model-picker");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Close model settings", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Журнал PAPER-сделок" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Создать счёт", exact: true })).toBeVisible();
+});
