@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import {
-  replayPerpetualPaperLedger,
   type PerpetualPaperEvent,
   type PerpetualPaperLedgerInput,
   type PerpetualPaperLedgerState,
+  replayPerpetualPaperLedger,
 } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
@@ -34,15 +34,26 @@ function canonical(value: unknown): unknown {
   if (value !== null && typeof value === "object") {
     const record = value as Record<string, unknown>;
     return Object.fromEntries(
-      Object.keys(record).sort().map((key) => [key, canonical(record[key])]),
+      Object.keys(record)
+        .sort()
+        .map((key) => [key, canonical(record[key])]),
     );
   }
   return value;
 }
 const genesis = (input: PerpetualPaperLedgerInput, owner: Owner): string =>
-  sha(JSON.stringify([VERSION, owner.spaceId, owner.userId, input.ledgerId, input.strategy, input.openedAt, input.initialBalanceQuote]));
-const link = (previous: string, digest: string): string =>
-  sha(JSON.stringify([previous, digest]));
+  sha(
+    JSON.stringify([
+      VERSION,
+      owner.spaceId,
+      owner.userId,
+      input.ledgerId,
+      input.strategy,
+      input.openedAt,
+      input.initialBalanceQuote,
+    ]),
+  );
+const link = (previous: string, digest: string): string => sha(JSON.stringify([previous, digest]));
 
 function normalize(event: PerpetualPaperEvent): PerpetualPaperEvent {
   const base = {
@@ -67,7 +78,12 @@ function normalize(event: PerpetualPaperEvent): PerpetualPaperEvent {
         maintenanceMarginBps: event.maintenanceMarginBps,
       };
     case "mark":
-      return { ...base, kind: "mark", positionId: event.positionId, markPriceQuote: event.markPriceQuote };
+      return {
+        ...base,
+        kind: "mark",
+        positionId: event.positionId,
+        markPriceQuote: event.markPriceQuote,
+      };
     case "funding":
       return {
         ...base,
@@ -219,10 +235,9 @@ export async function readVerifiedPerpetualPaperAccount(
   ledgerId: string,
 ): Promise<PerpetualPaperLedgerState> {
   return withTransactionRetry(() =>
-    prisma.$transaction(
-      async (tx) => (await recover(tx, owner, ledgerId)).state,
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    ),
+    prisma.$transaction(async (tx) => (await recover(tx, owner, ledgerId)).state, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    }),
   );
 }
 
