@@ -21,6 +21,7 @@ const fixture: PaperPerpetualProposalInput = {
     openNotionalQuote: "0",
     markedEquityQuote: "1000",
     openStopRiskQuote: "0",
+    sameIdeaStopRiskQuote: "0",
     realizedLossTodayQuote: "0",
   },
   assumedFeeBpsPerSide: 10,
@@ -176,6 +177,51 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
     expectDenial(
       { portfolio: { ...fixture.portfolio, markedEquityQuote: "0" } },
       "portfolio_stress_exceeded",
+    );
+  });
+
+  it("combines all same-direction entries under the per-idea risk budget", () => {
+    expectDenial(
+      {
+        portfolio: {
+          ...fixture.portfolio,
+          openPositions: 1,
+          openNotionalQuote: "100",
+          openStopRiskQuote: "9.8",
+          sameIdeaStopRiskQuote: "9.8",
+        },
+      },
+      "risk_budget_exceeded",
+    );
+  });
+
+  it("a distinct opposing hedge has its own idea risk, but shares gross portfolio limits", () => {
+    const proposedHedge = previewPaperPerpetualProposal({
+      ...fixture,
+      side: "short",
+      stopPriceQuote: "105",
+      takeProfitPriceQuote: "90",
+      portfolio: {
+        ...fixture.portfolio,
+        openPositions: 1,
+        openNotionalQuote: "100",
+        openStopRiskQuote: "9.8",
+        sameIdeaStopRiskQuote: "0",
+      },
+    });
+    expect(proposedHedge.status).toBe("inert_preview");
+  });
+
+  it("rejects inconsistent same-idea risk greater than aggregate committed risk", () => {
+    expectDenial(
+      {
+        portfolio: {
+          ...fixture.portfolio,
+          openStopRiskQuote: "1",
+          sameIdeaStopRiskQuote: "2",
+        },
+      },
+      "invalid_input",
     );
   });
 
