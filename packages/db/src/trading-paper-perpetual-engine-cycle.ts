@@ -17,8 +17,8 @@ import {
   isFreshPaperObservation,
   paperPerpetualNotional as notional,
   observePaperRecoverySteps,
-  planPaperRecoverySteps,
   PAPER_OKX_LV1_FEES,
+  planPaperRecoverySteps,
   previewPaperPerpetualProposal,
   projectPerpetualEngineSnapshot,
 } from "@rakazo/core";
@@ -533,14 +533,15 @@ export async function commitPerpetualEngineWake(
             const stepConfirmation = existingAddition
               ? assessPaperRecoveryStructure(s.history, p.side).status === "confirmed_structure"
               : false;
-            const stageApproval = existingAddition && additionPlan
-              ? canConsumePaperRecoveryStep(
-                  additionPlan.recoverySteps,
-                  p.recoveryStepId,
-                  format(consumedRecovery),
-                  stepConfirmation,
-                )
-              : "missing";
+            const stageApproval =
+              existingAddition && additionPlan
+                ? canConsumePaperRecoveryStep(
+                    additionPlan.recoverySteps,
+                    p.recoveryStepId,
+                    format(consumedRecovery),
+                    stepConfirmation,
+                  )
+                : "missing";
             const risk = previewPaperPerpetualProposal({
               strategy: state.strategy,
               ledgerId: key.ledgerId,
@@ -605,8 +606,7 @@ export async function commitPerpetualEngineWake(
             let denied: string | null = null;
             if (!p.addToPositionId && proposedRecoverySteps === null)
               denied = "denied_recovery_plan_invalid";
-            else if (p.addToPositionId && !existingAddition)
-              denied = "denied_add_unknown";
+            else if (p.addToPositionId && !existingAddition) denied = "denied_add_unknown";
             else if (
               p.addToPositionId &&
               (!additionPlan ||
@@ -617,7 +617,11 @@ export async function commitPerpetualEngineWake(
                 additionPlan.takeProfitPriceQuote !== p.takeProfitPriceQuote)
             )
               denied = "denied_add_plan_mismatch";
-            else if (p.addToPositionId && additionPlan!.recoverySteps.length && stageApproval !== "ready")
+            else if (
+              p.addToPositionId &&
+              additionPlan!.recoverySteps.length &&
+              stageApproval !== "ready"
+            )
               denied = "denied_recovery_step_" + stageApproval;
             else if (
               p.addToPositionId &&

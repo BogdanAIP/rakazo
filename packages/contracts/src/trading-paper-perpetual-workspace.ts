@@ -13,11 +13,13 @@ const Positive = Decimal.refine((value) => /[1-9]/.test(value));
 export const PaperPerpetualStrategySchema = z.enum(["conservative", "moderate", "aggressive"]);
 const Instrument = z.string().regex(/^[A-Z0-9]{1,20}-USDT-SWAP$/);
 /** Two explicitly planned optional recovery steps; never executable orders. */
-export const PaperRecoveryStepSchema = z.object({
-  stepId: Id,
-  triggerPriceQuote: Positive,
-  allocationPercent: z.number().int().min(1).max(99),
-}).strict();
+export const PaperRecoveryStepSchema = z
+  .object({
+    stepId: Id,
+    triggerPriceQuote: Positive,
+    allocationPercent: z.number().int().min(1).max(99),
+  })
+  .strict();
 export const PaperPerpetualDecisionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("no_trade"), reason: z.string().trim().min(1).max(2000) }).strict(),
   z
@@ -48,17 +50,16 @@ export const PaperPerpetualDecisionSchema = z.discriminatedUnion("kind", [
       message: "Cannot scale in and rotate out in one proposal",
     })
     .refine(
-      (p) => !p.recoverySteps || (
-        !p.addToPositionId &&
-        p.recoverySteps[0]!.stepId !== p.recoverySteps[1]!.stepId &&
-        p.recoverySteps[0]!.allocationPercent + p.recoverySteps[1]!.allocationPercent === 100
-      ),
+      (p) =>
+        !p.recoverySteps ||
+        (!p.addToPositionId &&
+          p.recoverySteps[0]!.stepId !== p.recoverySteps[1]!.stepId &&
+          p.recoverySteps[0]!.allocationPercent + p.recoverySteps[1]!.allocationPercent === 100),
       { message: "Recovery plan must contain two distinct total-100% steps on first entry" },
     )
-    .refine(
-      (p) => !p.recoveryStepId || (Boolean(p.addToPositionId) && !p.recoverySteps),
-      { message: "A recovery step may only be consumed by an existing-position addition" },
-    ),
+    .refine((p) => !p.recoveryStepId || (Boolean(p.addToPositionId) && !p.recoverySteps), {
+      message: "A recovery step may only be consumed by an existing-position addition",
+    }),
   z
     .object({
       kind: z.literal("close"),
@@ -200,13 +201,20 @@ export const PaperPerpetualWorkspaceStatusSchema = z.object({
           positionId: Id,
           reservedNotionalQuote: Decimal,
           reservedStopRiskQuote: Decimal,
-          stages: z.array(z.object({
-            stepId: Id,
-            triggerPriceQuote: Positive,
-            maximumNotionalQuote: Decimal,
-            remainingNotionalQuote: Decimal,
-            activatedAt: IsoDate.nullable(),
-          }).strict()).max(2).optional(),
+          stages: z
+            .array(
+              z
+                .object({
+                  stepId: Id,
+                  triggerPriceQuote: Positive,
+                  maximumNotionalQuote: Decimal,
+                  remainingNotionalQuote: Decimal,
+                  activatedAt: IsoDate.nullable(),
+                })
+                .strict(),
+            )
+            .max(2)
+            .optional(),
         })
         .strict(),
     )

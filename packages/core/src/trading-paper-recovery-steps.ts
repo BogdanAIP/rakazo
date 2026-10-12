@@ -1,6 +1,13 @@
-import { formatPaperPerpetualAmount, paperPerpetualAmount } from "./trading-paper-perpetual-ledger.js";
+import {
+  formatPaperPerpetualAmount,
+  paperPerpetualAmount,
+} from "./trading-paper-perpetual-ledger.js";
 
-export type RecoveryStepRequest = Readonly<{ stepId: string; triggerPriceQuote: string; allocationPercent: number }>;
+export type RecoveryStepRequest = Readonly<{
+  stepId: string;
+  triggerPriceQuote: string;
+  allocationPercent: number;
+}>;
 export type RecoveryBookedStep = {
   stepId: string;
   triggerPriceQuote: string;
@@ -29,11 +36,8 @@ export function planPaperRecoverySteps(
   if (steps[0]!.allocationPercent + steps[1]!.allocationPercent !== 100) return null;
   const a = paperPerpetualAmount(steps[0]!.triggerPriceQuote);
   const b = paperPerpetualAmount(steps[1]!.triggerPriceQuote);
-  if (
-    side === "long"
-      ? !(stop < b && b < a && a < entry)
-      : !(entry < a && a < b && b < stop)
-  ) return null;
+  if (side === "long" ? !(stop < b && b < a && a < entry) : !(entry < a && a < b && b < stop))
+    return null;
   const first = (reserved * BigInt(steps[0]!.allocationPercent)) / 100n;
   const second = reserved - first;
   if (first <= 0n || second <= 0n) return null;
@@ -65,7 +69,8 @@ export function observePaperRecoverySteps(
   steps: readonly RecoveryBookedStep[],
 ): RecoveryBookedStep[] {
   const price = paperPerpetualAmount(quote);
-  if (price <= 0n || !Number.isFinite(Date.parse(verifiedAt))) throw new Error("Untrusted PAPER mark");
+  if (price <= 0n || !Number.isFinite(Date.parse(verifiedAt)))
+    throw new Error("Untrusted PAPER mark");
   return steps.map((step) =>
     step.activatedAt ||
     (side === "long"
