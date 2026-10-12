@@ -428,6 +428,36 @@ export async function commitPerpetualPaperWake(
                       0n,
                     ),
                   ),
+                  openLongNotionalQuote: format(
+                    state.openPositions
+                      .filter((held) => held.side === "long")
+                      .reduce(
+                        (sum, held) =>
+                          sum +
+                          notional(
+                            amount(held.quantityBase),
+                            amount(held.markPriceQuote) > amount(held.entryPriceQuote)
+                              ? amount(held.markPriceQuote)
+                              : amount(held.entryPriceQuote),
+                          ),
+                        0n,
+                      ),
+                  ),
+                  openShortNotionalQuote: format(
+                    state.openPositions
+                      .filter((held) => held.side === "short")
+                      .reduce(
+                        (sum, held) =>
+                          sum +
+                          notional(
+                            amount(held.quantityBase),
+                            amount(held.markPriceQuote) > amount(held.entryPriceQuote)
+                              ? amount(held.markPriceQuote)
+                              : amount(held.entryPriceQuote),
+                          ),
+                        0n,
+                      ),
+                  ),
                   markedEquityQuote: state.markedEquityQuote,
                   // Legacy fallback has no persisted native high-watermark replay.
                   // Keep initial equity as its conservative minimum peak estimate.
