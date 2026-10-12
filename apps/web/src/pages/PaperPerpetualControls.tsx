@@ -33,6 +33,7 @@ const outcomes: Record<string, string> = {
   no_trade: "Без сделки",
   reduce_submitted: "Частичное сокращение запрошено",
   denied_reduce: "Частичное сокращение отклонено",
+  denied_add_unreserved: "Доливка превышает заранее выделенный резерв",
   protective_stop_tightened: "Защитный стоп усилен",
   denied_stop_unknown: "Позиция или план защиты не найдены",
   denied_stop_not_tighter: "Отказ: изменение ослабляет защиту",
