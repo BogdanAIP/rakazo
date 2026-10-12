@@ -195,7 +195,7 @@ export const TradingPaperPerpetualJournalReadOutputSchema = z.discriminatedUnion
             recovered: z.number().int().nonnegative(),
             recoveryRatePercent: z
               .string()
-              .regex(/^\\d{1,3}\\.\\d{2}$/)
+              .regex(/^\d{1,3}\.\d{2}$/)
               .nullable(),
             completedLosses: z.number().int().nonnegative(),
             openUnderwater: z.number().int().nonnegative(),
