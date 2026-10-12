@@ -229,22 +229,47 @@ export async function commitPerpetualEngineWake(
               p.side === "long"
                 ? amount(s.markPriceQuote) >= amount(plan.takeProfitPriceQuote)
                 : amount(s.markPriceQuote) <= amount(plan.takeProfitPriceQuote);
-            if (
+            const fullExit =
               stop ||
               target ||
               control.closeAll ||
               (active &&
                 key.stage === "research" &&
                 decision.kind === "close" &&
-                decision.positionId === p.positionId)
-            )
+                decision.positionId === p.positionId);
+            const partialExit =
+              active &&
+              key.stage === "research" &&
+              decision.kind === "reduce" &&
+              decision.positionId === p.positionId;
+            let exitQuantity: string | null = fullExit ? p.quantityBase : null;
+            if (!fullExit && partialExit && decision.kind === "reduce") {
+              const requested = amount(decision.quantityBase);
+              const held = amount(p.quantityBase);
+              const lot = amount(s.rules.lotIncrementBase);
+              const remainder = held - requested;
+              // No reverse trade, extra exposure or stranded sub-minimum dust.
+              if (
+                requested === 0n ||
+                requested > held ||
+                lot === 0n ||
+                requested % lot !== 0n ||
+                (remainder > 0n && remainder < amount(s.rules.minimumBase))
+              ) {
+                outcome = "denied_reduce";
+              } else {
+                exitQuantity = decision.quantityBase;
+                outcome = "reduce_submitted";
+              }
+            }
+            if (exitQuantity)
               batch.commands.push({
                 kind: "order",
                 orderId: prefix + ":exit:" + batch.commands.length,
                 positionId: p.positionId,
                 instrument: p.instrument,
                 action: p.side === "long" ? "sell" : "buy",
-                quantityBase: p.quantityBase,
+                quantityBase: exitQuantity,
                 reduceOnly: true,
                 orderType: "market",
                 limitPriceQuote: null,
