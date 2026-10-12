@@ -141,6 +141,18 @@ export function PaperPerpetualComparison({
                       0n,
                     ),
                   )}
+                  {(workspace.recoveryReservations ?? []).flatMap((reservation) =>
+                    (reservation.stages ?? []).map((step) => (
+                      <div
+                        className="text-xs text-muted-foreground"
+                        key={reservation.positionId + ":" + step.stepId}
+                      >
+                        {step.stepId}: уровень {step.triggerPriceQuote}, осталось{" "}
+                        {step.remainingNotionalQuote} USDT —{" "}
+                        {step.activatedAt ? "достигнут, ожидает подтверждения" : "ожидает уровня"}
+                      </div>
+                    )),
+                  )}
                 </td>
                 <td className="p-2">
                   {workspace.sessionStatus === "active"
