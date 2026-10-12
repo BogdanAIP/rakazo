@@ -9,11 +9,15 @@ import { PaperPerpetualDecisionSchema, PaperPerpetualSnapshotSchema } from "@rak
 import {
   paperPerpetualAmount as amount,
   assessPaperRecoveryStructure,
+  canConsumePaperRecoveryStep,
+  consumePaperRecoveryStep,
   evaluatePaperLeverage,
   formatPaperPerpetualAmount as format,
   getPaperExperimentPreset,
   isFreshPaperObservation,
   paperPerpetualNotional as notional,
+  observePaperRecoverySteps,
+  planPaperRecoverySteps,
   PAPER_OKX_LV1_FEES,
   previewPaperPerpetualProposal,
   projectPerpetualEngineSnapshot,
@@ -341,6 +345,20 @@ export async function commitPerpetualEngineWake(
             !isFreshPaperObservation(snapshot.fetchedAt, now.toISOString())
           )
             throw new Error("Execution observation expired during native preparation");
+        // Pre-booked triggers are observed against authenticated public marks.
+        // They are NOT executable orders. A later independent decision is mandatory.
+        for (const plan of control.plans) {
+          const position = state.openPositions.find((x) => x.positionId === plan.positionId);
+          const mark = position ? snapshots.get(position.instrument) : null;
+          if (position && mark && plan.recoverySteps.length) {
+            plan.recoverySteps = observePaperRecoverySteps(
+              position.side,
+              mark.markPriceQuote,
+              now.toISOString(),
+              plan.recoverySteps,
+            );
+          }
+        }
         const beforeEntry = state;
         let accepted: ReturnType<typeof previewPaperPerpetualProposal> | null = null;
         let enteringPosition: string | null = null;
@@ -503,6 +521,26 @@ export async function commitPerpetualEngineWake(
                 ? sum + remainingRiskReserve(plan)
                 : sum;
             }, 0n);
+            const proposedRecoverySteps = p.recoverySteps
+              ? planPaperRecoverySteps(
+                  p.side,
+                  entry ?? "0",
+                  p.stopPriceQuote,
+                  format(newRecovery),
+                  p.recoverySteps,
+                )
+              : [];
+            const stepConfirmation = existingAddition
+              ? assessPaperRecoveryStructure(s.history, p.side).status === "confirmed_structure"
+              : false;
+            const stageApproval = existingAddition && additionPlan
+              ? canConsumePaperRecoveryStep(
+                  additionPlan.recoverySteps,
+                  p.recoveryStepId,
+                  format(consumedRecovery),
+                  stepConfirmation,
+                )
+              : "missing";
             const risk = previewPaperPerpetualProposal({
               strategy: state.strategy,
               ledgerId: key.ledgerId,
@@ -565,7 +603,10 @@ export async function commitPerpetualEngineWake(
               maintenanceMarginBps: s.rules.maintenanceMarginBps,
             });
             let denied: string | null = null;
-            if (p.addToPositionId && !existingAddition) denied = "denied_add_unknown";
+            if (!p.addToPositionId && proposedRecoverySteps === null)
+              denied = "denied_recovery_plan_invalid";
+            else if (p.addToPositionId && !existingAddition)
+              denied = "denied_add_unknown";
             else if (
               p.addToPositionId &&
               (!additionPlan ||
@@ -576,6 +617,8 @@ export async function commitPerpetualEngineWake(
                 additionPlan.takeProfitPriceQuote !== p.takeProfitPriceQuote)
             )
               denied = "denied_add_plan_mismatch";
+            else if (p.addToPositionId && additionPlan!.recoverySteps.length && stageApproval !== "ready")
+              denied = "denied_recovery_step_" + stageApproval;
             else if (
               p.addToPositionId &&
               consumedRecovery > amount(additionPlan!.recoveryReserveQuote)
@@ -690,6 +733,13 @@ export async function commitPerpetualEngineWake(
                 );
                 const initial = amount(plan.recoveryReserveQuote);
                 const actuallyConsumed = consumed < initial ? consumed : initial;
+                if (plan.recoverySteps.length && order.proposal.recoveryStepId) {
+                  plan.recoverySteps = consumePaperRecoveryStep(
+                    plan.recoverySteps,
+                    order.proposal.recoveryStepId,
+                    format(actuallyConsumed),
+                  );
+                }
                 const heldRisk = amount(plan.recoveryReservedRiskQuote);
                 const usedRisk = initial > 0n ? ceil(heldRisk * actuallyConsumed, initial) : 0n;
                 plan.recoveryReserveQuote = format(initial - actuallyConsumed);
@@ -713,6 +763,32 @@ export async function commitPerpetualEngineWake(
                       amount(order.proposal.quantityBase),
                     ),
                 );
+                if (order.proposal.recoverySteps) {
+                  const part = planPaperRecoverySteps(
+                    order.proposal.side,
+                    accepted.effectiveEntryQuote,
+                    order.proposal.stopPriceQuote,
+                    format(
+                      ceil(
+                        amount(accepted.plannedRecoveryNotionalQuote) * filled,
+                        amount(order.proposal.quantityBase),
+                      ),
+                    ),
+                    order.proposal.recoverySteps,
+                  );
+                  if (!part) throw new Error("Committed PAPER recovery plan became invalid");
+                  for (const step of part) {
+                    const held = plan.recoverySteps.find((x) => x.stepId === step.stepId);
+                    if (!held || held.triggerPriceQuote !== step.triggerPriceQuote)
+                      throw new Error("Changed recovery step during partial initial fill");
+                    held.maximumNotionalQuote = format(
+                      amount(held.maximumNotionalQuote) + amount(step.maximumNotionalQuote),
+                    );
+                    held.remainingNotionalQuote = format(
+                      amount(held.remainingNotionalQuote) + amount(step.remainingNotionalQuote),
+                    );
+                  }
+                }
               }
             } else {
               control.plans.push({
@@ -732,6 +808,20 @@ export async function commitPerpetualEngineWake(
                     amount(order.proposal.quantityBase),
                   ),
                 ),
+                recoverySteps: order.proposal.recoverySteps
+                  ? (planPaperRecoverySteps(
+                      order.proposal.side,
+                      accepted.effectiveEntryQuote,
+                      order.proposal.stopPriceQuote,
+                      format(
+                        ceil(
+                          amount(accepted.plannedRecoveryNotionalQuote) * filled,
+                          amount(order.proposal.quantityBase),
+                        ),
+                      ),
+                      order.proposal.recoverySteps,
+                    ) ?? [])
+                  : [],
                 fundingThrough: now.toISOString(),
               });
             }
