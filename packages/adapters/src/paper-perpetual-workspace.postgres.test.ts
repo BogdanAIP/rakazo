@@ -485,7 +485,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         positions = (await state(id)).openPositions;
         expect(positions).toHaveLength(1);
         expect(positions[0]!.positionId).toBe(originalId);
-        expect(positions[0]!.quantityBase).toBe("1.50000000");
+        expect(Number(positions[0]!.quantityBase)).toBe(1.5);
 
         // The native worker must reject a scale-in that tries to change old protective exits.
         decision = {
@@ -496,7 +496,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           stopPriceQuote: "94",
         };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
-        expect((await state(id)).openPositions[0]!.quantityBase).toBe("1.50000000");
+        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1.5);
         expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
           lastDecision: { outcome: "denied_add_plan_mismatch" },
         });
