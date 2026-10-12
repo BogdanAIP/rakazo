@@ -425,6 +425,9 @@ export async function commitPerpetualEngineWake(
                 openPositions: state.openPositions.filter((x) => x.positionId !== enteringPosition)
                   .length,
                 openNotionalQuote: format(gross),
+                markedEquityQuote: format(
+                  signed(state.markedEquityQuote) > 0n ? signed(state.markedEquityQuote) : 0n,
+                ),
                 openStopRiskQuote: format(
                   control.plans.reduce((sum, x) => sum + amount(x.stopRiskQuote), 0n),
                 ),
