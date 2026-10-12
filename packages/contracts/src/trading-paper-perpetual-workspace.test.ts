@@ -39,6 +39,40 @@ describe("AI PAPER futures portfolio decision schema", () => {
     ).toBe(false);
   });
 
+  it("accepts a native position addition and a one-out-one-in hedge rotation", () => {
+    const proposal = {
+      kind: "proposal" as const,
+      instrument: "BTC-USDT-SWAP",
+      side: "long" as const,
+      leverage: 20,
+      quantityBase: "0.5",
+      orderType: "market" as const,
+      limitPriceQuote: null,
+      stopPriceQuote: "97",
+      takeProfitPriceQuote: "110",
+      rationale: "Verified PAPER market evidence",
+    };
+    expect(
+      PaperPerpetualDecisionSchema.parse({
+        ...proposal,
+        addToPositionId: "paper-position:old",
+      }),
+    ).toMatchObject({ addToPositionId: "paper-position:old" });
+    expect(
+      PaperPerpetualDecisionSchema.parse({
+        ...proposal,
+        replacePositionId: "paper-position:old",
+      }),
+    ).toMatchObject({ replacePositionId: "paper-position:old" });
+    expect(
+      PaperPerpetualDecisionSchema.safeParse({
+        ...proposal,
+        addToPositionId: "paper-position:old",
+        replacePositionId: "paper-position:other",
+      }).success,
+    ).toBe(false);
+  });
+
   it("preserves no_trade and full close decisions", () => {
     expect(PaperPerpetualDecisionSchema.parse({ kind: "no_trade", reason: "Нет сигнала" })).toMatchObject({
       kind: "no_trade",
