@@ -229,6 +229,7 @@ export function previewPaperPerpetualProposal(
       input.strategy === "conservative" ? 3500n : input.strategy === "moderate" ? 2500n : 2000n;
     const survivalReserveBps = 2500n;
     const stressMaintenanceBps = mmr > 200n ? mmr : 200n; // minimum 2% gross
+    const survivalReserve = ceil(markedEquity * survivalReserveBps, BPS);
     // Liquidation-avoidance is a PRE-ENTRY sizing objective, never a promise.
     // Even a full long collapse to zero and a 200% adverse short rally must
     // leave a reserve. Shorts can exceed +200%; actual venues may liquidate
@@ -242,7 +243,6 @@ export function previewPaperPerpetualProposal(
     if (catastropheResidual <= 0n) return deny("catastrophic_survival_exceeded");
     const shockLoss = ceil(projectedGross * shockBps, BPS);
     const maintenanceReserve = ceil(projectedGross * stressMaintenanceBps, BPS);
-    const survivalReserve = ceil(markedEquity * survivalReserveBps, BPS);
     if (markedEquity <= shockLoss + maintenanceReserve + survivalReserve)
       return deny("portfolio_stress_exceeded");
     if (
