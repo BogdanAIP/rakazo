@@ -62,6 +62,8 @@ export type PaperPerpetualProposalInput = Readonly<{
     /** Current marked equity from the native simulator, not model-supplied. */
     markedEquityQuote: string;
     openStopRiskQuote: string;
+    /** Stop risk already committed to the same instrument and side. */
+    sameIdeaStopRiskQuote: string;
     realizedLossTodayQuote: string;
   }>;
   assumedFeeBpsPerSide: number;
@@ -139,6 +141,7 @@ export function previewPaperPerpetualProposal(
     const openNotional = exact(input.portfolio.openNotionalQuote);
     const markedEquity = exact(input.portfolio.markedEquityQuote);
     const openRisk = exact(input.portfolio.openStopRiskQuote);
+    const sameIdeaRisk = exact(input.portfolio.sameIdeaStopRiskQuote);
     const dailyLoss = exact(input.portfolio.realizedLossTodayQuote);
     const perIdeaCap = exact(preset.maxPerIdeaRiskQuote);
     const dailyCap = exact(preset.maxDailyLossQuote);
@@ -190,6 +193,7 @@ export function previewPaperPerpetualProposal(
     // long + short notional: opposite hedge legs are NOT guaranteed to offset.
     // These are experimental buffers, not liquidation prices or authority
     // to widen/remove an existing stop.
+    if (sameIdeaRisk > openRisk) return deny("invalid_input");
     const shockBps =
       input.strategy === "conservative" ? 3500n : input.strategy === "moderate" ? 2500n : 2000n;
     const survivalReserveBps = 2500n;
@@ -202,6 +206,7 @@ export function previewPaperPerpetualProposal(
       return deny("portfolio_stress_exceeded");
     if (
       dailyLoss >= dailyCap ||
+      sameIdeaRisk + stopRisk > perIdeaCap ||
       stopRisk > min(perIdeaCap, dailyCap - dailyLoss) ||
       openRisk + stopRisk > openCap
     )
