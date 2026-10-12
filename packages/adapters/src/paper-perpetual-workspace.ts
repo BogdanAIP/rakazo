@@ -12,7 +12,11 @@ import type {
   PaperPerpetualSnapshot,
 } from "@rakazo/contracts";
 import { PaperPerpetualDecisionSchema } from "@rakazo/contracts";
-import { getPaperExperimentPreset, PAPER_OKX_LV1_FEES } from "@rakazo/core";
+import {
+  getPaperExperimentPreset,
+  PAPER_OKX_LV1_FEES,
+  summarizePaperVolatilityContext,
+} from "@rakazo/core";
 import type { PerpetualOwner, PrismaClient } from "@rakazo/db";
 import {
   cancelPerpetualEngineOrders,
@@ -228,7 +232,7 @@ export async function handlePerpetualPaperWake(
           "Long and short positions are independent hedge lots. Opposite positions never cancel automatically. quantityBase is BASE currency, not contract count. You may hedge via a new opposite-side proposal if gross risk and remaining position slots allow it; a full close can free a slot for a later hedge.",
           "For reduce, specify an existing positionId and a positive quantityBase no greater than the held quantity, aligned to the contract lot increment; protect remaining lots. This never opens a new position. Opposite-side same-instrument hedges are independent ideas, but same-instrument same-side scale-ins share ONE per-idea loss budget across all lots.",
           "Use a stop and a profitable take-profit. Respect leverage, per-idea loss, daily loss, total open stop risk and position count caps. Futures have NO legacy fixed USDT gross-exposure cap; a trusted equity-based portfolio stress guard checks the full gross exposure.",
-          "A volatile wick can stop out a good thesis; consider volatility, structure, funding and liquidity when placing stops. Do not remove or widen a protective stop simply to avoid taking a loss. Liquidation is never assumed impossible.",
+          "A volatile wick can stop out a good thesis; use the advisory ATR/wick context and public candles to assess stop distance. The diagnostic is a descriptive sample, not a trading signal, not a liquidation guarantee and not authority to delete or widen an existing protective exit.",
           "To scale into an existing position, use proposal.addToPositionId with a real matching position id, instrument, side, current leverage and EXACT existing stop/take-profit; each additional fill consumes the same whole-idea stop-loss risk. Do not average down solely because of a paper loss.",
           "To free a slot for a hedge or rotate an inferior position, use proposal.replacePositionId (NOT with addToPositionId). This requests closing that position first and entering the new proposal ONLY if the old position is fully closed and fresh independent risk checks still pass. A partial unfilled exit means no new entry. Never assume a replacement succeeded.",
           "Average daily return targets for a 14-day evaluation are research benchmarks, not per-session quotas. Long holds, short holds and no_trade are permitted; never trade to meet a target.",
@@ -240,6 +244,10 @@ export async function handlePerpetualPaperWake(
         skill: { provenance: prepared.provenance, content: prepared.skillContent },
         data: {
           snapshots,
+          volatilityContext: snapshots.map((row) => ({
+            instrument: row.market.symbol,
+            summary: summarizePaperVolatilityContext(row.history),
+          })),
           preset: {
             id: preset.id,
             initialBalanceQuote: preset.initialBalanceQuote,
