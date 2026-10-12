@@ -428,6 +428,7 @@ export async function commitPerpetualPaperWake(
                       0n,
                     ),
                   ),
+                  markedEquityQuote: state.markedEquityQuote,
                   openStopRiskQuote: format(
                     control.plans.reduce((sum, p) => sum + amount(p.stopRiskQuote), 0n),
                   ),
