@@ -680,6 +680,62 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
   );
 
   it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "reports an underwater position as recovered ONLY after net-positive native close",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine);
+        decision = { ...proposal("long"), leverage: 20, quantityBase: "1.00" };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await state(id)).openPositions).toHaveLength(1);
+
+        price = "98";
+        decision = { kind: "no_trade", reason: "Observe a losing position without buying the dip" };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const underwater = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
+        expect(underwater?.status).toBe("verified");
+        if (underwater?.status !== "verified") return;
+        expect(underwater.recovery).toMatchObject({
+          status: "verified",
+          scope: "position_only",
+          completedUnderwater: 0,
+          openUnderwater: 1,
+          recovered: 0,
+          recoveryRatePercent: null,
+        });
+
+        // Exits are the independent protective cycle, not an AI-generated profit claim.
+        price = "110";
+        modelFails = true;
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await state(id)).openPositions).toHaveLength(0);
+        const settled = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
+        expect(settled?.status).toBe("verified");
+        if (settled?.status !== "verified") return;
+        expect(settled.recovery).toMatchObject({
+          status: "verified",
+          scope: "position_only",
+          completedUnderwater: 1,
+          recovered: 1,
+          recoveryRatePercent: "100.00",
+          openUnderwater: 0,
+        });
+        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
+          "verified",
+        );
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
     "cancels native GTC entries on an owner leverage change before a crossed quote",
     async () => {
       const engine = new NautilusPaperEngine({
