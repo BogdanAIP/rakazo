@@ -20,6 +20,7 @@ const fixture: PaperPerpetualProposalInput = {
     openPositions: 0,
     openNotionalQuote: "0",
     markedEquityQuote: "1000",
+    peakEquityQuote: "1000",
     openStopRiskQuote: "0",
     sameIdeaStopRiskQuote: "0",
     realizedLossTodayQuote: "0",
@@ -95,17 +96,20 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
     expectDenial({ instrument: "BTC-USDT" }, "unsupported_market");
   });
 
-  it("rejects a stop beyond approximate maintenance collateral", () => {
-    expectDenial(
-      {
-        strategy: "aggressive",
-        leverage: 3,
-        quantityBase: "0.3",
-        stopPriceQuote: "65",
-        takeProfitPriceQuote: "120",
-      },
-      "liquidation_before_stop",
-    );
+  it("evaluates cross margin from account equity, not isolated order margin", () => {
+    const result = previewPaperPerpetualProposal({
+      ...fixture,
+      strategy: "aggressive",
+      leverage: 3,
+      quantityBase: "0.3",
+      stopPriceQuote: "65",
+      takeProfitPriceQuote: "120",
+    });
+    expect(result.status).toBe("inert_preview");
+    if (result.status !== "inert_preview") return;
+    expect(Number(result.collateralRemainingAtStopQuote)).toBeGreaterThan(980);
+    expect(Number(result.equityRemainingAfterStressQuote)).toBeGreaterThan(500);
+    expect(result.peakDrawdownPercent).toBe("0.00");
   });
 
   it("checks cash, exposure, risk, daily loss and position slots", () => {
@@ -220,6 +224,72 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
           openStopRiskQuote: "1",
           sameIdeaStopRiskQuote: "2",
         },
+      },
+      "invalid_input",
+    );
+  });
+
+  it("reduces fresh position risk after high-watermark drawdown in all strategies", () => {
+    for (const c of [
+      { strategy: "conservative", marked: "974", normal: "1000", largeQty: "0.5" },
+      { strategy: "moderate", marked: "949", normal: "1000", largeQty: "1.5" },
+      { strategy: "aggressive", marked: "919", normal: "1000", largeQty: "3" },
+    ] as const) {
+      const proposal = {
+        ...fixture,
+        strategy: c.strategy,
+        stopPriceQuote: "95",
+        takeProfitPriceQuote: "110",
+        quantityBase: c.largeQty,
+        portfolio: {
+          ...fixture.portfolio,
+          markedEquityQuote: c.marked,
+          peakEquityQuote: c.normal,
+        },
+      };
+      expect(previewPaperPerpetualProposal(proposal), c.strategy).toMatchObject({
+        status: "deny",
+        reason: "risk_budget_exceeded",
+      });
+      const unrestricted = previewPaperPerpetualProposal({
+        ...proposal,
+        portfolio: { ...fixture.portfolio },
+      });
+      expect(unrestricted.status, c.strategy).toBe("inert_preview");
+    }
+  });
+
+  it("freezes fresh entries at each profile high-watermark breaker", () => {
+    for (const c of [
+      { strategy: "conservative", marked: "950" },
+      { strategy: "moderate", marked: "900" },
+      { strategy: "aggressive", marked: "850" },
+    ] as const) {
+      const result = previewPaperPerpetualProposal({
+        ...fixture,
+        strategy: c.strategy,
+        portfolio: {
+          ...fixture.portfolio,
+          markedEquityQuote: c.marked,
+        },
+      });
+      expect(result, c.strategy).toMatchObject({
+        status: "deny",
+        reason: "drawdown_circuit_breaker",
+      });
+    }
+  });
+
+  it("uses the verified historical peak rather than only the initial 1000 USDT", () => {
+    expectDenial(
+      {
+        portfolio: { ...fixture.portfolio, markedEquityQuote: "1050", peakEquityQuote: "1200" },
+      },
+      "drawdown_circuit_breaker",
+    );
+    expectDenial(
+      {
+        portfolio: { ...fixture.portfolio, markedEquityQuote: "1100", peakEquityQuote: "1050" },
       },
       "invalid_input",
     );
