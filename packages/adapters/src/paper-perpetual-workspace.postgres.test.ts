@@ -567,6 +567,64 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
   );
 
   it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "tightens a protective stop without widening risk and replays the updated plan",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine);
+        decision = { ...proposal("long"), leverage: 20 };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const positionId = (await state(id)).openPositions[0]!.positionId;
+        const control = async () =>
+          parsePerpetualControl(
+            await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+              where: { ledgerId: id },
+            }),
+          );
+        const initialRisk = (await control()).plans[0]!.stopRiskQuote;
+        decision = {
+          kind: "tighten_stop",
+          positionId,
+          stopPriceQuote: "96.00",
+          reason: "Do not increase risk by widening the original stop",
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await control()).plans[0]!.stopPriceQuote).toBe("97");
+        expect((await control()).lastDecision?.outcome).toBe("denied_stop_not_tighter");
+
+        decision = {
+          kind: "tighten_stop",
+          positionId,
+          stopPriceQuote: "98.00",
+          reason: "Tighten protection after confirmation",
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const updated = await control();
+        expect(updated.plans[0]!.stopPriceQuote).toBe("98.00");
+        expect(updated.plans[0]!.stopRiskQuote).toBe(initialRisk);
+        expect(updated.lastDecision?.outcome).toBe("protective_stop_tightened");
+
+        engine.invalidate(id);
+        price = "97.50";
+        decision = { kind: "no_trade", reason: "Existing protective stop owns this exit" };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await state(id)).openPositions).toHaveLength(0);
+        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
+          "verified",
+        );
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
     "cancels native GTC entries on an owner leverage change before a crossed quote",
     async () => {
       const engine = new NautilusPaperEngine({
