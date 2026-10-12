@@ -423,6 +423,11 @@ export async function readOwnedPerpetualWorkspace(
                 takerFeeRate,
               }),
             ) ?? [],
+          recoveryReservations: control.plans.map((p) => ({
+            positionId: p.positionId,
+            reservedNotionalQuote: p.recoveryReserveQuote,
+            reservedStopRiskQuote: p.recoveryReservedRiskQuote,
+          })),
           pendingClose: control.closeAll,
           maxLeverage: control.maxLeverage ?? getPaperExperimentPreset(base.strategy).maxLeverage,
         };
