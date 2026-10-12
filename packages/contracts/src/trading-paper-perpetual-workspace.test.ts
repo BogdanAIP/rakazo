@@ -73,6 +73,26 @@ describe("AI PAPER futures portfolio decision schema", () => {
     ).toBe(false);
   });
 
+  it("accepts only an explicit price on a tighten-only stop intent", () => {
+    expect(
+      PaperPerpetualDecisionSchema.parse({
+        kind: "tighten_stop",
+        positionId: "paper-position:old",
+        stopPriceQuote: "98",
+        reason: "Confirmed volatility adjustment",
+      }),
+    ).toMatchObject({ kind: "tighten_stop", stopPriceQuote: "98" });
+    expect(
+      PaperPerpetualDecisionSchema.safeParse({
+        kind: "tighten_stop",
+        positionId: "paper-position:old",
+        stopPriceQuote: "98",
+        removeExistingStop: true,
+        reason: "Attempt to cancel protection",
+      }).success,
+    ).toBe(false);
+  });
+
   it("preserves no_trade and full close decisions", () => {
     expect(
       PaperPerpetualDecisionSchema.parse({ kind: "no_trade", reason: "Нет сигнала" }),
