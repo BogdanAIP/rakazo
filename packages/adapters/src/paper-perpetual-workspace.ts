@@ -235,6 +235,7 @@ export async function handlePerpetualPaperWake(
           "A volatile wick can stop out a good thesis; use the advisory ATR/wick context and public candles to assess stop distance. The diagnostic is a descriptive sample, not a trading signal, not a liquidation guarantee and not authority to delete or widen an existing protective exit.",
           "To scale into an existing position, use proposal.addToPositionId with a real matching position id, instrument, side, current leverage and EXACT existing stop/take-profit; each additional fill consumes the same whole-idea stop-loss risk. Do not average down solely because of a paper loss.",
           "To free a slot for a hedge or rotate an inferior position, use proposal.replacePositionId (NOT with addToPositionId). This requests closing that position first and entering the new proposal ONLY if the old position is fully closed and fresh independent risk checks still pass. A partial unfilled exit means no new entry. Never assume a replacement succeeded.",
+          "If verified market movement permits a strictly safer protective stop, choose tighten_stop with positionId and stopPriceQuote. For long the new stop must be HIGHER than the old one but still BELOW the current mark; for short LOWER than the old one but still ABOVE the current mark. Stops are never widened or removed, and an existing risk budget is not credited just because the stop moved.",
           "Average daily return targets for a 14-day evaluation are research benchmarks, not per-session quotas. Long holds, short holds and no_trade are permitted; never trade to meet a target.",
           "Stop loss must budget entry and exit at the highest nonnegative supplied maker/taker rate for that instrument and include the adverse slippage reserve. Fee rates are decimal fractions of filled notional, not margin; marketable limits can be taker. Round quantity DOWN to lotIncrementBase.",
           "This simulator uses account-wide margin. Reserve gross initial margin for BOTH hedge legs plus fees. While any position is open, use its existing leverage for all new entries; owner maxLeverage is a ceiling. Maintenance and funding consume equity.",
@@ -281,6 +282,7 @@ export async function handlePerpetualPaperWake(
       if (
         !deps.engine &&
         (decision.kind === "reduce" ||
+          decision.kind === "tighten_stop" ||
           (decision.kind === "proposal" &&
             (decision.addToPositionId || decision.replacePositionId)))
       ) {
