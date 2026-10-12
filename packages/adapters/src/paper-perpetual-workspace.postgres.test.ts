@@ -611,7 +611,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
 
         engine.invalidate(id);
         price = "97.50";
-        decision = { kind: "no_trade", reason: "Existing protective stop owns this exit" };
+        modelFails = true; // Protection must commit even if research fails after replay.
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         expect((await state(id)).openPositions).toHaveLength(0);
         expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
