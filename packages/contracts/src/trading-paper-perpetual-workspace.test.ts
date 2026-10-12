@@ -73,6 +73,55 @@ describe("AI PAPER futures portfolio decision schema", () => {
     ).toBe(false);
   });
 
+  it("validates two explicit pre-entry recovery stages and prevents relabeling an addition", () => {
+    const base = {
+      kind: "proposal",
+      instrument: "BTC-USDT-SWAP",
+      side: "long",
+      leverage: 10,
+      quantityBase: "0.2",
+      orderType: "market",
+      limitPriceQuote: null,
+      stopPriceQuote: "50",
+      takeProfitPriceQuote: "130",
+      rationale: "Plan margin and two optional recovery zones in advance",
+    };
+    const stages = [
+      { stepId: "test-1", triggerPriceQuote: "80", allocationPercent: 60 },
+      { stepId: "test-2", triggerPriceQuote: "60", allocationPercent: 40 },
+    ];
+    expect(PaperPerpetualDecisionSchema.parse({ ...base, recoverySteps: stages })).toMatchObject({
+      kind: "proposal",
+      recoverySteps: stages,
+    });
+    expect(
+      PaperPerpetualDecisionSchema.safeParse({
+        ...base,
+        recoverySteps: [{ ...stages[0]!, allocationPercent: 70 }, stages[1]],
+      }).success,
+    ).toBe(false);
+    expect(
+      PaperPerpetualDecisionSchema.safeParse({
+        ...base,
+        recoverySteps: [stages[0], { ...stages[1]!, stepId: "test-1" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      PaperPerpetualDecisionSchema.safeParse({
+        ...base,
+        addToPositionId: "paper-position:one",
+        recoverySteps: stages,
+      }).success,
+    ).toBe(false);
+    expect(
+      PaperPerpetualDecisionSchema.parse({
+        ...base,
+        addToPositionId: "paper-position:one",
+        recoveryStepId: "test-1",
+      }),
+    ).toMatchObject({ recoveryStepId: "test-1" });
+  });
+
   it("accepts only an explicit price on a tighten-only stop intent", () => {
     expect(
       PaperPerpetualDecisionSchema.parse({
