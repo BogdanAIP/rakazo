@@ -27,6 +27,8 @@ export const PaperPerpetualDecisionSchema = z.discriminatedUnion("kind", [
       takeProfitPriceQuote: Positive,
       /** Optional native-only scale-in: reuse the existing position and its exits. */
       addToPositionId: Id.optional(),
+      /** Optional quote-sized FUTURE addition budget. Executor enforces a safety floor. */
+      plannedRecoveryNotionalQuote: Decimal.optional(),
       /** Optional native-only rotation: close this old position before attempting entry. */
       replacePositionId: Id.optional(),
       rationale: z.string().trim().min(1).max(2000),
@@ -225,6 +227,10 @@ const Plan = z.object({
   stopPriceQuote: z.string(),
   takeProfitPriceQuote: z.string(),
   stopRiskQuote: z.string(),
+  /** Unspent, committed future add capacity (not an executable limit order). */
+  recoveryReserveQuote: Decimal.default("0"),
+  /** Pending stop-risk capacity attributable to the reserved adds. */
+  recoveryReservedRiskQuote: Decimal.default("0"),
   fundingThrough: IsoDate,
 });
 export const PerpetualControlSchema = z
