@@ -227,24 +227,22 @@ export function previewPaperPerpetualProposal(
     // Pretend reserved future adds eventually fill at an adverse comparable
     // price, WITHOUT making orders or treating these budgets as actual margin.
     const plannedRecoveryRisk =
-      ceil(newRecovery * adverseDifference, effectiveEntry) +
-      ceil(newRecovery * fee * 2n, BPS);
+      ceil(newRecovery * adverseDifference, effectiveEntry) + ceil(newRecovery * fee * 2n, BPS);
     const maintenance = ceil((notional > closeNotional ? notional : closeNotional) * mmr, BPS);
     // Account-wide cross margin: unused collateral is available as support.
     // Never treat initial margin of this isolated order as liquidation equity.
     // Conservative combined stop exposure from the entire account is used below.
-    const projectedGross =
-      openNotional + notional + reservedLong + reservedShort + newRecovery;
+    const projectedGross = openNotional + notional + reservedLong + reservedShort + newRecovery;
     const wholeStopRisk = openRisk + reservedRisk + stopRisk + plannedRecoveryRisk;
     const stopMaintenance = ceil(projectedGross * (mmr > 200n ? mmr : 200n), BPS);
     const stopEquityRemaining = markedEquity - wholeStopRisk;
     if (stopEquityRemaining <= stopMaintenance) return deny("liquidation_before_stop");
     // Reserve capacity BEFORE other independent ideas consume free collateral.
     if (
-      margin + entryFee +
-        ceil(reservedLong + reservedShort + newRecovery, BigInt(input.leverage)) >
+      margin + entryFee + ceil(reservedLong + reservedShort + newRecovery, BigInt(input.leverage)) >
       available
-    ) return deny("insufficient_margin");
+    )
+      return deny("insufficient_margin");
     // Futures exposure is bounded by live account equity under a simultaneous
     // adverse-move stress, not a legacy fixed SPOT notional cap. Count gross
     // long + short notional: opposite hedge legs are NOT guaranteed to offset.

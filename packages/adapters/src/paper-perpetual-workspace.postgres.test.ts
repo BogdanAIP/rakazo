@@ -767,14 +767,20 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
 
         // Model cannot consume more scale-in notional than planned for this position.
         decision = {
-          ...proposal("long"), leverage: 10, quantityBase: "0.75", addToPositionId: positionId,
+          ...proposal("long"),
+          leverage: 10,
+          quantityBase: "0.75",
+          addToPositionId: positionId,
         };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         expect((await readPlan()).lastDecision?.outcome).toBe("denied_add_unreserved");
         expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1);
 
         decision = {
-          ...proposal("long"), leverage: 10, quantityBase: "0.50", addToPositionId: positionId,
+          ...proposal("long"),
+          leverage: 10,
+          quantityBase: "0.50",
+          addToPositionId: positionId,
         };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1.5);

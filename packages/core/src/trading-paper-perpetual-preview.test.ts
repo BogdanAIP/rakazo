@@ -317,7 +317,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
         sameIdeaReservedRiskQuote: "8.7",
       },
     });
-    expect(decision).toMatchObject({status: "deny", reason: "risk_budget_exceeded"});
+    expect(decision).toMatchObject({ status: "deny", reason: "risk_budget_exceeded" });
   });
 
   it("fails closed if marked account equity is missing", () => {

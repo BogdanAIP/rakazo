@@ -171,11 +171,18 @@ export const PaperPerpetualWorkspaceStatusSchema = z.object({
     )
     .optional(),
   /** Capacity reserved inside the admission model, not wallet-locked cash. */
-  recoveryReservations: z.array(z.object({
-    positionId: Id,
-    reservedNotionalQuote: Decimal,
-    reservedStopRiskQuote: Decimal,
-  }).strict()).max(4).optional(),
+  recoveryReservations: z
+    .array(
+      z
+        .object({
+          positionId: Id,
+          reservedNotionalQuote: Decimal,
+          reservedStopRiskQuote: Decimal,
+        })
+        .strict(),
+    )
+    .max(4)
+    .optional(),
   pendingClose: z.boolean(),
   maxLeverage: z.number().int().positive().safe(),
 });

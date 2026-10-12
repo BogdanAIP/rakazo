@@ -462,9 +462,7 @@ export async function commitPerpetualEngineWake(
               limits: s.leverageLimits ?? null,
               now: now.toISOString(),
             });
-            const intendedNotional = entry
-              ? notional(amount(p.quantityBase), amount(entry))
-              : 0n;
+            const intendedNotional = entry ? notional(amount(p.quantityBase), amount(entry)) : 0n;
             // Every fresh idea receives at least 50% of its initial notional
             // in separately budgeted future scale-in capacity. No staged order
             // is submitted automatically; a later AI decision and fresh risk
@@ -496,7 +494,8 @@ export async function commitPerpetualEngineWake(
                 return held?.side === side ? sum + remainingReserve(plan) : sum;
               }, 0n);
             const recoveryRisk = control.plans.reduce(
-              (sum, plan) => sum + remainingRiskReserve(plan), 0n,
+              (sum, plan) => sum + remainingRiskReserve(plan),
+              0n,
             );
             const sameIdeaRecoveryRisk = control.plans.reduce((sum, plan) => {
               const held = state.openPositions.find((x) => x.positionId === plan.positionId);
@@ -570,7 +569,8 @@ export async function commitPerpetualEngineWake(
             else if (
               p.addToPositionId &&
               (!additionPlan || consumedRecovery > amount(additionPlan.recoveryReserveQuote))
-            ) denied = "denied_add_unreserved";
+            )
+              denied = "denied_add_unreserved";
             else if (
               p.addToPositionId &&
               (!additionPlan ||
@@ -587,7 +587,8 @@ export async function commitPerpetualEngineWake(
                 ? amount(s.markPriceQuote) < amount(existingAddition.entryPriceQuote)
                 : amount(s.markPriceQuote) > amount(existingAddition.entryPriceQuote)) &&
               assessPaperRecoveryStructure(s.history, p.side).status !== "confirmed_structure"
-            ) denied = "denied_add_falling_knife";
+            )
+              denied = "denied_add_falling_knife";
             else if (p.replacePositionId && stillOpenReplacement)
               denied = "denied_replace_not_closed";
             else if (Date.parse(order.expiresAt) <= clock) denied = "order_expired";
@@ -690,9 +691,7 @@ export async function commitPerpetualEngineWake(
                 const initial = amount(plan.recoveryReserveQuote);
                 const actuallyConsumed = consumed < initial ? consumed : initial;
                 const heldRisk = amount(plan.recoveryReservedRiskQuote);
-                const usedRisk = initial > 0n
-                  ? ceil(heldRisk * actuallyConsumed, initial)
-                  : 0n;
+                const usedRisk = initial > 0n ? ceil(heldRisk * actuallyConsumed, initial) : 0n;
                 plan.recoveryReserveQuote = format(initial - actuallyConsumed);
                 plan.recoveryReservedRiskQuote = format(
                   heldRisk > usedRisk ? heldRisk - usedRisk : 0n,
@@ -722,12 +721,16 @@ export async function commitPerpetualEngineWake(
                 takeProfitPriceQuote: order.proposal.takeProfitPriceQuote,
                 stopRiskQuote: format(risk),
                 recoveryReserveQuote: format(
-                  ceil(amount(accepted.plannedRecoveryNotionalQuote) * filled,
-                    amount(order.proposal.quantityBase)),
+                  ceil(
+                    amount(accepted.plannedRecoveryNotionalQuote) * filled,
+                    amount(order.proposal.quantityBase),
+                  ),
                 ),
                 recoveryReservedRiskQuote: format(
-                  ceil(amount(accepted.plannedRecoveryRiskQuote) * filled,
-                    amount(order.proposal.quantityBase)),
+                  ceil(
+                    amount(accepted.plannedRecoveryRiskQuote) * filled,
+                    amount(order.proposal.quantityBase),
+                  ),
                 ),
                 fundingThrough: now.toISOString(),
               });

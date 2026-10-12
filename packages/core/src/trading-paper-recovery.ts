@@ -62,7 +62,10 @@ export function summarizePaperPositionRecovery(transitions: readonly Transition[
   const episodes = new Map<string, PositionEpisode>();
   // GTC limit orders can fill many native batches after their submission.
   // Retain the historical, verified order-to-position link across replay.
-  const orders = new Map<string, Extract<PaperPerpetualEngineBatch["commands"][number], {kind: "order"}>>();
+  const orders = new Map<
+    string,
+    Extract<PaperPerpetualEngineBatch["commands"][number], { kind: "order" }>
+  >();
   try {
     for (const { input, output } of transitions) {
       for (const command of input.commands) {
