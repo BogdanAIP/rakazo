@@ -94,6 +94,7 @@ export function PaperPerpetualComparison({
               <th className="p-2">Результат с переоценкой, USDT</th>
               <th className="p-2">Закрыто / открыто</th>
               <th className="p-2">Recovery Rate*</th>
+              <th className="p-2">Резерв для доливок, USDT</th>
               <th className="p-2">Сессия</th>
             </tr>
           </thead>
@@ -133,6 +134,14 @@ export function PaperPerpetualComparison({
                       : `${journal.recovery.recoveryRatePercent}% (${journal.recovery.recovered}/${journal.recovery.completedUnderwater})`
                     : "—"}
                 </td>
+                <td className="p-2 tabular-nums">
+                  {formatPaperPerpetualAmount(
+                    (workspace.recoveryReservations ?? []).reduce(
+                      (sum, r) => sum + paperPerpetualAmount(r.reservedNotionalQuote),
+                      0n,
+                    ),
+                  )}
+                </td>
                 <td className="p-2">
                   {workspace.sessionStatus === "active"
                     ? "Входы разрешены"
@@ -147,6 +156,11 @@ export function PaperPerpetualComparison({
           </tbody>
         </table>
       </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Резерв для доливок — зарезервированная в проверке риска мощность будущих входов, а не
+        заблокированные биржей деньги и не автоматические ордера. Реальное исполнение требует
+        повторного допуска и подтверждения рыночной структуры.
+      </p>
       <p className="mt-3 text-xs text-muted-foreground">
         * Recovery Rate пока считается по завершённым нативным позициям: доливка и частичное
         сокращение одной позиции учитываются вместе, но отдельные хедж-позиции пока не объединяются
