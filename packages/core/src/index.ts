@@ -69,6 +69,7 @@ export * from "./trading-paper-perpetual-fees.js";
 export * from "./trading-paper-perpetual-ledger.js";
 export * from "./trading-paper-perpetual-matcher.js";
 export * from "./trading-paper-perpetual-preview.js";
+export * from "./trading-paper-recovery.js";
 export * from "./trading-paper-risk-state.js";
 export * from "./trading-paper-session-drain.js";
 export * from "./trading-paper-volatility-context.js";
