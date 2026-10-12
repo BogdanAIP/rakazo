@@ -467,6 +467,20 @@ export async function commitPerpetualEngineWake(
                 markedEquityQuote: format(
                   signed(state.markedEquityQuote) > 0n ? signed(state.markedEquityQuote) : 0n,
                 ),
+                peakEquityQuote: format(
+                  (prior?.transitions ?? []).reduce((peak, historical) => {
+                    const equity =
+                      signed(historical.output.balanceQuote) +
+                      historical.output.positions.reduce(
+                        (sum, held) => sum + signed(held.unrealizedPnlQuote),
+                        0n,
+                      );
+                    return equity > peak ? equity : peak;
+                  },
+                  signed(state.markedEquityQuote) > amount(preset.initialBalanceQuote)
+                    ? signed(state.markedEquityQuote)
+                    : amount(preset.initialBalanceQuote)),
+                ),
                 openStopRiskQuote: format(
                   control.plans.reduce((sum, x) => sum + amount(x.stopRiskQuote), 0n),
                 ),
