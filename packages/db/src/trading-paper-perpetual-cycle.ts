@@ -432,6 +432,14 @@ export async function commitPerpetualPaperWake(
                   openStopRiskQuote: format(
                     control.plans.reduce((sum, p) => sum + amount(p.stopRiskQuote), 0n),
                   ),
+                  sameIdeaStopRiskQuote: format(
+                    control.plans.reduce((sum, plan) => {
+                      const held = state.openPositions.find((pos) => pos.positionId === plan.positionId);
+                      return held?.instrument === proposal.instrument && held.side === proposal.side
+                        ? sum + amount(plan.stopRiskQuote)
+                        : sum;
+                    }, 0n),
+                  ),
                   realizedLossTodayQuote: format(lost > 0n ? lost : 0n),
                 },
                 assumedFeeBpsPerSide: 10,
