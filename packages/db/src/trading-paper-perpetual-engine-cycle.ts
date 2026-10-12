@@ -235,8 +235,9 @@ export async function commitPerpetualEngineWake(
               control.closeAll ||
               (active &&
                 key.stage === "research" &&
-                decision.kind === "close" &&
-                decision.positionId === p.positionId);
+                ((decision.kind === "close" && decision.positionId === p.positionId) ||
+                  (decision.kind === "proposal" &&
+                    decision.replacePositionId === p.positionId)));
             const partialExit =
               active &&
               key.stage === "research" &&
@@ -348,6 +349,10 @@ export async function commitPerpetualEngineWake(
           if (!active) control.orders = [];
           if (active && decision.kind === "proposal" && !control.orders.length) {
             if (!control.instruments.includes(decision.instrument)) outcome = "denied_market";
+            else if (
+              decision.replacePositionId &&
+              !old.state.openPositions.some((x) => x.positionId === decision.replacePositionId)
+            ) outcome = "denied_replace_unknown";
             else if (clock - tick.recordedAt.getTime() > 120000) outcome = "expired_research";
             else
               control.orders = [
@@ -369,7 +374,16 @@ export async function commitPerpetualEngineWake(
               p = order.proposal,
               s = snapshots.get(p.instrument);
             if (!s) throw new Error("Futures execution market missing");
-            enteringPosition = "paper-position:" + hash(order.orderId);
+            enteringPosition = p.addToPositionId ?? "paper-position:" + hash(order.orderId);
+            const existingAddition = p.addToPositionId
+              ? state.openPositions.find((x) => x.positionId === p.addToPositionId)
+              : undefined;
+            const additionPlan = existingAddition
+              ? control.plans.find((x) => x.positionId === existingAddition.positionId)
+              : undefined;
+            const stillOpenReplacement = p.replacePositionId
+              ? state.openPositions.some((x) => x.positionId === p.replacePositionId)
+              : false;
             const entry =
               p.orderType === "limit"
                 ? p.limitPriceQuote
@@ -472,7 +486,19 @@ export async function commitPerpetualEngineWake(
               maintenanceMarginBps: s.rules.maintenanceMarginBps,
             });
             let denied: string | null = null;
-            if (Date.parse(order.expiresAt) <= clock) denied = "order_expired";
+            if (p.addToPositionId && !existingAddition) denied = "denied_add_unknown";
+            else if (
+              p.addToPositionId &&
+              (!additionPlan ||
+                existingAddition?.instrument !== p.instrument ||
+                existingAddition?.side !== p.side ||
+                existingAddition?.leverage !== p.leverage ||
+                additionPlan.stopPriceQuote !== p.stopPriceQuote ||
+                additionPlan.takeProfitPriceQuote !== p.takeProfitPriceQuote)
+            ) denied = "denied_add_plan_mismatch";
+            else if (p.replacePositionId && stillOpenReplacement)
+              denied = "denied_replace_not_closed";
+            else if (Date.parse(order.expiresAt) <= clock) denied = "order_expired";
             else if (Date.parse(s.book.observedAt) < Date.parse(order.submittedAt))
               denied = "quote_before_submission";
             else if (!s.fundingNextAt || Date.parse(s.fundingNextAt) <= clock)
