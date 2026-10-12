@@ -136,6 +136,15 @@ export const PaperPerpetualWorkspaceStatusSchema = z.object({
       expiresAt: IsoDate,
     }),
   ),
+  executionFees: z
+    .array(
+      z.object({
+        instrument: Instrument,
+        makerFeeRate: z.string().regex(/^-?(?:0|[1-9]\d{0,15})(?:\.\d{1,8})?$/),
+        takerFeeRate: z.string().regex(/^-?(?:0|[1-9]\d{0,15})(?:\.\d{1,8})?$/),
+      }),
+    )
+    .optional(),
   pendingClose: z.boolean(),
   maxLeverage: z.number().int().positive().safe(),
 });

@@ -372,6 +372,9 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
     await page.getByRole("button", { name: "Проверить запуск фьючерсов" }).click();
     await expect(page.getByLabel("Проверка запуска фьючерсов")).toBeVisible();
     await expect(page.getByLabel("Проверка запуска фьючерсов")).toContainText(
+      "Тариф симуляции: maker 0,02%, taker 0,05%.",
+    );
+    await expect(page.getByLabel("Проверка запуска фьючерсов")).toContainText(
       "Исполнение по публичным bid/ask без дополнительного проскальзывания.",
     );
     expect(await db.prisma.tradingPaperPerpetualEvent.count({ where: { ledgerId } })).toBe(0);

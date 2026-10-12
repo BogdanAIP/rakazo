@@ -65,6 +65,7 @@ export * from "./trading-paper-experiments.js";
 export * from "./trading-paper-ledger.js";
 export * from "./trading-paper-leverage.js";
 export * from "./trading-paper-perpetual-engine-projection.js";
+export * from "./trading-paper-perpetual-fees.js";
 export * from "./trading-paper-perpetual-ledger.js";
 export * from "./trading-paper-perpetual-matcher.js";
 export * from "./trading-paper-perpetual-preview.js";

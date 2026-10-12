@@ -6,6 +6,7 @@ import {
   createDb,
   createOwnedPerpetualExperimentAccounts,
   readOwnedPerpetualPaperJournal,
+  readOwnedPerpetualWorkspace,
   recoverPerpetualEngineInTransaction,
 } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -198,6 +199,11 @@ suite("native futures simulator journal against PostgreSQL", () => {
     expect(journal?.status === "verified" && journal.state.engine?.id).toBe("nautilus");
     const committed = await read();
     expect(committed?.snapshot?.balanceQuote).toBe("999.80000000");
+    expect(await readOwnedPerpetualWorkspace(db.prisma, actor, ledgerId)).toMatchObject({
+      executionFees: [
+        { instrument: "BTC-USDT-SWAP", makerFeeRate: "0.001", takerFeeRate: "0.001" },
+      ],
+    });
     expect(committed?.snapshot?.positions).toHaveLength(2);
     expect(await db.prisma.tradingPaperPerpetualEvent.count({ where: { ledgerId } })).toBe(0);
     engine.invalidate(ledgerId);

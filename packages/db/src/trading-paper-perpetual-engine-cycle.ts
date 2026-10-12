@@ -13,6 +13,7 @@ import {
   getPaperExperimentPreset,
   isFreshPaperObservation,
   paperPerpetualNotional as notional,
+  PAPER_OKX_LV1_FEES,
   previewPaperPerpetualProposal,
   projectPerpetualEngineSnapshot,
 } from "@rakazo/core";
@@ -131,8 +132,7 @@ export async function commitPerpetualEngineWake(
             minimumBase: s.rules.minimumBase,
             maximumBase: s.rules.maxTierBase,
             maintenanceRate: format(BigInt(s.rules.maintenanceMarginBps) * 10000n),
-            makerFeeRate: "0.001",
-            takerFeeRate: "0.001",
+            ...PAPER_OKX_LV1_FEES,
           };
         };
         const config: PaperPerpetualEngineConfig = prior?.config ?? {
@@ -388,9 +388,15 @@ export async function commitPerpetualEngineWake(
             const instrumentQuantity = state.openPositions
               .filter((x) => x.instrument === p.instrument)
               .reduce((sum, x) => sum + amount(x.quantityBase), 0n);
-            const registeredMaximum = amount(
-              effectiveConfig.instruments.find((i) => i.instrument === p.instrument)!.maximumBase,
-            );
+            const registeredTerms = effectiveConfig.instruments.find(
+              (i) => i.instrument === p.instrument,
+            )!;
+            const registeredMaximum = amount(registeredTerms.maximumBase);
+            const highestFeeRate = [
+              signed(registeredTerms.makerFeeRate),
+              signed(registeredTerms.takerFeeRate),
+              0n,
+            ].reduce((max, value) => (value > max ? value : max));
             const lever = evaluatePaperLeverage({
               venue: "okx",
               instrument: p.instrument,
@@ -424,7 +430,8 @@ export async function commitPerpetualEngineWake(
                 ),
                 realizedLossTodayQuote: format(lost > 0n ? lost : 0n),
               },
-              assumedFeeBpsPerSide: 10,
+              // Budget both sides at the highest persisted native fee rate.
+              assumedFeeBpsPerSide: Number(ceil(highestFeeRate, 10000n)),
               assumedSlippageBpsPerSide: 10,
               maintenanceMarginBps: s.rules.maintenanceMarginBps,
             });

@@ -4,7 +4,7 @@ import type {
   PaperPerpetualWorkspaceStatus,
   PaperVenueLeverageLimits,
 } from "@rakazo/contracts";
-import { getPaperExperimentPreset } from "@rakazo/core";
+import { getPaperExperimentPreset, PAPER_OKX_LV1_FEES } from "@rakazo/core";
 import { Button } from "@rakazo/ui-web";
 import { useEffect, useState } from "react";
 import { rpc } from "../lib/rpc";
@@ -41,6 +41,24 @@ const outcomes: Record<string, string> = {
   expired_research: "Анализ устарел",
 };
 const dateTime = (iso: string) => new Date(iso).toLocaleString("ru-RU");
+function feeSummary(status: PaperPerpetualWorkspaceStatus | null, instruments: string[]) {
+  const fees = instruments.map(
+    (symbol) =>
+      status?.executionFees?.find((fee) => fee.instrument === symbol) ?? PAPER_OKX_LV1_FEES,
+  );
+  const rates = (key: "makerFeeRate" | "takerFeeRate") =>
+    [
+      ...new Set(
+        fees.map(
+          (fee) =>
+            (Number(fee[key]) * 100).toLocaleString("ru-RU", { maximumFractionDigits: 6 }) + "%",
+        ),
+      ),
+    ].join(" / ");
+  return (
+    "Тариф симуляции: maker " + rates("makerFeeRate") + ", taker " + rates("takerFeeRate") + "."
+  );
+}
 type Review = {
   preparation: Extract<PaperPerpetualPreparation, { status: "ready" }>;
   instruments: string[];
@@ -355,7 +373,7 @@ export function PaperPerpetualControls({
                     паузу.
                   </p>
                   <p className="text-sm">
-                    Комиссия PAPER: 0,1% за сторону. Исполнение по публичным bid/ask без
+                    {feeSummary(status, review.instruments)} Исполнение по публичным bid/ask без
                     дополнительного проскальзывания. Funding рассчитан по фактической опубликованной
                     ставке и последней наблюдаемой Mark-цене; это виртуальная оценка.
                   </p>

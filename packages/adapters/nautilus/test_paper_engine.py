@@ -76,6 +76,39 @@ class EngineTest(unittest.TestCase):
             finally:
                 replay.dispose()
 
+    def test_fee_depends_on_native_execution_not_order_type(self):
+        for mode, entry_fee in (("market", "0.05000000"),
+                                ("marketable_limit", "0.05000000"),
+                                ("resting_limit", "0.01980000")):
+            with self.subTest(mode=mode):
+                terms = config()
+                for instrument_terms in terms["instruments"]:
+                    instrument_terms.update(makerFeeRate="0.0002", takerFeeRate="0.0005")
+                engine = PaperEngine(terms)
+                inputs, outputs = [], []
+                try:
+                    limit = None if mode == "market" else ("99.00" if mode == "resting_limit" else "101.00")
+                    inputs.append(batch(1, [order("entry", "LONG", "buy", limit=limit)]))
+                    outputs.append(engine.apply(inputs[-1]))
+                    if mode == "resting_limit":
+                        self.assertEqual(outputs[-1]["positions"], [])
+                        inputs.append(batch(2, price="98.00"))
+                        outputs.append(engine.apply(inputs[-1]))
+                    self.assertEqual(outputs[-1]["totalFeesQuote"], entry_fee)
+                    inputs.append(batch(len(inputs) + 1, [order("exit", "LONG", "sell", reduce=True)]))
+                    outputs.append(engine.apply(inputs[-1]))
+                    expected = "0.06980000" if mode == "resting_limit" else "0.10000000"
+                    self.assertEqual(outputs[-1]["totalFeesQuote"], expected)
+                    self.assertEqual(outputs[-1]["positions"], [])
+                finally:
+                    engine.dispose()
+                replay = PaperEngine(terms)
+                try:
+                    for value, expected_output in zip(inputs, outputs):
+                        self.assertEqual(replay.apply(json.loads(json.dumps(value))), expected_output)
+                finally:
+                    replay.dispose()
+
     def test_limit_wait_cross_and_cancel(self):
         engine=PaperEngine(config())
         try:

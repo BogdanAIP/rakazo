@@ -17,9 +17,16 @@ entries must use the existing native leverage. A later flat session can register
 new selected contracts without resetting its wallet.
 
 Native execution consumes the available public bid/ask and depth without an extra
-fixed slippage charge. Both maker and taker PAPER commissions are 0.1% per side.
-The risk preview reserves another 10 bps per side conservatively; this reserve
-is not charged to the native wallet. The Start review states these assumptions.
+fixed slippage charge. New accounts use the public OKX Lv1 PAPER preset: maker
+0.02% and taker 0.05% per filled notional, verified on 2026-10-12 against
+https://www.okx.com/en-eu/help/how-to-calculate-the-contract-transaction-fee.
+This is a simulation preset, not a verified personal account tariff. Nautilus
+selects the fee from actual native liquidity execution: a marketable limit can
+be taker. Existing instruments retain their persisted rates during recovery.
+The Start review shows registered rates and uses the preset for new contracts.
+The risk preview budgets both sides at the highest registered fee rate and
+reserves another 10 bps per side for slippage conservatively; this reserve is
+not charged to the native wallet.
 Observation and public-tier freshness tolerate at most 2 seconds of positive
 host/exchange clock skew and still reject data older than 30 seconds.
 
@@ -39,6 +46,10 @@ both hedge legs. New entries cannot exceed the registered first maintenance tier
 in gross BASE quantity, including opposite legs; crossing a tier with a fixed
 instrument maintenance rate would understate simulator requirements. This
 reserve is a risk calculation, not another wallet.
+
+A limit cancelled and replaced by risk revalidation can execute as taker if
+its replacement crosses the fresh book; an earlier resting order does not make
+that replacement a maker fill.
 
 Every wake cancels resting entries before fresh executable data, settles native
 marks/funding/protective exits, then validates any new entry against updated

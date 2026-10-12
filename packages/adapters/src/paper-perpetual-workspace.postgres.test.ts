@@ -395,6 +395,11 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         ).toMatchObject({ runtimeError: null, lastDecision: { outcome: "filled" } });
         expect((await state(id)).openPositions).toHaveLength(1);
         expect((await state(id)).openPositions[0]!.leverage).toBe(20);
+        expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
+          executionFees: expect.arrayContaining([
+            { instrument: "BTC-USDT-SWAP", makerFeeRate: "0.0002", takerFeeRate: "0.0005" },
+          ]),
+        });
         expect((await state(id)).engine).toEqual({ id: "nautilus", version: "1.231.0" });
         expect(
           journal?.status === "verified" && journal.events.every((e) => e.kind === "engine"),
@@ -411,7 +416,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
             journal: await readOwnedPerpetualPaperJournal(db.prisma, owner, id),
           }),
         ).toEqual(["long", "short"]);
-        expect((await state(id)).bookBalanceQuote).toBe("999.80000000");
+        expect((await state(id)).bookBalanceQuote).toBe("999.90000000");
         engine.invalidate(id);
         await reconcilePerpetualPaperWorkspaces({ ...deps(), engine }, true);
         expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
@@ -432,17 +437,17 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         });
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id));
         expect((await state(id)).openPositions).toHaveLength(0);
-        expect((await state(id)).bookBalanceQuote).toBe("999.60800000");
+        expect((await state(id)).bookBalanceQuote).toBe("999.80400000");
         modelFails = false;
         price = "100.00";
         await start(id, engine, ["ETH-USDT-SWAP"]);
         decision = { ...proposal("long", "ETH-USDT-SWAP"), leverage: 20, quantityBase: "1" };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         expect((await state(id)).openPositions[0]!.instrument).toBe("ETH-USDT-SWAP");
-        expect((await state(id)).bookBalanceQuote).toBe("999.50800000");
+        expect((await state(id)).bookBalanceQuote).toBe("999.75400000");
         engine.invalidate(id);
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id));
-        expect((await state(id)).bookBalanceQuote).toBe("999.50800000");
+        expect((await state(id)).bookBalanceQuote).toBe("999.75400000");
       } finally {
         engine.dispose();
       }
@@ -605,7 +610,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           sessionStatus: "paused",
           runtimeError: "protection_unavailable",
         });
-        expect((await state(id)).bookBalanceQuote).toBe("999.90000000");
+        expect((await state(id)).bookBalanceQuote).toBe("999.95000000");
         funding = [
           {
             settledAt: new Date(boundary).toISOString(),
@@ -614,9 +619,9 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           },
         ];
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id));
-        expect((await state(id)).bookBalanceQuote).toBe("999.80000000");
+        expect((await state(id)).bookBalanceQuote).toBe("999.85000000");
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id));
-        expect((await state(id)).bookBalanceQuote).toBe("999.80000000");
+        expect((await state(id)).bookBalanceQuote).toBe("999.85000000");
         expect((await state(id)).fundingNetQuote).toBe("-0.10000000");
       } finally {
         engine.dispose();
@@ -647,7 +652,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           lastDecision: { outcome: "denied_contract" },
         });
         expect((await state(id)).openPositions).toHaveLength(1);
-        expect((await state(id)).bookBalanceQuote).toBe("999.90000000");
+        expect((await state(id)).bookBalanceQuote).toBe("999.95000000");
       } finally {
         engine.dispose();
       }

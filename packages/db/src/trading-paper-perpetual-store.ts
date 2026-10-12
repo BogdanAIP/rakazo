@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type {
   PaperPerpetualEngineBatch,
+  PaperPerpetualEngineConfig,
   PaperPerpetualEngineSnapshot,
   TradingPaperPerpetualJournalListOutput,
   TradingPaperPerpetualJournalReadOutput,
@@ -144,6 +145,7 @@ export async function recoverPerpetualPaperInTransaction(
   row: NonNullable<Awaited<ReturnType<typeof tx.tradingPaperPerpetualLedger.findFirst>>>;
   events: PerpetualPaperEvent[];
   state: PerpetualPaperLedgerState;
+  engineConfig?: PaperPerpetualEngineConfig;
 }> {
   await member(tx, owner);
   const row = await tx.tradingPaperPerpetualLedger.findFirst({
@@ -159,6 +161,7 @@ export async function recoverPerpetualPaperInTransaction(
       return {
         row,
         events: [],
+        engineConfig: engine.effectiveConfig,
         state: projectPerpetualEngineSnapshot(
           engine.effectiveConfig,
           engine.snapshot,

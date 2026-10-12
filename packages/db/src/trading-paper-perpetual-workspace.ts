@@ -415,6 +415,14 @@ export async function readOwnedPerpetualWorkspace(
             limitPriceQuote: o.proposal.limitPriceQuote,
             expiresAt: o.expiresAt,
           })),
+          executionFees:
+            recovered.engineConfig?.instruments.map(
+              ({ instrument, makerFeeRate, takerFeeRate }) => ({
+                instrument,
+                makerFeeRate,
+                takerFeeRate,
+              }),
+            ) ?? [],
           pendingClose: control.closeAll,
           maxLeverage: control.maxLeverage ?? getPaperExperimentPreset(base.strategy).maxLeverage,
         };
