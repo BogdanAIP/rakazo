@@ -59,6 +59,8 @@ export type PaperPerpetualProposalInput = Readonly<{
   portfolio: Readonly<{
     openPositions: number;
     openNotionalQuote: string;
+    /** Current marked equity from the native simulator, not model-supplied. */
+    markedEquityQuote: string;
     openStopRiskQuote: string;
     realizedLossTodayQuote: string;
   }>;
@@ -80,6 +82,7 @@ export type PaperPerpetualProposal =
         | "risk_budget_exceeded"
         | "position_count_exceeded"
         | "notional_exceeded"
+        | "portfolio_stress_exceeded"
         | "insufficient_margin"
         | "liquidation_before_stop";
     }
@@ -134,12 +137,12 @@ export function previewPaperPerpetualProposal(
     const target = exact(input.takeProfitPriceQuote);
     const available = exact(input.availableQuote);
     const openNotional = exact(input.portfolio.openNotionalQuote);
+    const markedEquity = exact(input.portfolio.markedEquityQuote);
     const openRisk = exact(input.portfolio.openStopRiskQuote);
     const dailyLoss = exact(input.portfolio.realizedLossTodayQuote);
     const perIdeaCap = exact(preset.maxPerIdeaRiskQuote);
     const dailyCap = exact(preset.maxDailyLossQuote);
     const openCap = exact(preset.maxOpenRiskQuote);
-    const exposureCap = exact(preset.maxTotalExposureQuote);
     if (
       [qty, entry, stop, target, available].some((v) => v === 0n) ||
       !Number.isSafeInteger(input.portfolio.openPositions) ||
@@ -182,7 +185,21 @@ export function previewPaperPerpetualProposal(
     // exchange may liquidate earlier; model/venue parameters must be audited.
     if (leftAtStop <= maintenance) return deny("liquidation_before_stop");
     if (margin + entryFee > available) return deny("insufficient_margin");
-    if (openNotional + notional > exposureCap) return deny("notional_exceeded");
+    // Futures exposure is bounded by live account equity under a simultaneous
+    // adverse-move stress, not a legacy fixed SPOT notional cap. Count gross
+    // long + short notional: opposite hedge legs are NOT guaranteed to offset.
+    // These are experimental buffers, not liquidation prices or authority
+    // to widen/remove an existing stop.
+    const shockBps =
+      input.strategy === "conservative" ? 3500n : input.strategy === "moderate" ? 2500n : 2000n;
+    const survivalReserveBps = 2500n;
+    const stressMaintenanceBps = mmr > 200n ? mmr : 200n; // minimum 2% gross
+    const projectedGross = openNotional + notional;
+    const shockLoss = ceil(projectedGross * shockBps, BPS);
+    const maintenanceReserve = ceil(projectedGross * stressMaintenanceBps, BPS);
+    const survivalReserve = ceil(markedEquity * survivalReserveBps, BPS);
+    if (markedEquity <= shockLoss + maintenanceReserve + survivalReserve)
+      return deny("portfolio_stress_exceeded");
     if (
       dailyLoss >= dailyCap ||
       stopRisk > min(perIdeaCap, dailyCap - dailyLoss) ||
