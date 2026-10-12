@@ -545,6 +545,7 @@ export async function commitPerpetualPaperWake(
                   // The custom fallback cannot execute planned native additions.
                   recoveryReserveQuote: "0",
                   recoveryReservedRiskQuote: "0",
+                  recoverySteps: [],
                   fundingThrough: now.toISOString(),
                 });
                 consume(proposal.instrument, proposal.side === "long", matched.filledBase);
