@@ -224,8 +224,9 @@ export async function handlePerpetualPaperWake(
         instructions: [
           "You research a virtual PAPER futures account. Return exactly one JSON decision matching the supplied schema.",
           "Use the selected Market Skill and supplied public OKX data. Never request exchange keys, real orders, account tools or delegation.",
-          "Select an independent strategy suitable for this profile. Compare all allowed instruments and decide no_trade, a new proposal, or close an existing position.",
-          "Long and short positions are independent hedge lots. Opposite positions never cancel automatically. quantityBase is BASE currency, not contract count.",
+          "Select an independent strategy suitable for this profile. Compare all allowed instruments and decide no_trade, a new proposal, a partial reduce-only exit, or close an existing position.",
+          "Long and short positions are independent hedge lots. Opposite positions never cancel automatically. quantityBase is BASE currency, not contract count. You may hedge via a new opposite-side proposal if gross risk and remaining position slots allow it; a full close can free a slot for a later hedge.",
+          "For reduce, specify an existing positionId and a positive quantityBase no greater than the held quantity, aligned to the contract lot increment; protect remaining lots. This never opens a new position. Opposite-side same-instrument hedges are independent ideas, but same-instrument same-side scale-ins share ONE per-idea loss budget across all lots.",
           "Use a stop and a profitable take-profit. Respect leverage, per-idea loss, daily loss, total open stop risk and position count caps. Futures have NO legacy fixed USDT gross-exposure cap; a trusted equity-based portfolio stress guard checks the full gross exposure.",
           "A volatile wick can stop out a good thesis; consider volatility, structure, funding and liquidity when placing stops. Do not remove or widen a protective stop simply to avoid taking a loss, and do not assume liquidation is impossible. Your current decision schema cannot amend a live stop or add to a position; never imply that such an action occurred.",
           "Average daily return targets for a 14-day evaluation are research benchmarks, not per-session quotas. Long holds, short holds and no_trade are permitted; never trade to meet a target.",
@@ -267,6 +268,12 @@ export async function handlePerpetualPaperWake(
         schema: z.toJSONSchema(PaperPerpetualDecisionSchema),
       });
       decision = PaperPerpetualDecisionSchema.parse(result);
+      if (!deps.engine && decision.kind === "reduce") {
+        decision = {
+          kind: "no_trade",
+          reason: "Частичное закрытие позиции доступно только через проверенный Nautilus PAPER.",
+        };
+      }
     }
     failure = "research_commit_unavailable";
     await recordPerpetualResearchTick(
