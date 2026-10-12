@@ -246,6 +246,80 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
     );
   });
 
+  it("reserves capital and worst-case stop risk for future adds BEFORE first fill", () => {
+    for (const strategy of ["conservative", "moderate", "aggressive"] as const) {
+      const first = previewPaperPerpetualProposal({
+        ...fixture,
+        strategy,
+        additionalRecoveryNotionalQuote: "5",
+      });
+      expect(first.status, strategy).toBe("inert_preview");
+      if (first.status !== "inert_preview") continue;
+      expect(first.plannedRecoveryNotionalQuote).toBe("5");
+      expect(Number(first.plannedRecoveryRiskQuote)).toBeGreaterThan(0);
+      expect(Number(first.equityRemainingAfterCatastropheQuote)).toBeLessThan(1000);
+    }
+  });
+
+  it("prevents an unrelated entry from spending committed recovery capacity", () => {
+    const withoutReservation = previewPaperPerpetualProposal({
+      ...fixture,
+      strategy: "aggressive",
+      leverage: 20,
+      quantityBase: "3",
+      stopPriceQuote: "99.9",
+      takeProfitPriceQuote: "120",
+      portfolio: {
+        ...fixture.portfolio,
+        openPositions: 1,
+        openNotionalQuote: "100",
+        openLongNotionalQuote: "100",
+        openStopRiskQuote: "1",
+      },
+    });
+    expect(withoutReservation.status).toBe("inert_preview");
+    const withReservation = previewPaperPerpetualProposal({
+      ...fixture,
+      strategy: "aggressive",
+      leverage: 20,
+      quantityBase: "3",
+      stopPriceQuote: "99.9",
+      takeProfitPriceQuote: "120",
+      portfolio: {
+        ...fixture.portfolio,
+        openPositions: 1,
+        openNotionalQuote: "100",
+        openLongNotionalQuote: "100",
+        recoveryLongNotionalQuote: "400",
+        recoveryReservedRiskQuote: "1",
+        openStopRiskQuote: "1",
+      },
+    });
+    expect(withReservation).toMatchObject({
+      status: "deny",
+      reason: "catastrophic_survival_exceeded",
+    });
+  });
+
+  it("reserves risk capacity as well as gross notional for future buys", () => {
+    const decision = previewPaperPerpetualProposal({
+      ...fixture,
+      strategy: "moderate",
+      portfolio: {
+        ...fixture.portfolio,
+        openPositions: 1,
+        openNotionalQuote: "100",
+        openLongNotionalQuote: "100",
+        openStopRiskQuote: "1",
+        sameIdeaStopRiskQuote: "1",
+        recoveryLongNotionalQuote: "10",
+        recoveryReservedRiskQuote: "8.7",
+        sameIdeaReservedRiskQuote: "8.7",
+      },
+    });
+    expect(decision).toMatchObject({status: "deny", reason: "risk_budget_exceeded"});
+  });
+
   it("fails closed if marked account equity is missing", () => {
     expectDenial({ portfolio: { ...fixture.portfolio, markedEquityQuote: "0" } }, "invalid_input");
   });
