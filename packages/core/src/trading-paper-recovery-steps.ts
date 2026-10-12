@@ -1,8 +1,6 @@
-import type { PaperRecoveryStepSchema } from "@rakazo/contracts";
-import type * as z from "zod";
 import { formatPaperPerpetualAmount, paperPerpetualAmount } from "./trading-paper-perpetual-ledger.js";
 
-export type RecoveryStepRequest = z.infer<typeof PaperRecoveryStepSchema>;
+export type RecoveryStepRequest = Readonly<{ stepId: string; triggerPriceQuote: string; allocationPercent: number }>;
 export type RecoveryBookedStep = {
   stepId: string;
   triggerPriceQuote: string;
