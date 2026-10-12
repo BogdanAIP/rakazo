@@ -676,25 +676,45 @@ export async function commitPerpetualEngineWake(
             if (plan) {
               plan.stopRiskQuote = format(amount(plan.stopRiskQuote) + risk);
               // A filled addition CONSUMES previously guaranteed capacity.
-              const consumed = notional(
-                filled,
-                amount(order.proposal.orderType === "limit"
-                  ? order.proposal.limitPriceQuote!
-                  : order.proposal.side === "long"
-                    ? snapshots.get(order.proposal.instrument)!.book.askQuote
-                    : snapshots.get(order.proposal.instrument)!.book.bidQuote),
-              );
-              const initial = amount(plan.recoveryReserveQuote);
-              const actuallyConsumed = consumed < initial ? consumed : initial;
-              const heldRisk = amount(plan.recoveryReservedRiskQuote);
-              const usedRisk =
-                initial > 0n ? ceil(heldRisk * actuallyConsumed, initial) : 0n;
-              plan.recoveryReserveQuote = format(
-                initial > actuallyConsumed ? initial - actuallyConsumed : 0n,
-              );
-              plan.recoveryReservedRiskQuote = format(
-                heldRisk > usedRisk ? heldRisk - usedRisk : 0n,
-              );
+              if (order.proposal.addToPositionId) {
+                const consumed = notional(
+                  filled,
+                  amount(
+                    order.proposal.orderType === "limit"
+                      ? order.proposal.limitPriceQuote!
+                      : order.proposal.side === "long"
+                        ? snapshots.get(order.proposal.instrument)!.book.askQuote
+                        : snapshots.get(order.proposal.instrument)!.book.bidQuote,
+                  ),
+                );
+                const initial = amount(plan.recoveryReserveQuote);
+                const actuallyConsumed = consumed < initial ? consumed : initial;
+                const heldRisk = amount(plan.recoveryReservedRiskQuote);
+                const usedRisk = initial > 0n
+                  ? ceil(heldRisk * actuallyConsumed, initial)
+                  : 0n;
+                plan.recoveryReserveQuote = format(initial - actuallyConsumed);
+                plan.recoveryReservedRiskQuote = format(
+                  heldRisk > usedRisk ? heldRisk - usedRisk : 0n,
+                );
+              } else {
+                // Another partial fill of the INITIAL order adds its pro-rata
+                // reserve rather than spending capacity on itself.
+                plan.recoveryReserveQuote = format(
+                  amount(plan.recoveryReserveQuote) +
+                    ceil(
+                      amount(accepted.plannedRecoveryNotionalQuote) * filled,
+                      amount(order.proposal.quantityBase),
+                    ),
+                );
+                plan.recoveryReservedRiskQuote = format(
+                  amount(plan.recoveryReservedRiskQuote) +
+                    ceil(
+                      amount(accepted.plannedRecoveryRiskQuote) * filled,
+                      amount(order.proposal.quantityBase),
+                    ),
+                );
+              }
             } else {
               control.plans.push({
                 positionId: enteringPosition,
