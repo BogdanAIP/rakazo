@@ -1,7 +1,4 @@
-import type {
-  PaperPerpetualEngineBatch,
-  PaperPerpetualEngineSnapshot,
-} from "@rakazo/contracts";
+import type { PaperPerpetualEngineBatch, PaperPerpetualEngineSnapshot } from "@rakazo/contracts";
 
 const SCALE = 100_000_000n;
 const decimal = /^-?(?:0|[1-9]\d*)(?:\.\d{1,8})?$/;
@@ -15,8 +12,9 @@ function fixed(raw: string): bigint {
 }
 function format(n: bigint): string {
   const abs = n < 0n ? -n : n;
-  return (n < 0n ? "-" : "") + (abs / SCALE).toString() +
-    "." + (abs % SCALE).toString().padStart(8, "0");
+  return (
+    (n < 0n ? "-" : "") + (abs / SCALE).toString() + "." + (abs % SCALE).toString().padStart(8, "0")
+  );
 }
 type Transition = Readonly<{
   input: PaperPerpetualEngineBatch;
@@ -85,9 +83,16 @@ export function summarizePaperPositionRecovery(transitions: readonly Transition[
           const side = order?.reduceOnly ? prior?.side : action === "buy" ? "long" : "short";
           if (!side || (prior && prior.side !== side)) throw new Error("invalid_position_lineage");
           const ep: PositionEpisode = prior ?? {
-            positionId: id, side, netFlows: 0n, fees: 0n,
-            funding: 0n, grossEntered: 0n, worstNet: 0n,
-            underwater: false, liquidated: false, completed: false,
+            positionId: id,
+            side,
+            netFlows: 0n,
+            fees: 0n,
+            funding: 0n,
+            grossEntered: 0n,
+            worstNet: 0n,
+            underwater: false,
+            liquidated: false,
+            completed: false,
           };
           if (ep.completed) throw new Error("reopened_completed_position");
           const notional = (qty * price) / SCALE;
@@ -112,12 +117,10 @@ export function summarizePaperPositionRecovery(transitions: readonly Transition[
           ? (fixed(position.quantityBase) * fixed(position.markPriceQuote)) / SCALE
           : 0n;
         const balance =
-          ep.netFlows + (ep.side === "long" ? markValue : -markValue) -
-          ep.fees + ep.funding;
+          ep.netFlows + (ep.side === "long" ? markValue : -markValue) - ep.fees + ep.funding;
         if (balance < ep.worstNet) ep.worstNet = balance;
-        const threshold = ep.grossEntered / 200n > SCALE / 20n
-          ? ep.grossEntered / 200n
-          : SCALE / 20n;
+        const threshold =
+          ep.grossEntered / 200n > SCALE / 20n ? ep.grossEntered / 200n : SCALE / 20n;
         if (balance < -threshold) ep.underwater = true;
         if (!position) {
           // Only native fill-driven episodes exist; a closed episode is final.
@@ -139,9 +142,8 @@ export function summarizePaperPositionRecovery(transitions: readonly Transition[
         completedUnderwater.length === 0
           ? null
           : ((10000 * recovered) / completedUnderwater.length / 100).toFixed(2),
-      completedLosses: all.filter(
-        (x) => x.completed && x.netFlows - x.fees + x.funding <= 0n,
-      ).length,
+      completedLosses: all.filter((x) => x.completed && x.netFlows - x.fees + x.funding <= 0n)
+        .length,
       openUnderwater: all.filter((x) => !x.completed && x.underwater).length,
       liquidated: all.filter((x) => x.liquidated).length,
     };

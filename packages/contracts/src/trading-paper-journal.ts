@@ -185,23 +185,32 @@ export const TradingPaperPerpetualJournalReadOutputSchema = z.discriminatedUnion
     openedAt: IsoDate,
     updatedAt: IsoDate,
     state: PerpetualJournalStateSchema,
-    recovery: z.discriminatedUnion("status", [
-      z.object({
-        status: z.literal("verified"),
-        scope: z.literal("position_only"),
-        completedUnderwater: z.number().int().nonnegative(),
-        recovered: z.number().int().nonnegative(),
-        recoveryRatePercent: z.string().regex(/^\\d{1,3}\\.\\d{2}$/).nullable(),
-        completedLosses: z.number().int().nonnegative(),
-        openUnderwater: z.number().int().nonnegative(),
-        liquidated: z.number().int().nonnegative(),
-      }).strict(),
-      z.object({
-        status: z.literal("incomplete"),
-        scope: z.literal("position_only"),
-        reason: z.string().min(1).max(120),
-      }).strict(),
-    ]).optional(),
+    recovery: z
+      .discriminatedUnion("status", [
+        z
+          .object({
+            status: z.literal("verified"),
+            scope: z.literal("position_only"),
+            completedUnderwater: z.number().int().nonnegative(),
+            recovered: z.number().int().nonnegative(),
+            recoveryRatePercent: z
+              .string()
+              .regex(/^\\d{1,3}\\.\\d{2}$/)
+              .nullable(),
+            completedLosses: z.number().int().nonnegative(),
+            openUnderwater: z.number().int().nonnegative(),
+            liquidated: z.number().int().nonnegative(),
+          })
+          .strict(),
+        z
+          .object({
+            status: z.literal("incomplete"),
+            scope: z.literal("position_only"),
+            reason: z.string().min(1).max(120),
+          })
+          .strict(),
+      ])
+      .optional(),
     events: z.array(PerpetualJournalEventSchema).max(100),
     nextBeforeSequence: z.number().int().positive().safe().nullable(),
   }),
