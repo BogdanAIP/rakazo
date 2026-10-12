@@ -19,6 +19,8 @@ const fixture: PaperPerpetualProposalInput = {
   portfolio: {
     openPositions: 0,
     openNotionalQuote: "0",
+    openLongNotionalQuote: "0",
+    openShortNotionalQuote: "0",
     markedEquityQuote: "1000",
     peakEquityQuote: "1000",
     openStopRiskQuote: "0",
@@ -115,7 +117,13 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
   it("checks cash, exposure, risk, daily loss and position slots", () => {
     expectDenial({ availableQuote: "1" }, "insufficient_margin");
     expectDenial(
-      { portfolio: { ...fixture.portfolio, openNotionalQuote: "4000" } },
+      {
+        portfolio: {
+          ...fixture.portfolio,
+          openNotionalQuote: "4000",
+          openLongNotionalQuote: "4000",
+        },
+      },
       "portfolio_stress_exceeded",
     );
     expectDenial(
@@ -132,11 +140,11 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
     );
   });
 
-  it("allows higher gross futures exposure than legacy fixed caps for all three profiles", () => {
+  it("permits independently risk-bounded exposure with high leverage, not automatic full leverage", () => {
     const cases = [
-      { strategy: "conservative", leverage: 5, quantityBase: "10" },
-      { strategy: "moderate", leverage: 10, quantityBase: "15" },
-      { strategy: "aggressive", leverage: 20, quantityBase: "25" },
+      { strategy: "conservative", leverage: 5, quantityBase: "3" },
+      { strategy: "moderate", leverage: 10, quantityBase: "4" },
+      { strategy: "aggressive", leverage: 20, quantityBase: "5" },
     ] as const;
     for (const candidate of cases) {
       const result = previewPaperPerpetualProposal({
@@ -158,7 +166,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
         stopPriceQuote: "99.95",
         takeProfitPriceQuote: "105",
       },
-      "portfolio_stress_exceeded",
+      "catastrophic_survival_exceeded",
     );
   });
 
@@ -171,9 +179,13 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
         quantityBase: "10",
         stopPriceQuote: "100.05",
         takeProfitPriceQuote: "95",
-        portfolio: { ...fixture.portfolio, openNotionalQuote: "3000" },
+        portfolio: {
+          ...fixture.portfolio,
+          openNotionalQuote: "3000",
+          openLongNotionalQuote: "3000",
+        },
       },
-      "portfolio_stress_exceeded",
+      "catastrophic_survival_exceeded",
     );
   });
 
@@ -188,6 +200,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
           ...fixture.portfolio,
           openPositions: 1,
           openNotionalQuote: "100",
+          openLongNotionalQuote: "100",
           openStopRiskQuote: "9.8",
           sameIdeaStopRiskQuote: "9.8",
         },
