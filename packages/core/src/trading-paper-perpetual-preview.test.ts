@@ -19,6 +19,7 @@ const fixture: PaperPerpetualProposalInput = {
   portfolio: {
     openPositions: 0,
     openNotionalQuote: "0",
+    markedEquityQuote: "1000",
     openStopRiskQuote: "0",
     realizedLossTodayQuote: "0",
   },
@@ -109,8 +110,8 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
   it("checks cash, exposure, risk, daily loss and position slots", () => {
     expectDenial({ availableQuote: "1" }, "insufficient_margin");
     expectDenial(
-      { portfolio: { ...fixture.portfolio, openNotionalQuote: "999" } },
-      "notional_exceeded",
+      { portfolio: { ...fixture.portfolio, openNotionalQuote: "4000" } },
+      "portfolio_stress_exceeded",
     );
     expectDenial(
       { portfolio: { ...fixture.portfolio, openStopRiskQuote: "19.9" } },
@@ -123,6 +124,58 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
     expectDenial(
       { portfolio: { ...fixture.portfolio, openPositions: 3 } },
       "position_count_exceeded",
+    );
+  });
+
+  it("allows higher gross futures exposure than legacy fixed caps for all three profiles", () => {
+    const cases = [
+      { strategy: "conservative", leverage: 5, quantityBase: "10" },
+      { strategy: "moderate", leverage: 10, quantityBase: "15" },
+      { strategy: "aggressive", leverage: 20, quantityBase: "25" },
+    ] as const;
+    for (const candidate of cases) {
+      const result = previewPaperPerpetualProposal({
+        ...fixture,
+        ...candidate,
+        stopPriceQuote: "99.95",
+        takeProfitPriceQuote: "105",
+      });
+      expect(result, candidate.strategy).toMatchObject({ status: "inert_preview" });
+    }
+  });
+
+  it("rejects proposals that exhaust post-shock equity despite a nearby stop", () => {
+    expectDenial(
+      {
+        strategy: "aggressive",
+        leverage: 20,
+        quantityBase: "35",
+        stopPriceQuote: "99.95",
+        takeProfitPriceQuote: "105",
+      },
+      "portfolio_stress_exceeded",
+    );
+  });
+
+  it("does not net opposite hedge exposure away when stress testing", () => {
+    expectDenial(
+      {
+        strategy: "aggressive",
+        side: "short",
+        leverage: 20,
+        quantityBase: "10",
+        stopPriceQuote: "100.05",
+        takeProfitPriceQuote: "95",
+        portfolio: { ...fixture.portfolio, openNotionalQuote: "3000" },
+      },
+      "portfolio_stress_exceeded",
+    );
+  });
+
+  it("fails closed if marked account equity is missing", () => {
+    expectDenial(
+      { portfolio: { ...fixture.portfolio, markedEquityQuote: "0" } },
+      "portfolio_stress_exceeded",
     );
   });
 
