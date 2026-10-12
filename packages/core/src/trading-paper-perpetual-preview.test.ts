@@ -124,7 +124,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
           openLongNotionalQuote: "4000",
         },
       },
-      "portfolio_stress_exceeded",
+      "catastrophic_survival_exceeded",
     );
     expectDenial(
       { portfolio: { ...fixture.portfolio, openStopRiskQuote: "19.9" } },
@@ -189,6 +189,63 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
     );
   });
 
+  it("rejects a 50-percent crash exposure and a full collapse exposure independently of leverage", () => {
+    const bigLong = previewPaperPerpetualProposal({
+      ...fixture,
+      strategy: "aggressive",
+      leverage: 20,
+      quantityBase: "15",
+      stopPriceQuote: "99.99",
+      takeProfitPriceQuote: "110",
+    });
+    expect(bigLong).toMatchObject({
+      status: "deny",
+      reason: "catastrophic_survival_exceeded",
+    });
+    const smallLong = previewPaperPerpetualProposal({
+      ...fixture,
+      strategy: "aggressive",
+      leverage: 20,
+      quantityBase: "4",
+      stopPriceQuote: "99.99",
+      takeProfitPriceQuote: "110",
+    });
+    expect(smallLong).toMatchObject({ status: "inert_preview" });
+    if (smallLong.status === "inert_preview") {
+      expect(Number(smallLong.equityRemainingAfterCatastropheQuote)).toBeGreaterThan(200);
+    }
+  });
+
+  it("refuses a short too large to withstand a 200-percent adverse price rally", () => {
+    const result = previewPaperPerpetualProposal({
+      ...fixture,
+      side: "short",
+      strategy: "aggressive",
+      leverage: 20,
+      quantityBase: "4",
+      stopPriceQuote: "100.01",
+      takeProfitPriceQuote: "90",
+    });
+    expect(result).toMatchObject({
+      status: "deny",
+      reason: "catastrophic_survival_exceeded",
+    });
+  });
+
+  it("rejects conflicting long and short gross evidence", () => {
+    expectDenial(
+      {
+        portfolio: {
+          ...fixture.portfolio,
+          openNotionalQuote: "100",
+          openLongNotionalQuote: "0",
+          openShortNotionalQuote: "0",
+        },
+      },
+      "invalid_input",
+    );
+  });
+
   it("fails closed if marked account equity is missing", () => {
     expectDenial({ portfolio: { ...fixture.portfolio, markedEquityQuote: "0" } }, "invalid_input");
   });
@@ -219,6 +276,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
         ...fixture.portfolio,
         openPositions: 1,
         openNotionalQuote: "100",
+        openLongNotionalQuote: "100",
         openStopRiskQuote: "9.8",
         sameIdeaStopRiskQuote: "0",
       },
