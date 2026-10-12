@@ -93,6 +93,7 @@ export function PaperPerpetualComparison({
               <th className="p-2">Стоимость, USDT</th>
               <th className="p-2">Результат с переоценкой, USDT</th>
               <th className="p-2">Закрыто / открыто</th>
+              <th className="p-2">Recovery Rate*</th>
               <th className="p-2">Сессия</th>
             </tr>
           </thead>
@@ -125,6 +126,13 @@ export function PaperPerpetualComparison({
                 <td className="p-2 tabular-nums">
                   {journal.state.closedPositions} / {journal.state.openPositions.length}
                 </td>
+                <td className="p-2 tabular-nums">
+                  {journal.recovery?.status === "verified"
+                    ? journal.recovery.recoveryRatePercent === null
+                      ? "—"
+                      : `${journal.recovery.recoveryRatePercent}% (${journal.recovery.recovered}/${journal.recovery.completedUnderwater})`
+                    : "—"}
+                </td>
                 <td className="p-2">
                   {workspace.sessionStatus === "active"
                     ? "Входы разрешены"
@@ -139,6 +147,12 @@ export function PaperPerpetualComparison({
           </tbody>
         </table>
       </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        * Recovery Rate пока считается по завершённым нативным позициям: доливка и частичное
+        сокращение одной позиции учитываются вместе, но отдельные хедж-позиции пока не объединяются
+        в одну торговую идею. Учитываются реальные исполнения, комиссии и funding. Открытая
+        убыточная позиция не считается восстановленной.
+      </p>
       <p className="mt-3 text-xs text-muted-foreground">
         Все счета начали с 1000 USDT. Результат включает комиссии, funding и переоценку открытых
         позиций. Срок сравнения отсчитывается от ручного запуска каждого счёта; котировки
