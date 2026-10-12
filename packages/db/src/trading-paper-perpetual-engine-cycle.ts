@@ -401,6 +401,20 @@ export async function commitPerpetualEngineWake(
                 ),
               0n,
             );
+            const grossBySide = (side: "long" | "short") =>
+              state.openPositions
+                .filter((held) => held.side === side)
+                .reduce(
+                  (sum, held) =>
+                    sum +
+                    notional(
+                      amount(held.quantityBase),
+                      amount(held.markPriceQuote) > amount(held.entryPriceQuote)
+                        ? amount(held.markPriceQuote)
+                        : amount(held.entryPriceQuote),
+                    ),
+                  0n,
+                );
             const reserve = state.openPositions.reduce(
               (sum, x) =>
                 sum +
@@ -464,6 +478,8 @@ export async function commitPerpetualEngineWake(
                 openPositions: state.openPositions.filter((x) => x.positionId !== enteringPosition)
                   .length,
                 openNotionalQuote: format(gross),
+                openLongNotionalQuote: format(grossBySide("long")),
+                openShortNotionalQuote: format(grossBySide("short")),
                 markedEquityQuote: format(
                   signed(state.markedEquityQuote) > 0n ? signed(state.markedEquityQuote) : 0n,
                 ),
