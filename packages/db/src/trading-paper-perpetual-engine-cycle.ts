@@ -616,6 +616,36 @@ export async function commitPerpetualEngineWake(
             control.orders = [];
           }
         }
+        if (key.stage === "research" && active && decision.kind === "tighten_stop") {
+          const held = state.openPositions.find((p) => p.positionId === decision.positionId);
+          const plan = control.plans.find((p) => p.positionId === decision.positionId);
+          const market = held ? snapshots.get(held.instrument) : undefined;
+          if (!held || !plan || !market) {
+            outcome = "denied_stop_unknown";
+          } else {
+            const requested = amount(decision.stopPriceQuote);
+            const previous = amount(plan.stopPriceQuote);
+            const current = amount(market.markPriceQuote);
+            const increment = market.market.priceIncrement
+              ? amount(market.market.priceIncrement)
+              : 0n;
+            // Permitted stop adjustment ALWAYS moves toward current market:
+            // long goes up / short goes down. A stop at or beyond the mark
+            // is unsafe; the normal protection cycle, not AI prose, exits.
+            const improves = held.side === "long" ? requested > previous : requested < previous;
+            const behindMarket =
+              held.side === "long" ? requested < current : requested > current;
+            if (!improves || !behindMarket || increment === 0n || requested % increment !== 0n) {
+              outcome = "denied_stop_not_tighter";
+            } else {
+              plan.stopPriceQuote = decision.stopPriceQuote;
+              // Do NOT lower the persisted stop-risk budget on speculative gains.
+              // This conservatively preserves the original whole-idea risk until
+              // actual native execution changes the lot and its recorded fills.
+              outcome = "protective_stop_tightened";
+            }
+          }
+        }
         if (!state.openPositions.length) control.closeAll = false;
         if (!active) control.orders = [];
         if (key.stage === "research" && tick.modelId) {
