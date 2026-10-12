@@ -541,16 +541,17 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         }
         const before = (await state(id)).openPositions;
         expect(before).toHaveLength(4);
+        const replacedPositionId = before.find((pos) => pos.side === "long")!.positionId;
         decision = {
           ...proposal("short", "SOL-USDT-SWAP"),
           leverage: 20,
           quantityBase: "0.50",
-          replacePositionId: before.find((pos) => pos.side === "long")!.positionId,
+          replacePositionId: replacedPositionId,
         };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         const after = (await state(id)).openPositions;
         expect(after).toHaveLength(4);
-        expect(after.some((pos) => pos.positionId === decision.replacePositionId)).toBe(false);
+        expect(after.some((pos) => pos.positionId === replacedPositionId)).toBe(false);
       } finally {
         engine.dispose();
       }
