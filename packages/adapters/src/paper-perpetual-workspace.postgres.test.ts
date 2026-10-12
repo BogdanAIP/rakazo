@@ -736,6 +736,66 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
   );
 
   it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "books a recovery reserve on initial fill, prevents over-addition and consumes on approved scale-in",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["moderate"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine);
+        decision = { ...proposal("long"), leverage: 10, quantityBase: "1.00" };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const initial = await state(id);
+        expect(initial.openPositions).toHaveLength(1);
+        const positionId = initial.openPositions[0]!.positionId;
+        const readPlan = async () =>
+          parsePerpetualControl(
+            await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+              where: { ledgerId: id },
+            }),
+          );
+        const firstPlan = (await readPlan()).plans.find((x) => x.positionId === positionId)!;
+        expect(Number(firstPlan.recoveryReserveQuote)).toBeGreaterThanOrEqual(50);
+        expect(Number(firstPlan.recoveryReservedRiskQuote)).toBeGreaterThan(0);
+        const workspace = await readOwnedPerpetualWorkspace(db.prisma, owner, id);
+        expect(workspace?.recoveryReservations?.[0]?.reservedNotionalQuote).toBe(
+          firstPlan.recoveryReserveQuote,
+        );
+
+        // Model cannot consume more scale-in notional than planned for this position.
+        decision = {
+          ...proposal("long"), leverage: 10, quantityBase: "0.75", addToPositionId: positionId,
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await readPlan()).lastDecision?.outcome).toBe("denied_add_unreserved");
+        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1);
+
+        decision = {
+          ...proposal("long"), leverage: 10, quantityBase: "0.50", addToPositionId: positionId,
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1.5);
+        const later = (await readPlan()).plans.find((x) => x.positionId === positionId)!;
+        expect(Number(later.recoveryReserveQuote)).toBeLessThan(
+          Number(firstPlan.recoveryReserveQuote),
+        );
+        expect(Number(later.recoveryReservedRiskQuote)).toBeLessThan(
+          Number(firstPlan.recoveryReservedRiskQuote),
+        );
+        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
+          "verified",
+        );
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
     "cancels native GTC entries on an owner leverage change before a crossed quote",
     async () => {
       const engine = new NautilusPaperEngine({
