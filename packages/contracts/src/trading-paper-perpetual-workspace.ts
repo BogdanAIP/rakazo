@@ -12,6 +12,12 @@ const Decimal = z.string().regex(/^(?:0|[1-9]\d{0,11})(?:\.\d{1,8})?$/);
 const Positive = Decimal.refine((value) => /[1-9]/.test(value));
 export const PaperPerpetualStrategySchema = z.enum(["conservative", "moderate", "aggressive"]);
 const Instrument = z.string().regex(/^[A-Z0-9]{1,20}-USDT-SWAP$/);
+/** Two explicitly planned optional recovery steps; never executable orders. */
+export const PaperRecoveryStepSchema = z.object({
+  stepId: Id,
+  triggerPriceQuote: Positive,
+  allocationPercent: z.number().int().min(1).max(99),
+}).strict();
 export const PaperPerpetualDecisionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("no_trade"), reason: z.string().trim().min(1).max(2000) }).strict(),
   z
@@ -29,6 +35,10 @@ export const PaperPerpetualDecisionSchema = z.discriminatedUnion("kind", [
       addToPositionId: Id.optional(),
       /** Optional quote-sized FUTURE addition budget. Executor enforces a safety floor. */
       plannedRecoveryNotionalQuote: Decimal.optional(),
+      /** Staged entry-time recovery plan. Older PAPER records remain backward-compatible. */
+      recoverySteps: z.array(PaperRecoveryStepSchema).length(2).optional(),
+      /** Stage explicitly selected when consuming a pre-booked recovery reserve. */
+      recoveryStepId: Id.optional(),
       /** Optional native-only rotation: close this old position before attempting entry. */
       replacePositionId: Id.optional(),
       rationale: z.string().trim().min(1).max(2000),
@@ -36,7 +46,19 @@ export const PaperPerpetualDecisionSchema = z.discriminatedUnion("kind", [
     .strict()
     .refine((p) => !(p.addToPositionId && p.replacePositionId), {
       message: "Cannot scale in and rotate out in one proposal",
-    }),
+    })
+    .refine(
+      (p) => !p.recoverySteps || (
+        !p.addToPositionId &&
+        p.recoverySteps[0]!.stepId !== p.recoverySteps[1]!.stepId &&
+        p.recoverySteps[0]!.allocationPercent + p.recoverySteps[1]!.allocationPercent === 100
+      ),
+      { message: "Recovery plan must contain two distinct total-100% steps on first entry" },
+    )
+    .refine(
+      (p) => !p.recoveryStepId || (Boolean(p.addToPositionId) && !p.recoverySteps),
+      { message: "A recovery step may only be consumed by an existing-position addition" },
+    ),
   z
     .object({
       kind: z.literal("close"),
@@ -235,6 +257,11 @@ const Order = z.object({
   expiresAt: IsoDate,
   ideaRiskSpentQuote: Decimal.default("0"),
 });
+const RecoveryPlannedStep = PaperRecoveryStepSchema.omit({ allocationPercent: true }).extend({
+  maximumNotionalQuote: Decimal,
+  remainingNotionalQuote: Decimal,
+  activatedAt: IsoDate.nullable(),
+});
 const Plan = z.object({
   positionId: z.string(),
   stopPriceQuote: z.string(),
@@ -244,6 +271,8 @@ const Plan = z.object({
   recoveryReserveQuote: Decimal.default("0"),
   /** Pending stop-risk capacity attributable to the reserved adds. */
   recoveryReservedRiskQuote: Decimal.default("0"),
+  /** Immutable trigger prices; fills consume stage sizes, never create orders. */
+  recoverySteps: z.array(RecoveryPlannedStep).max(2).default([]),
   fundingThrough: IsoDate,
 });
 export const PerpetualControlSchema = z
