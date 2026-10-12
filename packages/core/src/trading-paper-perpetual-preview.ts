@@ -59,6 +59,10 @@ export type PaperPerpetualProposalInput = Readonly<{
   portfolio: Readonly<{
     openPositions: number;
     openNotionalQuote: string;
+    /** Gross marked/opening value of long legs. Never net shorts against longs. */
+    openLongNotionalQuote: string;
+    /** Gross marked/opening value of short legs. */
+    openShortNotionalQuote: string;
     /** Current marked equity from the native simulator, not model-supplied. */
     markedEquityQuote: string;
     /** High watermark derived from verified historical native equity, not the model. */
@@ -87,6 +91,7 @@ export type PaperPerpetualProposal =
         | "position_count_exceeded"
         | "notional_exceeded"
         | "portfolio_stress_exceeded"
+        | "catastrophic_survival_exceeded"
         | "drawdown_circuit_breaker"
         | "insufficient_margin"
         | "liquidation_before_stop";
@@ -109,6 +114,7 @@ export type PaperPerpetualProposal =
       maintenanceMarginQuote: string;
       collateralRemainingAtStopQuote: string;
       equityRemainingAfterStressQuote: string;
+      equityRemainingAfterCatastropheQuote: string;
       peakDrawdownPercent: string;
       riskRewardRatio: string;
     };
@@ -144,6 +150,9 @@ export function previewPaperPerpetualProposal(
     const target = exact(input.takeProfitPriceQuote);
     const available = exact(input.availableQuote);
     const openNotional = exact(input.portfolio.openNotionalQuote);
+    const longNotional = exact(input.portfolio.openLongNotionalQuote);
+    const shortNotional = exact(input.portfolio.openShortNotionalQuote);
+    if (longNotional + shortNotional !== openNotional) return deny("invalid_input");
     const markedEquity = exact(input.portfolio.markedEquityQuote);
     const peakEquity = exact(input.portfolio.peakEquityQuote);
     const openRisk = exact(input.portfolio.openStopRiskQuote);
@@ -220,6 +229,17 @@ export function previewPaperPerpetualProposal(
       input.strategy === "conservative" ? 3500n : input.strategy === "moderate" ? 2500n : 2000n;
     const survivalReserveBps = 2500n;
     const stressMaintenanceBps = mmr > 200n ? mmr : 200n; // minimum 2% gross
+    // Liquidation-avoidance is a PRE-ENTRY sizing objective, never a promise.
+    // Even a full long collapse to zero and a 200% adverse short rally must
+    // leave a reserve. Shorts can exceed +200%; actual venues may liquidate
+    // earlier during gaps, funding, risk-tier changes or unavailable quotes.
+    const projectedLong = longNotional + (input.side === "long" ? notional : 0n);
+    const projectedShort = shortNotional + (input.side === "short" ? notional : 0n);
+    const catastropheLoss = projectedLong + 2n * projectedShort;
+    const catastropheMaintenance = ceil(projectedGross * stressMaintenanceBps, BPS);
+    const catastropheResidual =
+      markedEquity - catastropheLoss - catastropheMaintenance - survivalReserve;
+    if (catastropheResidual <= 0n) return deny("catastrophic_survival_exceeded");
     const shockLoss = ceil(projectedGross * shockBps, BPS);
     const maintenanceReserve = ceil(projectedGross * stressMaintenanceBps, BPS);
     const survivalReserve = ceil(markedEquity * survivalReserveBps, BPS);
@@ -257,6 +277,9 @@ export function previewPaperPerpetualProposal(
       maintenanceMarginQuote: fmt(maintenance),
       collateralRemainingAtStopQuote: fmt(stopEquityRemaining),
       equityRemainingAfterStressQuote: fmt(markedEquity - shockLoss - maintenanceReserve),
+      equityRemainingAfterCatastropheQuote: fmt(
+        markedEquity - catastropheLoss - catastropheMaintenance,
+      ),
       peakDrawdownPercent: (Number(drawdownBps) / 100).toFixed(2),
       riskRewardRatio: (Number(rrHundredths) / 100).toFixed(2),
     };
