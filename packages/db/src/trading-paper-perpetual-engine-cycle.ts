@@ -431,6 +431,14 @@ export async function commitPerpetualEngineWake(
                 openStopRiskQuote: format(
                   control.plans.reduce((sum, x) => sum + amount(x.stopRiskQuote), 0n),
                 ),
+                sameIdeaStopRiskQuote: format(
+                  control.plans.reduce((sum, plan) => {
+                    const held = state.openPositions.find((x) => x.positionId === plan.positionId);
+                    return held?.instrument === p.instrument && held.side === p.side
+                      ? sum + amount(plan.stopRiskQuote)
+                      : sum;
+                  }, 0n),
+                ),
                 realizedLossTodayQuote: format(lost > 0n ? lost : 0n),
               },
               // Budget both sides at the highest persisted native fee rate.
