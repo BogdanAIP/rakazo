@@ -43,3 +43,13 @@ This simple fixed stress scenario does not predict actual stop fills, hedge path
 - Start the three virtual accounts only after explicit owner Start; do not claim the 14-day experiment started from CI or sample fixtures.
 
 This document specifies a staged PAPER experiment and intentionally does **not** promise a 1–3% average daily return or zero risk of liquidation.
+
+## Update: native portfolio actions and wick diagnostics
+
+Supersedes the older 'not implemented' statements above for these specific features.
+
+- Native same-position scale-in: proposal.addToPositionId reuses the live position ID only when instrument, direction, leverage and the original protective stop/take-profit match. A second fill shares the same per-idea stop-risk cap. The native integration test confirmed an increase from 1.00 to 1.50 on the original position.
+- Native close-before-entry rotation: proposal.replacePositionId closes an existing position reduce-only, reprojects the ledger, and opens a replacement only if the previous position has fully closed and fresh risk checks allow the new entry. A four-occupied-slot hedge rotation passed its native integration journey. Partial/unfilled exits reject the replacement.
+- A public-candle volatility helper computes advisory true-range (ATR-like) and 90th percentile down/up-wicks from 14+ verified historical candles. The model receives these statistics as context; this is not a stop trigger, margin authority or liquidation prediction.
+- Prior full rebalancing, stop modification/removal, multi-action portfolio optimisation and out-of-sample proof of stop placement remain unfinished. Missing model / market context must not grant execution access.
+- New tests are tracked on PR #50. Keep this PR a draft until exact-head CI and native Windows replay qualification. PAPER remains owner-started only; the 14-day experiment is not running.
