@@ -429,6 +429,13 @@ export async function commitPerpetualPaperWake(
                     ),
                   ),
                   markedEquityQuote: state.markedEquityQuote,
+                  // Legacy fallback has no persisted native high-watermark replay.
+                  // Keep initial equity as its conservative minimum peak estimate.
+                  peakEquityQuote: format(
+                    signed(state.markedEquityQuote) > 1000n * SCALE
+                      ? signed(state.markedEquityQuote)
+                      : 1000n * SCALE,
+                  ),
                   openStopRiskQuote: format(
                     control.plans.reduce((sum, p) => sum + amount(p.stopRiskQuote), 0n),
                   ),
