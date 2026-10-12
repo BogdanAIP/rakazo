@@ -568,11 +568,6 @@ export async function commitPerpetualEngineWake(
             if (p.addToPositionId && !existingAddition) denied = "denied_add_unknown";
             else if (
               p.addToPositionId &&
-              (!additionPlan || consumedRecovery > amount(additionPlan.recoveryReserveQuote))
-            )
-              denied = "denied_add_unreserved";
-            else if (
-              p.addToPositionId &&
               (!additionPlan ||
                 existingAddition?.instrument !== p.instrument ||
                 existingAddition?.side !== p.side ||
@@ -581,6 +576,11 @@ export async function commitPerpetualEngineWake(
                 additionPlan.takeProfitPriceQuote !== p.takeProfitPriceQuote)
             )
               denied = "denied_add_plan_mismatch";
+            else if (
+              p.addToPositionId &&
+              consumedRecovery > amount(additionPlan!.recoveryReserveQuote)
+            )
+              denied = "denied_add_unreserved";
             else if (
               existingAddition &&
               (p.side === "long"
