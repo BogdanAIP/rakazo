@@ -480,7 +480,12 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         expect(positions).toHaveLength(1);
         const originalId = positions[0]!.positionId;
 
-        decision = { ...proposal("long"), leverage: 20, quantityBase: "0.50", addToPositionId: originalId };
+        decision = {
+          ...proposal("long"),
+          leverage: 20,
+          quantityBase: "0.50",
+          addToPositionId: originalId,
+        };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         positions = (await state(id)).openPositions;
         expect(positions).toHaveLength(1);
@@ -511,7 +516,9 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         expect(positions).toHaveLength(1);
         expect(positions[0]!.side).toBe("short");
         expect(positions[0]!.positionId).not.toBe(originalId);
-        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe("verified");
+        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
+          "verified",
+        );
       } finally {
         engine.dispose();
       }

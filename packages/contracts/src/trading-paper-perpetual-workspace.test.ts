@@ -74,13 +74,17 @@ describe("AI PAPER futures portfolio decision schema", () => {
   });
 
   it("preserves no_trade and full close decisions", () => {
-    expect(PaperPerpetualDecisionSchema.parse({ kind: "no_trade", reason: "Нет сигнала" })).toMatchObject({
+    expect(
+      PaperPerpetualDecisionSchema.parse({ kind: "no_trade", reason: "Нет сигнала" }),
+    ).toMatchObject({
       kind: "no_trade",
     });
-    expect(PaperPerpetualDecisionSchema.parse({
-      kind: "close",
-      positionId: "paper-position:one",
-      reason: "Торговая идея утратила силу",
-    })).toMatchObject({ kind: "close" });
+    expect(
+      PaperPerpetualDecisionSchema.parse({
+        kind: "close",
+        positionId: "paper-position:one",
+        reason: "Торговая идея утратила силу",
+      }),
+    ).toMatchObject({ kind: "close" });
   });
 });

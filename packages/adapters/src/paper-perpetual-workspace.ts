@@ -278,7 +278,8 @@ export async function handlePerpetualPaperWake(
       ) {
         decision = {
           kind: "no_trade",
-          reason: "Изменение существующей позиции доступно только через проверенный Nautilus PAPER.",
+          reason:
+            "Изменение существующей позиции доступно только через проверенный Nautilus PAPER.",
         };
       }
     }
