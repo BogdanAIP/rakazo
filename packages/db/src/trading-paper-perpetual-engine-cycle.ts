@@ -462,6 +462,48 @@ export async function commitPerpetualEngineWake(
               limits: s.leverageLimits ?? null,
               now: now.toISOString(),
             });
+            const intendedNotional = entry
+              ? notional(amount(p.quantityBase), amount(entry))
+              : 0n;
+            // Every fresh idea receives at least 50% of its initial notional
+            // in separately budgeted future scale-in capacity. No staged order
+            // is submitted automatically; a later AI decision and fresh risk
+            // gate are still mandatory.
+            const automaticRecovery = p.addToPositionId ? 0n : ceil(intendedNotional, 2n);
+            const suggestedRecovery =
+              !p.addToPositionId && p.plannedRecoveryNotionalQuote
+                ? amount(p.plannedRecoveryNotionalQuote)
+                : 0n;
+            const newRecovery =
+              suggestedRecovery > automaticRecovery ? suggestedRecovery : automaticRecovery;
+            const consumedRecovery = p.addToPositionId ? intendedNotional : 0n;
+            const remainingReserve = (plan: (typeof control.plans)[number]) => {
+              const reserved = amount(plan.recoveryReserveQuote);
+              if (plan.positionId !== p.addToPositionId) return reserved;
+              return consumedRecovery >= reserved ? 0n : reserved - consumedRecovery;
+            };
+            const remainingRiskReserve = (plan: (typeof control.plans)[number]) => {
+              const booked = amount(plan.recoveryReservedRiskQuote);
+              const initial = amount(plan.recoveryReserveQuote);
+              if (plan.positionId !== p.addToPositionId || initial === 0n) return booked;
+              const consumed = consumedRecovery < initial ? consumedRecovery : initial;
+              const used = ceil(booked * consumed, initial);
+              return booked > used ? booked - used : 0n;
+            };
+            const recoveryBuckets = (side: "long" | "short") =>
+              control.plans.reduce((sum, plan) => {
+                const held = state.openPositions.find((x) => x.positionId === plan.positionId);
+                return held?.side === side ? sum + remainingReserve(plan) : sum;
+              }, 0n);
+            const recoveryRisk = control.plans.reduce(
+              (sum, plan) => sum + remainingRiskReserve(plan), 0n,
+            );
+            const sameIdeaRecoveryRisk = control.plans.reduce((sum, plan) => {
+              const held = state.openPositions.find((x) => x.positionId === plan.positionId);
+              return held?.instrument === p.instrument && held.side === p.side
+                ? sum + remainingRiskReserve(plan)
+                : sum;
+            }, 0n);
             const risk = previewPaperPerpetualProposal({
               strategy: state.strategy,
               ledgerId: key.ledgerId,
@@ -475,12 +517,17 @@ export async function commitPerpetualEngineWake(
               stopPriceQuote: p.stopPriceQuote,
               takeProfitPriceQuote: p.takeProfitPriceQuote,
               availableQuote: format(available > 0n ? available : 0n),
+              additionalRecoveryNotionalQuote: format(newRecovery),
               portfolio: {
                 openPositions: state.openPositions.filter((x) => x.positionId !== enteringPosition)
                   .length,
                 openNotionalQuote: format(gross),
                 openLongNotionalQuote: format(grossBySide("long")),
                 openShortNotionalQuote: format(grossBySide("short")),
+                recoveryLongNotionalQuote: format(recoveryBuckets("long")),
+                recoveryShortNotionalQuote: format(recoveryBuckets("short")),
+                recoveryReservedRiskQuote: format(recoveryRisk),
+                sameIdeaReservedRiskQuote: format(sameIdeaRecoveryRisk),
                 markedEquityQuote: format(
                   signed(state.markedEquityQuote) > 0n ? signed(state.markedEquityQuote) : 0n,
                 ),
@@ -520,6 +567,10 @@ export async function commitPerpetualEngineWake(
             });
             let denied: string | null = null;
             if (p.addToPositionId && !existingAddition) denied = "denied_add_unknown";
+            else if (
+              p.addToPositionId &&
+              (!additionPlan || consumedRecovery > amount(additionPlan.recoveryReserveQuote))
+            ) denied = "denied_add_unreserved";
             else if (
               p.addToPositionId &&
               (!additionPlan ||
@@ -622,15 +673,45 @@ export async function commitPerpetualEngineWake(
               amount(order.proposal.quantityBase),
             );
             const plan = control.plans.find((p) => p.positionId === enteringPosition);
-            if (plan) plan.stopRiskQuote = format(amount(plan.stopRiskQuote) + risk);
-            else
+            if (plan) {
+              plan.stopRiskQuote = format(amount(plan.stopRiskQuote) + risk);
+              // A filled addition CONSUMES previously guaranteed capacity.
+              const consumed = notional(
+                filled,
+                amount(order.proposal.orderType === "limit"
+                  ? order.proposal.limitPriceQuote!
+                  : order.proposal.side === "long"
+                    ? snapshots.get(order.proposal.instrument)!.book.askQuote
+                    : snapshots.get(order.proposal.instrument)!.book.bidQuote),
+              );
+              const initial = amount(plan.recoveryReserveQuote);
+              const actuallyConsumed = consumed < initial ? consumed : initial;
+              const heldRisk = amount(plan.recoveryReservedRiskQuote);
+              const usedRisk =
+                initial > 0n ? ceil(heldRisk * actuallyConsumed, initial) : 0n;
+              plan.recoveryReserveQuote = format(
+                initial > actuallyConsumed ? initial - actuallyConsumed : 0n,
+              );
+              plan.recoveryReservedRiskQuote = format(
+                heldRisk > usedRisk ? heldRisk - usedRisk : 0n,
+              );
+            } else {
               control.plans.push({
                 positionId: enteringPosition,
                 stopPriceQuote: order.proposal.stopPriceQuote,
                 takeProfitPriceQuote: order.proposal.takeProfitPriceQuote,
                 stopRiskQuote: format(risk),
+                recoveryReserveQuote: format(
+                  ceil(amount(accepted.plannedRecoveryNotionalQuote) * filled,
+                    amount(order.proposal.quantityBase)),
+                ),
+                recoveryReservedRiskQuote: format(
+                  ceil(amount(accepted.plannedRecoveryRiskQuote) * filled,
+                    amount(order.proposal.quantityBase)),
+                ),
                 fundingThrough: now.toISOString(),
               });
+            }
             order.ideaRiskSpentQuote = format(amount(order.ideaRiskSpentQuote) + risk);
           }
           const pending = output.openOrders.find((o) => o.orderId === prefix + ":entry");
