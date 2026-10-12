@@ -6,7 +6,7 @@ import {
 
 const make = (side: "long" | "short"): PaperVolatilityCandle[] =>
   Array.from({ length: 24 }, (_, i) => {
-    const low = side === "long" ? (i === 8 ? 50 : i === 16 ? 50.2 : 55) : 50;
+    const low = side === "long" ? (i === 8 ? 50 : i === 16 ? 50.2 : 55) : i === 23 ? 35 : 50;
     const high = side === "short" ? (i === 8 ? 80 : i === 16 ? 80.1 : 75) : 75;
     const close = i === 23 ? (side === "long" ? 70 : 40) : 60;
     return {
@@ -28,7 +28,10 @@ describe("PAPER recovery must not average down a falling knife", () => {
       reason: "two_pivots_and_neckline_break",
     });
     expect(
-      assessPaperRecoveryStructure(history.map((c, i) => (i === 23 ? { ...c, close: "59" } : c)), "long"),
+      assessPaperRecoveryStructure(
+        history.map((c, i) => (i === 23 ? { ...c, close: "59" } : c)),
+        "long",
+      ),
     ).toMatchObject({ status: "unconfirmed_structure" });
   });
   it("can recognize the symmetric double top for a losing short, not as guarantee", () => {
@@ -42,10 +45,18 @@ describe("PAPER recovery must not average down a falling knife", () => {
       status: "unconfirmed_structure",
     });
     expect(
-      assessPaperRecoveryStructure(history.map((c, i) => i === 7 ? { ...c, confirmed: false } : c, "long"),
+      assessPaperRecoveryStructure(
+        history.map((c, i) => (i === 7 ? { ...c, confirmed: false } : c)),
+        "long",
+      ),
     ).toMatchObject({ status: "unconfirmed_structure" });
     expect(
-      assessPaperRecoveryStructure(history.map((c, i) => i === 20 ? { ...c, openedAt: c.openedAt.replace("20:00", "19:00") } : c, "long"),
+      assessPaperRecoveryStructure(
+        history.map((c, i) =>
+          i === 20 ? { ...c, openedAt: c.openedAt.replace("20:00", "19:00") } : c,
+        ),
+        "long",
+      ),
     ).toMatchObject({ status: "unconfirmed_structure" });
   });
 });
