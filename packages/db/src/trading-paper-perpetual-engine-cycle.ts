@@ -468,18 +468,20 @@ export async function commitPerpetualEngineWake(
                   signed(state.markedEquityQuote) > 0n ? signed(state.markedEquityQuote) : 0n,
                 ),
                 peakEquityQuote: format(
-                  (prior?.transitions ?? []).reduce((peak, historical) => {
-                    const equity =
-                      signed(historical.output.balanceQuote) +
-                      historical.output.positions.reduce(
-                        (sum, held) => sum + signed(held.unrealizedPnlQuote),
-                        0n,
-                      );
-                    return equity > peak ? equity : peak;
-                  },
-                  signed(state.markedEquityQuote) > amount(preset.initialBalanceQuote)
-                    ? signed(state.markedEquityQuote)
-                    : amount(preset.initialBalanceQuote)),
+                  (prior?.transitions ?? []).reduce(
+                    (peak, historical) => {
+                      const equity =
+                        signed(historical.output.balanceQuote) +
+                        historical.output.positions.reduce(
+                          (sum, held) => sum + signed(held.unrealizedPnlQuote),
+                          0n,
+                        );
+                      return equity > peak ? equity : peak;
+                    },
+                    signed(state.markedEquityQuote) > amount(preset.initialBalanceQuote)
+                      ? signed(state.markedEquityQuote)
+                      : amount(preset.initialBalanceQuote),
+                  ),
                 ),
                 openStopRiskQuote: format(
                   control.plans.reduce((sum, x) => sum + amount(x.stopRiskQuote), 0n),
@@ -633,8 +635,7 @@ export async function commitPerpetualEngineWake(
             // long goes up / short goes down. A stop at or beyond the mark
             // is unsafe; the normal protection cycle, not AI prose, exits.
             const improves = held.side === "long" ? requested > previous : requested < previous;
-            const behindMarket =
-              held.side === "long" ? requested < current : requested > current;
+            const behindMarket = held.side === "long" ? requested < current : requested > current;
             if (!improves || !behindMarket || increment === 0n || requested % increment !== 0n) {
               outcome = "denied_stop_not_tighter";
             } else {

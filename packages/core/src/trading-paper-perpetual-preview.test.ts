@@ -180,7 +180,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
   it("fails closed if marked account equity is missing", () => {
     expectDenial(
       { portfolio: { ...fixture.portfolio, markedEquityQuote: "0" } },
-      "portfolio_stress_exceeded",
+      "invalid_input",
     );
   });
 
