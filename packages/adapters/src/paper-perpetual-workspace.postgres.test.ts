@@ -509,6 +509,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
           const journal = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
           expect(journal?.status, profile.strategy).toBe("verified");
+          if (journal?.status !== "verified") throw new Error("Unverified account journal");
           expect(journal?.state.openPositions, profile.strategy).toHaveLength(1);
           expect(journal?.state.openPositions[0]).toMatchObject({
             instrument: profile.instrument,
@@ -542,6 +543,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           });
           const journal = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
           expect(journal?.status).toBe("verified");
+          if (journal?.status !== "verified") throw new Error("Unverified replay journal");
           expect(journal?.state.openPositions).toHaveLength(1);
         }
 
@@ -558,6 +560,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id));
           const journal = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
           expect(journal?.status).toBe("verified");
+          if (journal?.status !== "verified") throw new Error("Unverified replay journal");
           expect(journal?.state.openPositions).toHaveLength(0);
           expect(journal?.state.liquidations).toBe(0);
           expect(Number(journal?.state.bookBalanceQuote)).toBeGreaterThan(990);
