@@ -464,6 +464,101 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     120000,
   );
   it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "scales into a verified lot and rotates a fully closed lot into an opposite-side hedge",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine);
+        decision = { ...proposal("long"), leverage: 20 };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        let positions = (await state(id)).openPositions;
+        expect(positions).toHaveLength(1);
+        const originalId = positions[0]!.positionId;
+
+        decision = { ...proposal("long"), leverage: 20, quantityBase: "0.50", addToPositionId: originalId };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        positions = (await state(id)).openPositions;
+        expect(positions).toHaveLength(1);
+        expect(positions[0]!.positionId).toBe(originalId);
+        expect(positions[0]!.quantityBase).toBe("1.50000000");
+
+        // The native worker must reject a scale-in that tries to change old protective exits.
+        decision = {
+          ...proposal("long"),
+          leverage: 20,
+          quantityBase: "0.50",
+          addToPositionId: originalId,
+          stopPriceQuote: "94",
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await state(id)).openPositions[0]!.quantityBase).toBe("1.50000000");
+        expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
+          lastDecision: { outcome: "denied_add_plan_mismatch" },
+        });
+
+        decision = {
+          ...proposal("short"),
+          leverage: 20,
+          replacePositionId: originalId,
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        positions = (await state(id)).openPositions;
+        expect(positions).toHaveLength(1);
+        expect(positions[0]!.side).toBe("short");
+        expect(positions[0]!.positionId).not.toBe(originalId);
+        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe("verified");
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "permits a hedge rotation at four occupied slots only after a real full exit",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine);
+        for (const [instrument, side] of [
+          ["BTC-USDT-SWAP", "long"],
+          ["BTC-USDT-SWAP", "short"],
+          ["SOL-USDT-SWAP", "long"],
+          ["SOL-USDT-SWAP", "short"],
+        ] as const) {
+          decision = { ...proposal(side, instrument), leverage: 20, quantityBase: "0.50" };
+          await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        }
+        const before = (await state(id)).openPositions;
+        expect(before).toHaveLength(4);
+        decision = {
+          ...proposal("short", "SOL-USDT-SWAP"),
+          leverage: 20,
+          quantityBase: "0.50",
+          replacePositionId: before.find((pos) => pos.side === "long")!.positionId,
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const after = (await state(id)).openPositions;
+        expect(after).toHaveLength(4);
+        expect(after.some((pos) => pos.positionId === decision.replacePositionId)).toBe(false);
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
     "cancels native GTC entries on an owner leverage change before a crossed quote",
     async () => {
       const engine = new NautilusPaperEngine({
