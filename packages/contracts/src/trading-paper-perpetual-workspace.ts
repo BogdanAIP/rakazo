@@ -200,6 +200,13 @@ export const PaperPerpetualWorkspaceStatusSchema = z.object({
           positionId: Id,
           reservedNotionalQuote: Decimal,
           reservedStopRiskQuote: Decimal,
+          stages: z.array(z.object({
+            stepId: Id,
+            triggerPriceQuote: Positive,
+            maximumNotionalQuote: Decimal,
+            remainingNotionalQuote: Decimal,
+            activatedAt: IsoDate.nullable(),
+          }).strict()).max(2).optional(),
         })
         .strict(),
     )
