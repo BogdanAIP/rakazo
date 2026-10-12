@@ -271,7 +271,7 @@ export function PaperPerpetualJournalPanel() {
           )}
           {accounts?.ledgers.map((entry) => (
             <option key={entry.ledgerId} value={entry.ledgerId}>
-              {strategyName[entry.strategy]} · {entry.ledgerId} · {entry.eventsCount} событий
+              {strategyName[entry.strategy]} · {entry.eventsCount} событий
             </option>
           ))}
         </select>

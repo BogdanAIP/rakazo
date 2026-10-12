@@ -460,7 +460,11 @@ export async function readPerpetualWake(
     prisma.$transaction(
       async (tx) => {
         const { row, control } = await lockOwnedPerpetualWorkspace(tx, owner, ledgerId);
-        const { state } = await recoverPerpetualPaperInTransaction(tx, owner, ledgerId);
+        const { state, engineConfig } = await recoverPerpetualPaperInTransaction(
+          tx,
+          owner,
+          ledgerId,
+        );
         const now = await perpetualDatabaseClock(tx);
         if (
           row.revision !== revision ||
@@ -480,7 +484,7 @@ export async function readPerpetualWake(
           await savePerpetualControl(tx, ledgerId, revision, { ...control, orders: [] }, null);
           return null;
         }
-        return { row, control, state, entries, now };
+        return { row, control, state, engineConfig, entries, now };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),

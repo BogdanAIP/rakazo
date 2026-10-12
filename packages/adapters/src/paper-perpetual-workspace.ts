@@ -12,7 +12,7 @@ import type {
   PaperPerpetualSnapshot,
 } from "@rakazo/contracts";
 import { PaperPerpetualDecisionSchema } from "@rakazo/contracts";
-import { getPaperExperimentPreset } from "@rakazo/core";
+import { getPaperExperimentPreset, PAPER_OKX_LV1_FEES } from "@rakazo/core";
 import type { PerpetualOwner, PrismaClient } from "@rakazo/db";
 import {
   cancelPerpetualEngineOrders,
@@ -208,6 +208,12 @@ export async function handlePerpetualPaperWake(
       failure = "model_unavailable";
       model = await deps.resolveModel(owner);
       const preset = getPaperExperimentPreset(current.state.strategy);
+      const executionFees = current.control.instruments.map((instrument) => {
+        const fees =
+          current.engineConfig?.instruments.find((terms) => terms.instrument === instrument) ??
+          (deps.engine ? PAPER_OKX_LV1_FEES : { makerFeeRate: "0.001", takerFeeRate: "0.001" });
+        return { instrument, makerFeeRate: fees.makerFeeRate, takerFeeRate: fees.takerFeeRate };
+      });
       const result = await invokePaperSkillDecision(deps.runtime, {
         owner,
         model,
@@ -221,7 +227,7 @@ export async function handlePerpetualPaperWake(
           "Select an independent strategy suitable for this profile. Compare all allowed instruments and decide no_trade, a new proposal, or close an existing position.",
           "Long and short positions are independent hedge lots. Opposite positions never cancel automatically. quantityBase is BASE currency, not contract count.",
           "Use a stop and a profitable take-profit. Respect the profile's leverage, per-idea stop loss, daily loss, total open risk, gross exposure and position count caps.",
-          "Stop loss must include entry/exit fees of 10 bps each and adverse slippage of 10 bps each. Round quantity DOWN to lotIncrementBase.",
+          "Stop loss must budget entry and exit at the highest nonnegative supplied maker/taker rate for that instrument and include the adverse slippage reserve. Fee rates are decimal fractions of filled notional, not margin; marketable limits can be taker. Round quantity DOWN to lotIncrementBase.",
           "This simulator uses account-wide margin. Reserve gross initial margin for BOTH hedge legs plus fees. While any position is open, use its existing leverage for all new entries; owner maxLeverage is a ceiling. Maintenance and funding consume equity.",
           "Only choose a position when the public evidence supports it. Otherwise explain no_trade. Never invent prices or balance fields.",
           "Respond in Russian in rationale/reason. Your proposal is independently checked and may be denied by execution rules.",
@@ -233,8 +239,8 @@ export async function handlePerpetualPaperWake(
           account: current.state,
           protectionPlans: current.control.plans,
           allowedInstruments: current.control.instruments,
-          simulatedFeesBps: 10,
-          simulatedSlippageBps: 10,
+          executionFees,
+          slippageReserveBpsPerSide: 10,
         },
         schema: z.toJSONSchema(PaperPerpetualDecisionSchema),
       });

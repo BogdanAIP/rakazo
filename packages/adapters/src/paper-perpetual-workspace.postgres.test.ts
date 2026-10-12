@@ -395,6 +395,15 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         ).toMatchObject({ runtimeError: null, lastDecision: { outcome: "filled" } });
         expect((await state(id)).openPositions).toHaveLength(1);
         expect((await state(id)).openPositions[0]!.leverage).toBe(20);
+        const modelContext = JSON.parse(
+          (calls[0] as Parameters<AgentRuntime["run"]>[0]).prompt,
+        ).publicMarketData;
+        expect(modelContext).toMatchObject({
+          executionFees: expect.arrayContaining([
+            { instrument: "BTC-USDT-SWAP", makerFeeRate: "0.0002", takerFeeRate: "0.0005" },
+          ]),
+          slippageReserveBpsPerSide: 10,
+        });
         expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
           executionFees: expect.arrayContaining([
             { instrument: "BTC-USDT-SWAP", makerFeeRate: "0.0002", takerFeeRate: "0.0005" },
