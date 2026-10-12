@@ -25,9 +25,16 @@ export const PaperPerpetualDecisionSchema = z.discriminatedUnion("kind", [
       limitPriceQuote: Positive.nullable(),
       stopPriceQuote: Positive,
       takeProfitPriceQuote: Positive,
+      /** Optional native-only scale-in: reuse the existing position and its exits. */
+      addToPositionId: Id.optional(),
+      /** Optional native-only rotation: close this old position before attempting entry. */
+      replacePositionId: Id.optional(),
       rationale: z.string().trim().min(1).max(2000),
     })
-    .strict(),
+    .strict()
+    .refine((p) => !(p.addToPositionId && p.replacePositionId), {
+      message: "Cannot scale in and rotate out in one proposal",
+    }),
   z
     .object({
       kind: z.literal("close"),
