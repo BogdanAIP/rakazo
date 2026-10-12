@@ -625,6 +625,61 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
   );
 
   it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "gapped stop with thin then zero liquidity persists residual without reversing or phantom fills",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine);
+        decision = { ...proposal("long"), leverage: 20, quantityBase: "1.00" };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await state(id)).openPositions).toHaveLength(1);
+        const original = (await state(id)).openPositions[0]!.positionId;
+
+        // A sharp 10% price gap skips the chosen stop: fill ONLY displayed depth.
+        price = "90";
+        depth = "0.25";
+        modelFails = true;
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        let after = await state(id);
+        expect(after.openPositions).toHaveLength(1);
+        expect(after.openPositions[0]!.positionId).toBe(original);
+        expect(Number(after.openPositions[0]!.quantityBase)).toBe(0.75);
+        expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
+          sessionStatus: "paused",
+          runtimeError: "model_unavailable",
+        });
+
+        // Zero exit liquidity must NOT fabricate a stop fill or reverse into a short.
+        depth = "0";
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id));
+        after = await state(id);
+        expect(after.openPositions).toHaveLength(1);
+        expect(Number(after.openPositions[0]!.quantityBase)).toBe(0.75);
+        expect(after.openPositions[0]!.side).toBe("long");
+
+        // On later public depth, the independently protected remainder exits.
+        engine.invalidate(id);
+        depth = "100";
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id));
+        after = await state(id);
+        expect(after.openPositions).toHaveLength(0);
+        expect(after.closedPositions).toBe(1);
+        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
+          "verified",
+        );
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
     "cancels native GTC entries on an owner leverage change before a crossed quote",
     async () => {
       const engine = new NautilusPaperEngine({
