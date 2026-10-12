@@ -50,6 +50,14 @@ export const PaperPerpetualDecisionSchema = z.discriminatedUnion("kind", [
       reason: z.string().trim().min(1).max(2000),
     })
     .strict(),
+  z
+    .object({
+      kind: z.literal("tighten_stop"),
+      positionId: Id,
+      stopPriceQuote: Positive,
+      reason: z.string().trim().min(1).max(2000),
+    })
+    .strict(),
 ]);
 export type PaperPerpetualDecision = z.infer<typeof PaperPerpetualDecisionSchema>;
 export const PaperPerpetualSourceSchema = z
