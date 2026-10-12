@@ -12,6 +12,7 @@ import {
   type PerpetualPaperLedgerState,
   projectPerpetualEngineSnapshot,
   replayPerpetualPaperLedger,
+  summarizePaperPositionRecovery,
 } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
@@ -435,6 +436,7 @@ export async function readOwnedPerpetualPaperJournal(
             openedAt: scoped.openedAt.toISOString(),
             updatedAt: scoped.updatedAt.toISOString(),
             state: { ...state, openPositions: [...state.openPositions] },
+            recovery: summarizePaperPositionRecovery(native.transitions),
             events: page.map((r) => ({
               kind: "engine" as const,
               ledgerId,
