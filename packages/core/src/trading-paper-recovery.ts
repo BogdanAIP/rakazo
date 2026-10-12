@@ -60,11 +60,19 @@ export function summarizePaperPositionRecovery(transitions: readonly Transition[
     }
   | { status: "incomplete"; scope: "position_only"; reason: string } {
   const episodes = new Map<string, PositionEpisode>();
+  // GTC limit orders can fill many native batches after their submission.
+  // Retain the historical, verified order-to-position link across replay.
+  const orders = new Map<string, Extract<PaperPerpetualEngineBatch["commands"][number], {kind: "order"}>>();
   try {
     for (const { input, output } of transitions) {
-      const orders = new Map(
-        input.commands.filter((x) => x.kind === "order").map((x) => [x.orderId, x]),
-      );
+      for (const command of input.commands) {
+        if (command.kind === "order") {
+          const previous = orders.get(command.orderId);
+          if (previous && JSON.stringify(previous) !== JSON.stringify(command))
+            throw new Error("conflicting_native_order_lineage");
+          orders.set(command.orderId, command);
+        }
+      }
       for (const event of output.events) {
         if (event.kind === "fill") {
           const id = event.positionId;
