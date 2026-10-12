@@ -464,6 +464,112 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     120000,
   );
   it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "final prelaunch smoke: starts all three isolated 1000-USDT accounts, journals native fills, pauses and safely exits after replay",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const profiles = [
+          { strategy: "conservative", ceiling: 5, instrument: "BTC-USDT-SWAP" },
+          { strategy: "moderate", ceiling: 10, instrument: "SOL-USDT-SWAP" },
+          { strategy: "aggressive", ceiling: 20, instrument: "ETH-USDT-SWAP" },
+        ] as const;
+        const accounts = (
+          await createOwnedPerpetualExperimentAccounts(
+            db.prisma,
+            owner,
+            profiles.map((p) => p.strategy),
+          )
+        ).accounts;
+        expect(accounts).toHaveLength(3);
+        const ids = profiles.map((p) => accounts.find((a) => a.strategy === p.strategy)!.ledgerId);
+        expect(new Set(ids).size).toBe(3);
+
+        // A real owner Start is mandatory even in this isolated test.
+        for (const [idx, profile] of profiles.entries()) {
+          const id = ids[idx]!;
+          const before = await state(id);
+          expect(before.initialBalanceQuote).toBe("1000.00000000");
+          expect(before.openPositions).toHaveLength(0);
+          const unstarted = await readOwnedPerpetualWorkspace(db.prisma, owner, id);
+          expect(unstarted).toMatchObject({ sessionStatus: "idle" });
+          await start(id, engine, [profile.instrument]);
+          decision = {
+            ...proposal("long", profile.instrument),
+            leverage: profile.ceiling,
+            quantityBase: "1.00",
+            recoverySteps: [
+              { stepId: "r1", triggerPriceQuote: "98.5", allocationPercent: 60 },
+              { stepId: "r2", triggerPriceQuote: "97.5", allocationPercent: 40 },
+            ],
+            // Both stages strictly above hard stop of 97 and below entry of 100.
+          };
+          await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+          const journal = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
+          expect(journal?.status, profile.strategy).toBe("verified");
+          expect(journal?.state.openPositions, profile.strategy).toHaveLength(1);
+          expect(journal?.state.openPositions[0]).toMatchObject({
+            instrument: profile.instrument,
+            leverage: profile.ceiling,
+          });
+          expect(Number(journal?.state.bookBalanceQuote)).toBeGreaterThan(990);
+          const ws = await readOwnedPerpetualWorkspace(db.prisma, owner, id);
+          expect(ws).toMatchObject({
+            sessionStatus: "active",
+            runtimeError: null,
+            lastDecision: { outcome: "filled" },
+          });
+          expect(ws?.recoveryReservations?.[0]?.stages).toHaveLength(2);
+          expect(ws?.recoveryReservations?.[0]?.stages?.[0]?.activatedAt).toBeNull();
+        }
+
+        // No shared wallet or unintended cross-ledger entries.
+        for (const id of ids) {
+          const journal = await state(id);
+          expect(journal.openPositions).toHaveLength(1);
+          expect(journal.openPositions[0]!.positionId).toBeTruthy();
+          expect(Number(journal.bookBalanceQuote)).toBeGreaterThan(990);
+        }
+
+        // Crash/restart forces safe pause, retaining the positions and hash journals.
+        for (const id of ids) engine.invalidate(id);
+        await reconcilePerpetualPaperWorkspaces({ ...deps(), engine }, true);
+        for (const id of ids) {
+          expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
+            sessionStatus: "paused",
+          });
+          const journal = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
+          expect(journal?.status).toBe("verified");
+          expect(journal?.state.openPositions).toHaveLength(1);
+        }
+
+        // Owner-driven drain; never let research generate a new entry while stopping.
+        modelFails = true;
+        for (const id of ids) {
+          const status = await readOwnedPerpetualWorkspace(db.prisma, owner, id);
+          await controlPerpetualPaperWorkspace({ ...deps(), engine }, owner, {
+            ledgerId: id,
+            commandId: randomUUID(),
+            expectedRevision: status!.revision,
+            action: "close_all",
+          });
+          await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id));
+          const journal = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
+          expect(journal?.status).toBe("verified");
+          expect(journal?.state.openPositions).toHaveLength(0);
+          expect(journal?.state.liquidations).toBe(0);
+          expect(Number(journal?.state.bookBalanceQuote)).toBeGreaterThan(990);
+        }
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
     "scales into a verified lot and rotates a fully closed lot into an opposite-side hedge",
     async () => {
       const engine = new NautilusPaperEngine({
