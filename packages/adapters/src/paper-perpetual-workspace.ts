@@ -273,7 +273,8 @@ export async function handlePerpetualPaperWake(
       if (
         !deps.engine &&
         (decision.kind === "reduce" ||
-          (decision.kind === "proposal" && (decision.addToPositionId || decision.replacePositionId)))
+          (decision.kind === "proposal" &&
+            (decision.addToPositionId || decision.replacePositionId)))
       ) {
         decision = {
           kind: "no_trade",
