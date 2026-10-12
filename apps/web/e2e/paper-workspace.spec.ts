@@ -371,6 +371,9 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
     await page.getByLabel("Длительность новых входов").selectOption("15");
     await page.getByRole("button", { name: "Проверить запуск фьючерсов" }).click();
     await expect(page.getByLabel("Проверка запуска фьючерсов")).toBeVisible();
+    await expect(page.getByLabel("Проверка запуска фьючерсов")).toContainText(
+      "Исполнение по публичным bid/ask без дополнительного проскальзывания.",
+    );
     expect(await db.prisma.tradingPaperPerpetualEvent.count({ where: { ledgerId } })).toBe(0);
     await captureScreenshot(page, testInfo, "futures-reviewed-start");
     await page.getByRole("button", { name: "Запустить PAPER-фьючерсы", exact: true }).click();

@@ -16,6 +16,13 @@ leverage changes require a flat account; while positions remain open, new
 entries must use the existing native leverage. A later flat session can register
 new selected contracts without resetting its wallet.
 
+Native execution consumes the available public bid/ask and depth without an extra
+fixed slippage charge. Both maker and taker PAPER commissions are 0.1% per side.
+The risk preview reserves another 10 bps per side conservatively; this reserve
+is not charged to the native wallet. The Start review states these assumptions.
+Observation and public-tier freshness tolerate at most 2 seconds of positive
+host/exchange clock skew and still reject data older than 30 seconds.
+
 Native fills, commissions, realized PnL, funding adjustments, positions, resting
 orders and wallet balances are the accounting authority. Ordered inputs and
 results commit in the same owner-scoped database transaction as the workspace

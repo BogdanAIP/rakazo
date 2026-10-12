@@ -11,6 +11,7 @@ import {
   evaluatePaperLeverage,
   formatPaperPerpetualAmount as format,
   getPaperExperimentPreset,
+  isFreshPaperObservation,
   paperPerpetualNotional as notional,
   previewPaperPerpetualProposal,
   projectPerpetualEngineSnapshot,
@@ -106,7 +107,7 @@ export async function commitPerpetualEngineWake(
           )
             throw new Error("Unverified derivative market identity");
           for (const at of [s.book.observedAt, s.markObservedAt, s.fetchedAt])
-            if (Date.parse(at) > clock || clock - Date.parse(at) > 30000)
+            if (!isFreshPaperObservation(at, now.toISOString()))
               throw new Error("Stale futures execution observation");
         }
         let outcome = key.stage === "protection" ? "protection_checked" : "no_trade";
@@ -309,8 +310,9 @@ export async function commitPerpetualEngineWake(
           Date.parse(control.expiresAt) > clock;
         for (const snapshot of execution)
           if (
-            clock - Date.parse(snapshot.book.observedAt) > 30000 ||
-            clock - Date.parse(snapshot.markObservedAt) > 30000
+            !isFreshPaperObservation(snapshot.book.observedAt, now.toISOString()) ||
+            !isFreshPaperObservation(snapshot.markObservedAt, now.toISOString()) ||
+            !isFreshPaperObservation(snapshot.fetchedAt, now.toISOString())
           )
             throw new Error("Execution observation expired during native preparation");
         const beforeEntry = state;

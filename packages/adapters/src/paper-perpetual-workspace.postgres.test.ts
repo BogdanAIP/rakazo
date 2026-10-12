@@ -42,6 +42,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
   let fundingNextAtOverride: string | null = null;
   let modelFails = false;
   let tierMaximumBase = "100";
+  let observationShiftMs = 0;
   let price = "100",
     depth = "100",
     funding: PaperPerpetualSnapshot["funding"] = [];
@@ -55,7 +56,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
   } as unknown as AgentRuntime;
   const snapshot = async (instrument: string): Promise<PaperPerpetualSnapshot> => {
     await new Promise((resolve) => setTimeout(resolve, 5));
-    const now = new Date(),
+    const now = new Date(Date.now() + observationShiftMs),
       at = now.toISOString();
     return {
       market: {
@@ -163,6 +164,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     calls.length = 0;
     modelFails = false;
     tierMaximumBase = "100";
+    observationShiftMs = 0;
     price = "100";
     depth = "100";
     funding = [];
@@ -344,6 +346,33 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       scheduledFor: now.toISOString(),
     };
   }
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "accepts bounded clock skew in native observations and pauses on excessive skew",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine);
+        observationShiftMs = 1500;
+        decision = { ...proposal("long"), leverage: 20 };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await state(id)).openPositions).toHaveLength(1);
+        observationShiftMs = 6000;
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await state(id)).openPositions).toHaveLength(1);
+        expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
+          sessionStatus: "paused",
+        });
+      } finally {
+        await engine.dispose();
+      }
+    },
+  );
 
   it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
     "runs the production futures worker through native long/short, pause, replay and protective exits",

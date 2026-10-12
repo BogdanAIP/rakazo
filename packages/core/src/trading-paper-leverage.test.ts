@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluatePaperLeverage,
+  isFreshPaperObservation,
   type PaperLeverageInput,
   type PaperVenueLeverageLimits,
 } from "./trading-paper-leverage.js";
@@ -95,7 +96,7 @@ describe("PAPER leverage against owner settings and fresh venue tiers", () => {
       status: "deny",
       reason: "venue_limits_unavailable",
     });
-    for (const observedAt of ["2026-10-10T23:59:30.000Z", "2026-10-11T00:00:02.000Z"]) {
+    for (const observedAt of ["2026-10-10T23:59:30.000Z", "2026-10-11T00:00:03.001Z"]) {
       expect(evaluatePaperLeverage({ ...fixture, limits: { ...limits, observedAt } })).toEqual({
         status: "deny",
         reason: "venue_limits_stale",
@@ -131,6 +132,18 @@ describe("PAPER leverage against owner settings and fresh venue tiers", () => {
         reason: "invalid_venue_tiers",
       });
     }
+  });
+
+  it("accepts bounded clock skew but rejects stale, invalid and far-future evidence", () => {
+    for (const offset of [-30_001, -30_000, 0, 1_000, 2_000, 2_001]) {
+      const observedAt = new Date(Date.parse(fixture.now) + offset).toISOString();
+      const allowed = offset >= -30_000 && offset <= 2_000;
+      expect(isFreshPaperObservation(observedAt, fixture.now)).toBe(allowed);
+      expect(evaluatePaperLeverage({ ...fixture, limits: { ...limits, observedAt } }).status).toBe(
+        allowed ? "allowed" : "deny",
+      );
+    }
+    expect(isFreshPaperObservation("invalid", fixture.now)).toBe(false);
   });
 
   it("fails closed on malformed quantities, clocks and leverage", () => {

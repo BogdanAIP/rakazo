@@ -355,9 +355,9 @@ export function PaperPerpetualControls({
                     паузу.
                   </p>
                   <p className="text-sm">
-                    Комиссия PAPER: 0,1% за сторону, проскальзывание: 0,1%. Funding рассчитан по
-                    фактической опубликованной ставке и последней наблюдаемой Mark-цене; это
-                    виртуальная оценка.
+                    Комиссия PAPER: 0,1% за сторону. Исполнение по публичным bid/ask без
+                    дополнительного проскальзывания. Funding рассчитан по фактической опубликованной
+                    ставке и последней наблюдаемой Mark-цене; это виртуальная оценка.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button disabled={pending} onClick={() => void command("start")}>
@@ -408,8 +408,8 @@ export function PaperPerpetualControls({
             >
               <p className="text-sm">
                 Остановить новые входы и закрыть {openPositions} виртуальных позиций по свежему
-                публичному стакану с комиссией и проскальзыванием? При недостаточном объёме остаток
-                будет повторно проверяться до 15 минут.
+                публичному стакану с комиссией? При недостаточном объёме остаток будет повторно
+                проверяться до 15 минут.
               </p>
               <div className="flex gap-2">
                 <Button disabled={pending} onClick={() => void command("close_all")}>

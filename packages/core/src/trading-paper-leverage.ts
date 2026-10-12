@@ -45,6 +45,17 @@ export type PaperLeverageResult =
 
 const SCALE = 100_000_000n;
 const MAX_LIMIT_AGE_MS = 30_000;
+const MAX_CLOCK_AHEAD_MS = 2_000;
+
+/** Bounded host/exchange clock skew; this does not change event ordering. */
+export function isFreshPaperObservation(observedAt: string, now: string): boolean {
+  try {
+    const age = clock(now) - clock(observedAt);
+    return age >= -MAX_CLOCK_AHEAD_MS && age <= MAX_LIMIT_AGE_MS;
+  } catch {
+    return false;
+  }
+}
 
 function quantity(raw: string): bigint {
   if (!/^(?:0|[1-9]\d{0,11})(?:\.\d{1,8})?$/.test(raw)) {
@@ -103,8 +114,8 @@ export function evaluatePaperLeverage(input: PaperLeverageInput): PaperLeverageR
     if (!limits.sourceId.trim() || limits.sourceId.length > 256) {
       return deny("venue_limits_unavailable");
     }
-    const age = now - clock(limits.observedAt);
-    if (age < 0 || age > MAX_LIMIT_AGE_MS) return deny("venue_limits_stale");
+    if (!isFreshPaperObservation(limits.observedAt, new Date(now).toISOString()))
+      return deny("venue_limits_stale");
     if (limits.tiers.length === 0 || limits.tiers.length > 1000) {
       return deny("invalid_venue_tiers");
     }
