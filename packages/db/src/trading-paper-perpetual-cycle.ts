@@ -434,7 +434,9 @@ export async function commitPerpetualPaperWake(
                   ),
                   sameIdeaStopRiskQuote: format(
                     control.plans.reduce((sum, plan) => {
-                      const held = state.openPositions.find((pos) => pos.positionId === plan.positionId);
+                      const held = state.openPositions.find(
+                        (pos) => pos.positionId === plan.positionId,
+                      );
                       return held?.instrument === proposal.instrument && held.side === proposal.side
                         ? sum + amount(plan.stopRiskQuote)
                         : sum;
