@@ -55,6 +55,8 @@ export type PaperPerpetualProposalInput = Readonly<{
   stopPriceQuote: string;
   takeProfitPriceQuote: string;
   availableQuote: string;
+  /** Future additional gross quote budget for this NEW idea; no automatic order. */
+  additionalRecoveryNotionalQuote?: string;
   /** Snapshot MUST come from the same owner-scoped ledger, never from the model. */
   portfolio: Readonly<{
     openPositions: number;
@@ -63,6 +65,11 @@ export type PaperPerpetualProposalInput = Readonly<{
     openLongNotionalQuote: string;
     /** Gross marked/opening value of short legs. */
     openShortNotionalQuote: string;
+    /** Unspent reserves on OTHER and EXISTING position ideas, split by side. */
+    recoveryLongNotionalQuote?: string;
+    recoveryShortNotionalQuote?: string;
+    recoveryReservedRiskQuote?: string;
+    sameIdeaReservedRiskQuote?: string;
     /** Current marked equity from the native simulator, not model-supplied. */
     markedEquityQuote: string;
     /** High watermark derived from verified historical native equity, not the model. */
@@ -111,6 +118,8 @@ export type PaperPerpetualProposal =
       entryFeeQuote: string;
       stopExitFeeQuote: string;
       worstCaseStopLossQuote: string;
+      plannedRecoveryNotionalQuote: string;
+      plannedRecoveryRiskQuote: string;
       maintenanceMarginQuote: string;
       collateralRemainingAtStopQuote: string;
       equityRemainingAfterStressQuote: string;
@@ -152,6 +161,12 @@ export function previewPaperPerpetualProposal(
     const openNotional = exact(input.portfolio.openNotionalQuote);
     const longNotional = exact(input.portfolio.openLongNotionalQuote);
     const shortNotional = exact(input.portfolio.openShortNotionalQuote);
+    const reservedLong = exact(input.portfolio.recoveryLongNotionalQuote ?? "0");
+    const reservedShort = exact(input.portfolio.recoveryShortNotionalQuote ?? "0");
+    const reservedRisk = exact(input.portfolio.recoveryReservedRiskQuote ?? "0");
+    const reservedSameIdea = exact(input.portfolio.sameIdeaReservedRiskQuote ?? "0");
+    const newRecovery = exact(input.additionalRecoveryNotionalQuote ?? "0");
+    if (reservedSameIdea > reservedRisk) return deny("invalid_input");
     if (longNotional + shortNotional !== openNotional) return deny("invalid_input");
     const markedEquity = exact(input.portfolio.markedEquityQuote);
     const peakEquity = exact(input.portfolio.peakEquityQuote);
@@ -209,16 +224,27 @@ export function previewPaperPerpetualProposal(
       input.side === "long" ? effectiveEntry - effectiveStop : effectiveStop - effectiveEntry;
     const priceLoss = ceil(qty * adverseDifference, SCALE);
     const stopRisk = priceLoss + entryFee + stopFee;
+    // Pretend reserved future adds eventually fill at an adverse comparable
+    // price, WITHOUT making orders or treating these budgets as actual margin.
+    const plannedRecoveryRisk =
+      ceil(newRecovery * adverseDifference, effectiveEntry) +
+      ceil(newRecovery * fee * 2n, BPS);
     const maintenance = ceil((notional > closeNotional ? notional : closeNotional) * mmr, BPS);
     // Account-wide cross margin: unused collateral is available as support.
     // Never treat initial margin of this isolated order as liquidation equity.
     // Conservative combined stop exposure from the entire account is used below.
-    const projectedGross = openNotional + notional;
-    const wholeStopRisk = openRisk + stopRisk;
+    const projectedGross =
+      openNotional + notional + reservedLong + reservedShort + newRecovery;
+    const wholeStopRisk = openRisk + reservedRisk + stopRisk + plannedRecoveryRisk;
     const stopMaintenance = ceil(projectedGross * (mmr > 200n ? mmr : 200n), BPS);
     const stopEquityRemaining = markedEquity - wholeStopRisk;
     if (stopEquityRemaining <= stopMaintenance) return deny("liquidation_before_stop");
-    if (margin + entryFee > available) return deny("insufficient_margin");
+    // Reserve capacity BEFORE other independent ideas consume free collateral.
+    if (
+      margin + entryFee +
+        ceil(reservedLong + reservedShort + newRecovery, BigInt(input.leverage)) >
+      available
+    ) return deny("insufficient_margin");
     // Futures exposure is bounded by live account equity under a simultaneous
     // adverse-move stress, not a legacy fixed SPOT notional cap. Count gross
     // long + short notional: opposite hedge legs are NOT guaranteed to offset.
@@ -234,8 +260,10 @@ export function previewPaperPerpetualProposal(
     // Even a full long collapse to zero and a 200% adverse short rally must
     // leave a reserve. Shorts can exceed +200%; actual venues may liquidate
     // earlier during gaps, funding, risk-tier changes or unavailable quotes.
-    const projectedLong = longNotional + (input.side === "long" ? notional : 0n);
-    const projectedShort = shortNotional + (input.side === "short" ? notional : 0n);
+    const projectedLong =
+      longNotional + reservedLong + (input.side === "long" ? notional + newRecovery : 0n);
+    const projectedShort =
+      shortNotional + reservedShort + (input.side === "short" ? notional + newRecovery : 0n);
     const catastropheLoss = projectedLong + 2n * projectedShort;
     const catastropheMaintenance = ceil(projectedGross * stressMaintenanceBps, BPS);
     const catastropheResidual =
@@ -247,9 +275,9 @@ export function previewPaperPerpetualProposal(
       return deny("portfolio_stress_exceeded");
     if (
       dailyLoss >= dailyCap ||
-      sameIdeaRisk + stopRisk > effectiveIdeaCap ||
+      sameIdeaRisk + reservedSameIdea + stopRisk + plannedRecoveryRisk > effectiveIdeaCap ||
       stopRisk > min(effectiveIdeaCap, dailyCap - dailyLoss) ||
-      openRisk + stopRisk > effectiveOpenCap
+      openRisk + reservedRisk + stopRisk + plannedRecoveryRisk > effectiveOpenCap
     )
       return deny("risk_budget_exceeded");
 
@@ -274,6 +302,8 @@ export function previewPaperPerpetualProposal(
       entryFeeQuote: fmt(entryFee),
       stopExitFeeQuote: fmt(stopFee),
       worstCaseStopLossQuote: fmt(stopRisk),
+      plannedRecoveryNotionalQuote: fmt(newRecovery),
+      plannedRecoveryRiskQuote: fmt(plannedRecoveryRisk),
       maintenanceMarginQuote: fmt(maintenance),
       collateralRemainingAtStopQuote: fmt(stopEquityRemaining),
       equityRemainingAfterStressQuote: fmt(markedEquity - shockLoss - maintenanceReserve),
