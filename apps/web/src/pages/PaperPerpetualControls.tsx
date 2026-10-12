@@ -31,6 +31,8 @@ const errors: Record<string, string> = {
 };
 const outcomes: Record<string, string> = {
   no_trade: "Без сделки",
+  reduce_submitted: "Частичное сокращение запрошено",
+  denied_reduce: "Частичное сокращение отклонено",
   filled: "Исполнено",
   partially_filled: "Исполнено частично",
   order_pending: "Ордер ожидает цены",
