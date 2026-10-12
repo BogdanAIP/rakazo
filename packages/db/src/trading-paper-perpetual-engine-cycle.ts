@@ -8,6 +8,7 @@ import type {
 import { PaperPerpetualDecisionSchema, PaperPerpetualSnapshotSchema } from "@rakazo/contracts";
 import {
   paperPerpetualAmount as amount,
+  assessPaperRecoveryStructure,
   evaluatePaperLeverage,
   formatPaperPerpetualAmount as format,
   getPaperExperimentPreset,
@@ -529,6 +530,13 @@ export async function commitPerpetualEngineWake(
                 additionPlan.takeProfitPriceQuote !== p.takeProfitPriceQuote)
             )
               denied = "denied_add_plan_mismatch";
+            else if (
+              existingAddition &&
+              (p.side === "long"
+                ? amount(s.markPriceQuote) < amount(existingAddition.entryPriceQuote)
+                : amount(s.markPriceQuote) > amount(existingAddition.entryPriceQuote)) &&
+              assessPaperRecoveryStructure(s.history, p.side).status !== "confirmed_structure"
+            ) denied = "denied_add_falling_knife";
             else if (p.replacePositionId && stillOpenReplacement)
               denied = "denied_replace_not_closed";
             else if (Date.parse(order.expiresAt) <= clock) denied = "order_expired";
