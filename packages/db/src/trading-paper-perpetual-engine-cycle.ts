@@ -236,8 +236,7 @@ export async function commitPerpetualEngineWake(
               (active &&
                 key.stage === "research" &&
                 ((decision.kind === "close" && decision.positionId === p.positionId) ||
-                  (decision.kind === "proposal" &&
-                    decision.replacePositionId === p.positionId)));
+                  (decision.kind === "proposal" && decision.replacePositionId === p.positionId)));
             const partialExit =
               active &&
               key.stage === "research" &&
@@ -352,7 +351,8 @@ export async function commitPerpetualEngineWake(
             else if (
               decision.replacePositionId &&
               !old.state.openPositions.some((x) => x.positionId === decision.replacePositionId)
-            ) outcome = "denied_replace_unknown";
+            )
+              outcome = "denied_replace_unknown";
             else if (clock - tick.recordedAt.getTime() > 120000) outcome = "expired_research";
             else
               control.orders = [
@@ -495,7 +495,8 @@ export async function commitPerpetualEngineWake(
                 existingAddition?.leverage !== p.leverage ||
                 additionPlan.stopPriceQuote !== p.stopPriceQuote ||
                 additionPlan.takeProfitPriceQuote !== p.takeProfitPriceQuote)
-            ) denied = "denied_add_plan_mismatch";
+            )
+              denied = "denied_add_plan_mismatch";
             else if (p.replacePositionId && stillOpenReplacement)
               denied = "denied_replace_not_closed";
             else if (Date.parse(order.expiresAt) <= clock) denied = "order_expired";
