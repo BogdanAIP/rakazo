@@ -491,7 +491,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         for (const [idx, profile] of profiles.entries()) {
           const id = ids[idx]!;
           const before = await state(id);
-          expect(before.initialBalanceQuote).toBe("1000.00000000");
+          expect(before.initialBalanceQuote).toBe("1000");
           expect(before.openPositions).toHaveLength(0);
           const unstarted = await readOwnedPerpetualWorkspace(db.prisma, owner, id);
           expect(unstarted).toMatchObject({ sessionStatus: "idle" });
