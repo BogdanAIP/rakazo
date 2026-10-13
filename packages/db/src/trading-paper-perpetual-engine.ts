@@ -20,6 +20,35 @@ type Transition = {
   output: PaperPerpetualEngineSnapshot;
   recordedAt: Date;
 };
+type Recovered = {
+  config: PaperPerpetualEngineConfig;
+  headSha256: string;
+  snapshot: PaperPerpetualEngineSnapshot | null;
+  transitions: Transition[];
+  effectiveConfig: PaperPerpetualEngineConfig;
+};
+/** A transaction-scoped verified journal. Never reuse across transactions:
+ * the first read verifies the entire chain; further reads compare the locked
+ * row head and projection before using the verified result.
+ */
+const verifiedWithinTransaction = new WeakMap<
+  Prisma.TransactionClient,
+  Map<string, { owner: PerpetualOwner; result: Recovered }>
+>();
+function cacheTransactionRecovery(
+  tx: Prisma.TransactionClient,
+  owner: PerpetualOwner,
+  ledgerId: string,
+  recovered: Recovered,
+): void {
+  let entries = verifiedWithinTransaction.get(tx);
+  if (!entries) {
+    entries = new Map();
+    verifiedWithinTransaction.set(tx, entries);
+  }
+  entries.set(ledgerId, { owner: { ...owner }, result: recovered });
+}
+
 const genesis = (owner: PerpetualOwner, config: PaperPerpetualEngineConfig) =>
   hash(["paper_engine_journal_v1", { spaceId: owner.spaceId, userId: owner.userId }, config]);
 const link = (previous: string, input: unknown, output: unknown) =>
@@ -78,13 +107,7 @@ export async function recoverPerpetualEngineInTransaction(
   tx: Prisma.TransactionClient,
   owner: PerpetualOwner,
   ledgerId: string,
-): Promise<{
-  config: PaperPerpetualEngineConfig;
-  headSha256: string;
-  snapshot: PaperPerpetualEngineSnapshot | null;
-  transitions: Transition[];
-  effectiveConfig: PaperPerpetualEngineConfig;
-} | null> {
+): Promise<Recovered | null> {
   const member = await tx.spaceMember.findFirst({
     where: { spaceId: owner.spaceId, userId: owner.userId },
     select: { id: true },
@@ -105,6 +128,19 @@ export async function recoverPerpetualEngineInTransaction(
     ledger.quoteCurrency !== "USDT"
   )
     throw new Error("PAPER engine configuration integrity failed");
+  const verified = verifiedWithinTransaction.get(tx)?.get(ledgerId);
+  if (
+    verified?.owner.spaceId === owner.spaceId &&
+    verified.owner.userId === owner.userId &&
+    verified.result.headSha256 === row.headSha256 &&
+    verified.result.snapshot?.sequence === row.sequence &&
+    (verified.result.snapshot === null
+      ? row.projection === null && row.projectionSha256 === null
+      : hash(verified.result.snapshot) === row.projectionSha256 &&
+        hash(row.projection) === row.projectionSha256)
+  ) {
+    return verified.result;
+  }
   const batches = await tx.tradingPaperPerpetualEngineBatch.findMany({
     where: { ledgerId },
     orderBy: { sequence: "asc" },
@@ -141,7 +177,9 @@ export async function recoverPerpetualEngineInTransaction(
       : hash(snapshot) !== row.projectionSha256 || hash(row.projection) !== hash(snapshot))
   )
     throw new Error("PAPER engine projection differs from journal");
-  return { config, headSha256: previous, snapshot, transitions, effectiveConfig };
+  const result = { config, headSha256: previous, snapshot, transitions, effectiveConfig };
+  cacheTransactionRecovery(tx, owner, ledgerId, result);
+  return result;
 }
 /** Internal composition-only append AFTER independent risk/revision/session checks.
  * The adapter must discard its process after a failed enclosing transaction and
@@ -205,7 +243,7 @@ export async function appendPerpetualEngineBatchInTransaction(
     });
   }
   const chain = link(previous, input, output);
-  await tx.tradingPaperPerpetualEngineBatch.create({
+  const appended = await tx.tradingPaperPerpetualEngineBatch.create({
     data: {
       ledgerId: config.accountId,
       sequence: input.sequence,
@@ -228,6 +266,19 @@ export async function appendPerpetualEngineBatchInTransaction(
     },
   });
   if (changed.count !== 1) throw new Error("PAPER engine commit conflict");
+  if (recovered) {
+    const nextConfig = register(recovered.effectiveConfig, input.registerInstruments);
+    cacheTransactionRecovery(tx, owner, config.accountId, {
+      ...recovered,
+      headSha256: chain,
+      snapshot: output,
+      effectiveConfig: nextConfig,
+      transitions: [
+        ...recovered.transitions,
+        { input, output, recordedAt: appended.recordedAt },
+      ],
+    });
+  }
   await tx.tradingPaperPerpetualLedger.update({
     where: { id: config.accountId },
     data: { updatedAt: new Date() },
