@@ -12,7 +12,11 @@ import type {
   PaperPerpetualSnapshot,
 } from "@rakazo/contracts";
 import { PaperPerpetualDecisionSchema } from "@rakazo/contracts";
-import { getPaperExperimentPreset, PAPER_OKX_LV1_FEES } from "@rakazo/core";
+import {
+  getPaperExperimentPreset,
+  isFreshPaperObservation,
+  PAPER_OKX_LV1_FEES,
+} from "@rakazo/core";
 import type { PerpetualOwner, PrismaClient } from "@rakazo/db";
 import {
   cancelPerpetualEngineOrders,
@@ -255,15 +259,27 @@ export async function handlePerpetualPaperWake(
       decision,
       model ? { provider: model.provider, modelId: model.id } : undefined,
     );
-    // Capture a new book after analysis and durable submission. A past quote
-    // cannot fill a newly submitted order.
+    // A new or pending intent still needs a post-submission executable book.
+    // No-trade native wakes can reuse the already-committed protection evidence.
     failure = "market_data_unavailable";
-    const execution = await read([
-      ...(deps.engine ? current.control.instruments : []),
-      ...current.state.openPositions.map((p) => p.instrument),
-      ...current.control.orders.map((o) => o.proposal.instrument),
-      ...(decision.kind === "proposal" ? [decision.instrument] : []),
-    ]);
+    const executionNow = new Date().toISOString();
+    const reuseProtection =
+      deps.engine &&
+      decision.kind === "no_trade" &&
+      current.control.orders.length === 0 &&
+      protection.every((s) =>
+        [s.book.observedAt, s.markObservedAt, s.fetchedAt].every((at) =>
+          isFreshPaperObservation(at, executionNow),
+        ),
+      );
+    const execution = reuseProtection
+      ? protection
+      : await read([
+          ...(deps.engine ? current.control.instruments : []),
+          ...current.state.openPositions.map((p) => p.instrument),
+          ...current.control.orders.map((o) => o.proposal.instrument),
+          ...(decision.kind === "proposal" ? [decision.instrument] : []),
+        ]);
     failure = "execution_unavailable";
     await commit(researchKey, execution);
     failure = "queue_unavailable";

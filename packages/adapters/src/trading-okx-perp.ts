@@ -1,8 +1,7 @@
+import type { TradingInstrument, TradingPerpContext } from "@rakazo/contracts";
 import {
   TradingDecimalSchema,
-  type TradingInstrument,
   TradingInstrumentSchema,
-  type TradingPerpContext,
   TradingPerpContextSchema,
   TradingPositiveDecimalSchema,
   TradingSignedRateSchema,
@@ -18,7 +17,11 @@ import * as z from "zod";
 import { createHash } from "node:crypto";
 import type { PaperPerpetualSnapshot } from "@rakazo/contracts";
 import { PaperPerpetualSnapshotSchema } from "@rakazo/contracts";
-import { paperPerpetualAmount as amount, formatPaperPerpetualAmount as format } from "@rakazo/core";
+import {
+  paperPerpetualAmount as amount,
+  formatPaperPerpetualAmount as format,
+  isFreshPaperObservation,
+} from "@rakazo/core";
 import { fetchOkxClosedOneHourHistory } from "./trading-okx-history.js";
 
 /** Public observations only. Contract lots are converted to BASE units exactly.
@@ -134,7 +137,7 @@ export async function fetchOkxPaperPerpetualSnapshot(
   const now = options.now ?? new Date();
   const bookAt = new Date(Number(book.ts)).toISOString();
   for (const at of [bookAt, context.mark.observedAt]) {
-    if (Date.parse(at) > now.getTime() || now.getTime() - Date.parse(at) > 30000)
+    if (!isFreshPaperObservation(at, now.toISOString()))
       throw new Error("Stale or future perpetual price");
   }
   const funding = historyRows

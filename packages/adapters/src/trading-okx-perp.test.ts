@@ -215,6 +215,33 @@ describe("PAPER OKX contract units and funding history", () => {
     expect(result.history).toHaveLength(1);
     expect(fake.mock.mock.calls).toHaveLength(8);
   });
+  it("accepts bounded public book/mark skew and rejects the exact out-of-range boundaries", async () => {
+    for (const shift of [1500, 2000, -30000]) {
+      const fake = publicFixture((path, rows) =>
+        path.endsWith("/books") || path.endsWith("/mark-price")
+          ? [{ ...(rows[0] as object), ts: String(now.getTime() + shift) }]
+          : rows,
+      );
+      const result = await fetchOkxPaperPerpetualSnapshot(market.symbol, {
+        now,
+        fetchImpl: fake.fetchImpl,
+      });
+      expect(result.book.observedAt).toBe(new Date(now.getTime() + shift).toISOString());
+      expect(result.markObservedAt).toBe(new Date(now.getTime() + shift).toISOString());
+    }
+    for (const shift of [2001, -30001]) {
+      for (const endpoint of ["/books", "/mark-price"]) {
+        const fake = publicFixture((path, rows) =>
+          path.endsWith(endpoint)
+            ? [{ ...(rows[0] as object), ts: String(now.getTime() + shift) }]
+            : rows,
+        );
+        await expect(
+          fetchOkxPaperPerpetualSnapshot(market.symbol, { now, fetchImpl: fake.fetchImpl }),
+        ).rejects.toThrow("Stale or future");
+      }
+    }
+  });
   it("rejects inverse/mismatched metadata, unsupported precision, stale quotes and duplicate funding", async () => {
     for (const patch of [
       { ctType: "inverse" },

@@ -348,6 +348,58 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
   }
 
   it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "reuses protection-only observations but captures fresh quotes for pending and new entries",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["moderate"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine, ["BTC-USDT-SWAP"]);
+        const fetchSnapshot = vi.fn(snapshot);
+        const run = { ...worker(), engine, fetchSnapshot };
+        decision = { kind: "no_trade", reason: "No supported entry" };
+        await handlePerpetualPaperWake(run, await payload(id, true));
+        expect(fetchSnapshot).toHaveBeenCalledTimes(2);
+
+        // The already-protected non-research wake must not issue a redundant
+        // second public request which could spuriously pause a healthy account.
+        fetchSnapshot.mockReset();
+        fetchSnapshot.mockImplementationOnce(snapshot).mockRejectedValue(
+          new Error("Redundant public request unavailable"),
+        );
+        await handlePerpetualPaperWake(run, await payload(id));
+        expect(fetchSnapshot).toHaveBeenCalledTimes(1);
+        expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
+          sessionStatus: "active",
+          runtimeError: null,
+        });
+
+        fetchSnapshot.mockReset();
+        fetchSnapshot.mockImplementation(snapshot);
+        decision = { ...proposal("long"), orderType: "limit", limitPriceQuote: "99" };
+        await handlePerpetualPaperWake(run, await payload(id, true));
+        expect(fetchSnapshot).toHaveBeenCalledTimes(3);
+        expect((await state(id)).openPositions).toHaveLength(0);
+
+        fetchSnapshot.mockClear();
+        price = "98";
+        await handlePerpetualPaperWake(run, await payload(id));
+        expect(fetchSnapshot).toHaveBeenCalledTimes(2);
+        expect((await state(id)).openPositions).toHaveLength(1);
+        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
+          "verified",
+        );
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
     "accepts bounded clock skew in native observations and pauses on excessive skew",
     async () => {
       const engine = new NautilusPaperEngine({
