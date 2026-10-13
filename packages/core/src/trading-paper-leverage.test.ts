@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  evaluatePaperLeverage,
-  isFreshPaperObservation,
-  type PaperLeverageInput,
-  type PaperVenueLeverageLimits,
-} from "./trading-paper-leverage.js";
+import type { PaperLeverageInput, PaperVenueLeverageLimits } from "./trading-paper-leverage.js";
+import { evaluatePaperLeverage, isFreshPaperObservation } from "./trading-paper-leverage.js";
 
 const limits: PaperVenueLeverageLimits = {
   venue: "okx",
