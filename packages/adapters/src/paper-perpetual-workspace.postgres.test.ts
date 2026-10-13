@@ -1215,7 +1215,9 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           action: "pause",
         };
         await controlPerpetualPaperWorkspace({ ...deps(), engine }, owner, oldPause);
-        expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))?.openOrders).toHaveLength(0);
+        expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))?.openOrders).toHaveLength(
+          0,
+        );
 
         await start(id, engine);
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
