@@ -225,6 +225,7 @@ jobs:
       DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5432/futures_stress
       VERIFY_DATABASE: "1"
       PAPER_LONG_JOURNAL_ROWS: "40000"
+      PAPER_LONG_JOURNAL_NATIVE: "1"
     steps:
       - uses: actions/checkout@v5
         with:
