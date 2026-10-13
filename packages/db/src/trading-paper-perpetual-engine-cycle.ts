@@ -739,7 +739,8 @@ export async function commitPerpetualEngineWake(
                 );
                 if (
                   entryFills.some((event) => !event.quantityBase || !event.priceQuote) ||
-                  entryFills.reduce((sum, event) => sum + amount(event.quantityBase!), 0n) !== filled
+                  entryFills.reduce((sum, event) => sum + amount(event.quantityBase!), 0n) !==
+                    filled
                 )
                   throw new Error("Native recovery fill evidence disagrees with position delta");
                 const consumed = entryFills.reduce(
