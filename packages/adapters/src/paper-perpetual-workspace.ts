@@ -15,8 +15,8 @@ import { PaperPerpetualDecisionSchema } from "@rakazo/contracts";
 import {
   getPaperExperimentPreset,
   isFreshPaperObservation,
-  paperPerpetualAmount,
   PAPER_OKX_LV1_FEES,
+  paperPerpetualAmount,
   summarizePaperVolatilityContext,
 } from "@rakazo/core";
 import type { PerpetualOwner, PrismaClient } from "@rakazo/db";
@@ -336,8 +336,7 @@ export async function handlePerpetualPaperWake(
       );
       return (
         !remaining ||
-        paperPerpetualAmount(remaining.quantityBase) <
-          paperPerpetualAmount(previous.quantityBase)
+        paperPerpetualAmount(remaining.quantityBase) < paperPerpetualAmount(previous.quantityBase)
       );
     });
     const reuseProtection =
