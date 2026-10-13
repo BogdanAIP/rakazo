@@ -618,6 +618,25 @@ export async function commitPerpetualEngineWake(
                   );
                   return held?.side === side ? sum + remainingReserve(plan) : sum;
                 }, 0n);
+              const maintenanceLegs = riskState.openPositions.map((held) => {
+                const verified = snapshots.get(held.instrument);
+                if (!verified) throw new Error("Missing verified held-market maintenance terms");
+                const heldGross = notional(
+                  amount(held.quantityBase),
+                  amount(held.markPriceQuote) > amount(held.entryPriceQuote)
+                    ? amount(held.markPriceQuote)
+                    : amount(held.entryPriceQuote),
+                );
+                const unspent = riskPlans.reduce(
+                  (sum, plan) =>
+                    plan.positionId === held.positionId ? sum + remainingReserve(plan) : sum,
+                  0n,
+                );
+                return {
+                  grossNotionalQuote: format(heldGross + unspent),
+                  maintenanceMarginBps: verified.rules.maintenanceMarginBps,
+                };
+              });
               const recoveryRisk = riskPlans.reduce(
                 (sum, plan) => sum + remainingRiskReserve(plan),
                 0n,
@@ -684,6 +703,7 @@ export async function commitPerpetualEngineWake(
                   recoveryLongNotionalQuote: format(recoveryBuckets("long")),
                   recoveryShortNotionalQuote: format(recoveryBuckets("short")),
                   recoveryReservedRiskQuote: format(recoveryRisk),
+                  maintenanceLegs,
                   sameIdeaReservedRiskQuote: format(sameIdeaRecoveryRisk),
                   markedEquityQuote: format(
                     signed(riskState.markedEquityQuote) > 0n

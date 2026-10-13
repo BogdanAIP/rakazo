@@ -119,6 +119,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
         portfolio: {
           ...fixture.portfolio,
           openNotionalQuote: "4000",
+          maintenanceLegs: [{ grossNotionalQuote: "4000", maintenanceMarginBps: 50 }],
           openLongNotionalQuote: "4000",
         },
       },
@@ -180,6 +181,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
         portfolio: {
           ...fixture.portfolio,
           openNotionalQuote: "3000",
+          maintenanceLegs: [{ grossNotionalQuote: "3000", maintenanceMarginBps: 50 }],
           openLongNotionalQuote: "3000",
         },
       },
@@ -236,6 +238,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
         portfolio: {
           ...fixture.portfolio,
           openNotionalQuote: "100",
+          maintenanceLegs: [{ grossNotionalQuote: "100", maintenanceMarginBps: 50 }],
           openLongNotionalQuote: "0",
           openShortNotionalQuote: "0",
         },
@@ -271,6 +274,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
         ...fixture.portfolio,
         openPositions: 1,
         openNotionalQuote: "100",
+        maintenanceLegs: [{ grossNotionalQuote: "100", maintenanceMarginBps: 50 }],
         openLongNotionalQuote: "100",
         openStopRiskQuote: "1",
       },
@@ -287,6 +291,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
         ...fixture.portfolio,
         openPositions: 1,
         openNotionalQuote: "100",
+        maintenanceLegs: [{ grossNotionalQuote: "500", maintenanceMarginBps: 50 }],
         openLongNotionalQuote: "100",
         recoveryLongNotionalQuote: "400",
         recoveryReservedRiskQuote: "1",
@@ -307,6 +312,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
         ...fixture.portfolio,
         openPositions: 1,
         openNotionalQuote: "100",
+        maintenanceLegs: [{ grossNotionalQuote: "110", maintenanceMarginBps: 50 }],
         openLongNotionalQuote: "100",
         openStopRiskQuote: "1",
         sameIdeaStopRiskQuote: "1",
@@ -329,6 +335,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
           ...fixture.portfolio,
           openPositions: 1,
           openNotionalQuote: "100",
+          maintenanceLegs: [{ grossNotionalQuote: "100", maintenanceMarginBps: 50 }],
           openLongNotionalQuote: "100",
           openStopRiskQuote: "9.8",
           sameIdeaStopRiskQuote: "9.8",
@@ -348,6 +355,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
         ...fixture.portfolio,
         openPositions: 1,
         openNotionalQuote: "100",
+        maintenanceLegs: [{ grossNotionalQuote: "100", maintenanceMarginBps: 50 }],
         openLongNotionalQuote: "100",
         openStopRiskQuote: "9.8",
         sameIdeaStopRiskQuote: "0",
@@ -441,5 +449,86 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
     }
     expectDenial({ assumedFeeBpsPerSide: Number.NaN }, "invalid_input");
     expectDenial({ maintenanceMarginBps: 0 }, "invalid_input");
+  });
+
+  it("uses verified maintenance per held market, not the proposed market rate", () => {
+    const portfolio = {
+      ...fixture.portfolio,
+      openPositions: 2,
+      openNotionalQuote: "720",
+      openLongNotionalQuote: "720",
+      maintenanceLegs: [
+        { grossNotionalQuote: "300", maintenanceMarginBps: 50 },
+        { grossNotionalQuote: "420", maintenanceMarginBps: 50 },
+      ],
+    };
+    const proposal = {
+      ...fixture,
+      strategy: "aggressive" as const,
+      leverage: 20,
+      stopPriceQuote: "99.9",
+      portfolio,
+    };
+    expect(previewPaperPerpetualProposal(proposal).status).toBe("inert_preview");
+    expect(
+      previewPaperPerpetualProposal({
+        ...proposal,
+        portfolio: {
+          ...portfolio,
+          maintenanceLegs: [
+            { grossNotionalQuote: "300", maintenanceMarginBps: 1000 },
+            { grossNotionalQuote: "420", maintenanceMarginBps: 50 },
+          ],
+        },
+      }),
+    ).toMatchObject({ status: "deny", reason: "catastrophic_survival_exceeded" });
+  });
+
+  it("accounts for held-market unspent recovery reserves and fails closed on absent or mismatched terms", () => {
+    const portfolio = {
+      ...fixture.portfolio,
+      openPositions: 1,
+      openNotionalQuote: "600",
+      openLongNotionalQuote: "600",
+      recoveryLongNotionalQuote: "120",
+    };
+    const proposal = {
+      ...fixture,
+      strategy: "aggressive" as const,
+      leverage: 20,
+      stopPriceQuote: "99.9",
+      portfolio,
+    };
+    expect(previewPaperPerpetualProposal(proposal)).toMatchObject({
+      status: "deny",
+      reason: "invalid_input",
+    });
+    expect(
+      previewPaperPerpetualProposal({
+        ...proposal,
+        portfolio: {
+          ...portfolio,
+          maintenanceLegs: [{ grossNotionalQuote: "600", maintenanceMarginBps: 50 }],
+        },
+      }),
+    ).toMatchObject({ status: "deny", reason: "invalid_input" });
+    expect(
+      previewPaperPerpetualProposal({
+        ...proposal,
+        portfolio: {
+          ...portfolio,
+          maintenanceLegs: [{ grossNotionalQuote: "720", maintenanceMarginBps: 50 }],
+        },
+      }).status,
+    ).toBe("inert_preview");
+    expect(
+      previewPaperPerpetualProposal({
+        ...proposal,
+        portfolio: {
+          ...portfolio,
+          maintenanceLegs: [{ grossNotionalQuote: "720", maintenanceMarginBps: 1000 }],
+        },
+      }),
+    ).toMatchObject({ status: "deny", reason: "catastrophic_survival_exceeded" });
   });
 });

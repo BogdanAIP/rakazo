@@ -458,6 +458,22 @@ export async function commitPerpetualPaperWake(
                         0n,
                       ),
                   ),
+                  maintenanceLegs: state.openPositions.map((held) => {
+                    const verified = snapshots.get(held.instrument);
+                    if (!verified)
+                      throw new Error("Missing verified held-market maintenance terms");
+                    return {
+                      grossNotionalQuote: format(
+                        notional(
+                          amount(held.quantityBase),
+                          amount(held.markPriceQuote) > amount(held.entryPriceQuote)
+                            ? amount(held.markPriceQuote)
+                            : amount(held.entryPriceQuote),
+                        ),
+                      ),
+                      maintenanceMarginBps: verified.rules.maintenanceMarginBps,
+                    };
+                  }),
                   markedEquityQuote: state.markedEquityQuote,
                   // Legacy fallback has no persisted native high-watermark replay.
                   // Keep initial equity as its conservative minimum peak estimate.

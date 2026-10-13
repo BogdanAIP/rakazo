@@ -71,6 +71,15 @@ export type PaperPerpetualProposalInput = Readonly<{
     recoveryLongNotionalQuote?: string;
     recoveryShortNotionalQuote?: string;
     recoveryReservedRiskQuote?: string;
+    /** Trusted current exposure and unspent reserves, by held leg. Required for
+     * nonzero existing gross exposure; missing terms fail closed.
+     */
+    maintenanceLegs?: ReadonlyArray<
+      Readonly<{
+        grossNotionalQuote: string;
+        maintenanceMarginBps: number;
+      }>
+    >;
     sameIdeaReservedRiskQuote?: string;
     /** Current marked equity from the native simulator, not model-supplied. */
     markedEquityQuote: string;
@@ -168,6 +177,19 @@ export function previewPaperPerpetualProposal(
     const reservedRisk = exact(input.portfolio.recoveryReservedRiskQuote ?? "0");
     const reservedSameIdea = exact(input.portfolio.sameIdeaReservedRiskQuote ?? "0");
     const newRecovery = exact(input.additionalRecoveryNotionalQuote ?? "0");
+    const existingGross = openNotional + reservedLong + reservedShort;
+    const maintenanceLegs = input.portfolio.maintenanceLegs ?? [];
+    if (maintenanceLegs.length > 100) return deny("invalid_input");
+    let evidencedGross = 0n;
+    let existingStressMaintenance = 0n;
+    for (const leg of maintenanceLegs) {
+      const gross = exact(leg.grossNotionalQuote);
+      const rate = checkedBps(leg.maintenanceMarginBps, 1000);
+      if (gross === 0n || rate === 0n) return deny("invalid_input");
+      evidencedGross += gross;
+      existingStressMaintenance += ceil(gross * (rate > 200n ? rate : 200n), BPS);
+    }
+    if (evidencedGross !== existingGross) return deny("invalid_input");
     if (reservedSameIdea > reservedRisk) return deny("invalid_input");
     if (longNotional + shortNotional !== openNotional) return deny("invalid_input");
     const markedEquity = exact(input.portfolio.markedEquityQuote);
@@ -236,7 +258,11 @@ export function previewPaperPerpetualProposal(
     // Conservative combined stop exposure from the entire account is used below.
     const projectedGross = openNotional + notional + reservedLong + reservedShort + newRecovery;
     const wholeStopRisk = openRisk + reservedRisk + stopRisk + plannedRecoveryRisk;
-    const stopMaintenance = ceil(projectedGross * (mmr > 200n ? mmr : 200n), BPS);
+    const proposedStressMaintenance = ceil(
+      (notional + newRecovery) * (mmr > 200n ? mmr : 200n),
+      BPS,
+    );
+    const stopMaintenance = existingStressMaintenance + proposedStressMaintenance;
     const stopEquityRemaining = markedEquity - wholeStopRisk;
     if (stopEquityRemaining <= stopMaintenance) return deny("liquidation_before_stop");
     // Reserve capacity BEFORE other independent ideas consume free collateral.
@@ -254,7 +280,6 @@ export function previewPaperPerpetualProposal(
     const shockBps =
       input.strategy === "conservative" ? 3500n : input.strategy === "moderate" ? 2500n : 2000n;
     const survivalReserveBps = 2500n;
-    const stressMaintenanceBps = mmr > 200n ? mmr : 200n; // minimum 2% gross
     const survivalReserve = ceil(markedEquity * survivalReserveBps, BPS);
     // Liquidation-avoidance is a PRE-ENTRY sizing objective, never a promise.
     // Even a full long collapse to zero and a 200% adverse short rally must
@@ -265,12 +290,12 @@ export function previewPaperPerpetualProposal(
     const projectedShort =
       shortNotional + reservedShort + (input.side === "short" ? notional + newRecovery : 0n);
     const catastropheLoss = projectedLong + 2n * projectedShort;
-    const catastropheMaintenance = ceil(projectedGross * stressMaintenanceBps, BPS);
+    const catastropheMaintenance = stopMaintenance;
     const catastropheResidual =
       markedEquity - catastropheLoss - catastropheMaintenance - survivalReserve;
     if (catastropheResidual <= 0n) return deny("catastrophic_survival_exceeded");
     const shockLoss = ceil(projectedGross * shockBps, BPS);
-    const maintenanceReserve = ceil(projectedGross * stressMaintenanceBps, BPS);
+    const maintenanceReserve = stopMaintenance;
     if (markedEquity <= shockLoss + maintenanceReserve + survivalReserve)
       return deny("portfolio_stress_exceeded");
     if (
