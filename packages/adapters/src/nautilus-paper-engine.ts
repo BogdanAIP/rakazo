@@ -86,12 +86,29 @@ export class NautilusPaperEngine implements PaperPerpetualEngine {
         });
         cached = { process, configHash, sequence: 0, outputHash: null, idleTimer: null };
         this.accounts.set(config.accountId, cached);
-        for (const row of committed) {
-          const replay = await process.apply(row.input);
-          if (digest(replay) !== digest(row.output))
-            throw new Error("Nautilus PAPER replay diverged");
-          cached.sequence = replay.sequence;
-          cached.outputHash = digest(replay);
+        let cursor = 0;
+        while (cursor < committed.length) {
+          const group: typeof committed[number][] = [];
+          let bytes = 0;
+          while (cursor < committed.length && group.length < 16) {
+            const item = committed[cursor]!;
+            const size = JSON.stringify(item.input).length + JSON.stringify(item.output).length;
+            if (group.length && bytes + size > 400_000) break;
+            group.push(item);
+            bytes += size;
+            cursor += 1;
+          }
+          const snapshots =
+            group.length === 1
+              ? [await process.apply(group[0]!.input)]
+              : await process.applyMany(group.map((item) => item.input));
+          for (let index = 0; index < group.length; index += 1) {
+            const replay = snapshots[index]!;
+            if (digest(replay) !== digest(group[index]!.output))
+              throw new Error("Nautilus PAPER replay diverged");
+            cached.sequence = replay.sequence;
+            cached.outputHash = digest(replay);
+          }
         }
       }
       this.armIdleEviction(config.accountId, cached);
