@@ -143,10 +143,15 @@ export async function handlePerpetualPaperWake(
       Promise.all([...new Set(symbols)].map((symbol) => fetchSnapshot(symbol)));
     // An unavailable selected-but-unused market must not prevent protection
     // of live positions or pending orders in other instruments.
-    const protection = await read([
+    const activeProtectionSymbols = [
       ...first.state.openPositions.map((p) => p.instrument),
       ...(deps.engine ? first.control.orders.map((o) => o.proposal.instrument) : []),
-    ]);
+    ];
+    // Flat-account bootstrap still registers selected markets. With exposure,
+    // only instruments needing protection can block the protective stage.
+    const protection = await read(
+      activeProtectionSymbols.length ? activeProtectionSymbols : first.control.instruments,
+    );
     const commit = (
       stage: {
         ledgerId: string;
