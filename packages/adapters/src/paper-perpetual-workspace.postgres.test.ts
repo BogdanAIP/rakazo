@@ -392,9 +392,15 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           .accounts[0]!.ledgerId;
         await start(id, engine, ["BTC-USDT-SWAP"]);
         const fetchSnapshot = vi.fn(snapshot);
-        const run = { ...worker(), engine, fetchSnapshot };
+        const resolveModel = vi.fn(async () => ({ provider: "fixture", id: "fixture-model" }));
+        const run = { ...worker(), engine, fetchSnapshot, resolveModel };
         decision = { kind: "no_trade", reason: "No supported entry" };
         await handlePerpetualPaperWake(run, await payload(id, true));
+        const accountBot = await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+          where: { ledgerId: id },
+          select: { botId: true },
+        });
+        expect(resolveModel).toHaveBeenCalledWith({ ...owner, botId: accountBot.botId });
         expect(fetchSnapshot).toHaveBeenCalledTimes(2);
 
         // The already-protected non-research wake must not issue a redundant
