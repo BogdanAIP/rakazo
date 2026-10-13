@@ -385,7 +385,7 @@ export async function commitPerpetualEngineWake(
         let enteringPosition: string | null = null;
         if (key.stage === "research") {
           if (active && control.source) await verifyPerpetualSource(tx, owner, control.source);
-          if (!active) control.orders = [];
+          if (!active || contractUpdateDeferred) control.orders = [];
           if (active && decision.kind === "proposal" && !control.orders.length) {
             if (contractUpdateDeferred) outcome = "denied_contract_terms_pending";
             else if (!control.instruments.includes(decision.instrument)) outcome = "denied_market";
