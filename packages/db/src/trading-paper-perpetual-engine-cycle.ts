@@ -126,7 +126,9 @@ export async function commitPerpetualEngineWake(
         });
         if (preparedHead !== null && prior?.headSha256 !== preparedHead)
           throw new Error("PAPER journal advanced during native recovery; retry wake");
-        const old = await recoverPerpetualPaperInTransaction(tx, owner, key.ledgerId);
+        const old = await recoverPerpetualPaperInTransaction(tx, owner, key.ledgerId, {
+          transactionScopedNativeReuse: true,
+        });
         if (!prior && old.row.version !== 0)
           throw new Error("Existing custom wallet cannot change executor");
         const snapshots = new Map(execution.map((s) => [s.market.symbol, s]));
