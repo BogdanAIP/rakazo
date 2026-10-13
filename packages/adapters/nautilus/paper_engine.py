@@ -382,6 +382,11 @@ def serve():
                 result = dict(status="ready", engineVersion=VERSION)
             elif request["action"] == "apply" and engine is not None:
                 result = engine.apply(request["batch"])
+            elif request["action"] == "apply_many" and engine is not None:
+                batches = request["batches"]
+                if not isinstance(batches, list) or not 1 <= len(batches) <= 16:
+                    raise ValueError("Invalid bounded PAPER replay batch")
+                result = [engine.apply(item) for item in batches]
             else:
                 raise ValueError("Invalid engine request")
             output.write(json.dumps(result, separators=(",", ":")) + "\n")
