@@ -36,8 +36,12 @@ function register(
   updates: PaperPerpetualEngineBatch["registerInstruments"],
 ): PaperPerpetualEngineConfig {
   const terms = new Map(config.instruments.map((i) => [i.instrument, i]));
+  const changed = new Set<string>();
   for (const term of updates ?? []) {
-    if (terms.has(term.instrument)) throw new Error("PAPER contract already registered");
+    if (changed.has(term.instrument)) throw new Error("Duplicate PAPER contract update");
+    changed.add(term.instrument);
+    // Same-market registration is a versioned refresh. It is safe only while
+    // flat; Nautilus enforces the flat-account invariant during native apply.
     terms.set(term.instrument, term);
   }
   if (terms.size > 256) throw new Error("PAPER contract registry full");
