@@ -94,7 +94,13 @@ export async function controlPerpetualPaperWorkspace(
   const receipt = await commandOwnedPerpetualWorkspace(deps.prisma, owner, command, limits);
   try {
     if (deps.engine)
-      await cancelPerpetualEngineOrders(deps.prisma, owner, command.ledgerId, deps.engine);
+      await cancelPerpetualEngineOrders(
+        deps.prisma,
+        owner,
+        command.ledgerId,
+        deps.engine,
+        receipt.revision,
+      );
     await enqueueNext(deps, owner, command.ledgerId, receipt.revision);
   } catch (error) {
     await failPerpetualWake(
