@@ -924,11 +924,15 @@ export async function cancelPerpetualEngineOrders(
   owner: PerpetualOwner,
   ledgerId: string,
   engine: PaperPerpetualEngine,
+  expectedRevision?: number,
 ) {
   try {
     await prisma.$transaction(
       async (tx) => {
         const { row } = await lockOwnedPerpetualWorkspace(tx, owner, ledgerId);
+        // A delayed retry of a previously accepted owner command must never
+        // cancel native orders that belong to a later workspace revision.
+        if (expectedRevision !== undefined && row.revision !== expectedRevision) return;
         const recovered = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId);
         if (!recovered?.snapshot?.openOrders.length) return;
         const batch: PaperPerpetualEngineBatch = {
