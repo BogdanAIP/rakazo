@@ -31,6 +31,18 @@ export {
 export * from "./trading-paper-journal-read.js";
 export { auditTradingPaperLifecycle } from "./trading-paper-lifecycle-audit.js";
 export { tradingPaperMarketScope } from "./trading-paper-market-choice.js";
+export * from "./trading-paper-perpetual-cycle.js";
+export * from "./trading-paper-perpetual-engine.js";
+export {
+  cancelPerpetualEngineOrders,
+  commitPerpetualEngineWake,
+  preparePerpetualEngineBeforeMarketFetch,
+} from "./trading-paper-perpetual-engine-cycle.js";
+export {
+  listOwnedPerpetualPaperJournals,
+  readOwnedPerpetualPaperJournal,
+} from "./trading-paper-perpetual-store.js";
+export * from "./trading-paper-perpetual-workspace.js";
 export * from "./trading-paper-protection-lease.js";
 export * from "./trading-paper-protection-successor.js";
 export { applyApprovedTradingPaperProtectiveExitControl } from "./trading-paper-protective-exit-authority.js";

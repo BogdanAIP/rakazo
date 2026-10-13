@@ -106,6 +106,8 @@ async function main() {
         "packages/db/src/space-membership.postgres.test.ts",
         "packages/db/src/messaging.postgres.test.ts",
         "packages/memory/src/commit.postgres.test.ts",
+        "packages/adapters/src/paper-workspace.postgres.test.ts",
+        "packages/adapters/src/paper-perpetual-workspace.postgres.test.ts",
         "packages/adapters/src/wakeup.postgres.test.ts",
         "packages/adapters/src/realtime.postgres.test.ts",
         "packages/adapters/src/job-reconciler.postgres.test.ts",
@@ -159,7 +161,12 @@ async function main() {
     const [
       { ComposioEmulator, EmailEmulator, PipedreamConnector, ThirdPartyConnectorEmulator },
       { createApp },
-    ] = await Promise.all([import("@rakazo/adapters"), import("../../../../apps/api/src/app.ts")]);
+      { paperBrowserFixtures },
+    ] = await Promise.all([
+      import("@rakazo/adapters"),
+      import("../../../../apps/api/src/app.ts"),
+      import("../paper-browser-fixtures.js"),
+    ]);
     const { serve } = await import("@hono/node-server");
     const thirdParties = new ThirdPartyConnectorEmulator();
     const pipedream = new PipedreamConnector(
@@ -174,6 +181,7 @@ async function main() {
     );
     const email = new EmailEmulator();
     const handles = await createApp({
+      ...(agentRuntime === "scripted" ? paperBrowserFixtures() : {}),
       databaseUrl,
       prisma: undefined,
       composio: new ComposioEmulator(),

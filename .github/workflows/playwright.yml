@@ -65,6 +65,15 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned PAPER simulator
+        run: |
+          python -m venv .paper-engine
+          .paper-engine/bin/python -m pip install -r packages/adapters/nautilus/requirements.txt
+          echo "PAPER_NAUTILUS_PYTHON=$GITHUB_WORKSPACE/.paper-engine/bin/python" >> "$GITHUB_ENV"
+          echo "PAPER_NAUTILUS_SCRIPT=$GITHUB_WORKSPACE/packages/adapters/nautilus/paper_engine.py" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
       - uses: actions/cache@v4
         with:

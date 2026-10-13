@@ -1,4 +1,4 @@
-import type { JobPublisher } from "@rakazo/adapter-kit";
+import type { JobPublisher, PaperPerpetualEngine } from "@rakazo/adapter-kit";
 import { paperProtectionCheckJob } from "@rakazo/adapter-kit";
 import type { TradingPaperWorkspaceCommand } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
@@ -11,10 +11,15 @@ import {
   readVerifiedTradingPaperProtectionLease,
   settleVerifiedTradingPaperSessionReservations,
 } from "@rakazo/db";
+import { reconcilePerpetualPaperWorkspaces } from "./paper-perpetual-workspace.js";
 import { enqueuePaperWorkerPreflightOnce } from "./paper-worker-scheduler.js";
 
 type Owner = { spaceId: string; userId: string };
-type Deps = { prisma: PrismaClient; jobs: Pick<JobPublisher, "enqueue"> };
+type Deps = {
+  prisma: PrismaClient;
+  jobs: Pick<JobPublisher, "enqueue">;
+  engine?: PaperPerpetualEngine;
+};
 
 /** Human API calls are the only initial-entry publisher. Queue failure fences
  * the committed session before returning; retries cannot extend its deadline. */
@@ -121,6 +126,7 @@ export async function reconcileTradingPaperWorkspaces(
   deps: Deps,
   restarting = false,
 ): Promise<void> {
+  await reconcilePerpetualPaperWorkspaces(deps, restarting);
   let afterLedger: string | undefined;
   for (;;) {
     const workspaces = await deps.prisma.tradingPaperWorkspace.findMany({

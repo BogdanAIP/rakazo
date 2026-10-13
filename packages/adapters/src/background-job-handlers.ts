@@ -4,9 +4,11 @@ import type {
   BackgroundJobHandlers,
   JobPublisher,
   MessagingSurface,
+  PaperPerpetualEngine,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import { messagingDeliverJob } from "@rakazo/adapter-kit";
+import type { PaperPerpetualSnapshot } from "@rakazo/contracts";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import type { CloudAgentConnection } from "./cloud-agent-factory.js";
@@ -18,6 +20,7 @@ import type { createRunExecutor } from "./executor.js";
 import { compactHistory } from "./history-compaction.js";
 import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import { deliverMessagingOutbound, mirrorMessagingOutbound } from "./messaging-delivery.js";
+import { handlePerpetualPaperWake } from "./paper-perpetual-workspace.js";
 import { enqueueAuthorizedPaperProtectionSuccessor } from "./paper-protection-only-scheduler.js";
 import { handlePaperProtectionOnlyWake } from "./paper-protection-only-wake.js";
 import { handleManagedPaperWorkerWake } from "./paper-workspace-market.js";
@@ -33,6 +36,8 @@ export function createBackgroundJobHandlers(deps: {
   events: ThreadEvents;
   workerId: string;
   runtime: AgentRuntime;
+  perpetualPaperEngine?: PaperPerpetualEngine;
+  fetchPerpetualPaperSnapshot?: (instrument: string) => Promise<PaperPerpetualSnapshot>;
   secretStore: EncryptedSecretStore;
   memoryProviders: MemoryProviderResolver;
   deploymentModelKey?: string;
@@ -100,6 +105,20 @@ export function createBackgroundJobHandlers(deps: {
       });
     },
     "paper.worker-preflight": async (payload) => {
+      if (payload.marketKind === "perpetual") {
+        await handlePerpetualPaperWake(
+          {
+            prisma: deps.prisma,
+            jobs: deps.jobs,
+            runtime: deps.runtime,
+            resolveModel: (scope) => deps.executor.resolveModel(scope),
+            fetchSnapshot: deps.fetchPerpetualPaperSnapshot,
+            engine: deps.perpetualPaperEngine,
+          },
+          payload,
+        );
+        return;
+      }
       if (payload.sessionRevision === undefined) return;
       await handleManagedPaperWorkerWake(
         {

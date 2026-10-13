@@ -2407,6 +2407,9 @@ export function ShellPage() {
       notifyOnFinish: true,
       computerMode: input.computerMode,
     });
+    // A roster response started before this committed creation must not remove
+    // the new bot and redirect its chat to another bot.
+    botsRefreshApplied.current = ++botsRefreshEpoch.current;
     setBots((current) =>
       current.some((item) => item.id === bot.id) ? current : [bot, ...current],
     );

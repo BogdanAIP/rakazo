@@ -589,6 +589,7 @@ export interface BackgroundJobPayloads {
     gateRevision: number;
     /** H1b session revision from the *original* owner-approved wake. */
     sessionRevision?: number;
+    marketKind?: "perpetual";
     scheduledFor: string;
   };
 }

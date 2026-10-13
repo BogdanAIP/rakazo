@@ -1,6 +1,6 @@
 import { TradingInstrumentSchema } from "@rakazo/contracts";
 import { describe, expect, it, vi } from "vitest";
-import { fetchOkxPublicPerpContext } from "./trading-okx-perp.js";
+import { fetchOkxPaperPerpetualSnapshot, fetchOkxPublicPerpContext } from "./trading-okx-perp.js";
 
 const now = new Date("2026-10-03T10:15:00.000Z");
 const market = TradingInstrumentSchema.parse({
@@ -122,5 +122,150 @@ describe("keyless OKX perpetual risk telemetry", () => {
     await expect(call([new Response("not-json")])).rejects.toThrow("not JSON");
     await expect(call([new Response("busy", { status: 503 })])).rejects.toThrow("HTTP error");
     await expect(call([wrap(funding)], { ...market, kind: "spot" })).rejects.toThrow("perpetuals");
+  });
+});
+
+describe("PAPER OKX contract units and funding history", () => {
+  function publicFixture(change?: (path: string, rows: unknown[]) => unknown[]) {
+    const mock = vi.fn(async (url: unknown, opts: RequestInit) => {
+      const u = new URL(String(url));
+      expect(u.origin).toBe("https://www.okx.com");
+      expect(opts.method).toBe("GET");
+      expect(JSON.stringify(opts.headers)).not.toMatch(/authorization|signature|api.?key/i);
+      const path = u.pathname;
+      let rows: unknown[];
+      if (path.endsWith("/instruments"))
+        rows = [
+          {
+            instId: market.symbol,
+            instType: "SWAP",
+            state: "live",
+            ruleType: "normal",
+            settleCcy: "USDT",
+            ctType: "linear",
+            ctValCcy: "SOL",
+            ctVal: "0.1",
+            ctMult: "1",
+            lotSz: "0.01",
+            minSz: "0.01",
+            tickSz: "0.01",
+          },
+        ];
+      else if (path.endsWith("/books"))
+        rows = [
+          {
+            ts: String(now.getTime()),
+            bids: [["108", "2", "0", "1"]],
+            asks: [["109", "3", "0", "1"]],
+          },
+        ];
+      else if (path.endsWith("/position-tiers"))
+        rows = [{ tier: "1", minSz: "0", maxSz: "10000", mmr: "0.004", maxLever: "100" }];
+      else if (path.endsWith("/funding-rate-history"))
+        rows = [
+          {
+            instId: market.symbol,
+            instType: "SWAP",
+            fundingTime: String(now.getTime() - 3600000),
+            fundingRate: "0.9",
+            realizedRate: "-0.000000001",
+          },
+        ];
+      else if (path.endsWith("/funding-rate")) rows = [funding];
+      else if (path.endsWith("/open-interest")) rows = [interest];
+      else if (path.endsWith("/mark-price")) rows = [marked];
+      else if (path.endsWith("/history-candles"))
+        rows = [
+          [
+            String(Math.floor(now.getTime() / 3600000) * 3600000 - 3600000),
+            "100",
+            "110",
+            "99",
+            "108",
+            "10",
+            "1",
+            "1000",
+            "1",
+          ],
+        ];
+      else throw new Error("Unexpected public fixture");
+      return Response.json({ code: "0", data: change ? change(path, rows) : rows });
+    });
+    return { mock, fetchImpl: mock as unknown as typeof fetch };
+  }
+  it("converts lot, minimum and visible depth from contracts to base; uses final realized funding", async () => {
+    const fake = publicFixture();
+    const result = await fetchOkxPaperPerpetualSnapshot(market.symbol, {
+      now,
+      fetchImpl: fake.fetchImpl,
+    });
+    expect(result.rules).toMatchObject({
+      basePerContract: "0.1",
+      lotIncrementBase: "0.001",
+      minimumBase: "0.001",
+      maxTierBase: "1000",
+      maintenanceMarginBps: 40,
+    });
+    expect(result.book.bidAvailableBase).toBe("0.2");
+    expect(result.book.askAvailableBase).toBe("0.3");
+    expect(result.funding[0]).toMatchObject({
+      rateSigned: "-0.000000001",
+      priceBasis: "latest_observed_mark_simulation",
+    });
+    expect(result.history).toHaveLength(1);
+    expect(fake.mock.mock.calls).toHaveLength(8);
+  });
+  it("accepts bounded public book/mark skew and rejects the exact out-of-range boundaries", async () => {
+    for (const shift of [1500, 2000, -30000]) {
+      const fake = publicFixture((path, rows) =>
+        path.endsWith("/books") || path.endsWith("/mark-price")
+          ? [{ ...(rows[0] as object), ts: String(now.getTime() + shift) }]
+          : rows,
+      );
+      const result = await fetchOkxPaperPerpetualSnapshot(market.symbol, {
+        now,
+        fetchImpl: fake.fetchImpl,
+      });
+      expect(result.book.observedAt).toBe(new Date(now.getTime() + shift).toISOString());
+      expect(result.markObservedAt).toBe(new Date(now.getTime() + shift).toISOString());
+    }
+    for (const shift of [2001, -30001]) {
+      for (const endpoint of ["/books", "/mark-price"]) {
+        const fake = publicFixture((path, rows) =>
+          path.endsWith(endpoint)
+            ? [{ ...(rows[0] as object), ts: String(now.getTime() + shift) }]
+            : rows,
+        );
+        await expect(
+          fetchOkxPaperPerpetualSnapshot(market.symbol, { now, fetchImpl: fake.fetchImpl }),
+        ).rejects.toThrow("Stale or future");
+      }
+    }
+  });
+  it("rejects inverse/mismatched metadata, unsupported precision, stale quotes and duplicate funding", async () => {
+    for (const patch of [
+      { ctType: "inverse" },
+      { ctValCcy: "BTC" },
+      { ctVal: "0.00000001", lotSz: "0.01" },
+    ]) {
+      const fake = publicFixture((path, rows) =>
+        path.endsWith("/instruments") ? [{ ...(rows[0] as object), ...patch }] : rows,
+      );
+      await expect(
+        fetchOkxPaperPerpetualSnapshot(market.symbol, { now, fetchImpl: fake.fetchImpl }),
+      ).rejects.toThrow();
+    }
+    for (const duplicate of [false, true]) {
+      const fake = publicFixture((path, rows) =>
+        duplicate && path.endsWith("/funding-rate-history")
+          ? [...rows, ...rows]
+          : !duplicate && path.endsWith("/books")
+            ? [{ ...(rows[0] as object), ts: String(now.getTime() - 31000) }]
+            : rows,
+      );
+      await expect(
+        fetchOkxPaperPerpetualSnapshot(market.symbol, { now, fetchImpl: fake.fetchImpl }),
+      ).rejects.toThrow();
+    }
   });
 });

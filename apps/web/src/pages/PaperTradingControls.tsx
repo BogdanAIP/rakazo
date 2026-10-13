@@ -3,9 +3,18 @@ import type {
   TradingPaperWorkspaceCommand,
   TradingPaperWorkspaceStatus,
 } from "@rakazo/contracts";
+import type { PaperExperimentStrategy } from "@rakazo/core";
+import { getPaperExperimentPreset, PAPER_EXPERIMENT_STRATEGIES } from "@rakazo/core";
 import { Button, Input } from "@rakazo/ui-web";
 import { useEffect, useState } from "react";
 import { rpc } from "../lib/rpc";
+
+const defaultProfile = getPaperExperimentPreset("conservative");
+const profileLabels: Record<PaperExperimentStrategy, string> = {
+  conservative: "Консервативная",
+  moderate: "Умеренная",
+  aggressive: "Агрессивная",
+};
 
 const phases: Record<string, string> = {
   idle: "Готов к запуску",
@@ -28,12 +37,12 @@ export function PaperTradingControls({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [name, setName] = useState("Учебный счёт");
-  const [balance, setBalance] = useState("10000");
-  const [idea, setIdea] = useState("100");
-  const [daily, setDaily] = useState("500");
-  const [openRisk, setOpenRisk] = useState("200");
-  const [exposure, setExposure] = useState("2000");
+  const [name, setName] = useState(defaultProfile.accountName);
+  const [balance, setBalance] = useState(defaultProfile.initialBalanceQuote);
+  const [idea, setIdea] = useState(defaultProfile.maxPerIdeaRiskQuote);
+  const [daily, setDaily] = useState(defaultProfile.maxDailyLossQuote);
+  const [openRisk, setOpenRisk] = useState(defaultProfile.maxOpenRiskQuote);
+  const [exposure, setExposure] = useState(defaultProfile.maxTotalExposureQuote);
   const [venue, setVenue] = useState<"okx" | "bingx">("okx");
   const [symbol, setSymbol] = useState("BTC-USDT");
   const [duration, setDuration] = useState(60);
@@ -80,6 +89,15 @@ export function PaperTradingControls({
     };
   }, [ledgerId]);
   const verified = status?.status === "verified" ? status : null;
+  function applyRiskProfile(strategy: PaperExperimentStrategy) {
+    const profile = getPaperExperimentPreset(strategy);
+    setName(profile.accountName);
+    setBalance(profile.initialBalanceQuote);
+    setIdea(profile.maxPerIdeaRiskQuote);
+    setDaily(profile.maxDailyLossQuote);
+    setOpenRisk(profile.maxOpenRiskQuote);
+    setExposure(profile.maxTotalExposureQuote);
+  }
   async function create() {
     if (pending) return;
     setPending(true);
@@ -191,6 +209,25 @@ export function PaperTradingControls({
           }}
           className="grid gap-3 sm:grid-cols-2"
         >
+          <div className="space-y-2 sm:col-span-2">
+            <p className="text-sm font-medium">Шаблон риска PAPER · 1 000 USDT</p>
+            <div className="flex flex-wrap gap-2">
+              {PAPER_EXPERIMENT_STRATEGIES.map((strategy) => (
+                <Button
+                  key={strategy}
+                  type="button"
+                  variant="outline"
+                  onClick={() => applyRiskProfile(strategy)}
+                >
+                  {profileLabels[strategy]}
+                </Button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Шаблоны пока заполняют только лимиты нового спотового счёта. Фьючерсы, плечо и
+              хеджирование не включаются до отдельной проверки.
+            </p>
+          </div>
           {[
             ["Название", name, setName],
             ["Начальный баланс, USDT", balance, setBalance],

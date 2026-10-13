@@ -6,6 +6,7 @@ import type {
   JobPublisher,
   ManagedConnectorProvider,
   MessagingSurface,
+  PaperPerpetualEngine,
   RealtimeFanout,
   SandboxProvider,
   TransactionalEmailProvider,
@@ -23,6 +24,7 @@ import {
   ComposioConnector,
   createBackgroundJobHandlers,
   createCloudAgentConnection,
+  createConfiguredPaperPerpetualEngine,
   createConnectorStack,
   createJobReconciler,
   createMessagingContextLoader,
@@ -67,7 +69,7 @@ import {
   toTeamChatInbound,
 } from "@rakazo/adapters";
 import { createAuth, isBlockedAuthPath, loopbackTwinOrigins } from "@rakazo/auth";
-import type { Actor } from "@rakazo/contracts";
+import type { Actor, PaperPerpetualSnapshot } from "@rakazo/contracts";
 import { signupAllowlistBootUpdate, signupPolicyFromEnv } from "@rakazo/core";
 import type { Pool, PrismaClient } from "@rakazo/db";
 import {
@@ -150,6 +152,9 @@ export interface AppHandles {
 export async function createApp(
   overrides: Partial<AppEnv> & {
     prisma?: PrismaClient;
+    runtime?: AgentRuntime;
+    perpetualPaperEngine?: PaperPerpetualEngine;
+    perpetualPaperSnapshot?: (instrument: string) => Promise<PaperPerpetualSnapshot>;
     realtime?: RealtimeFanout;
     sandbox?: SandboxProvider;
     composio?: ComposioProvider;
@@ -162,6 +167,9 @@ export async function createApp(
 ): Promise<AppHandles> {
   const {
     prisma: prismaOverride,
+    runtime: runtimeOverride,
+    perpetualPaperEngine: perpetualPaperEngineOverride,
+    perpetualPaperSnapshot: perpetualPaperSnapshotOverride,
     realtime: realtimeOverride,
     sandbox: sandboxOverride,
     composio: composioOverride,
@@ -366,11 +374,14 @@ export async function createApp(
   await connector.start();
   integrationSettings.warmDirectories();
   const runtime =
-    env.agentRuntime === "scripted"
+    runtimeOverride ??
+    (env.agentRuntime === "scripted"
       ? new ScriptedAgentRuntime()
       : new PiAgentRuntime({
           sessionRoot: env.piSessionRecording ? piSessionsRoot(env.dataDir) : undefined,
-        });
+        }));
+  const perpetualPaperEngine =
+    perpetualPaperEngineOverride ?? createConfiguredPaperPerpetualEngine();
   const notifications = new ExpoPushProvider(env.dataDir, (sessionId) =>
     pushSessionExpiresAt(prisma, sessionId),
   );
@@ -483,6 +494,8 @@ export async function createApp(
     events,
     workerId: "api",
     runtime,
+    fetchPerpetualPaperSnapshot: perpetualPaperSnapshotOverride,
+    perpetualPaperEngine,
     secretStore: secrets,
     memoryProviders,
     deploymentModelKey: env.deploymentModelKey,
@@ -490,7 +503,7 @@ export async function createApp(
     cloudAgent,
   });
   if (inMemoryJobs) {
-    await reconcileTradingPaperWorkspaces({ prisma, jobs }, true);
+    await reconcileTradingPaperWorkspaces({ prisma, jobs, engine: perpetualPaperEngine }, true);
     await inMemoryJobs.start(jobHandlers);
   }
   const reconciler = inMemoryJobs
@@ -501,12 +514,15 @@ export async function createApp(
         notifications,
         reconcileCloudAgents: () => reconcileCloudAgents({ prisma, jobs, cloudAgent }),
         reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
-        reconcilePaperWorkspaces: () => reconcileTradingPaperWorkspaces({ prisma, jobs }),
+        reconcilePaperWorkspaces: () =>
+          reconcileTradingPaperWorkspaces({ prisma, jobs, engine: perpetualPaperEngine }),
       })
     : undefined;
   reconciler?.start();
 
   const router = createRouter({
+    fetchPerpetualPaperSnapshot: perpetualPaperSnapshotOverride,
+    perpetualPaperEngine,
     resolvePaperResearchModel: (scope) => executor.resolveModel(scope),
     cloudAgent,
     codexCatalog,
@@ -965,6 +981,7 @@ export async function createApp(
       await email?.drain?.();
       await reconciler?.stop();
       await jobs.close();
+      perpetualPaperEngine?.dispose?.();
       await realtime.close();
       await connector.stop();
       windowsHostCommandHub.close();

@@ -12,6 +12,7 @@ import type {
   ConnectorTool,
   JobPublisher,
   MemoryStore,
+  PaperPerpetualEngine,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import {
@@ -54,6 +55,7 @@ import {
   computerSupportsTerminal,
   computerSupportsUpdate,
   computerUpdateView,
+  controlPerpetualPaperWorkspace,
   controlTradingPaperWorkspace,
   createVoiceProvider,
   defaultCatalogModelId,
@@ -65,6 +67,7 @@ import {
   expireComputerControl,
   fetchBingxPublicSpotSnapshot,
   fetchOkxClosedOneHourHistory,
+  fetchOkxPaperPerpetualSnapshot,
   fetchOkxPublicCatalog,
   fetchOkxPublicPerpContext,
   fetchOkxPublicSpotTickers,
@@ -129,6 +132,7 @@ import type {
   ComputerStatus,
   McpServer,
   Me,
+  PaperPerpetualSnapshot,
   ProductEvent,
   SpaceNavigation,
 } from "@rakazo/contracts";
@@ -140,6 +144,7 @@ import {
   foldComputerCommands,
   IntegrationProviderIdSchema,
   OPENAI_COMPATIBLE_PROVIDER_ID,
+  PaperPerpetualWorkspaceStatusSchema,
   TradingPaperWorkspaceStatusSchema,
   usableModelId,
   WindowsHostCapabilitySchema,
@@ -169,6 +174,7 @@ import {
   claimEmptySpaceDeletionForMember,
   createExternalConversationRepos,
   createGroupRepos,
+  createOwnedPerpetualExperimentAccounts,
   createOwnedTradingPaperAccount,
   createRepos,
   createSpaceForMember,
@@ -185,6 +191,7 @@ import {
   InvalidSpaceNameError,
   IsolationError,
   issueMessagingLinkCode,
+  listOwnedPerpetualPaperJournals,
   listOwnedTradingPaperJournals,
   listWindowsHosts,
   lockOwnedGroup,
@@ -192,8 +199,11 @@ import {
   newestVoiceCredentialOrder,
   Prisma,
   parseComputerMode,
+  perpetualMarketSource,
   pushSessionExpiresAt,
   readOwnedMarketPreparedResearch,
+  readOwnedPerpetualPaperJournal,
+  readOwnedPerpetualWorkspace,
   readOwnedTradingPaperJournal,
   readOwnedTradingPaperWorkspace,
   releaseSpaceDeletionClaim,
@@ -712,6 +722,8 @@ function mcpAssignmentDto(row: {
 }
 
 export interface RouterDeps {
+  perpetualPaperEngine?: PaperPerpetualEngine;
+  fetchPerpetualPaperSnapshot?: (instrument: string) => Promise<PaperPerpetualSnapshot>;
   resolvePaperResearchModel?: (scope: {
     spaceId: string;
     userId: string;
@@ -939,6 +951,106 @@ export function createRouter(deps: RouterDeps) {
 
   return os.router({
     trading: {
+      perpetualExperimentsCreate: authed.trading.perpetualExperimentsCreate.handler(
+        ({ context, input }) =>
+          createOwnedPerpetualExperimentAccounts(
+            deps.prisma,
+            context.actor,
+            input.strategy ? [input.strategy] : undefined,
+          ),
+      ),
+      perpetualMarketPrepare: authed.trading.perpetualMarketPrepare.handler(
+        async ({ context, input }) => {
+          const workspace = await readOwnedPerpetualWorkspace(
+            deps.prisma,
+            context.actor,
+            input.ledgerId,
+          );
+          if (workspace?.status !== "verified") throw new ORPCError("NOT_FOUND");
+          if (!deps.perpetualPaperEngine && process.env.NODE_ENV !== "test")
+            return { status: "unavailable" as const, reason: "engine_not_configured" as const };
+          let prepared: Awaited<ReturnType<typeof readOwnedMarketPreparedResearch>>;
+          let scope: ReturnType<typeof perpetualMarketSource>;
+          try {
+            prepared = await readOwnedMarketPreparedResearch(deps.prisma, context.actor, {
+              semanticKey: "futures.data",
+              limit: 50,
+            });
+            scope = perpetualMarketSource(prepared);
+          } catch {
+            return { status: "unavailable" as const, reason: "market_not_ready" as const };
+          }
+          try {
+            if (!deps.resolvePaperResearchModel) throw new Error("Model unavailable");
+            await deps.resolvePaperResearchModel(context.actor);
+          } catch {
+            return { status: "unavailable" as const, reason: "model_not_configured" as const };
+          }
+          return {
+            status: "ready" as const,
+            name:
+              prepared.selection.status === "ready"
+                ? prepared.selection.implementation.name
+                : "OKX public",
+            scope,
+          };
+        },
+      ),
+      perpetualLeverageRead: authed.trading.perpetualLeverageRead.handler(
+        async ({ context, input }) => {
+          const workspace = await readOwnedPerpetualWorkspace(
+            deps.prisma,
+            context.actor,
+            input.ledgerId,
+          );
+          if (workspace?.status !== "verified") throw new ORPCError("NOT_FOUND");
+          return Promise.all(
+            input.instruments.map(async (instrument) => {
+              const snapshot = await (
+                deps.fetchPerpetualPaperSnapshot ?? fetchOkxPaperPerpetualSnapshot
+              )(instrument);
+              if (!snapshot.leverageLimits) throw new ORPCError("CONFLICT");
+              return snapshot.leverageLimits;
+            }),
+          );
+        },
+      ),
+      perpetualWorkspaceRead: authed.trading.perpetualWorkspaceRead.handler(
+        async ({ context, input }) => {
+          const result = await readOwnedPerpetualWorkspace(
+            deps.prisma,
+            context.actor,
+            input.ledgerId,
+          );
+          if (!result) throw new ORPCError("NOT_FOUND");
+          return PaperPerpetualWorkspaceStatusSchema.parse(result);
+        },
+      ),
+      perpetualWorkspaceCommand: authed.trading.perpetualWorkspaceCommand.handler(
+        async ({ context, input }) => {
+          if (input.action === "start") {
+            if (!deps.resolvePaperResearchModel) throw new ORPCError("CONFLICT");
+            await deps.resolvePaperResearchModel(context.actor);
+          }
+          await controlPerpetualPaperWorkspace(
+            {
+              prisma: deps.prisma,
+              jobs: deps.jobs,
+              fetchSnapshot: deps.fetchPerpetualPaperSnapshot,
+              engine: deps.perpetualPaperEngine,
+            },
+            context.actor,
+            input,
+          );
+          const result = await readOwnedPerpetualWorkspace(
+            deps.prisma,
+            context.actor,
+            input.ledgerId,
+          );
+          if (!result) throw new ORPCError("NOT_FOUND");
+          return PaperPerpetualWorkspaceStatusSchema.parse(result);
+        },
+      ),
       marketPrepare: authed.trading.marketPrepare.handler(async ({ input, context }) => {
         const owner = context.actor!;
         const workspace = await readOwnedTradingPaperWorkspace(deps.prisma, owner, input.ledgerId);
@@ -1011,6 +1123,22 @@ export function createRouter(deps: RouterDeps) {
         if (!journal) throw new ORPCError("NOT_FOUND");
         return journal;
       }),
+      // Futures is a read-only tab within the same human PAPER journal.
+      perpetualJournalList: authed.trading.perpetualJournalList.handler(({ context }) =>
+        listOwnedPerpetualPaperJournals(deps.prisma, context.actor),
+      ),
+      perpetualJournalRead: authed.trading.perpetualJournalRead.handler(
+        async ({ context, input }) => {
+          const journal = await readOwnedPerpetualPaperJournal(
+            deps.prisma,
+            context.actor,
+            input.ledgerId,
+            input.beforeSequence,
+          );
+          if (!journal) throw new ORPCError("NOT_FOUND");
+          return journal;
+        },
+      ),
       // User-invoked public GET requests only. No exchange keys, wallet or execution capability.
       list: authed.trading.list.handler(async ({ input }) => {
         if (input.venue === "okx") {

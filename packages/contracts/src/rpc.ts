@@ -122,7 +122,19 @@ import {
   TradingPaperJournalListOutputSchema,
   TradingPaperJournalReadInputSchema,
   TradingPaperJournalReadOutputSchema,
+  TradingPaperPerpetualJournalListOutputSchema,
+  TradingPaperPerpetualJournalReadOutputSchema,
 } from "./trading-paper-journal.js";
+import {
+  PaperLeverageReadInputSchema,
+  PaperVenueLeverageLimitsSchema,
+} from "./trading-paper-leverage.js";
+import {
+  PaperPerpetualCommandSchema,
+  PaperPerpetualPreparationSchema,
+  PaperPerpetualStrategySchema,
+  PaperPerpetualWorkspaceStatusSchema,
+} from "./trading-paper-perpetual-workspace.js";
 import { TradingPaperMarketPreparationSchema } from "./trading-paper-workspace.js";
 import {
   WindowsHostBrowserRequestSchema,
@@ -226,6 +238,28 @@ import {
 
 export const appContract = {
   trading: {
+    perpetualExperimentsCreate: oc
+      .input(z.object({ strategy: PaperPerpetualStrategySchema.optional() }).strict())
+      .output(
+        z.object({
+          mode: z.literal("paper_only"),
+          accounts: z.array(
+            z.object({ ledgerId: z.string(), strategy: PaperPerpetualStrategySchema }),
+          ),
+        }),
+      ),
+    perpetualMarketPrepare: oc
+      .input(z.object({ ledgerId: z.string().min(1).max(128) }))
+      .output(PaperPerpetualPreparationSchema),
+    perpetualLeverageRead: oc
+      .input(PaperLeverageReadInputSchema)
+      .output(z.array(PaperVenueLeverageLimitsSchema)),
+    perpetualWorkspaceRead: oc
+      .input(z.object({ ledgerId: z.string().min(1).max(128) }))
+      .output(PaperPerpetualWorkspaceStatusSchema),
+    perpetualWorkspaceCommand: oc
+      .input(PaperPerpetualCommandSchema)
+      .output(PaperPerpetualWorkspaceStatusSchema),
     marketPrepare: oc
       .input(z.object({ ledgerId: z.string().min(1).max(128), venue: z.enum(["okx", "bingx"]) }))
       .output(TradingPaperMarketPreparationSchema),
@@ -251,6 +285,13 @@ export const appContract = {
     journalRead: oc
       .input(TradingPaperJournalReadInputSchema)
       .output(TradingPaperJournalReadOutputSchema),
+    /** Futures is a tab of the same journal; both routes are read-only. */
+    perpetualJournalList: oc
+      .input(z.object({}))
+      .output(TradingPaperPerpetualJournalListOutputSchema),
+    perpetualJournalRead: oc
+      .input(TradingPaperJournalReadInputSchema)
+      .output(TradingPaperPerpetualJournalReadOutputSchema),
     /** Public derivative context only; no collateral, leverage or order controls. */
     perpContext: oc.input(TradingPerpContextInputSchema).output(TradingPerpContextSchema),
   },
