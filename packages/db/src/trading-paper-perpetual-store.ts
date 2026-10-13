@@ -6,10 +6,12 @@ import type {
   TradingPaperPerpetualJournalListOutput,
   TradingPaperPerpetualJournalReadOutput,
 } from "@rakazo/contracts";
+import type {
+  PerpetualPaperEvent,
+  PerpetualPaperLedgerInput,
+  PerpetualPaperLedgerState,
+} from "@rakazo/core";
 import {
-  type PerpetualPaperEvent,
-  type PerpetualPaperLedgerInput,
-  type PerpetualPaperLedgerState,
   projectPerpetualEngineSnapshot,
   replayPerpetualPaperLedger,
   summarizePaperPositionRecovery,
