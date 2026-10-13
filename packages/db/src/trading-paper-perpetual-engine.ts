@@ -273,10 +273,7 @@ export async function appendPerpetualEngineBatchInTransaction(
       headSha256: chain,
       snapshot: output,
       effectiveConfig: nextConfig,
-      transitions: [
-        ...recovered.transitions,
-        { input, output, recordedAt: appended.recordedAt },
-      ],
+      transitions: [...recovered.transitions, { input, output, recordedAt: appended.recordedAt }],
     });
   }
   await tx.tradingPaperPerpetualLedger.update({
