@@ -25,6 +25,7 @@ import {
   commitPerpetualPaperWake,
   failPerpetualWake,
   pausePerpetualAfterRestart,
+  preparePerpetualEngineBeforeMarketFetch,
   perpetualMarketSource,
   readOwnedMarketPreparedResearch,
   readPerpetualWake,
@@ -137,6 +138,8 @@ export async function handlePerpetualPaperWake(
       key.scheduledFor,
     );
     if (!first) return;
+    if (deps.engine)
+      await preparePerpetualEngineBeforeMarketFetch(deps.prisma, owner, key.ledgerId, deps.engine);
     const fetchSnapshot = deps.fetchSnapshot ?? fetchOkxPaperPerpetualSnapshot;
     const read = async (symbols: string[]) =>
       Promise.all([...new Set(symbols)].map((symbol) => fetchSnapshot(symbol)));
