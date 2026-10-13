@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import {
-  type PerpetualPaperOrder,
-  type PerpetualPaperPublicBook,
-  previewPerpetualPaperOrderMatch,
+import type {
+  PerpetualPaperOrder,
+  PerpetualPaperPublicBook,
 } from "./trading-paper-perpetual-matcher.js";
+import { previewPerpetualPaperOrderMatch } from "./trading-paper-perpetual-matcher.js";
 
 const order: PerpetualPaperOrder = {
   accountId: "paper.one",
