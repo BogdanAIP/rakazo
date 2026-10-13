@@ -41,9 +41,6 @@ function cacheTransactionRecovery(
   ledgerId: string,
   recovered: Recovered,
 ): void {
-  // PrismaClient also satisfies the transaction-client shape but lives across
-  // requests. Never memoize a journal on the shared client.
-  if ("$transaction" in tx) return;
   let entries = verifiedWithinTransaction.get(tx);
   if (!entries) {
     entries = new Map();
@@ -110,6 +107,7 @@ export async function recoverPerpetualEngineInTransaction(
   tx: Prisma.TransactionClient,
   owner: PerpetualOwner,
   ledgerId: string,
+  options: { transactionScopedReuse?: boolean } = {},
 ): Promise<Recovered | null> {
   const member = await tx.spaceMember.findFirst({
     where: { spaceId: owner.spaceId, userId: owner.userId },
@@ -131,7 +129,9 @@ export async function recoverPerpetualEngineInTransaction(
     ledger.quoteCurrency !== "USDT"
   )
     throw new Error("PAPER engine configuration integrity failed");
-  const verified = "$transaction" in tx ? undefined : verifiedWithinTransaction.get(tx)?.get(ledgerId);
+  const verified = options.transactionScopedReuse
+    ? verifiedWithinTransaction.get(tx)?.get(ledgerId)
+    : undefined;
   if (
     verified?.owner.spaceId === owner.spaceId &&
     verified.owner.userId === owner.userId &&
@@ -181,7 +181,9 @@ export async function recoverPerpetualEngineInTransaction(
   )
     throw new Error("PAPER engine projection differs from journal");
   const result = { config, headSha256: previous, snapshot, transitions, effectiveConfig };
-  cacheTransactionRecovery(tx, owner, ledgerId, result);
+  // Callers opt in only inside Prisma $transaction; the shared PrismaClient
+  // must always fully verify history and must never retain a cross-request cache.
+  if (options.transactionScopedReuse) cacheTransactionRecovery(tx, owner, ledgerId, result);
   return result;
 }
 /** Internal composition-only append AFTER independent risk/revision/session checks.
@@ -211,7 +213,9 @@ export async function appendPerpetualEngineBatchInTransaction(
   if (!member) throw new Error("PAPER engine membership denied");
   await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "trading_paper_perpetual_ledgers"
   WHERE id=${config.accountId} AND "spaceId"=${owner.spaceId} AND "ownerUserId"=${owner.userId} FOR UPDATE`;
-  const recovered = await recoverPerpetualEngineInTransaction(tx, owner, config.accountId);
+  const recovered = await recoverPerpetualEngineInTransaction(tx, owner, config.accountId, {
+    transactionScopedReuse: true,
+  });
   const previous = recovered?.headSha256 ?? genesis(owner, config);
   if (recovered && hash(recovered.config) !== hash(config))
     throw new Error("PAPER engine configuration changed");
