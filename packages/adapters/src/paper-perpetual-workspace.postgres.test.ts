@@ -566,31 +566,59 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
             journal.events[0]?.kind === "engine" &&
             journal.events[0].output.openOrders,
         ).toHaveLength(0);
-        // A later revision can create a new resting order. Retrying an OLD
-        // successful command must never cancel that newer native GTC order.
-        decision = {
-          ...proposal("long"),
-          leverage: 5,
-          quantityBase: "1.00",
-          orderType: "limit",
-          limitPriceQuote: "99.00",
-        };
-        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
-        const newOrderJournal = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
-        const newOrderBatch = newOrderJournal?.events.filter((e) => e.kind === "engine").at(-1);
-        expect(newOrderBatch?.kind === "engine" && newOrderBatch.output.openOrders).toHaveLength(1);
-        await controlPerpetualPaperWorkspace(
-          { ...deps(), engine, fetchSnapshot: snapshot },
-          owner,
-          leverageCommand,
-        );
-        const replayJournal = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
-        expect(replayJournal?.events).toHaveLength(newOrderJournal?.events.length ?? 0);
-
         price = "98.00";
         await handlePerpetualPaperWake({ ...worker(), engine }, old);
         expect((await state(id)).openPositions).toHaveLength(0);
         expect((await state(id)).bookBalanceQuote).toBe("1000.00000000");
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "does not cancel later native orders on a stale idempotent Pause retry",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine);
+        decision = {
+          ...proposal("long"),
+          leverage: 20,
+          orderType: "limit",
+          limitPriceQuote: "99.00",
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))?.openOrders).toHaveLength(1);
+
+        const status = await readOwnedPerpetualWorkspace(db.prisma, owner, id);
+        const oldPause: PaperPerpetualCommand = {
+          ledgerId: id,
+          expectedRevision: status!.revision,
+          commandId: randomUUID(),
+          action: "pause",
+        };
+        await controlPerpetualPaperWorkspace({ ...deps(), engine }, owner, oldPause);
+        expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))?.openOrders).toHaveLength(0);
+
+        await start(id, engine);
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))?.openOrders).toHaveLength(1);
+        const before = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
+        if (before?.status !== "verified") throw new Error("Unverified native journal");
+
+        // An identical old command receipt cannot affect a newer active session.
+        await controlPerpetualPaperWorkspace({ ...deps(), engine }, owner, oldPause);
+        const after = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
+        if (after?.status !== "verified") throw new Error("Native journal changed after retry");
+        expect(after.events).toHaveLength(before.events.length);
+        expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))?.openOrders).toHaveLength(1);
       } finally {
         engine.dispose();
       }
