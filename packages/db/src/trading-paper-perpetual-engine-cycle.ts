@@ -279,8 +279,8 @@ export async function commitPerpetualEngineWake(
               control.closeAll ||
               (active &&
                 key.stage === "research" &&
-                ((decision.kind === "close" && decision.positionId === p.positionId) ||
-                  (decision.kind === "proposal" && decision.replacePositionId === p.positionId)));
+                decision.kind === "close" &&
+                decision.positionId === p.positionId);
             const partialExit =
               active &&
               key.stage === "research" &&
@@ -321,58 +321,64 @@ export async function commitPerpetualEngineWake(
           }
         let output: PaperPerpetualEngineSnapshot | null = null;
         // Native marks, funding and exits settle before checking risk for a new entry.
-        if (batch.quotes.length || batch.commands.length) {
-          output = await engine.apply(config, prior?.transitions ?? [], batch);
-          await appendPerpetualEngineBatchInTransaction(tx, owner, {
-            config,
-            batchId: prefix + ":observe",
-            input: batch,
-            output,
-            expectedHead: prior?.headSha256 ?? null,
-          });
-          state = projectPerpetualEngineSnapshot(effectiveConfig, output, old.state.strategy);
-          prior = await recoverPerpetualEngineInTransaction(tx, owner, key.ledgerId, {
-            transactionScopedReuse: true,
-          });
-          for (const plan of control.plans) {
-            const before = old.state.openPositions.find((x) => x.positionId === plan.positionId),
-              after = state.openPositions.find((x) => x.positionId === plan.positionId);
-            if (before && after && amount(after.quantityBase) < amount(before.quantityBase))
-              plan.stopRiskQuote = format(
-                ceil(
-                  amount(plan.stopRiskQuote) * amount(after.quantityBase),
-                  amount(before.quantityBase),
+        const applySettlement = async (suffix: string) => {
+          if (batch.quotes.length || batch.commands.length) {
+            const previousState = state;
+            output = await engine.apply(config, prior?.transitions ?? [], batch);
+            await appendPerpetualEngineBatchInTransaction(tx, owner, {
+              config,
+              batchId: prefix + suffix,
+              input: batch,
+              output,
+              expectedHead: prior?.headSha256 ?? null,
+            });
+            state = projectPerpetualEngineSnapshot(effectiveConfig, output, old.state.strategy);
+            prior = await recoverPerpetualEngineInTransaction(tx, owner, key.ledgerId, {
+              transactionScopedReuse: true,
+            });
+            for (const plan of control.plans) {
+              const before = previousState.openPositions.find(
+                  (x) => x.positionId === plan.positionId,
                 ),
-              );
-          }
-          control.plans = control.plans.filter((plan) =>
-            state.openPositions.some((p) => p.positionId === plan.positionId),
-          );
-          const submitted = new Map(
-            batch.commands.filter((c) => c.kind === "order").map((c) => [c.orderId, c]),
-          );
-          batch.quotes = batch.quotes.map((q) => {
-            let bid = amount(q.bidAvailableBase),
-              ask = amount(q.askAvailableBase);
-            for (const e of output!.events) {
-              const c = e.kind === "fill" ? submitted.get(e.orderId!) : undefined;
-              if (c && c.instrument === q.instrument) {
-                if (c.action === "buy") ask -= amount(e.quantityBase!);
-                else bid -= amount(e.quantityBase!);
-              }
+                after = state.openPositions.find((x) => x.positionId === plan.positionId);
+              if (before && after && amount(after.quantityBase) < amount(before.quantityBase))
+                plan.stopRiskQuote = format(
+                  ceil(
+                    amount(plan.stopRiskQuote) * amount(after.quantityBase),
+                    amount(before.quantityBase),
+                  ),
+                );
             }
-            return {
-              ...q,
-              atNs: String(BigInt(output!.clockNs) + 1n),
-              bidAvailableBase: format(bid > 0n ? bid : 0n),
-              askAvailableBase: format(ask > 0n ? ask : 0n),
-            };
-          });
-          batch.sequence = output.sequence + 1;
-          batch.commands = [];
-          batch.funding = [];
-          delete batch.registerInstruments;
-        }
+            control.plans = control.plans.filter((plan) =>
+              state.openPositions.some((p) => p.positionId === plan.positionId),
+            );
+            const submitted = new Map(
+              batch.commands.filter((c) => c.kind === "order").map((c) => [c.orderId, c]),
+            );
+            batch.quotes = batch.quotes.map((q) => {
+              let bid = amount(q.bidAvailableBase),
+                ask = amount(q.askAvailableBase);
+              for (const e of output!.events) {
+                const c = e.kind === "fill" ? submitted.get(e.orderId!) : undefined;
+                if (c && c.instrument === q.instrument) {
+                  if (c.action === "buy") ask -= amount(e.quantityBase!);
+                  else bid -= amount(e.quantityBase!);
+                }
+              }
+              return {
+                ...q,
+                atNs: String(BigInt(output!.clockNs) + 1n),
+                bidAvailableBase: format(bid > 0n ? bid : 0n),
+                askAvailableBase: format(ask > 0n ? ask : 0n),
+              };
+            });
+            batch.sequence = output.sequence + 1;
+            batch.commands = [];
+            batch.funding = [];
+            delete batch.registerInstruments;
+          }
+        };
+        await applySettlement(":observe");
         now = await perpetualDatabaseClock(tx);
         clock = now.getTime();
         active =
@@ -400,7 +406,7 @@ export async function commitPerpetualEngineWake(
             );
           }
         }
-        const beforeEntry = state;
+        let beforeEntry = state;
         let accepted: ReturnType<typeof previewPaperPerpetualProposal> | null = null;
         let enteringPosition: string | null = null;
         if (key.stage === "research") {
@@ -430,316 +436,429 @@ export async function commitPerpetualEngineWake(
                 },
               ];
           }
-          if (active && control.orders.length) {
-            const order = control.orders[0]!,
-              p = order.proposal,
-              s = snapshots.get(p.instrument);
-            if (!s) throw new Error("Futures execution market missing");
-            enteringPosition = p.addToPositionId ?? "paper-position:" + hash(order.orderId);
-            const existingAddition = p.addToPositionId
-              ? state.openPositions.find((x) => x.positionId === p.addToPositionId)
-              : undefined;
-            const additionPlan = existingAddition
-              ? control.plans.find((x) => x.positionId === existingAddition.positionId)
-              : undefined;
-            const stillOpenReplacement = p.replacePositionId
-              ? state.openPositions.some((x) => x.positionId === p.replacePositionId)
-              : false;
-            // A marketable limit can execute at a better public bid/ask
-            // than its limit: risk and reserved notional use that executable quote.
-            const executableQuote = p.side === "long" ? s.book.askQuote : s.book.bidQuote;
-            const entry =
-              p.orderType !== "limit"
-                ? executableQuote
-                : p.side === "long"
-                  ? amount(executableQuote) <= amount(p.limitPriceQuote!)
-                    ? executableQuote
-                    : p.limitPriceQuote
-                  : amount(executableQuote) >= amount(p.limitPriceQuote!)
-                    ? executableQuote
-                    : p.limitPriceQuote;
-            const gross = state.openPositions.reduce(
-              (sum, x) =>
-                sum +
-                notional(
-                  amount(x.quantityBase),
-                  amount(x.markPriceQuote) > amount(x.entryPriceQuote)
-                    ? amount(x.markPriceQuote)
-                    : amount(x.entryPriceQuote),
-                ),
-              0n,
-            );
-            const grossBySide = (side: "long" | "short") =>
-              state.openPositions
-                .filter((held) => held.side === side)
-                .reduce(
-                  (sum, held) =>
-                    sum +
-                    notional(
-                      amount(held.quantityBase),
-                      amount(held.markPriceQuote) > amount(held.entryPriceQuote)
-                        ? amount(held.markPriceQuote)
-                        : amount(held.entryPriceQuote),
-                    ),
-                  0n,
+          for (let admissionPass = 0; admissionPass < 2; admissionPass++) {
+            if (active && control.orders.length) {
+              const order = control.orders[0]!,
+                p = order.proposal,
+                s = snapshots.get(p.instrument);
+              if (!s) throw new Error("Futures execution market missing");
+              enteringPosition = p.addToPositionId ?? "paper-position:" + hash(order.orderId);
+              const existingAddition = p.addToPositionId
+                ? state.openPositions.find((x) => x.positionId === p.addToPositionId)
+                : undefined;
+              const additionPlan = existingAddition
+                ? control.plans.find((x) => x.positionId === existingAddition.positionId)
+                : undefined;
+              const stillOpenReplacement = p.replacePositionId
+                ? state.openPositions.some((x) => x.positionId === p.replacePositionId)
+                : false;
+              const replacement = p.replacePositionId
+                ? state.openPositions.find((x) => x.positionId === p.replacePositionId)
+                : undefined;
+              let riskState = state;
+              const riskPlans = control.plans.filter(
+                (plan) => plan.positionId !== replacement?.positionId,
+              );
+              if (replacement) {
+                const quote = snapshots.get(replacement.instrument);
+                const terms = effectiveConfig.instruments.find(
+                  (i) => i.instrument === replacement.instrument,
                 );
-            const reserve = state.openPositions.reduce(
-              (sum, x) =>
-                sum +
-                ceil(
+                if (!quote || !terms) throw new Error("Replacement exit evidence unavailable");
+                const exitPrice =
+                  replacement.side === "long" ? quote.book.bidQuote : quote.book.askQuote;
+                const exitNotional = notional(amount(replacement.quantityBase), amount(exitPrice));
+                const entryNotional = notional(
+                  amount(replacement.quantityBase),
+                  amount(replacement.entryPriceQuote),
+                );
+                const realized =
+                  replacement.side === "long"
+                    ? exitNotional - entryNotional
+                    : entryNotional - exitNotional;
+                const fee = ceil(
+                  exitNotional *
+                    (signed(terms.takerFeeRate) > 0n ? signed(terms.takerFeeRate) : 0n),
+                  100000000n,
+                );
+                riskState = {
+                  ...state,
+                  openPositions: state.openPositions.filter(
+                    (x) => x.positionId !== replacement.positionId,
+                  ),
+                  markedEquityQuote: format(
+                    signed(state.markedEquityQuote) +
+                      realized -
+                      signed(replacement.unrealizedPnlQuote) -
+                      fee,
+                  ),
+                  realizedPnlQuote: format(signed(state.realizedPnlQuote) + realized - fee),
+                  unrealizedPnlQuote: format(
+                    signed(state.unrealizedPnlQuote) - signed(replacement.unrealizedPnlQuote),
+                  ),
+                };
+              }
+              // A marketable limit can execute at a better public bid/ask
+              // than its limit: risk and reserved notional use that executable quote.
+              const executableQuote = p.side === "long" ? s.book.askQuote : s.book.bidQuote;
+              const entry =
+                p.orderType !== "limit"
+                  ? executableQuote
+                  : p.side === "long"
+                    ? amount(executableQuote) <= amount(p.limitPriceQuote!)
+                      ? executableQuote
+                      : p.limitPriceQuote
+                    : amount(executableQuote) >= amount(p.limitPriceQuote!)
+                      ? executableQuote
+                      : p.limitPriceQuote;
+              const gross = riskState.openPositions.reduce(
+                (sum, x) =>
+                  sum +
                   notional(
                     amount(x.quantityBase),
                     amount(x.markPriceQuote) > amount(x.entryPriceQuote)
                       ? amount(x.markPriceQuote)
                       : amount(x.entryPriceQuote),
                   ),
-                  BigInt(x.leverage),
-                ),
-              0n,
-            );
-            const available = signed(state.markedEquityQuote) - reserve;
-            const day = now.toISOString().slice(0, 10);
-            const beginning =
-              prior?.transitions.filter((t) => t.recordedAt.toISOString().slice(0, 10) < day).at(-1)
-                ?.output.realizedPnlQuote ?? "0";
-            const lost =
-              signed(beginning) -
-              signed(state.realizedPnlQuote) -
-              (signed(state.unrealizedPnlQuote) < 0n ? signed(state.unrealizedPnlQuote) : 0n);
-            const instrumentQuantity = state.openPositions
-              .filter((x) => x.instrument === p.instrument)
-              .reduce((sum, x) => sum + amount(x.quantityBase), 0n);
-            const registeredTerms = effectiveConfig.instruments.find(
-              (i) => i.instrument === p.instrument,
-            )!;
-            const registeredMaximum = amount(registeredTerms.maximumBase);
-            const highestFeeRate = [
-              signed(registeredTerms.makerFeeRate),
-              signed(registeredTerms.takerFeeRate),
-              0n,
-            ].reduce((max, value) => (value > max ? value : max));
-            const lever = evaluatePaperLeverage({
-              venue: "okx",
-              instrument: p.instrument,
-              marginMode: "cross",
-              requestedLeverage: p.leverage,
-              ownerMaxLeverage: ceiling,
-              existingQuantityBase: format(instrumentQuantity),
-              proposedQuantityBase: p.quantityBase,
-              limits: s.leverageLimits ?? null,
-              now: now.toISOString(),
-            });
-            const intendedNotional = entry ? notional(amount(p.quantityBase), amount(entry)) : 0n;
-            // Every fresh idea receives at least 50% of its initial notional
-            // in separately budgeted future scale-in capacity. No staged order
-            // is submitted automatically; a later AI decision and fresh risk
-            // gate are still mandatory.
-            const automaticRecovery = p.addToPositionId ? 0n : ceil(intendedNotional, 2n);
-            const suggestedRecovery =
-              !p.addToPositionId && p.plannedRecoveryNotionalQuote
-                ? amount(p.plannedRecoveryNotionalQuote)
-                : 0n;
-            const newRecovery =
-              suggestedRecovery > automaticRecovery ? suggestedRecovery : automaticRecovery;
-            const consumedRecovery = p.addToPositionId ? intendedNotional : 0n;
-            const remainingReserve = (plan: (typeof control.plans)[number]) => {
-              const reserved = amount(plan.recoveryReserveQuote);
-              if (plan.positionId !== p.addToPositionId) return reserved;
-              return consumedRecovery >= reserved ? 0n : reserved - consumedRecovery;
-            };
-            const remainingRiskReserve = (plan: (typeof control.plans)[number]) => {
-              const booked = amount(plan.recoveryReservedRiskQuote);
-              const initial = amount(plan.recoveryReserveQuote);
-              if (plan.positionId !== p.addToPositionId || initial === 0n) return booked;
-              const consumed = consumedRecovery < initial ? consumedRecovery : initial;
-              const used = ceil(booked * consumed, initial);
-              return booked > used ? booked - used : 0n;
-            };
-            const recoveryBuckets = (side: "long" | "short") =>
-              control.plans.reduce((sum, plan) => {
-                const held = state.openPositions.find((x) => x.positionId === plan.positionId);
-                return held?.side === side ? sum + remainingReserve(plan) : sum;
-              }, 0n);
-            const recoveryRisk = control.plans.reduce(
-              (sum, plan) => sum + remainingRiskReserve(plan),
-              0n,
-            );
-            const sameIdeaRecoveryRisk = control.plans.reduce((sum, plan) => {
-              const held = state.openPositions.find((x) => x.positionId === plan.positionId);
-              return held?.instrument === p.instrument && held.side === p.side
-                ? sum + remainingRiskReserve(plan)
-                : sum;
-            }, 0n);
-            const proposedRecoverySteps = p.recoverySteps
-              ? planPaperRecoverySteps(
-                  p.side,
-                  entry ?? "0",
-                  p.stopPriceQuote,
-                  format(newRecovery),
-                  p.recoverySteps,
-                )
-              : [];
-            const stepConfirmation = existingAddition
-              ? assessPaperRecoveryStructure(s.history, p.side).status === "confirmed_structure"
-              : false;
-            const stageApproval =
-              existingAddition && additionPlan
-                ? canConsumePaperRecoveryStep(
-                    additionPlan.recoverySteps,
-                    p.recoveryStepId,
-                    format(consumedRecovery),
-                    stepConfirmation,
-                  )
-                : "missing";
-            const risk = previewPaperPerpetualProposal({
-              strategy: state.strategy,
-              ledgerId: key.ledgerId,
-              venue: "okx",
-              instrument: p.instrument,
-              side: p.side,
-              leverage: p.leverage,
-              ownerMaxLeverage: ceiling,
-              quantityBase: p.quantityBase,
-              entryPriceQuote: entry ?? "0",
-              stopPriceQuote: p.stopPriceQuote,
-              takeProfitPriceQuote: p.takeProfitPriceQuote,
-              availableQuote: format(available > 0n ? available : 0n),
-              additionalRecoveryNotionalQuote: format(newRecovery),
-              portfolio: {
-                openPositions: state.openPositions.filter((x) => x.positionId !== enteringPosition)
-                  .length,
-                openNotionalQuote: format(gross),
-                openLongNotionalQuote: format(grossBySide("long")),
-                openShortNotionalQuote: format(grossBySide("short")),
-                recoveryLongNotionalQuote: format(recoveryBuckets("long")),
-                recoveryShortNotionalQuote: format(recoveryBuckets("short")),
-                recoveryReservedRiskQuote: format(recoveryRisk),
-                sameIdeaReservedRiskQuote: format(sameIdeaRecoveryRisk),
-                markedEquityQuote: format(
-                  signed(state.markedEquityQuote) > 0n ? signed(state.markedEquityQuote) : 0n,
-                ),
-                peakEquityQuote: format(
-                  (prior?.transitions ?? []).reduce(
-                    (peak, historical) => {
-                      const equity =
-                        signed(historical.output.balanceQuote) +
-                        historical.output.positions.reduce(
-                          (sum, held) => sum + signed(held.unrealizedPnlQuote),
-                          0n,
-                        );
-                      return equity > peak ? equity : peak;
-                    },
-                    signed(state.markedEquityQuote) > amount(preset.initialBalanceQuote)
-                      ? signed(state.markedEquityQuote)
-                      : amount(preset.initialBalanceQuote),
+                0n,
+              );
+              const grossBySide = (side: "long" | "short") =>
+                riskState.openPositions
+                  .filter((held) => held.side === side)
+                  .reduce(
+                    (sum, held) =>
+                      sum +
+                      notional(
+                        amount(held.quantityBase),
+                        amount(held.markPriceQuote) > amount(held.entryPriceQuote)
+                          ? amount(held.markPriceQuote)
+                          : amount(held.entryPriceQuote),
+                      ),
+                    0n,
+                  );
+              const reserve = riskState.openPositions.reduce(
+                (sum, x) =>
+                  sum +
+                  ceil(
+                    notional(
+                      amount(x.quantityBase),
+                      amount(x.markPriceQuote) > amount(x.entryPriceQuote)
+                        ? amount(x.markPriceQuote)
+                        : amount(x.entryPriceQuote),
+                    ),
+                    BigInt(x.leverage),
                   ),
-                ),
-                openStopRiskQuote: format(
-                  control.plans.reduce((sum, x) => sum + amount(x.stopRiskQuote), 0n),
-                ),
-                sameIdeaStopRiskQuote: format(
-                  control.plans.reduce((sum, plan) => {
-                    const held = state.openPositions.find((x) => x.positionId === plan.positionId);
-                    return held?.instrument === p.instrument && held.side === p.side
-                      ? sum + amount(plan.stopRiskQuote)
-                      : sum;
-                  }, 0n),
-                ),
-                realizedLossTodayQuote: format(lost > 0n ? lost : 0n),
-              },
-              // Budget both sides at the highest persisted native fee rate.
-              assumedFeeBpsPerSide: Number(ceil(highestFeeRate, 10000n)),
-              assumedSlippageBpsPerSide: 10,
-              maintenanceMarginBps: s.rules.maintenanceMarginBps,
-            });
-            let denied: string | null = null;
-            if (!p.addToPositionId && proposedRecoverySteps === null)
-              denied = "denied_recovery_plan_invalid";
-            else if (p.addToPositionId && !existingAddition) denied = "denied_add_unknown";
-            else if (
-              p.addToPositionId &&
-              (!additionPlan ||
-                existingAddition?.instrument !== p.instrument ||
-                existingAddition?.side !== p.side ||
-                existingAddition?.leverage !== p.leverage ||
-                additionPlan.stopPriceQuote !== p.stopPriceQuote ||
-                additionPlan.takeProfitPriceQuote !== p.takeProfitPriceQuote)
-            )
-              denied = "denied_add_plan_mismatch";
-            else if (
-              p.addToPositionId &&
-              additionPlan!.recoverySteps.length &&
-              stageApproval !== "ready"
-            )
-              denied = "denied_recovery_step_" + stageApproval;
-            else if (
-              p.addToPositionId &&
-              consumedRecovery > amount(additionPlan!.recoveryReserveQuote)
-            )
-              denied = "denied_add_unreserved";
-            else if (
-              existingAddition &&
-              (p.side === "long"
-                ? amount(s.markPriceQuote) < amount(existingAddition.entryPriceQuote)
-                : amount(s.markPriceQuote) > amount(existingAddition.entryPriceQuote)) &&
-              assessPaperRecoveryStructure(s.history, p.side).status !== "confirmed_structure"
-            )
-              denied = "denied_add_falling_knife";
-            else if (p.replacePositionId && stillOpenReplacement)
-              denied = "denied_replace_not_closed";
-            else if (Date.parse(order.expiresAt) <= clock) denied = "order_expired";
-            else if (Date.parse(s.book.observedAt) < Date.parse(order.submittedAt))
-              denied = "quote_before_submission";
-            else if (!s.fundingNextAt || Date.parse(s.fundingNextAt) <= clock)
-              denied = "funding_boundary_unavailable";
-            else if (lever.status !== "allowed") denied = "denied_" + lever.reason;
-            else if (state.openPositions.length && p.leverage !== prior?.snapshot?.leverage)
-              denied = "denied_account_leverage";
-            else if (risk.status !== "inert_preview") denied = "denied_" + risk.reason;
-            else if (
-              amount(order.ideaRiskSpentQuote) + amount(risk.worstCaseStopLossQuote) >
-              amount(preset.maxPerIdeaRiskQuote)
-            )
-              denied = "denied_risk_budget_exceeded";
-            else if (
-              amount(p.quantityBase) < amount(s.rules.minimumBase) ||
-              amount(p.quantityBase) % amount(s.rules.lotIncrementBase) !== 0n ||
-              instrumentQuantity + amount(p.quantityBase) > amount(s.rules.maxTierBase) ||
-              instrumentQuantity + amount(p.quantityBase) > registeredMaximum ||
-              (p.orderType === "limit" &&
-                (!entry || amount(entry) % amount(s.market.priceIncrement!) !== 0n))
-            )
-              denied = "denied_contract";
-            // Changing native leverage requires an empty account and no resting native
-            // orders; cancellation is committed in a separate wake before this case.
-            else if (
-              !state.openPositions.length &&
-              prior?.snapshot?.openOrders.length &&
-              p.leverage !== prior.snapshot.leverage
-            )
-              denied = "denied_cancel_before_leverage";
-            if (denied) {
-              outcome = denied;
-              control.orders = [];
-            } else {
-              accepted = risk;
-              if (!state.openPositions.length) batch.leverage = p.leverage;
-              batch.quotes = batch.quotes.map((q) => ({
-                ...q,
-                atNs: String(BigInt(ns(now)) > BigInt(q.atNs) ? BigInt(ns(now)) : BigInt(q.atNs)),
-              }));
-              batch.commands.push({
-                kind: "order",
-                orderId: prefix + ":entry",
-                positionId: enteringPosition,
+                0n,
+              );
+              const available = signed(riskState.markedEquityQuote) - reserve;
+              const day = now.toISOString().slice(0, 10);
+              const beginning =
+                prior?.transitions
+                  .filter((t) => t.recordedAt.toISOString().slice(0, 10) < day)
+                  .at(-1)?.output.realizedPnlQuote ?? "0";
+              const lost =
+                signed(beginning) -
+                signed(riskState.realizedPnlQuote) -
+                (signed(riskState.unrealizedPnlQuote) < 0n
+                  ? signed(riskState.unrealizedPnlQuote)
+                  : 0n);
+              const instrumentQuantity = riskState.openPositions
+                .filter((x) => x.instrument === p.instrument)
+                .reduce((sum, x) => sum + amount(x.quantityBase), 0n);
+              const registeredTerms = effectiveConfig.instruments.find(
+                (i) => i.instrument === p.instrument,
+              )!;
+              const registeredMaximum = amount(registeredTerms.maximumBase);
+              const highestFeeRate = [
+                signed(registeredTerms.makerFeeRate),
+                signed(registeredTerms.takerFeeRate),
+                0n,
+              ].reduce((max, value) => (value > max ? value : max));
+              const lever = evaluatePaperLeverage({
+                venue: "okx",
                 instrument: p.instrument,
-                action: p.side === "long" ? "buy" : "sell",
-                quantityBase: p.quantityBase,
-                reduceOnly: false,
-                orderType: p.orderType,
-                limitPriceQuote: p.limitPriceQuote,
+                marginMode: "cross",
+                requestedLeverage: p.leverage,
+                ownerMaxLeverage: ceiling,
+                existingQuantityBase: format(instrumentQuantity),
+                proposedQuantityBase: p.quantityBase,
+                limits: s.leverageLimits ?? null,
+                now: now.toISOString(),
               });
+              const intendedNotional = entry ? notional(amount(p.quantityBase), amount(entry)) : 0n;
+              // Every fresh idea receives at least 50% of its initial notional
+              // in separately budgeted future scale-in capacity. No staged order
+              // is submitted automatically; a later AI decision and fresh risk
+              // gate are still mandatory.
+              const automaticRecovery = p.addToPositionId ? 0n : ceil(intendedNotional, 2n);
+              const suggestedRecovery =
+                !p.addToPositionId && p.plannedRecoveryNotionalQuote
+                  ? amount(p.plannedRecoveryNotionalQuote)
+                  : 0n;
+              const newRecovery =
+                suggestedRecovery > automaticRecovery ? suggestedRecovery : automaticRecovery;
+              const consumedRecovery = p.addToPositionId ? intendedNotional : 0n;
+              const remainingReserve = (plan: (typeof riskPlans)[number]) => {
+                const reserved = amount(plan.recoveryReserveQuote);
+                if (plan.positionId !== p.addToPositionId) return reserved;
+                return consumedRecovery >= reserved ? 0n : reserved - consumedRecovery;
+              };
+              const remainingRiskReserve = (plan: (typeof riskPlans)[number]) => {
+                const booked = amount(plan.recoveryReservedRiskQuote);
+                const initial = amount(plan.recoveryReserveQuote);
+                if (plan.positionId !== p.addToPositionId || initial === 0n) return booked;
+                const consumed = consumedRecovery < initial ? consumedRecovery : initial;
+                const used = ceil(booked * consumed, initial);
+                return booked > used ? booked - used : 0n;
+              };
+              const recoveryBuckets = (side: "long" | "short") =>
+                riskPlans.reduce((sum, plan) => {
+                  const held = riskState.openPositions.find(
+                    (x) => x.positionId === plan.positionId,
+                  );
+                  return held?.side === side ? sum + remainingReserve(plan) : sum;
+                }, 0n);
+              const recoveryRisk = riskPlans.reduce(
+                (sum, plan) => sum + remainingRiskReserve(plan),
+                0n,
+              );
+              const sameIdeaRecoveryRisk = riskPlans.reduce((sum, plan) => {
+                const held = riskState.openPositions.find((x) => x.positionId === plan.positionId);
+                return held?.instrument === p.instrument && held.side === p.side
+                  ? sum + remainingRiskReserve(plan)
+                  : sum;
+              }, 0n);
+              const proposedRecoverySteps = p.recoverySteps
+                ? planPaperRecoverySteps(
+                    p.side,
+                    entry ?? "0",
+                    p.stopPriceQuote,
+                    format(newRecovery),
+                    p.recoverySteps,
+                  )
+                : null;
+              const recoveryStage = additionPlan?.recoverySteps.find(
+                (step) => step.stepId === p.recoveryStepId,
+              );
+              const stepConfirmation =
+                existingAddition && recoveryStage?.activatedAt
+                  ? assessPaperRecoveryStructure(
+                      s.history.filter(
+                        (candle) =>
+                          Date.parse(candle.openedAt) >= Date.parse(recoveryStage.activatedAt!) &&
+                          Date.parse(candle.openedAt) + candle.durationMs <= clock,
+                      ),
+                      p.side,
+                    ).status === "confirmed_structure"
+                  : false;
+              const stageApproval =
+                existingAddition && additionPlan
+                  ? canConsumePaperRecoveryStep(
+                      additionPlan.recoverySteps,
+                      p.recoveryStepId,
+                      format(consumedRecovery),
+                      stepConfirmation,
+                    )
+                  : "missing";
+              const risk = previewPaperPerpetualProposal({
+                strategy: riskState.strategy,
+                ledgerId: key.ledgerId,
+                venue: "okx",
+                instrument: p.instrument,
+                side: p.side,
+                leverage: p.leverage,
+                ownerMaxLeverage: ceiling,
+                quantityBase: p.quantityBase,
+                entryPriceQuote: entry ?? "0",
+                stopPriceQuote: p.stopPriceQuote,
+                takeProfitPriceQuote: p.takeProfitPriceQuote,
+                availableQuote: format(available > 0n ? available : 0n),
+                additionalRecoveryNotionalQuote: format(newRecovery),
+                portfolio: {
+                  openPositions: riskState.openPositions.filter(
+                    (x) => x.positionId !== enteringPosition,
+                  ).length,
+                  openNotionalQuote: format(gross),
+                  openLongNotionalQuote: format(grossBySide("long")),
+                  openShortNotionalQuote: format(grossBySide("short")),
+                  recoveryLongNotionalQuote: format(recoveryBuckets("long")),
+                  recoveryShortNotionalQuote: format(recoveryBuckets("short")),
+                  recoveryReservedRiskQuote: format(recoveryRisk),
+                  sameIdeaReservedRiskQuote: format(sameIdeaRecoveryRisk),
+                  markedEquityQuote: format(
+                    signed(riskState.markedEquityQuote) > 0n
+                      ? signed(riskState.markedEquityQuote)
+                      : 0n,
+                  ),
+                  peakEquityQuote: format(
+                    (prior?.transitions ?? []).reduce(
+                      (peak, historical) => {
+                        const equity =
+                          signed(historical.output.balanceQuote) +
+                          historical.output.positions.reduce(
+                            (sum, held) => sum + signed(held.unrealizedPnlQuote),
+                            0n,
+                          );
+                        return equity > peak ? equity : peak;
+                      },
+                      signed(riskState.markedEquityQuote) > amount(preset.initialBalanceQuote)
+                        ? signed(riskState.markedEquityQuote)
+                        : amount(preset.initialBalanceQuote),
+                    ),
+                  ),
+                  openStopRiskQuote: format(
+                    riskPlans.reduce((sum, x) => sum + amount(x.stopRiskQuote), 0n),
+                  ),
+                  sameIdeaStopRiskQuote: format(
+                    riskPlans.reduce((sum, plan) => {
+                      const held = riskState.openPositions.find(
+                        (x) => x.positionId === plan.positionId,
+                      );
+                      return held?.instrument === p.instrument && held.side === p.side
+                        ? sum + amount(plan.stopRiskQuote)
+                        : sum;
+                    }, 0n),
+                  ),
+                  realizedLossTodayQuote: format(lost > 0n ? lost : 0n),
+                },
+                // Budget both sides at the highest persisted native fee rate.
+                assumedFeeBpsPerSide: Number(ceil(highestFeeRate, 10000n)),
+                assumedSlippageBpsPerSide: 10,
+                maintenanceMarginBps: s.rules.maintenanceMarginBps,
+              });
+              let denied: string | null = null;
+              if (!p.addToPositionId && proposedRecoverySteps === null)
+                denied = "denied_recovery_plan_invalid";
+              else if (p.addToPositionId && !existingAddition) denied = "denied_add_unknown";
+              else if (
+                p.addToPositionId &&
+                (!additionPlan ||
+                  existingAddition?.instrument !== p.instrument ||
+                  existingAddition?.side !== p.side ||
+                  existingAddition?.leverage !== p.leverage ||
+                  additionPlan.stopPriceQuote !== p.stopPriceQuote ||
+                  additionPlan.takeProfitPriceQuote !== p.takeProfitPriceQuote)
+              )
+                denied = "denied_add_plan_mismatch";
+              else if (
+                p.addToPositionId &&
+                additionPlan!.recoverySteps.length &&
+                stageApproval !== "ready"
+              )
+                denied = "denied_recovery_step_" + stageApproval;
+              else if (
+                p.addToPositionId &&
+                consumedRecovery > amount(additionPlan!.recoveryReserveQuote)
+              )
+                denied = "denied_add_unreserved";
+              else if (
+                existingAddition &&
+                (p.side === "long"
+                  ? amount(s.markPriceQuote) < amount(existingAddition.entryPriceQuote)
+                  : amount(s.markPriceQuote) > amount(existingAddition.entryPriceQuote)) &&
+                assessPaperRecoveryStructure(s.history, p.side).status !== "confirmed_structure"
+              )
+                denied = "denied_add_falling_knife";
+              else if (Date.parse(order.expiresAt) <= clock) denied = "order_expired";
+              else if (Date.parse(s.book.observedAt) < Date.parse(order.submittedAt))
+                denied = "quote_before_submission";
+              else if (!s.fundingNextAt || Date.parse(s.fundingNextAt) <= clock)
+                denied = "funding_boundary_unavailable";
+              else if (lever.status !== "allowed") denied = "denied_" + lever.reason;
+              else if (riskState.openPositions.length && p.leverage !== prior?.snapshot?.leverage)
+                denied = "denied_account_leverage";
+              else if (risk.status !== "inert_preview") denied = "denied_" + risk.reason;
+              else if (
+                amount(order.ideaRiskSpentQuote) + amount(risk.worstCaseStopLossQuote) >
+                amount(preset.maxPerIdeaRiskQuote)
+              )
+                denied = "denied_risk_budget_exceeded";
+              else if (
+                amount(p.quantityBase) < amount(s.rules.minimumBase) ||
+                amount(p.quantityBase) % amount(s.rules.lotIncrementBase) !== 0n ||
+                instrumentQuantity + amount(p.quantityBase) > amount(s.rules.maxTierBase) ||
+                instrumentQuantity + amount(p.quantityBase) > registeredMaximum ||
+                (p.orderType === "limit" &&
+                  (!entry || amount(entry) % amount(s.market.priceIncrement!) !== 0n))
+              )
+                denied = "denied_contract";
+              // Changing native leverage requires an empty account and no resting native
+              // orders; cancellation is committed in a separate wake before this case.
+              else if (
+                !riskState.openPositions.length &&
+                prior?.snapshot?.openOrders.length &&
+                p.leverage !== prior.snapshot.leverage
+              )
+                denied = "denied_cancel_before_leverage";
+              if (denied) {
+                outcome = denied;
+                control.orders = [];
+              } else if (stillOpenReplacement && replacement) {
+                // Admission checks the post-exit book before authorizing this close.
+                // Recheck the actual settlement before any new entry; a partial
+                // reduction never grants replacement entry authority.
+                batch.commands.push({
+                  kind: "order",
+                  orderId: prefix + ":replacement",
+                  positionId: replacement.positionId,
+                  instrument: replacement.instrument,
+                  action: replacement.side === "long" ? "sell" : "buy",
+                  quantityBase: replacement.quantityBase,
+                  reduceOnly: true,
+                  orderType: "market",
+                  limitPriceQuote: null,
+                });
+                await applySettlement(":replace");
+                beforeEntry = state;
+                if (
+                  state.openPositions.some(
+                    (position) => position.positionId === replacement.positionId,
+                  )
+                ) {
+                  outcome = "denied_replace_not_closed";
+                  control.orders = [];
+                  break;
+                }
+                now = await perpetualDatabaseClock(tx);
+                clock = now.getTime();
+                active =
+                  control.sessionStatus === "active" &&
+                  control.expiresAt !== null &&
+                  Date.parse(control.expiresAt) > clock;
+                if (!active) {
+                  outcome = "expired_research";
+                  control.orders = [];
+                  break;
+                }
+                if (
+                  execution.some(
+                    (snapshot) =>
+                      !isFreshPaperObservation(snapshot.book.observedAt, now.toISOString()),
+                  )
+                )
+                  throw new Error("Replacement execution observation expired");
+                continue;
+              } else {
+                accepted = risk;
+                if (!state.openPositions.length) batch.leverage = p.leverage;
+                batch.quotes = batch.quotes.map((q) => ({
+                  ...q,
+                  atNs: String(BigInt(ns(now)) > BigInt(q.atNs) ? BigInt(ns(now)) : BigInt(q.atNs)),
+                }));
+                batch.commands.push({
+                  kind: "order",
+                  orderId: prefix + ":entry",
+                  positionId: enteringPosition,
+                  instrument: p.instrument,
+                  action: p.side === "long" ? "buy" : "sell",
+                  quantityBase: p.quantityBase,
+                  reduceOnly: false,
+                  orderType: p.orderType,
+                  limitPriceQuote: p.limitPriceQuote,
+                });
+              }
             }
+            break;
           }
         }
         if (batch.commands.some((c) => c.kind === "order" && !c.reduceOnly)) {
