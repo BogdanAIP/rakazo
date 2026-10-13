@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import {
-  type PerpetualPaperEvent,
-  type PerpetualPaperLedgerInput,
-  replayPerpetualPaperLedger,
+import type {
+  PerpetualPaperEvent,
+  PerpetualPaperLedgerInput,
 } from "./trading-paper-perpetual-ledger.js";
+import { replayPerpetualPaperLedger } from "./trading-paper-perpetual-ledger.js";
 
 const openedAt = "2026-10-11T00:00:00.000Z";
 const ledgerId = "virtual.test.one";
