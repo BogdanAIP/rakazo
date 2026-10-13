@@ -16,7 +16,6 @@ import {
   getPaperExperimentPreset,
   isFreshPaperObservation,
   PAPER_OKX_LV1_FEES,
-  paperPerpetualAmount,
 } from "@rakazo/core";
 import type { PerpetualOwner, PrismaClient } from "@rakazo/db";
 import {
@@ -278,18 +277,11 @@ export async function handlePerpetualPaperWake(
     // No-trade native wakes can reuse the already-committed protection evidence.
     failure = "market_data_unavailable";
     const executionNow = new Date().toISOString();
-    const protectionConsumedLiquidity = first.state.openPositions.some((previous) => {
-      const remaining = current.state.openPositions.find(
-        (position) => position.positionId === previous.positionId,
-      );
-      return (
-        !remaining ||
-        paperPerpetualAmount(remaining.quantityBase) < paperPerpetualAmount(previous.quantityBase)
-      );
-    });
+    // The protection stage has already consumed the executable depth of
+    // its public book observation. A no-trade research stage may carry marks
+    // forward, but MUST NOT present the same liquidity a second time.
     const reuseProtection =
       deps.engine &&
-      !protectionConsumedLiquidity &&
       decision.kind === "no_trade" &&
       current.control.orders.length === 0 &&
       protection.every((s) =>
@@ -298,7 +290,10 @@ export async function handlePerpetualPaperWake(
         ),
       );
     const execution = reuseProtection
-      ? protection
+      ? protection.map((snapshot) => ({
+          ...snapshot,
+          book: { ...snapshot.book, bidAvailableBase: "0", askAvailableBase: "0" },
+        }))
       : await read([
           ...(deps.engine && decision.kind === "proposal" ? current.control.instruments : []),
           ...current.state.openPositions.map((p) => p.instrument),
