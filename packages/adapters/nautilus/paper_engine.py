@@ -194,17 +194,22 @@ class PaperEngine:
         if registrations:
             if self.engine.cache.positions_open() or self.engine.cache.orders_open():
                 raise ValueError("Register new contracts only on a settled account")
-            if len(registrations) > 8 or len(self.instruments) + len(registrations) > 256:
+            distinct = {terms["instrument"] for terms in registrations}
+            if len(distinct) != len(registrations):
+                raise ValueError("Duplicate PAPER contract update")
+            if len(registrations) > 8 or len(set(self.instruments) | distinct) > 256:
                 raise ValueError("PAPER contract registry full")
+            latest = {terms["instrument"]: terms for terms in self.terms}
             for terms in registrations:
-                if terms["instrument"] in self.instruments:
-                    raise ValueError("PAPER contract already registered")
+                symbol = terms["instrument"]
+                fresh = symbol not in self.instruments
                 value = instrument(terms, self.leverage)
                 self.engine.add_instrument(value)
-                self.instruments[terms["instrument"]] = value
-                self.terms.append(terms)
-                if self.sequence:
+                self.instruments[symbol] = value
+                latest[symbol] = terms
+                if fresh and self.sequence:
                     self.strategy.subscribe_quotes(value.id)
+            self.terms = list(latest.values())
         quotes = batch["quotes"]
         commands = batch.get("commands", [])
         funding = batch.get("funding", [])
