@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  type PaperPerpetualProposalInput,
-  previewPaperPerpetualProposal,
-} from "./trading-paper-perpetual-preview.js";
+import type { PaperPerpetualProposalInput } from "./trading-paper-perpetual-preview.js";
+import { previewPaperPerpetualProposal } from "./trading-paper-perpetual-preview.js";
 
 const fixture: PaperPerpetualProposalInput = {
   strategy: "moderate",
