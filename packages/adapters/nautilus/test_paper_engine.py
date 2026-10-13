@@ -68,6 +68,7 @@ class EngineTest(unittest.TestCase):
             self.assertEqual(Decimal(str(engine.instruments["BTC-USDT-SWAP"].price_increment)), Decimal("0.10"))
             self.assertEqual(Decimal(str(engine.instruments["BTC-USDT-SWAP"].size_increment)), Decimal("0.10"))
             self.assertEqual(expected[-1]["positions"][0]["quantityBase"], "0.10")
+            self.assertEqual(expected[-1]["totalFeesQuote"], "0.02002000")
         finally:
             engine.dispose()
         restored = PaperEngine(config())
