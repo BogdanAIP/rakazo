@@ -140,6 +140,7 @@ export async function recoverPerpetualPaperInTransaction(
   tx: Prisma.TransactionClient,
   owner: Owner,
   ledgerId: string,
+  options: { transactionScopedNativeReuse?: boolean } = {},
 ): Promise<{
   row: NonNullable<Awaited<ReturnType<typeof tx.tradingPaperPerpetualLedger.findFirst>>>;
   events: PerpetualPaperEvent[];
@@ -155,7 +156,9 @@ export async function recoverPerpetualPaperInTransaction(
     throw new PerpetualPaperIntegrityError("Perpetual journal currency or capital changed");
   }
   if (tx.tradingPaperPerpetualEngine) {
-    const engine = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId);
+    const engine = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId, {
+      transactionScopedReuse: options.transactionScopedNativeReuse === true,
+    });
     if (engine?.snapshot)
       return {
         row,
