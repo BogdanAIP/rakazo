@@ -1,8 +1,10 @@
+import type {
+  PaperExperimentStrategy,
+  PaperExperimentVenue,
+  PaperHedgeSide,
+} from "./trading-paper-experiments.js";
 import {
   getPaperExperimentPreset,
-  type PaperExperimentStrategy,
-  type PaperExperimentVenue,
-  type PaperHedgeSide,
   paperExperimentHedgeBucket,
 } from "./trading-paper-experiments.js";
 
