@@ -80,7 +80,12 @@ it("refuses a corrupted committed native replay before trading", async () => {
   } as unknown as NautilusPaperProcess);
   const engine = new NautilusPaperEngine({ pythonCommand: "stub", scriptPath: "stub" });
   await expect(
-    engine.prepare(config, [{ input: batch, output: { sequence: 1, balanceQuote: "1000" } as PaperPerpetualEngineSnapshot }]),
+    engine.prepare(config, [
+      {
+        input: batch,
+        output: { sequence: 1, balanceQuote: "1000" } as PaperPerpetualEngineSnapshot,
+      },
+    ]),
   ).rejects.toThrow("Nautilus PAPER replay diverged");
   expect(engine.requiresRecovery(config.accountId)).toBe(true);
   expect(dispose).toHaveBeenCalledTimes(1);
