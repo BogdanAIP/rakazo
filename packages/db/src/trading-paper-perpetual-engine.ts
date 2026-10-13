@@ -41,6 +41,9 @@ function cacheTransactionRecovery(
   ledgerId: string,
   recovered: Recovered,
 ): void {
+  // PrismaClient also satisfies the transaction-client shape but lives across
+  // requests. Never memoize a journal on the shared client.
+  if ("$transaction" in tx) return;
   let entries = verifiedWithinTransaction.get(tx);
   if (!entries) {
     entries = new Map();
@@ -128,7 +131,7 @@ export async function recoverPerpetualEngineInTransaction(
     ledger.quoteCurrency !== "USDT"
   )
     throw new Error("PAPER engine configuration integrity failed");
-  const verified = verifiedWithinTransaction.get(tx)?.get(ledgerId);
+  const verified = "$transaction" in tx ? undefined : verifiedWithinTransaction.get(tx)?.get(ledgerId);
   if (
     verified?.owner.spaceId === owner.spaceId &&
     verified.owner.userId === owner.userId &&
