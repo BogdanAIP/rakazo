@@ -44,6 +44,20 @@ type Key = {
   stage: "protection" | "research";
 };
 
+/** Finish any cold native replay before requesting a new public market observation.
+ * Quotes must be fetched after recovery to avoid expiring during long restarts.
+ */
+export async function preparePerpetualEngineBeforeMarketFetch(
+  prisma: PrismaClient,
+  owner: PerpetualOwner,
+  ledgerId: string,
+  engine: PaperPerpetualEngine,
+): Promise<void> {
+  if (!engine.requiresRecovery?.(ledgerId) || !engine.prepare) return;
+  const history = await recoverPerpetualEngineInTransaction(prisma, owner, ledgerId);
+  if (history) await engine.prepare(history.config, history.transitions);
+}
+
 /** Native simulator side effects remain disposable until the owner-scoped database
  * transaction commits. Never retry this transaction with an advanced process.
  * Queue retry recovers only committed batches and compares native output hashes.
