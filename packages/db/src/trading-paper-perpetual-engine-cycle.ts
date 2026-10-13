@@ -59,6 +59,17 @@ export async function commitPerpetualEngineWake(
   if (new Set(execution.map((s) => s.market.symbol)).size !== execution.length)
     throw new Error("Duplicate futures observations");
   try {
+    // An interrupted worker may have thousands of committed native batches.
+    // Replay their exact outputs without holding PostgreSQL row locks or the
+    // 60-second serializable transaction. Recheck the journal head under lock.
+    let preparedHead: string | null = null;
+    if (engine.requiresRecovery?.(key.ledgerId) && engine.prepare) {
+      const history = await recoverPerpetualEngineInTransaction(prisma, owner, key.ledgerId);
+      if (history) {
+        await engine.prepare(history.config, history.transitions);
+        preparedHead = history.headSha256;
+      }
+    }
     return await prisma.$transaction(
       async (tx) => {
         const { row, control } = await lockOwnedPerpetualWorkspace(tx, owner, key.ledgerId);
@@ -93,6 +104,8 @@ export async function commitPerpetualEngineWake(
         const protects =
           control.protectionExpiresAt !== null && Date.parse(control.protectionExpiresAt) > clock;
         let prior = await recoverPerpetualEngineInTransaction(tx, owner, key.ledgerId);
+        if (preparedHead !== null && prior?.headSha256 !== preparedHead)
+          throw new Error("PAPER journal advanced during native recovery; retry wake");
         const old = await recoverPerpetualPaperInTransaction(tx, owner, key.ledgerId);
         if (!prior && old.row.version !== 0)
           throw new Error("Existing custom wallet cannot change executor");
@@ -585,6 +598,14 @@ export async function cancelPerpetualEngineOrders(
   expectedRevision?: number,
 ) {
   try {
+    let preparedHead: string | null = null;
+    if (engine.requiresRecovery?.(ledgerId) && engine.prepare) {
+      const history = await recoverPerpetualEngineInTransaction(prisma, owner, ledgerId);
+      if (history) {
+        await engine.prepare(history.config, history.transitions);
+        preparedHead = history.headSha256;
+      }
+    }
     await prisma.$transaction(
       async (tx) => {
         const { row } = await lockOwnedPerpetualWorkspace(tx, owner, ledgerId);
@@ -592,6 +613,8 @@ export async function cancelPerpetualEngineOrders(
         // cancel native orders that belong to a later workspace revision.
         if (expectedRevision !== undefined && row.revision !== expectedRevision) return;
         const recovered = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId);
+        if (preparedHead !== null && recovered?.headSha256 !== preparedHead)
+          throw new Error("PAPER journal advanced during native cancellation recovery");
         if (!recovered?.snapshot?.openOrders.length) return;
         const batch: PaperPerpetualEngineBatch = {
           sequence: recovered.snapshot.sequence + 1,
