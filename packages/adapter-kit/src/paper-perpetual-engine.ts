@@ -18,6 +18,16 @@ export interface PaperPerpetualEngine {
     }>[],
     batch: PaperPerpetualEngineBatch,
   ): Promise<PaperPerpetualEngineSnapshot>;
+  /** Cold recovery may run outside the owner DB transaction. Implementations must
+   * verify every committed native output before allowing another batch. */
+  requiresRecovery?(accountId: string): boolean;
+  prepare?(
+    config: PaperPerpetualEngineConfig,
+    committed: readonly Readonly<{
+      input: PaperPerpetualEngineBatch;
+      output: PaperPerpetualEngineSnapshot;
+    }>[],
+  ): Promise<void>;
   invalidate(accountId: string): void;
   dispose?(): void;
 }
