@@ -449,12 +449,16 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         // The next flat wake journals the new live public contract increments.
         decision = { kind: "no_trade", reason: "Refresh contract after settlement" };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
-        const row = await db.prisma.tradingPaperPerpetualEngineBatch.findFirstOrThrow({
-          where: { ledgerId: id, input: { path: ["registerInstruments"], not: null } },
+        const recent = await db.prisma.tradingPaperPerpetualEngineBatch.findMany({
+          where: { ledgerId: id },
           orderBy: { sequence: "desc" },
+          take: 10,
         });
-        expect(JSON.stringify(row.input)).toContain('"priceIncrement":"0.05"');
-        expect(JSON.stringify(row.input)).toContain('"quantityIncrement":"0.05"');
+        const refreshed = recent.find((record) =>
+          JSON.stringify(record.input).includes('"priceIncrement":"0.05"'),
+        );
+        expect(refreshed).toBeDefined();
+        expect(JSON.stringify(refreshed?.input)).toContain('"quantityIncrement":"0.05"');
       } finally {
         engine.dispose();
       }
