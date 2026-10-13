@@ -88,7 +88,7 @@ export class NautilusPaperEngine implements PaperPerpetualEngine {
         this.accounts.set(config.accountId, cached);
         let cursor = 0;
         while (cursor < committed.length) {
-          const group: typeof committed[number][] = [];
+          const group: (typeof committed)[number][] = [];
           let bytes = 0;
           while (cursor < committed.length && group.length < 16) {
             const item = committed[cursor]!;
