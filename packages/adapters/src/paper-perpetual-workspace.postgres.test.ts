@@ -47,6 +47,9 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
   let modelFails = false;
   let tierMaximumBase = "100";
   let observationShiftMs = 0;
+  let contractPriceStep = "0.01";
+  let contractSizeStep = "0.01";
+  let contractMaintenanceBps = 50;
   let price = "100",
     depth = "100",
     funding: PaperPerpetualSnapshot["funding"] = [];
@@ -70,8 +73,8 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         base: instrument.slice(0, -10),
         quote: "USDT",
         status: "active",
-        priceIncrement: "0.01",
-        quantityIncrement: "0.01",
+        priceIncrement: contractPriceStep,
+        quantityIncrement: contractSizeStep,
         minNotional: null,
         expiryAt: null,
       },
@@ -112,10 +115,10 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       },
       rules: {
         basePerContract: "0.1",
-        lotIncrementBase: "0.01",
-        minimumBase: "0.01",
+        lotIncrementBase: contractSizeStep,
+        minimumBase: contractSizeStep,
         maxTierBase: tierMaximumBase,
-        maintenanceMarginBps: 50,
+        maintenanceMarginBps: contractMaintenanceBps,
         maxLeverage: 20,
       },
       markPriceQuote: price,
@@ -169,6 +172,9 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     modelFails = false;
     tierMaximumBase = "100";
     observationShiftMs = 0;
+    contractPriceStep = "0.01";
+    contractSizeStep = "0.01";
+    contractMaintenanceBps = 50;
     price = "100";
     depth = "100";
     funding = [];
@@ -396,6 +402,59 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
           "verified",
         );
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "blocks new entries on changed OKX terms, but closes the old position and refreshes when flat",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine, ["BTC-USDT-SWAP"]);
+        decision = { ...proposal("long"), quantityBase: "1.00", leverage: 20 };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await state(id)).openPositions).toHaveLength(1);
+
+        // A venue step/risk-tier revision must not silently leave new entry
+        // orders active while a protected long still exists.
+        contractPriceStep = "0.05";
+        contractSizeStep = "0.05";
+        contractMaintenanceBps = 100;
+        decision = { ...proposal("short"), quantityBase: "1.00", leverage: 20 };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await state(id)).openPositions).toHaveLength(1);
+        expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
+          lastDecision: { outcome: "denied_contract_terms_pending" },
+        });
+
+        // The old native contract still executes the independent reduce-only
+        // safety exit, without authorizing a short on the changed market.
+        price = "96.00";
+        decision = { kind: "no_trade", reason: "Only the protective stop may execute" };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await state(id)).openPositions).toHaveLength(0);
+        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
+          "verified",
+        );
+
+        // The next flat wake journals the new live public contract increments.
+        decision = { kind: "no_trade", reason: "Refresh contract after settlement" };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const row = await db.prisma.tradingPaperPerpetualEngineBatch.findFirstOrThrow({
+          where: { ledgerId: id, input: { path: ["registerInstruments"], not: null } },
+          orderBy: { sequence: "desc" },
+        });
+        expect(JSON.stringify(row.input)).toContain('"priceIncrement":"0.05"');
+        expect(JSON.stringify(row.input)).toContain('"quantityIncrement":"0.05"');
       } finally {
         engine.dispose();
       }
