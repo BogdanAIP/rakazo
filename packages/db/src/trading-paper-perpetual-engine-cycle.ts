@@ -172,7 +172,9 @@ export async function commitPerpetualEngineWake(
         let effectiveConfig = prior?.effectiveConfig ?? config;
         const known = new Set(effectiveConfig.instruments.map((i) => i.instrument));
         const additions = control.instruments.filter((symbol) => !known.has(symbol)).map(termsFor);
-        const existing = new Map(effectiveConfig.instruments.map((term) => [term.instrument, term]));
+        const existing = new Map(
+          effectiveConfig.instruments.map((term) => [term.instrument, term]),
+        );
         const refreshes = execution
           .filter((snapshot) => known.has(snapshot.market.symbol))
           .map((snapshot) => termsFor(snapshot.market.symbol))
