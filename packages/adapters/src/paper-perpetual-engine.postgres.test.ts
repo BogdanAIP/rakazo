@@ -360,9 +360,10 @@ suite("native futures simulator journal against PostgreSQL", () => {
       expect(verified?.transitions).toHaveLength(count);
       expect(verified?.headSha256).toBe(head);
       expect(verified?.snapshot?.sequence).toBe(count);
-      console.info(
+      process.stdout.write(
         "PAPER_LONG_JOURNAL " +
-          JSON.stringify({ rows: count, seededMs, verifiedMs, targetMs: 60000 }),
+          JSON.stringify({ rows: count, seededMs, verifiedMs, targetMs: 60000 }) +
+          "\n",
       );
       expect(verifiedMs).toBeLessThan(60000);
       if (process.env.PAPER_LONG_JOURNAL_NATIVE === "1") {
@@ -370,7 +371,9 @@ suite("native futures simulator journal against PostgreSQL", () => {
         const replayStart = Date.now();
         await engine.prepare(setup, verified!.transitions);
         const replayMs = Date.now() - replayStart;
-        console.info("PAPER_LONG_JOURNAL_NATIVE " + JSON.stringify({ rows: count, replayMs }));
+        process.stdout.write(
+          "PAPER_LONG_JOURNAL_NATIVE " + JSON.stringify({ rows: count, replayMs }) + "\n",
+        );
         expect(engine.requiresRecovery(accountId)).toBe(false);
       }
       engine.invalidate(accountId);
