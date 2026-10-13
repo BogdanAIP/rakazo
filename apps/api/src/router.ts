@@ -727,6 +727,7 @@ export interface RouterDeps {
   resolvePaperResearchModel?: (scope: {
     spaceId: string;
     userId: string;
+    botId?: string;
   }) => Promise<AgentRunModel>;
   cloudAgent?: CloudAgentConnection | null;
   prisma: PrismaClient;
@@ -943,6 +944,20 @@ export function createRouter(deps: RouterDeps) {
   });
   const agentSkills = createAgentSkillsService(deps.prisma);
   const market = createMarketService(deps.prisma);
+  const perpetualResearchModelScope = async (
+    owner: { spaceId: string; userId: string },
+    ledgerId: string,
+  ) => {
+    const account = await deps.prisma.tradingPaperPerpetualWorkspace.findFirst({
+      where: {
+        ledgerId,
+        ledger: { spaceId: owner.spaceId, ownerUserId: owner.userId },
+      },
+      select: { botId: true },
+    });
+    if (!account) throw new ORPCError("NOT_FOUND");
+    return { ...owner, botId: account.botId };
+  };
 
   const authed = os.use(async ({ context, next }) => {
     if (!context.actor) throw new ORPCError("UNAUTHORIZED");
@@ -982,7 +997,9 @@ export function createRouter(deps: RouterDeps) {
           }
           try {
             if (!deps.resolvePaperResearchModel) throw new Error("Model unavailable");
-            await deps.resolvePaperResearchModel(context.actor);
+            await deps.resolvePaperResearchModel(
+              await perpetualResearchModelScope(context.actor, input.ledgerId),
+            );
           } catch {
             return { status: "unavailable" as const, reason: "model_not_configured" as const };
           }
@@ -1030,7 +1047,9 @@ export function createRouter(deps: RouterDeps) {
         async ({ context, input }) => {
           if (input.action === "start") {
             if (!deps.resolvePaperResearchModel) throw new ORPCError("CONFLICT");
-            await deps.resolvePaperResearchModel(context.actor);
+            await deps.resolvePaperResearchModel(
+              await perpetualResearchModelScope(context.actor, input.ledgerId),
+            );
           }
           await controlPerpetualPaperWorkspace(
             {

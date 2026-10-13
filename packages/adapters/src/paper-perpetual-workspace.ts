@@ -44,7 +44,7 @@ type Deps = {
 };
 type WorkerDeps = Deps & {
   runtime: AgentRuntime;
-  resolveModel: (scope: PerpetualOwner) => Promise<AgentRunModel>;
+  resolveModel: (scope: PerpetualOwner & { botId?: string }) => Promise<AgentRunModel>;
   fetchSnapshot?: (instrument: string) => Promise<PaperPerpetualSnapshot>;
 };
 async function enqueueNext(
@@ -228,7 +228,9 @@ export async function handlePerpetualPaperWake(
         throw new Error("Closed market history is stale");
       }
       failure = "model_unavailable";
-      model = await deps.resolveModel(owner);
+      // Each PAPER account owns its dedicated bot, so resolve that bot's model
+      // selection instead of silently falling back to the space-wide default.
+      model = await deps.resolveModel({ ...owner, botId: current.row.botId });
       const preset = getPaperExperimentPreset(current.state.strategy);
       const executionFees = current.control.instruments.map((instrument) => {
         const fees =
