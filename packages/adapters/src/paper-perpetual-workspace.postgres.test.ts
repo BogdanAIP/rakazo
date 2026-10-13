@@ -1171,7 +1171,9 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           limitPriceQuote: "99.00",
         };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
-        expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))?.openOrders).toHaveLength(1);
+        expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))?.openOrders).toHaveLength(
+          1,
+        );
 
         const status = await readOwnedPerpetualWorkspace(db.prisma, owner, id);
         const oldPause: PaperPerpetualCommand = {
@@ -1185,7 +1187,9 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
 
         await start(id, engine);
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
-        expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))?.openOrders).toHaveLength(1);
+        expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))?.openOrders).toHaveLength(
+          1,
+        );
         const before = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
         if (before?.status !== "verified") throw new Error("Unverified native journal");
 
@@ -1194,7 +1198,9 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         const after = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
         if (after?.status !== "verified") throw new Error("Native journal changed after retry");
         expect(after.events).toHaveLength(before.events.length);
-        expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))?.openOrders).toHaveLength(1);
+        expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))?.openOrders).toHaveLength(
+          1,
+        );
       } finally {
         engine.dispose();
       }
