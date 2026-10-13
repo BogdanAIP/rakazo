@@ -128,11 +128,18 @@ export function PaperPerpetualComparison({
                   {journal.state.closedPositions} / {journal.state.openPositions.length}
                 </td>
                 <td className="p-2 tabular-nums">
-                  {journal.recovery?.status === "verified"
-                    ? journal.recovery.recoveryRatePercent === null
-                      ? "—"
-                      : `${journal.recovery.recoveryRatePercent}% (${journal.recovery.recovered}/${journal.recovery.completedUnderwater})`
-                    : "—"}
+                  {journal.recovery?.status === "verified" ? (
+                    <>
+                      {journal.recovery.recoveryRatePercent === null
+                        ? "—"
+                        : `${journal.recovery.recoveryRatePercent}% (${journal.recovery.recovered}/${journal.recovery.completedUnderwater})`}
+                      <div className="text-xs text-muted-foreground">
+                        Открыто в убытке: {journal.recovery.openUnderwater}
+                      </div>
+                    </>
+                  ) : (
+                    "—"
+                  )}
                 </td>
                 <td className="p-2 tabular-nums">
                   {formatPaperPerpetualAmount(
