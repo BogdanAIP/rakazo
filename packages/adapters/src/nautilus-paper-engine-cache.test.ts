@@ -46,3 +46,42 @@ it("disposes the native child after ten minutes without account activity", async
   engine.dispose();
   expect(dispose).toHaveBeenCalledTimes(1);
 });
+
+it("prepares committed native replay before a new batch and reuses the same child", async () => {
+  const dispose = vi.fn();
+  const previous = { sequence: 1, balanceQuote: "1000" } as PaperPerpetualEngineSnapshot;
+  const current = { sequence: 2, balanceQuote: "1000" } as PaperPerpetualEngineSnapshot;
+  const nativeApply = vi.fn().mockResolvedValueOnce(previous).mockResolvedValueOnce(current);
+  vi.mocked(NautilusPaperProcess.start).mockResolvedValue({
+    apply: nativeApply,
+    dispose,
+  } as unknown as NautilusPaperProcess);
+  const engine = new NautilusPaperEngine({ pythonCommand: "stub", scriptPath: "stub" });
+  const history = [{ input: batch, output: previous }];
+  expect(engine.requiresRecovery(config.accountId)).toBe(true);
+
+  await engine.prepare(config, history);
+  expect(engine.requiresRecovery(config.accountId)).toBe(false);
+  expect(NautilusPaperProcess.start).toHaveBeenCalledTimes(1);
+  expect(nativeApply).toHaveBeenCalledTimes(1);
+
+  expect(await engine.apply(config, history, { ...batch, sequence: 2 })).toEqual(current);
+  expect(NautilusPaperProcess.start).toHaveBeenCalledTimes(1);
+  expect(nativeApply).toHaveBeenCalledTimes(2);
+  engine.dispose();
+  expect(dispose).toHaveBeenCalledTimes(1);
+});
+
+it("refuses a corrupted committed native replay before trading", async () => {
+  const dispose = vi.fn();
+  vi.mocked(NautilusPaperProcess.start).mockResolvedValue({
+    apply: vi.fn().mockResolvedValue({ sequence: 1, balanceQuote: "999" }),
+    dispose,
+  } as unknown as NautilusPaperProcess);
+  const engine = new NautilusPaperEngine({ pythonCommand: "stub", scriptPath: "stub" });
+  await expect(
+    engine.prepare(config, [{ input: batch, output: { sequence: 1, balanceQuote: "1000" } as PaperPerpetualEngineSnapshot }]),
+  ).rejects.toThrow("Nautilus PAPER replay diverged");
+  expect(engine.requiresRecovery(config.accountId)).toBe(true);
+  expect(dispose).toHaveBeenCalledTimes(1);
+});
