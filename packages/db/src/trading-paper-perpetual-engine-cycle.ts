@@ -168,7 +168,9 @@ export async function commitPerpetualEngineWake(
         let effectiveConfig = prior?.effectiveConfig ?? config;
         const known = new Set(effectiveConfig.instruments.map((i) => i.instrument));
         const additions = control.instruments.filter((symbol) => !known.has(symbol)).map(termsFor);
-        const existing = new Map(effectiveConfig.instruments.map((term) => [term.instrument, term]));
+        const existing = new Map(
+          effectiveConfig.instruments.map((term) => [term.instrument, term]),
+        );
         // OKX can change contract price/size increments and margin requirements.
         // Record the exact refresh in the immutable batch, never silently keep
         // obsolete terms when the account is flat.
