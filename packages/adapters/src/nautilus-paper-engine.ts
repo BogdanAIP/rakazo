@@ -47,22 +47,23 @@ export class NautilusPaperEngine implements PaperPerpetualEngine {
     );
     cached.idleTimer.unref();
   }
-  async apply(
+  requiresRecovery(accountId: string): boolean {
+    return !this.accounts.has(accountId);
+  }
+  /** Replay committed native batches before entering a serializable transaction.
+   * Cached state is accepted only when its last output matches the DB journal.
+   */
+  async prepare(
     config: PaperPerpetualEngineConfig,
     committed: readonly Readonly<{
       input: PaperPerpetualEngineBatch;
       output: PaperPerpetualEngineSnapshot;
     }>[],
-    batch: PaperPerpetualEngineBatch,
-  ): Promise<PaperPerpetualEngineSnapshot> {
-    if (
-      config.engineId !== "nautilus" ||
-      config.engineVersion !== "1.231.0" ||
-      batch.sequence !== committed.length + 1
-    )
-      throw new Error("Nautilus PAPER configuration or sequence mismatch");
-    const configHash = digest(config),
-      last = committed.at(-1);
+  ): Promise<void> {
+    if (config.engineId !== "nautilus" || config.engineVersion !== "1.231.0")
+      throw new Error("Nautilus PAPER configuration mismatch");
+    const configHash = digest(config);
+    const last = committed.at(-1);
     let cached = this.accounts.get(config.accountId);
     if (cached?.idleTimer) {
       clearTimeout(cached.idleTimer);
@@ -93,6 +94,26 @@ export class NautilusPaperEngine implements PaperPerpetualEngine {
           cached.outputHash = digest(replay);
         }
       }
+      this.armIdleEviction(config.accountId, cached);
+    } catch (error) {
+      this.invalidate(config.accountId);
+      throw error;
+    }
+  }
+  async apply(
+    config: PaperPerpetualEngineConfig,
+    committed: readonly Readonly<{
+      input: PaperPerpetualEngineBatch;
+      output: PaperPerpetualEngineSnapshot;
+    }>[],
+    batch: PaperPerpetualEngineBatch,
+  ): Promise<PaperPerpetualEngineSnapshot> {
+    if (batch.sequence !== committed.length + 1)
+      throw new Error("Nautilus PAPER configuration or sequence mismatch");
+    await this.prepare(config, committed);
+    const cached = this.accounts.get(config.accountId);
+    if (!cached) throw new Error("Nautilus PAPER unavailable after recovery");
+    try {
       const result = await cached.process.apply(batch);
       cached.sequence = result.sequence;
       cached.outputHash = digest(result);
