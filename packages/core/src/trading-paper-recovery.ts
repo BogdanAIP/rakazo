@@ -23,6 +23,7 @@ type Transition = Readonly<{
 type PositionEpisode = {
   positionId: string;
   side: "long" | "short";
+  remainingQuantity: bigint;
   netFlows: bigint;
   fees: bigint;
   funding: bigint;
@@ -91,11 +92,19 @@ export function summarizePaperPositionRecovery(transitions: readonly Transition[
           const price = fixed(event.priceQuote);
           const fee = fixed(event.commission);
           if (qty <= 0n || price <= 0n || fee < 0n) throw new Error("invalid_native_fill");
-          const side = order?.reduceOnly ? prior?.side : action === "buy" ? "long" : "short";
+          const reducing = isLiquidation || order?.reduceOnly;
+          const side = reducing ? prior?.side : action === "buy" ? "long" : "short";
+          if (order && order.positionId !== id) throw new Error("invalid_position_lineage");
+          if (
+            side &&
+            action !== (side === "long" ? (reducing ? "sell" : "buy") : reducing ? "buy" : "sell")
+          )
+            throw new Error("invalid_position_fill_direction");
           if (!side || (prior && prior.side !== side)) throw new Error("invalid_position_lineage");
           const ep: PositionEpisode = prior ?? {
             positionId: id,
             side,
+            remainingQuantity: 0n,
             netFlows: 0n,
             fees: 0n,
             funding: 0n,
@@ -106,6 +115,9 @@ export function summarizePaperPositionRecovery(transitions: readonly Transition[
             completed: false,
           };
           if (ep.completed) throw new Error("reopened_completed_position");
+          if (reducing && qty > ep.remainingQuantity)
+            throw new Error("invalid_native_closing_quantity");
+          ep.remainingQuantity += reducing ? -qty : qty;
           const notional = (qty * price) / SCALE;
           ep.netFlows += action === "sell" ? notional : -notional;
           ep.fees += fee;
@@ -121,9 +133,22 @@ export function summarizePaperPositionRecovery(transitions: readonly Transition[
         }
       }
       const current = new Map(output.positions.map((x) => [x.positionId, x]));
+      if (current.size !== output.positions.length) throw new Error("duplicate_native_position");
+      for (const position of current.values()) {
+        const ep = episodes.get(position.positionId);
+        if (!ep || ep.completed) throw new Error("unattributed_native_position");
+        if (
+          fixed(position.quantityBase) <= 0n ||
+          fixed(position.quantityBase) !== ep.remainingQuantity ||
+          position.side !== (ep.side === "long" ? "LONG" : "SHORT")
+        )
+          throw new Error("native_position_quantity_mismatch");
+      }
       for (const ep of episodes.values()) {
         if (ep.completed) continue;
         const position = current.get(ep.positionId);
+        if (!position && ep.remainingQuantity !== 0n)
+          throw new Error("missing_native_closing_fill");
         const markValue = position
           ? (fixed(position.quantityBase) * fixed(position.markPriceQuote)) / SCALE
           : 0n;
@@ -134,7 +159,7 @@ export function summarizePaperPositionRecovery(transitions: readonly Transition[
           ep.grossEntered / 200n > SCALE / 20n ? ep.grossEntered / 200n : SCALE / 20n;
         if (balance < -threshold) ep.underwater = true;
         if (!position) {
-          // Only native fill-driven episodes exist; a closed episode is final.
+          // Quantity is fully reconciled to native closing or liquidation fills.
           ep.completed = true;
         }
       }
