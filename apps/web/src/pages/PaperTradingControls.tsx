@@ -3,11 +3,8 @@ import type {
   TradingPaperWorkspaceCommand,
   TradingPaperWorkspaceStatus,
 } from "@rakazo/contracts";
-import {
-  getPaperExperimentPreset,
-  PAPER_EXPERIMENT_STRATEGIES,
-  type PaperExperimentStrategy,
-} from "@rakazo/core";
+import type { PaperExperimentStrategy } from "@rakazo/core";
+import { getPaperExperimentPreset, PAPER_EXPERIMENT_STRATEGIES } from "@rakazo/core";
 import { Button, Input } from "@rakazo/ui-web";
 import { useEffect, useState } from "react";
 import { rpc } from "../lib/rpc";
