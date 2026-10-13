@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 import unittest
 from paper_engine import PaperEngine
 
@@ -64,8 +65,8 @@ class EngineTest(unittest.TestCase):
         try:
             for item in inputs:
                 expected.append(engine.apply(item))
-            self.assertEqual(str(engine.instruments["BTC-USDT-SWAP"].price_increment), "0.10")
-            self.assertEqual(str(engine.instruments["BTC-USDT-SWAP"].size_increment), "0.10")
+            self.assertEqual(Decimal(str(engine.instruments["BTC-USDT-SWAP"].price_increment)), Decimal("0.10"))
+            self.assertEqual(Decimal(str(engine.instruments["BTC-USDT-SWAP"].size_increment)), Decimal("0.10"))
             self.assertEqual(expected[-1]["positions"][0]["quantityBase"], "0.10")
         finally:
             engine.dispose()
