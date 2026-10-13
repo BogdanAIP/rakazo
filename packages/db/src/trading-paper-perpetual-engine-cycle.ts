@@ -121,7 +121,9 @@ export async function commitPerpetualEngineWake(
           Date.parse(control.expiresAt) > clock;
         const protects =
           control.protectionExpiresAt !== null && Date.parse(control.protectionExpiresAt) > clock;
-        let prior = await recoverPerpetualEngineInTransaction(tx, owner, key.ledgerId);
+        let prior = await recoverPerpetualEngineInTransaction(tx, owner, key.ledgerId, {
+          transactionScopedReuse: true,
+        });
         if (preparedHead !== null && prior?.headSha256 !== preparedHead)
           throw new Error("PAPER journal advanced during native recovery; retry wake");
         const old = await recoverPerpetualPaperInTransaction(tx, owner, key.ledgerId);
@@ -327,7 +329,9 @@ export async function commitPerpetualEngineWake(
             expectedHead: prior?.headSha256 ?? null,
           });
           state = projectPerpetualEngineSnapshot(effectiveConfig, output, old.state.strategy);
-          prior = await recoverPerpetualEngineInTransaction(tx, owner, key.ledgerId);
+          prior = await recoverPerpetualEngineInTransaction(tx, owner, key.ledgerId, {
+          transactionScopedReuse: true,
+        });
           for (const plan of control.plans) {
             const before = old.state.openPositions.find((x) => x.positionId === plan.positionId),
               after = state.openPositions.find((x) => x.positionId === plan.positionId);
@@ -978,7 +982,9 @@ export async function cancelPerpetualEngineOrders(
         // A delayed retry of a previously accepted owner command must never
         // cancel native orders that belong to a later workspace revision.
         if (expectedRevision !== undefined && row.revision !== expectedRevision) return;
-        const recovered = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId);
+        const recovered = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId, {
+          transactionScopedReuse: true,
+        });
         if (preparedHead !== null && recovered?.headSha256 !== preparedHead)
           throw new Error("PAPER journal advanced during native cancellation recovery");
         if (!recovered?.snapshot?.openOrders.length) return;
