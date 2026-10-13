@@ -64,6 +64,16 @@ export async function commitPerpetualEngineWake(
   if (new Set(execution.map((s) => s.market.symbol)).size !== execution.length)
     throw new Error("Duplicate futures observations");
   try {
+    // Reconstruct committed native state before acquiring PostgreSQL row locks.
+    // A fresh owner-scoped history and locked journal head must match exactly.
+    let preparedHead: string | null = null;
+    if (engine.requiresRecovery?.(key.ledgerId) && engine.prepare) {
+      const history = await recoverPerpetualEngineInTransaction(prisma, owner, key.ledgerId);
+      if (history) {
+        await engine.prepare(history.config, history.transitions);
+        preparedHead = history.headSha256;
+      }
+    }
     return await prisma.$transaction(
       async (tx) => {
         const { row, control } = await lockOwnedPerpetualWorkspace(tx, owner, key.ledgerId);
@@ -98,6 +108,8 @@ export async function commitPerpetualEngineWake(
         const protects =
           control.protectionExpiresAt !== null && Date.parse(control.protectionExpiresAt) > clock;
         let prior = await recoverPerpetualEngineInTransaction(tx, owner, key.ledgerId);
+        if (preparedHead !== null && prior?.headSha256 !== preparedHead)
+          throw new Error("PAPER journal advanced during native recovery; retry wake");
         const old = await recoverPerpetualPaperInTransaction(tx, owner, key.ledgerId);
         if (!prior && old.row.version !== 0)
           throw new Error("Existing custom wallet cannot change executor");
@@ -160,16 +172,23 @@ export async function commitPerpetualEngineWake(
         let effectiveConfig = prior?.effectiveConfig ?? config;
         const known = new Set(effectiveConfig.instruments.map((i) => i.instrument));
         const additions = control.instruments.filter((symbol) => !known.has(symbol)).map(termsFor);
-        if (additions.length) {
-          if (state.openPositions.length || priorSnapshot?.openOrders.length)
-            throw new Error("Settle account before registering new markets");
-          batch.registerInstruments = additions;
-          effectiveConfig = {
-            ...effectiveConfig,
-            instruments: [...effectiveConfig.instruments, ...additions],
-          };
-          for (const t of additions) known.add(t.instrument);
+        const existing = new Map(effectiveConfig.instruments.map((term) => [term.instrument, term]));
+        const refreshes = execution
+          .filter((snapshot) => known.has(snapshot.market.symbol))
+          .map((snapshot) => termsFor(snapshot.market.symbol))
+          .filter((term) => hash(existing.get(term.instrument)) !== hash(term));
+        const contractUpdatePending = additions.length > 0 || refreshes.length > 0;
+        const canUpdateContracts = !state.openPositions.length && !priorSnapshot?.openOrders.length;
+        if (contractUpdatePending && canUpdateContracts) {
+          batch.registerInstruments = [...additions, ...refreshes];
+          const next = new Map(effectiveConfig.instruments.map((term) => [term.instrument, term]));
+          for (const term of batch.registerInstruments) {
+            next.set(term.instrument, term);
+            known.add(term.instrument);
+          }
+          effectiveConfig = { ...effectiveConfig, instruments: [...next.values()] };
         }
+        const contractUpdateDeferred = contractUpdatePending && !canUpdateContracts;
         // Cancel resting entries before feeding any new executable quote. Every
         // remaining intent must pass independent risk again on this wake.
         for (const o of priorSnapshot?.openOrders ?? [])
@@ -366,7 +385,8 @@ export async function commitPerpetualEngineWake(
           if (active && control.source) await verifyPerpetualSource(tx, owner, control.source);
           if (!active) control.orders = [];
           if (active && decision.kind === "proposal" && !control.orders.length) {
-            if (!control.instruments.includes(decision.instrument)) outcome = "denied_market";
+            if (contractUpdateDeferred) outcome = "denied_contract_terms_pending";
+            else if (!control.instruments.includes(decision.instrument)) outcome = "denied_market";
             else if (
               decision.replacePositionId &&
               !old.state.openPositions.some((x) => x.positionId === decision.replacePositionId)
@@ -928,6 +948,14 @@ export async function cancelPerpetualEngineOrders(
   expectedRevision?: number,
 ) {
   try {
+    let preparedHead: string | null = null;
+    if (engine.requiresRecovery?.(ledgerId) && engine.prepare) {
+      const history = await recoverPerpetualEngineInTransaction(prisma, owner, ledgerId);
+      if (history) {
+        await engine.prepare(history.config, history.transitions);
+        preparedHead = history.headSha256;
+      }
+    }
     await prisma.$transaction(
       async (tx) => {
         const { row } = await lockOwnedPerpetualWorkspace(tx, owner, ledgerId);
@@ -935,6 +963,8 @@ export async function cancelPerpetualEngineOrders(
         // cancel native orders that belong to a later workspace revision.
         if (expectedRevision !== undefined && row.revision !== expectedRevision) return;
         const recovered = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId);
+        if (preparedHead !== null && recovered?.headSha256 !== preparedHead)
+          throw new Error("PAPER journal advanced during native cancellation recovery");
         if (!recovered?.snapshot?.openOrders.length) return;
         const batch: PaperPerpetualEngineBatch = {
           sequence: recovered.snapshot.sequence + 1,
