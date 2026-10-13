@@ -1,4 +1,8 @@
-import type { TradingInstrument, TradingPerpContext } from "@rakazo/contracts";
+import type {
+  PaperPerpetualSnapshot,
+  TradingInstrument,
+  TradingPerpContext,
+} from "@rakazo/contracts";
 import {
   TradingDecimalSchema,
   TradingInstrumentSchema,
@@ -15,7 +19,6 @@ import * as z from "zod";
  */
 
 import { createHash } from "node:crypto";
-import type { PaperPerpetualSnapshot } from "@rakazo/contracts";
 import { PaperPerpetualSnapshotSchema } from "@rakazo/contracts";
 import {
   paperPerpetualAmount as amount,

@@ -367,9 +367,9 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         // The already-protected non-research wake must not issue a redundant
         // second public request which could spuriously pause a healthy account.
         fetchSnapshot.mockReset();
-        fetchSnapshot.mockImplementationOnce(snapshot).mockRejectedValue(
-          new Error("Redundant public request unavailable"),
-        );
+        fetchSnapshot
+          .mockImplementationOnce(snapshot)
+          .mockRejectedValue(new Error("Redundant public request unavailable"));
         await handlePerpetualPaperWake(run, await payload(id));
         expect(fetchSnapshot).toHaveBeenCalledTimes(1);
         expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
