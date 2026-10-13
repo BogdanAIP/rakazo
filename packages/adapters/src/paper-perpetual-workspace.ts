@@ -15,6 +15,7 @@ import { PaperPerpetualDecisionSchema } from "@rakazo/contracts";
 import {
   getPaperExperimentPreset,
   isFreshPaperObservation,
+  paperPerpetualAmount,
   PAPER_OKX_LV1_FEES,
 } from "@rakazo/core";
 import type { PerpetualOwner, PrismaClient } from "@rakazo/db";
@@ -140,9 +141,12 @@ export async function handlePerpetualPaperWake(
     const fetchSnapshot = deps.fetchSnapshot ?? fetchOkxPaperPerpetualSnapshot;
     const read = async (symbols: string[]) =>
       Promise.all([...new Set(symbols)].map((symbol) => fetchSnapshot(symbol)));
-    const protection = await read(
-      deps.engine ? first.control.instruments : first.state.openPositions.map((p) => p.instrument),
-    );
+    // An unavailable selected-but-unused market must not prevent protection
+    // of live positions or pending orders in other instruments.
+    const protection = await read([
+      ...first.state.openPositions.map((p) => p.instrument),
+      ...(deps.engine ? first.control.orders.map((o) => o.proposal.instrument) : []),
+    ]);
     const commit = (
       stage: {
         ledgerId: string;
@@ -269,8 +273,19 @@ export async function handlePerpetualPaperWake(
     // No-trade native wakes can reuse the already-committed protection evidence.
     failure = "market_data_unavailable";
     const executionNow = new Date().toISOString();
+    const protectionConsumedLiquidity = first.state.openPositions.some((previous) => {
+      const remaining = current.state.openPositions.find(
+        (position) => position.positionId === previous.positionId,
+      );
+      return (
+        !remaining ||
+        paperPerpetualAmount(remaining.quantityBase) <
+          paperPerpetualAmount(previous.quantityBase)
+      );
+    });
     const reuseProtection =
       deps.engine &&
+      !protectionConsumedLiquidity &&
       decision.kind === "no_trade" &&
       current.control.orders.length === 0 &&
       protection.every((s) =>
@@ -281,7 +296,7 @@ export async function handlePerpetualPaperWake(
     const execution = reuseProtection
       ? protection
       : await read([
-          ...(deps.engine ? current.control.instruments : []),
+          ...(deps.engine && decision.kind === "proposal" ? current.control.instruments : []),
           ...current.state.openPositions.map((p) => p.instrument),
           ...current.control.orders.map((o) => o.proposal.instrument),
           ...(decision.kind === "proposal" ? [decision.instrument] : []),
