@@ -36,6 +36,7 @@ export * from "./trading-paper-perpetual-engine.js";
 export {
   cancelPerpetualEngineOrders,
   commitPerpetualEngineWake,
+  preparePerpetualEngineBeforeMarketFetch,
 } from "./trading-paper-perpetual-engine-cycle.js";
 export {
   listOwnedPerpetualPaperJournals,
