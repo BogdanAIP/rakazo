@@ -39,9 +39,12 @@ export class NautilusPaperEngine implements PaperPerpetualEngine {
   constructor(private readonly options: { pythonCommand: string; scriptPath: string }) {}
   private armIdleEviction(accountId: string, cached: Cached): void {
     if (cached.idleTimer) clearTimeout(cached.idleTimer);
-    cached.idleTimer = setTimeout(() => {
-      if (this.accounts.get(accountId) === cached) this.invalidate(accountId);
-    }, 10 * 60 * 1000);
+    cached.idleTimer = setTimeout(
+      () => {
+        if (this.accounts.get(accountId) === cached) this.invalidate(accountId);
+      },
+      10 * 60 * 1000,
+    );
     cached.idleTimer.unref();
   }
   async apply(
