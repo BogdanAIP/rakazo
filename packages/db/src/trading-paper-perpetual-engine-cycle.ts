@@ -168,16 +168,28 @@ export async function commitPerpetualEngineWake(
         let effectiveConfig = prior?.effectiveConfig ?? config;
         const known = new Set(effectiveConfig.instruments.map((i) => i.instrument));
         const additions = control.instruments.filter((symbol) => !known.has(symbol)).map(termsFor);
-        if (additions.length) {
-          if (state.openPositions.length || priorSnapshot?.openOrders.length)
-            throw new Error("Settle account before registering new markets");
-          batch.registerInstruments = additions;
-          effectiveConfig = {
-            ...effectiveConfig,
-            instruments: [...effectiveConfig.instruments, ...additions],
-          };
-          for (const t of additions) known.add(t.instrument);
+        const existing = new Map(effectiveConfig.instruments.map((term) => [term.instrument, term]));
+        // OKX can change contract price/size increments and margin requirements.
+        // Record the exact refresh in the immutable batch, never silently keep
+        // obsolete terms when the account is flat.
+        const refreshes = execution
+          .filter((snapshot) => known.has(snapshot.market.symbol))
+          .map((snapshot) => termsFor(snapshot.market.symbol))
+          .filter((term) => hash(existing.get(term.instrument)) !== hash(term));
+        const contractUpdatePending = additions.length > 0 || refreshes.length > 0;
+        const canUpdateContracts = !state.openPositions.length && !priorSnapshot?.openOrders.length;
+        if (contractUpdatePending && canUpdateContracts) {
+          batch.registerInstruments = [...additions, ...refreshes];
+          const next = new Map(effectiveConfig.instruments.map((term) => [term.instrument, term]));
+          for (const term of batch.registerInstruments) {
+            next.set(term.instrument, term);
+            known.add(term.instrument);
+          }
+          effectiveConfig = { ...effectiveConfig, instruments: [...next.values()] };
         }
+        // With exposure, keep protection running under the last verified native
+        // terms but block new entries until all contracts can be refreshed.
+        const contractUpdateDeferred = contractUpdatePending && !canUpdateContracts;
         // Cancel resting entries before feeding any new executable quote. Every
         // remaining intent must pass independent risk again on this wake.
         for (const o of priorSnapshot?.openOrders ?? [])
@@ -335,7 +347,8 @@ export async function commitPerpetualEngineWake(
           if (active && control.source) await verifyPerpetualSource(tx, owner, control.source);
           if (!active) control.orders = [];
           if (active && decision.kind === "proposal" && !control.orders.length) {
-            if (!control.instruments.includes(decision.instrument)) outcome = "denied_market";
+            if (contractUpdateDeferred) outcome = "denied_contract_terms_pending";
+            else if (!control.instruments.includes(decision.instrument)) outcome = "denied_market";
             else if (clock - tick.recordedAt.getTime() > 120000) outcome = "expired_research";
             else
               control.orders = [
