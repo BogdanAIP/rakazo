@@ -26,6 +26,7 @@ type Cached = {
   configHash: string;
   sequence: number;
   outputHash: string | null;
+  idleTimer: ReturnType<typeof setTimeout> | null;
 };
 /** One isolated native process per account. Replay compares every committed
  * result, including fees/funding/positions; mismatch blocks all further work.
@@ -36,6 +37,13 @@ export class NautilusPaperEngine implements PaperPerpetualEngine {
   readonly version = "1.231.0";
   private readonly accounts = new Map<string, Cached>();
   constructor(private readonly options: { pythonCommand: string; scriptPath: string }) {}
+  private armIdleEviction(accountId: string, cached: Cached): void {
+    if (cached.idleTimer) clearTimeout(cached.idleTimer);
+    cached.idleTimer = setTimeout(() => {
+      if (this.accounts.get(accountId) === cached) this.invalidate(accountId);
+    }, 10 * 60 * 1000);
+    cached.idleTimer.unref();
+  }
   async apply(
     config: PaperPerpetualEngineConfig,
     committed: readonly Readonly<{
@@ -53,6 +61,10 @@ export class NautilusPaperEngine implements PaperPerpetualEngine {
     const configHash = digest(config),
       last = committed.at(-1);
     let cached = this.accounts.get(config.accountId);
+    if (cached?.idleTimer) {
+      clearTimeout(cached.idleTimer);
+      cached.idleTimer = null;
+    }
     if (
       cached &&
       (cached.configHash !== configHash ||
@@ -68,7 +80,7 @@ export class NautilusPaperEngine implements PaperPerpetualEngine {
           ...config,
           engineVersion: "1.231.0",
         });
-        cached = { process, configHash, sequence: 0, outputHash: null };
+        cached = { process, configHash, sequence: 0, outputHash: null, idleTimer: null };
         this.accounts.set(config.accountId, cached);
         for (const row of committed) {
           const replay = await process.apply(row.input);
@@ -81,6 +93,7 @@ export class NautilusPaperEngine implements PaperPerpetualEngine {
       const result = await cached.process.apply(batch);
       cached.sequence = result.sequence;
       cached.outputHash = digest(result);
+      this.armIdleEviction(config.accountId, cached);
       return result;
     } catch (error) {
       this.invalidate(config.accountId);
@@ -90,6 +103,7 @@ export class NautilusPaperEngine implements PaperPerpetualEngine {
   invalidate(accountId: string): void {
     const cached = this.accounts.get(accountId);
     this.accounts.delete(accountId);
+    if (cached?.idleTimer) clearTimeout(cached.idleTimer);
     cached?.process.dispose();
   }
   dispose(): void {
