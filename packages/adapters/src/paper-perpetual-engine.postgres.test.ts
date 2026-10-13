@@ -270,9 +270,9 @@ suite("native futures simulator journal against PostgreSQL", () => {
   it.skipIf(!process.env.PAPER_LONG_JOURNAL_ROWS)(
     "audits long PAPER journal in PostgreSQL within the recovery budget",
     async () => {
-      // This stress fixture synthesizes flat-account projections. It measures
-      // persisted hash-chain verification, not native execution throughput.
-      // Optional PAPER_LONG_JOURNAL_NATIVE=1 additionally measures true replay.
+      // This fixture holds genuine hedged Long/Short positions for 40k quotes.
+      // Only unchanged quote-only snapshots are synthesized. Optional native
+      // replay checks every intermediate output and executes final reduce-only exits.
       const count = Number(process.env.PAPER_LONG_JOURNAL_ROWS);
       if (!Number.isSafeInteger(count) || count < 100 || count > 50000)
         throw new Error("Set PAPER_LONG_JOURNAL_ROWS to an integer from 100 to 50000");
@@ -280,10 +280,13 @@ suite("native futures simulator journal against PostgreSQL", () => {
         await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["conservative"])
       ).accounts[0]!.ledgerId;
       const setup = { ...config, accountId };
-      const initialInput = input(1);
+      const initialInput = input(1, [
+        order("load-long", "LOAD_LONG", "buy"),
+        order("load-short", "LOAD_SHORT", "sell"),
+      ]);
       const initialOutput = await engine.apply(setup, [], initialInput);
-      if (initialOutput.positions.length || initialOutput.events.length)
-        throw new Error("Stress fixture expected an empty native starting account");
+      if (initialOutput.positions.length !== 2 || initialOutput.openOrders.length)
+        throw new Error("Stress fixture expected two filled hedged native positions");
       const first = await db.prisma.$transaction((tx) =>
         appendPerpetualEngineBatchInTransaction(tx, owner, {
           config: setup,
@@ -309,14 +312,14 @@ suite("native futures simulator journal against PostgreSQL", () => {
       const seedStart = Date.now();
       for (let sequence = 2; sequence <= count; sequence++) {
         const event = input(sequence);
-        // No orders, funding, fills, fee changes or position changes exist in
-        // this fixture; only native clock and transition sequence advance.
+        // No further orders/funding occur: both hedged positions and their
+        // realized entry fees remain unchanged at constant marks and quotes.
         const result = {
           ...initialOutput,
           sequence,
           clockNs: event.quotes[0]!.atNs,
           events: [],
-          eventCount: 0,
+          eventCount: initialOutput.eventCount,
         };
         const inputHash = perpetualPaperHash(event);
         const outputHash = perpetualPaperHash(result);
@@ -360,6 +363,7 @@ suite("native futures simulator journal against PostgreSQL", () => {
       expect(verified?.transitions).toHaveLength(count);
       expect(verified?.headSha256).toBe(head);
       expect(verified?.snapshot?.sequence).toBe(count);
+      expect(verified?.snapshot?.positions).toHaveLength(2);
       process.stdout.write(
         "PAPER_LONG_JOURNAL " +
           JSON.stringify({ rows: count, seededMs, verifiedMs, targetMs: 60000 }) +
@@ -375,6 +379,16 @@ suite("native futures simulator journal against PostgreSQL", () => {
           "PAPER_LONG_JOURNAL_NATIVE " + JSON.stringify({ rows: count, replayMs }) + "\n",
         );
         expect(engine.requiresRecovery(accountId)).toBe(false);
+        const closing = input(count + 1, [
+          order("load-exit-long", "LOAD_LONG", "sell", true),
+          order("load-exit-short", "LOAD_SHORT", "buy", true),
+        ]);
+        const flat = await engine.apply(setup, verified!.transitions, closing);
+        expect(flat.sequence).toBe(count + 1);
+        expect(flat.positions).toHaveLength(0);
+        expect(flat.openOrders).toHaveLength(0);
+        expect(flat.liquidations).toBe(0);
+        expect(Number(flat.balanceQuote)).toBeLessThan(Number(initialOutput.balanceQuote));
       }
       engine.invalidate(accountId);
     },
