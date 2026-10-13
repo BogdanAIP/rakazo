@@ -143,6 +143,33 @@ suite("native futures simulator journal against PostgreSQL", () => {
       await db.pool.end();
     }
   });
+  it("restores a multi-chunk native journal after process loss without skipped batches", async () => {
+    const fresh = new NautilusPaperEngine({
+      pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+      scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+    });
+    const standAlone = { ...config, accountId: "native-replay:" + suffix };
+    const history: Array<{
+      input: PaperPerpetualEngineBatch;
+      output: Awaited<ReturnType<NautilusPaperEngine["apply"]>>;
+    }> = [];
+    try {
+      for (let sequence = 1; sequence <= 20; sequence += 1) {
+        const next = input(sequence);
+        const snapshot = await fresh.apply(standAlone, history, next);
+        history.push({ input: next, output: snapshot });
+      }
+      fresh.invalidate(standAlone.accountId);
+      expect(fresh.requiresRecovery(standAlone.accountId)).toBe(true);
+      const restored = await fresh.apply(standAlone, history, input(21));
+      expect(restored.sequence).toBe(21);
+      expect(restored.balanceQuote).toBe(history.at(-1)!.output.balanceQuote);
+      expect(restored.eventCount).toBe(history.at(-1)!.output.eventCount);
+    } finally {
+      fresh.dispose();
+    }
+  }, 60000);
+
   it("commits native money, replays after rollback/restart and rejects forks and tampering", async () => {
     const read = () =>
       db.prisma.$transaction((tx) => recoverPerpetualEngineInTransaction(tx, owner, ledgerId));
