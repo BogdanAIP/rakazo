@@ -403,12 +403,19 @@ export async function commitPerpetualEngineWake(
             const stillOpenReplacement = p.replacePositionId
               ? state.openPositions.some((x) => x.positionId === p.replacePositionId)
               : false;
+            // A marketable limit can execute at a better public bid/ask
+            // than its limit: risk and reserved notional use that executable quote.
+            const executableQuote = p.side === "long" ? s.book.askQuote : s.book.bidQuote;
             const entry =
-              p.orderType === "limit"
-                ? p.limitPriceQuote
+              p.orderType !== "limit"
+                ? executableQuote
                 : p.side === "long"
-                  ? s.book.askQuote
-                  : s.book.bidQuote;
+                  ? amount(executableQuote) <= amount(p.limitPriceQuote!)
+                    ? executableQuote
+                    : p.limitPriceQuote
+                  : amount(executableQuote) >= amount(p.limitPriceQuote!)
+                    ? executableQuote
+                    : p.limitPriceQuote;
             const gross = state.openPositions.reduce(
               (sum, x) =>
                 sum +
@@ -725,15 +732,20 @@ export async function commitPerpetualEngineWake(
               plan.stopRiskQuote = format(amount(plan.stopRiskQuote) + risk);
               // A filled addition CONSUMES previously guaranteed capacity.
               if (order.proposal.addToPositionId) {
-                const consumed = notional(
-                  filled,
-                  amount(
-                    order.proposal.orderType === "limit"
-                      ? order.proposal.limitPriceQuote!
-                      : order.proposal.side === "long"
-                        ? snapshots.get(order.proposal.instrument)!.book.askQuote
-                        : snapshots.get(order.proposal.instrument)!.book.bidQuote,
-                  ),
+                // Consume the guaranteed recovery budget at the ACTUAL
+                // native fill prices, not the submitted limit or public quote.
+                const entryFills = output.events.filter(
+                  (event) => event.kind === "fill" && event.orderId === prefix + ":entry",
+                );
+                if (
+                  entryFills.some((event) => !event.quantityBase || !event.priceQuote) ||
+                  entryFills.reduce((sum, event) => sum + amount(event.quantityBase!), 0n) !== filled
+                )
+                  throw new Error("Native recovery fill evidence disagrees with position delta");
+                const consumed = entryFills.reduce(
+                  (sum, event) =>
+                    sum + notional(amount(event.quantityBase!), amount(event.priceQuote!)),
+                  0n,
                 );
                 const initial = amount(plan.recoveryReserveQuote);
                 const actuallyConsumed = consumed < initial ? consumed : initial;
