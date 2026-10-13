@@ -404,6 +404,38 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
   );
 
   it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "cannot exit twice against one partially consumed protective order book",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine, ["BTC-USDT-SWAP"]);
+        decision = { ...proposal("long"), leverage: 20, quantityBase: "1.00" };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await state(id)).openPositions[0]?.quantityBase).toBe("1.00000000");
+
+        // Protection sees only 0.40 base at bid while a full 1.00 long
+        // crosses its stop. Research no-trade must not refill the same book.
+        price = "96.00";
+        depth = "0.40";
+        decision = { kind: "no_trade", reason: "No new entry after protective stop" };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const after = await state(id);
+        expect(after.openPositions).toHaveLength(1);
+        expect(after.openPositions[0]?.quantityBase).toBe("0.60000000");
+        expect(after.closedPositions).toBe(0);
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
     "accepts bounded clock skew in native observations and pauses on excessive skew",
     async () => {
       const engine = new NautilusPaperEngine({
