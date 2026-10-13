@@ -6,7 +6,11 @@ import type {
   JobPublisher,
   PaperPerpetualEngine,
 } from "@rakazo/adapter-kit";
-import type { PaperPerpetualDecision, PaperPerpetualSnapshot } from "@rakazo/contracts";
+import type {
+  PaperPerpetualCommand,
+  PaperPerpetualDecision,
+  PaperPerpetualSnapshot,
+} from "@rakazo/contracts";
 import { buildSkillMd } from "@rakazo/core";
 import {
   commitPerpetualPaperWake,
@@ -1118,18 +1122,19 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         ).toHaveLength(1);
         const old = await payload(id),
           status = await readOwnedPerpetualWorkspace(db.prisma, owner, id);
+        const leverageCommand: PaperPerpetualCommand = {
+          ledgerId: id,
+          commandId: randomUUID(),
+          expectedRevision: status!.revision,
+          action: "set_leverage",
+          venue: "okx",
+          instruments: ["BTC-USDT-SWAP"],
+          maxLeverage: 5,
+        };
         await controlPerpetualPaperWorkspace(
           { ...deps(), engine, fetchSnapshot: snapshot },
           owner,
-          {
-            ledgerId: id,
-            commandId: randomUUID(),
-            expectedRevision: status!.revision,
-            action: "set_leverage",
-            venue: "okx",
-            instruments: ["BTC-USDT-SWAP"],
-            maxLeverage: 5,
-          },
+          leverageCommand,
         );
         journal = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
         expect(
@@ -1137,6 +1142,27 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
             journal.events[0]?.kind === "engine" &&
             journal.events[0].output.openOrders,
         ).toHaveLength(0);
+        // A later revision can create a new resting order. Retrying an OLD
+        // successful command must never cancel that newer native GTC order.
+        decision = {
+          ...proposal("long"),
+          leverage: 5,
+          quantityBase: "1.00",
+          orderType: "limit",
+          limitPriceQuote: "99.00",
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const newOrderJournal = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
+        const newOrderBatch = newOrderJournal?.events.filter((e) => e.kind === "engine").at(-1);
+        expect(newOrderBatch?.kind === "engine" && newOrderBatch.output.openOrders).toHaveLength(1);
+        await controlPerpetualPaperWorkspace(
+          { ...deps(), engine, fetchSnapshot: snapshot },
+          owner,
+          leverageCommand,
+        );
+        const replayJournal = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
+        expect(replayJournal?.events).toHaveLength(newOrderJournal?.events.length ?? 0);
+
         price = "98.00";
         await handlePerpetualPaperWake({ ...worker(), engine }, old);
         expect((await state(id)).openPositions).toHaveLength(0);
