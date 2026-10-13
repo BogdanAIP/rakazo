@@ -308,8 +308,8 @@ export async function commitPerpetualEngineWake(
           });
           state = projectPerpetualEngineSnapshot(effectiveConfig, output, old.state.strategy);
           prior = await recoverPerpetualEngineInTransaction(tx, owner, key.ledgerId, {
-          transactionScopedReuse: true,
-        });
+            transactionScopedReuse: true,
+          });
           for (const plan of control.plans) {
             const before = old.state.openPositions.find((x) => x.positionId === plan.positionId),
               after = state.openPositions.find((x) => x.positionId === plan.positionId);
