@@ -428,8 +428,72 @@ export async function commitPerpetualPaperWake(
                       0n,
                     ),
                   ),
+                  openLongNotionalQuote: format(
+                    state.openPositions
+                      .filter((held) => held.side === "long")
+                      .reduce(
+                        (sum, held) =>
+                          sum +
+                          notional(
+                            amount(held.quantityBase),
+                            amount(held.markPriceQuote) > amount(held.entryPriceQuote)
+                              ? amount(held.markPriceQuote)
+                              : amount(held.entryPriceQuote),
+                          ),
+                        0n,
+                      ),
+                  ),
+                  openShortNotionalQuote: format(
+                    state.openPositions
+                      .filter((held) => held.side === "short")
+                      .reduce(
+                        (sum, held) =>
+                          sum +
+                          notional(
+                            amount(held.quantityBase),
+                            amount(held.markPriceQuote) > amount(held.entryPriceQuote)
+                              ? amount(held.markPriceQuote)
+                              : amount(held.entryPriceQuote),
+                          ),
+                        0n,
+                      ),
+                  ),
+                  maintenanceLegs: state.openPositions.map((held) => {
+                    const verified = snapshots.get(held.instrument);
+                    if (!verified)
+                      throw new Error("Missing verified held-market maintenance terms");
+                    return {
+                      grossNotionalQuote: format(
+                        notional(
+                          amount(held.quantityBase),
+                          amount(held.markPriceQuote) > amount(held.entryPriceQuote)
+                            ? amount(held.markPriceQuote)
+                            : amount(held.entryPriceQuote),
+                        ),
+                      ),
+                      maintenanceMarginBps: verified.rules.maintenanceMarginBps,
+                    };
+                  }),
+                  markedEquityQuote: state.markedEquityQuote,
+                  // Legacy fallback has no persisted native high-watermark replay.
+                  // Keep initial equity as its conservative minimum peak estimate.
+                  peakEquityQuote: format(
+                    signed(state.markedEquityQuote) > 1000n * SCALE
+                      ? signed(state.markedEquityQuote)
+                      : 1000n * SCALE,
+                  ),
                   openStopRiskQuote: format(
                     control.plans.reduce((sum, p) => sum + amount(p.stopRiskQuote), 0n),
+                  ),
+                  sameIdeaStopRiskQuote: format(
+                    control.plans.reduce((sum, plan) => {
+                      const held = state.openPositions.find(
+                        (pos) => pos.positionId === plan.positionId,
+                      );
+                      return held?.instrument === proposal.instrument && held.side === proposal.side
+                        ? sum + amount(plan.stopRiskQuote)
+                        : sum;
+                    }, 0n),
                   ),
                   realizedLossTodayQuote: format(lost > 0n ? lost : 0n),
                 },
@@ -494,6 +558,10 @@ export async function commitPerpetualPaperWake(
                   stopPriceQuote: proposal.stopPriceQuote,
                   takeProfitPriceQuote: proposal.takeProfitPriceQuote,
                   stopRiskQuote: risk.worstCaseStopLossQuote,
+                  // The custom fallback cannot execute planned native additions.
+                  recoveryReserveQuote: "0",
+                  recoveryReservedRiskQuote: "0",
+                  recoverySteps: [],
                   fundingThrough: now.toISOString(),
                 });
                 consume(proposal.instrument, proposal.side === "long", matched.filledBase);

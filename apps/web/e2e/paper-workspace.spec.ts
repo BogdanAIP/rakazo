@@ -417,3 +417,42 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
     await db.pool.end();
   }
 });
+
+test("recovery comparison keeps unresolved losses visible with and without completed recoveries", async ({
+  page,
+}, testInfo) => {
+  await signup(page, `recovery-view-${Date.now()}@rakazo.test`, "password12", "Recovery View");
+  await completeOnboarding(page);
+  let completed = true;
+  await page.route("**/rpc/trading/perpetualJournalRead", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    if (body.json?.status === "verified" && body.json.state.strategy === "conservative") {
+      body.json.recovery = {
+        ...body.json.recovery,
+        status: "verified",
+        recoveryRatePercent: completed ? "100.00" : null,
+        recovered: completed ? 1 : 0,
+        completedUnderwater: completed ? 1 : 0,
+        openUnderwater: 1,
+      };
+    }
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto("/app/paper-journal");
+  await page.getByRole("tab", { name: "Фьючерсы" }).click();
+  await page.getByRole("button", { name: "Создать три фьючерсных счёта", exact: true }).click();
+  const comparison = page.getByLabel("Сравнение фьючерсных профилей");
+  const row = comparison.getByRole("row").filter({
+    has: page.getByRole("button", { name: "Консервативная", exact: true }),
+  });
+  await expect(row).toContainText("100.00% (1/1)");
+  await expect(row.getByText("Открыто в убытке: 1", { exact: true })).toBeVisible();
+  await captureScreenshot(page, testInfo, "futures-recovery-open-losses");
+
+  completed = false;
+  await page.reload();
+  await page.getByRole("tab", { name: "Фьючерсы" }).click();
+  await expect(row).not.toContainText("100.00%");
+  await expect(row.getByText("Открыто в убытке: 1", { exact: true })).toBeVisible();
+});

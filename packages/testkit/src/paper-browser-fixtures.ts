@@ -28,6 +28,10 @@ class PaperBrowserRuntime extends ScriptedAgentRuntime {
         limitPriceQuote: null,
         stopPriceQuote: "97",
         takeProfitPriceQuote: "110",
+        recoverySteps: [
+          { stepId: "first-retest", triggerPriceQuote: "99", allocationPercent: 50 },
+          { stepId: "second-retest", triggerPriceQuote: "98", allocationPercent: 50 },
+        ],
         rationale:
           "Проверка браузерного сценария: виртуальный Long по публичному тестовому снимку.",
       }),

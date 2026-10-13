@@ -93,6 +93,8 @@ export function PaperPerpetualComparison({
               <th className="p-2">Стоимость, USDT</th>
               <th className="p-2">Результат с переоценкой, USDT</th>
               <th className="p-2">Закрыто / открыто</th>
+              <th className="p-2">Recovery Rate*</th>
+              <th className="p-2">Резерв для доливок, USDT</th>
               <th className="p-2">Сессия</th>
             </tr>
           </thead>
@@ -125,6 +127,40 @@ export function PaperPerpetualComparison({
                 <td className="p-2 tabular-nums">
                   {journal.state.closedPositions} / {journal.state.openPositions.length}
                 </td>
+                <td className="p-2 tabular-nums">
+                  {journal.recovery?.status === "verified" ? (
+                    <>
+                      {journal.recovery.recoveryRatePercent === null
+                        ? "—"
+                        : `${journal.recovery.recoveryRatePercent}% (${journal.recovery.recovered}/${journal.recovery.completedUnderwater})`}
+                      <div className="text-xs text-muted-foreground">
+                        Открыто в убытке: {journal.recovery.openUnderwater}
+                      </div>
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="p-2 tabular-nums">
+                  {formatPaperPerpetualAmount(
+                    (workspace.recoveryReservations ?? []).reduce(
+                      (sum, r) => sum + paperPerpetualAmount(r.reservedNotionalQuote),
+                      0n,
+                    ),
+                  )}
+                  {(workspace.recoveryReservations ?? []).flatMap((reservation) =>
+                    (reservation.stages ?? []).map((step) => (
+                      <div
+                        className="text-xs text-muted-foreground"
+                        key={reservation.positionId + ":" + step.stepId}
+                      >
+                        {step.stepId}: уровень {step.triggerPriceQuote}, осталось{" "}
+                        {step.remainingNotionalQuote} USDT —{" "}
+                        {step.activatedAt ? "достигнут, ожидает подтверждения" : "ожидает уровня"}
+                      </div>
+                    )),
+                  )}
+                </td>
                 <td className="p-2">
                   {workspace.sessionStatus === "active"
                     ? "Входы разрешены"
@@ -139,11 +175,35 @@ export function PaperPerpetualComparison({
           </tbody>
         </table>
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">
-        Все счета начали с 1000 USDT. Результат включает комиссии, funding и переоценку открытых
-        позиций. Срок сравнения отсчитывается от ручного запуска каждого счёта; котировки
-        обновляются при фоновых проверках.
-      </p>
+      {rows.some(
+        ({ journal, workspace }) =>
+          (journal.recovery?.status === "verified" &&
+            (journal.recovery.completedUnderwater > 0 || journal.recovery.openUnderwater > 0)) ||
+          (workspace.recoveryReservations?.length ?? 0) > 0,
+      ) && (
+        <details className="mt-3 text-xs text-muted-foreground">
+          <summary className="cursor-pointer select-none">
+            Как рассчитываются Recovery Rate и резерв для доливок
+          </summary>
+          <div className="mt-2 space-y-2">
+            <p>
+              Резерв для доливок — зарезервированная в проверке риска мощность будущих входов, а не
+              заблокированные биржей деньги и не автоматические ордера. Каждый вход требует нового
+              допуска и подтверждения рыночной структуры.
+            </p>
+            <p>
+              Recovery Rate считается по завершённым нативным позициям: доливки и частичные
+              сокращения объединяются внутри позиции, но отдельные хедж-позиции пока считаются
+              отдельно. Учитываются исполнения, комиссии и funding. Открытая убыточная позиция не
+              считается восстановленной.
+            </p>
+            <p>
+              Все счета начинают с 1000 USDT. Итог включает комиссии, funding и переоценку открытых
+              позиций; дни отсчитываются от ручного запуска каждого счёта.
+            </p>
+          </div>
+        </details>
+      )}
     </section>
   );
 }

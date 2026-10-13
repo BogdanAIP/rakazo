@@ -203,6 +203,88 @@ jobs:
           packages/adapters/src/paper-perpetual-engine.postgres.test.ts
           packages/adapters/src/paper-perpetual-workspace.postgres.test.ts
 
+  test-native-windows:
+    name: Windows native PAPER simulator
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'feature/paper-portfolio-adaptive-risk-')
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: packages/adapters/nautilus/requirements.txt
+      - run: pnpm install --frozen-lockfile
+      - name: Install isolated pinned native runtime
+        shell: pwsh
+        run: |
+          python -m venv .paper-engine
+          .\.paper-engine\Scripts\python.exe -m pip install -r packages/adapters/nautilus/requirements.txt
+      - name: Verify native hedge, replay, contract changes and protective execution
+        shell: pwsh
+        run: .\.paper-engine\Scripts\python.exe -m unittest discover -s packages/adapters/nautilus -v
+
+      - name: Verify real Windows Node-to-Nautilus process restart
+        shell: pwsh
+        run: |
+          $env:PAPER_NAUTILUS_PYTHON = (Resolve-Path .\.paper-engine\Scripts\python.exe).Path
+          pnpm exec vitest run packages/adapters/src/nautilus-paper-windows-smoke.test.ts
+
+  test-native-long-journal:
+    name: Native PAPER long-journal benchmark
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'feature/paper-portfolio-adaptive-risk-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: rakazo
+          POSTGRES_PASSWORD: rakazo
+          POSTGRES_DB: futures_stress
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5432/futures_stress
+      VERIFY_DATABASE: "1"
+      PAPER_LONG_JOURNAL_ROWS: "40000"
+      PAPER_LONG_JOURNAL_NATIVE: "1"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pnpm install --frozen-lockfile
+      - run: python -m venv .paper-engine
+      - run: .paper-engine/bin/python -m pip install -r packages/adapters/nautilus/requirements.txt
+      - run: pnpm db:generate
+      - run: pnpm --filter @rakazo/db migrate
+      - name: Verify 40k-record immutable journal recovery against PostgreSQL
+        run: >-
+          PAPER_NAUTILUS_PYTHON="$GITHUB_WORKSPACE/.paper-engine/bin/python"
+          pnpm exec vitest run
+          packages/adapters/src/paper-perpetual-engine.postgres.test.ts
+          -t "audits long PAPER journal"
+
   test-e2e:
     name: Web E2E
     uses: ./.github/workflows/playwright.yml

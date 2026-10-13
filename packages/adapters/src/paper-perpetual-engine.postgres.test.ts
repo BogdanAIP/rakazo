@@ -5,6 +5,8 @@ import {
   appendPerpetualEngineBatchInTransaction,
   createDb,
   createOwnedPerpetualExperimentAccounts,
+  perpetualPaperHash,
+  perpetualPaperJson,
   readOwnedPerpetualPaperJournal,
   readOwnedPerpetualWorkspace,
   recoverPerpetualEngineInTransaction,
@@ -264,4 +266,132 @@ suite("native futures simulator journal against PostgreSQL", () => {
     });
     await expect(read()).rejects.toThrow("PAPER engine journal integrity failed");
   }, 60000);
+
+  it.skipIf(!process.env.PAPER_LONG_JOURNAL_ROWS)(
+    "audits long PAPER journal in PostgreSQL within the recovery budget",
+    async () => {
+      // This fixture holds genuine hedged Long/Short positions for 40k quotes.
+      // Only unchanged quote-only snapshots are synthesized. Optional native
+      // replay checks every intermediate output and executes final reduce-only exits.
+      const count = Number(process.env.PAPER_LONG_JOURNAL_ROWS);
+      if (!Number.isSafeInteger(count) || count < 100 || count > 50000)
+        throw new Error("Set PAPER_LONG_JOURNAL_ROWS to an integer from 100 to 50000");
+      const accountId = (
+        await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["conservative"])
+      ).accounts[0]!.ledgerId;
+      const setup = { ...config, accountId };
+      const initialInput = input(1, [
+        order("load-long", "LOAD_LONG", "buy"),
+        order("load-short", "LOAD_SHORT", "sell"),
+      ]);
+      const initialOutput = await engine.apply(setup, [], initialInput);
+      if (initialOutput.positions.length !== 2 || initialOutput.openOrders.length)
+        throw new Error("Stress fixture expected two filled hedged native positions");
+      const first = await db.prisma.$transaction((tx) =>
+        appendPerpetualEngineBatchInTransaction(tx, owner, {
+          config: setup,
+          input: initialInput,
+          output: initialOutput,
+          batchId: "load:1",
+          expectedHead: null,
+        }),
+      );
+      let head = first.headSha256;
+      let lastOutput = initialOutput;
+      const rows: Array<{
+        ledgerId: string;
+        sequence: number;
+        batchId: string;
+        input: ReturnType<typeof perpetualPaperJson>;
+        output: ReturnType<typeof perpetualPaperJson>;
+        inputSha256: string;
+        outputSha256: string;
+        previousSha256: string;
+        chainSha256: string;
+      }> = [];
+      const seedStart = Date.now();
+      for (let sequence = 2; sequence <= count; sequence++) {
+        const event = input(sequence);
+        // No further orders/funding occur: both hedged positions and their
+        // realized entry fees remain unchanged at constant marks and quotes.
+        const result = {
+          ...initialOutput,
+          sequence,
+          clockNs: event.quotes[0]!.atNs,
+          events: [],
+          eventCount: initialOutput.eventCount,
+        };
+        const inputHash = perpetualPaperHash(event);
+        const outputHash = perpetualPaperHash(result);
+        const nextHead = perpetualPaperHash([head, inputHash, outputHash]);
+        rows.push({
+          ledgerId: accountId,
+          sequence,
+          batchId: "load:" + sequence,
+          input: perpetualPaperJson(event),
+          output: perpetualPaperJson(result),
+          inputSha256: inputHash,
+          outputSha256: outputHash,
+          previousSha256: head,
+          chainSha256: nextHead,
+        });
+        head = nextHead;
+        lastOutput = result;
+        if (rows.length === 500 || sequence === count) {
+          const insert = rows.splice(0, rows.length);
+          await db.prisma.$transaction(async (tx) => {
+            await tx.tradingPaperPerpetualEngineBatch.createMany({ data: insert });
+            await tx.tradingPaperPerpetualEngine.update({
+              where: { ledgerId: accountId },
+              data: {
+                sequence,
+                headSha256: head,
+                projection: perpetualPaperJson(lastOutput),
+                projectionSha256: perpetualPaperHash(lastOutput),
+              },
+            });
+          });
+        }
+      }
+      const seededMs = Date.now() - seedStart;
+      const scanStart = Date.now();
+      const verified = await db.prisma.$transaction(
+        (tx) => recoverPerpetualEngineInTransaction(tx, owner, accountId),
+        { timeout: 60000 },
+      );
+      const verifiedMs = Date.now() - scanStart;
+      expect(verified?.transitions).toHaveLength(count);
+      expect(verified?.headSha256).toBe(head);
+      expect(verified?.snapshot?.sequence).toBe(count);
+      expect(verified?.snapshot?.positions).toHaveLength(2);
+      process.stdout.write(
+        "PAPER_LONG_JOURNAL " +
+          JSON.stringify({ rows: count, seededMs, verifiedMs, targetMs: 60000 }) +
+          "\n",
+      );
+      expect(verifiedMs).toBeLessThan(60000);
+      if (process.env.PAPER_LONG_JOURNAL_NATIVE === "1") {
+        engine.invalidate(accountId);
+        const replayStart = Date.now();
+        await engine.prepare(setup, verified!.transitions);
+        const replayMs = Date.now() - replayStart;
+        process.stdout.write(
+          "PAPER_LONG_JOURNAL_NATIVE " + JSON.stringify({ rows: count, replayMs }) + "\n",
+        );
+        expect(engine.requiresRecovery(accountId)).toBe(false);
+        const closing = input(count + 1, [
+          order("load-exit-long", "LOAD_LONG", "sell", true),
+          order("load-exit-short", "LOAD_SHORT", "buy", true),
+        ]);
+        const flat = await engine.apply(setup, verified!.transitions, closing);
+        expect(flat.sequence).toBe(count + 1);
+        expect(flat.positions).toHaveLength(0);
+        expect(flat.openOrders).toHaveLength(0);
+        expect(flat.liquidations).toBe(0);
+        expect(Number(flat.balanceQuote)).toBeLessThan(Number(initialOutput.balanceQuote));
+      }
+      engine.invalidate(accountId);
+    },
+    900000,
+  );
 });

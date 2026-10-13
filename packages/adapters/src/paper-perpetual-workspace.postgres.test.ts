@@ -161,6 +161,18 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     limitPriceQuote: null,
     stopPriceQuote: side === "long" ? "97" : "103",
     takeProfitPriceQuote: side === "long" ? "110" : "90",
+    recoverySteps: [
+      {
+        stepId: "first-retest",
+        triggerPriceQuote: side === "long" ? "97.8" : "102.2",
+        allocationPercent: 50,
+      },
+      {
+        stepId: "second-retest",
+        triggerPriceQuote: side === "long" ? "97.4" : "102.6",
+        allocationPercent: 50,
+      },
+    ],
     rationale: "Independent public fixture strategy",
   });
   beforeAll(() => {
@@ -296,6 +308,17 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
   async function account(strategy: "conservative" | "moderate" | "aggressive" = "moderate") {
     const accounts = await createOwnedPerpetualExperimentAccounts(db.prisma, owner);
     return accounts.accounts.find((a) => a.strategy === strategy)!.ledgerId;
+  }
+  async function legacyRecoveryPlan(ledgerId: string) {
+    const row = await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+      where: { ledgerId },
+    });
+    const control = parsePerpetualControl(row);
+    for (const plan of control.plans) plan.recoverySteps = [];
+    await db.prisma.tradingPaperPerpetualWorkspace.update({
+      where: { ledgerId },
+      data: { control: perpetualPaperJson(control), controlSha256: perpetualPaperHash(control) },
+    });
   }
   async function start(
     ledgerId: string,
@@ -614,6 +637,594 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     },
     120000,
   );
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "final prelaunch smoke: starts all three isolated 1000-USDT accounts, journals native fills, pauses and safely exits after replay",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const profiles = [
+          { strategy: "conservative", ceiling: 5, instrument: "BTC-USDT-SWAP" },
+          { strategy: "moderate", ceiling: 10, instrument: "SOL-USDT-SWAP" },
+          { strategy: "aggressive", ceiling: 20, instrument: "ETH-USDT-SWAP" },
+        ] as const;
+        const accounts = (
+          await createOwnedPerpetualExperimentAccounts(
+            db.prisma,
+            owner,
+            profiles.map((p) => p.strategy),
+          )
+        ).accounts;
+        expect(accounts).toHaveLength(3);
+        const ids = profiles.map((p) => accounts.find((a) => a.strategy === p.strategy)!.ledgerId);
+        expect(new Set(ids).size).toBe(3);
+
+        // A real owner Start is mandatory even in this isolated test.
+        for (const [idx, profile] of profiles.entries()) {
+          const id = ids[idx]!;
+          const before = await state(id);
+          expect(before.initialBalanceQuote).toBe("1000");
+          expect(before.openPositions).toHaveLength(0);
+          const unstarted = await readOwnedPerpetualWorkspace(db.prisma, owner, id);
+          expect(unstarted).toMatchObject({ sessionStatus: "idle" });
+          await start(id, engine, [profile.instrument]);
+          decision = {
+            ...proposal("long", profile.instrument),
+            leverage: profile.ceiling,
+            quantityBase: "1.00",
+            recoverySteps: [
+              { stepId: "r1", triggerPriceQuote: "98.5", allocationPercent: 60 },
+              { stepId: "r2", triggerPriceQuote: "97.5", allocationPercent: 40 },
+            ],
+            // Both stages strictly above hard stop of 97 and below entry of 100.
+          };
+          await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+          const journal = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
+          expect(journal?.status, profile.strategy).toBe("verified");
+          if (journal?.status !== "verified") throw new Error("Unverified account journal");
+          expect(journal?.state.openPositions, profile.strategy).toHaveLength(1);
+          expect(journal?.state.openPositions[0]).toMatchObject({
+            instrument: profile.instrument,
+            leverage: profile.ceiling,
+          });
+          expect(Number(journal?.state.bookBalanceQuote)).toBeGreaterThan(990);
+          const ws = await readOwnedPerpetualWorkspace(db.prisma, owner, id);
+          expect(ws).toMatchObject({
+            sessionStatus: "active",
+            runtimeError: null,
+            lastDecision: { outcome: "filled" },
+          });
+          expect(ws?.recoveryReservations?.[0]?.stages).toHaveLength(2);
+          expect(ws?.recoveryReservations?.[0]?.stages?.[0]?.activatedAt).toBeNull();
+        }
+
+        // No shared wallet or unintended cross-ledger entries.
+        for (const id of ids) {
+          const journal = await state(id);
+          expect(journal.openPositions).toHaveLength(1);
+          expect(journal.openPositions[0]!.positionId).toBeTruthy();
+          expect(Number(journal.bookBalanceQuote)).toBeGreaterThan(990);
+        }
+
+        // Crash/restart forces safe pause, retaining the positions and hash journals.
+        for (const id of ids) engine.invalidate(id);
+        await reconcilePerpetualPaperWorkspaces({ ...deps(), engine }, true);
+        for (const id of ids) {
+          expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
+            sessionStatus: "paused",
+          });
+          const journal = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
+          expect(journal?.status).toBe("verified");
+          if (journal?.status !== "verified") throw new Error("Unverified replay journal");
+          expect(journal?.state.openPositions).toHaveLength(1);
+        }
+
+        // Owner-driven drain; never let research generate a new entry while stopping.
+        modelFails = true;
+        for (const id of ids) {
+          const status = await readOwnedPerpetualWorkspace(db.prisma, owner, id);
+          await controlPerpetualPaperWorkspace({ ...deps(), engine }, owner, {
+            ledgerId: id,
+            commandId: randomUUID(),
+            expectedRevision: status!.revision,
+            action: "close_all",
+          });
+          await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id));
+          const journal = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
+          expect(journal?.status).toBe("verified");
+          if (journal?.status !== "verified") throw new Error("Unverified replay journal");
+          expect(journal?.state.openPositions).toHaveLength(0);
+          expect(journal?.state.liquidations).toBe(0);
+          expect(Number(journal?.state.bookBalanceQuote)).toBeGreaterThan(990);
+        }
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "legacy compatibility: scales into a verified lot and rotates a fully closed lot into an opposite-side hedge",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine);
+        decision = { ...proposal("long"), leverage: 20 };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        let positions = (await state(id)).openPositions;
+        expect(positions).toHaveLength(1);
+        const originalId = positions[0]!.positionId;
+        await legacyRecoveryPlan(id);
+
+        decision = {
+          ...proposal("long"),
+          leverage: 20,
+          quantityBase: "0.50",
+          addToPositionId: originalId,
+          recoverySteps: undefined,
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        positions = (await state(id)).openPositions;
+        expect(positions).toHaveLength(1);
+        expect(positions[0]!.positionId).toBe(originalId);
+        expect(Number(positions[0]!.quantityBase)).toBe(1.5);
+
+        // The native worker must reject a scale-in that tries to change old protective exits.
+        decision = {
+          ...proposal("long"),
+          leverage: 20,
+          quantityBase: "0.50",
+          addToPositionId: originalId,
+          recoverySteps: undefined,
+          stopPriceQuote: "94",
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1.5);
+        expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
+          lastDecision: { outcome: "denied_add_plan_mismatch" },
+        });
+
+        decision = {
+          ...proposal("short"),
+          leverage: 20,
+          replacePositionId: originalId,
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        positions = (await state(id)).openPositions;
+        expect(positions).toHaveLength(1);
+        expect(positions[0]!.side).toBe("short");
+        expect(positions[0]!.positionId).not.toBe(originalId);
+        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
+          "verified",
+        );
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "permits a hedge rotation at four occupied slots only after a real full exit",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine);
+        for (const [instrument, side] of [
+          ["BTC-USDT-SWAP", "long"],
+          ["BTC-USDT-SWAP", "short"],
+          ["SOL-USDT-SWAP", "long"],
+          ["SOL-USDT-SWAP", "short"],
+        ] as const) {
+          decision = { ...proposal(side, instrument), leverage: 20, quantityBase: "0.50" };
+          await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        }
+        const before = (await state(id)).openPositions;
+        expect(before).toHaveLength(4);
+        const replacedPositionId = before.find((pos) => pos.side === "long")!.positionId;
+        decision = {
+          ...proposal("short", "SOL-USDT-SWAP"),
+          leverage: 20,
+          quantityBase: "0.50",
+          replacePositionId: replacedPositionId,
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const after = (await state(id)).openPositions;
+        expect(after).toHaveLength(4);
+        expect(after.some((pos) => pos.positionId === replacedPositionId)).toBe(false);
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "tightens a protective stop without widening risk and replays the updated plan",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine);
+        decision = { ...proposal("long"), leverage: 20 };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const positionId = (await state(id)).openPositions[0]!.positionId;
+        const control = async () =>
+          parsePerpetualControl(
+            await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+              where: { ledgerId: id },
+            }),
+          );
+        const initialRisk = (await control()).plans[0]!.stopRiskQuote;
+        decision = {
+          kind: "tighten_stop",
+          positionId,
+          stopPriceQuote: "96.00",
+          reason: "Do not increase risk by widening the original stop",
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await control()).plans[0]!.stopPriceQuote).toBe("97");
+        expect((await control()).lastDecision?.outcome).toBe("denied_stop_not_tighter");
+
+        decision = {
+          kind: "tighten_stop",
+          positionId,
+          stopPriceQuote: "98.00",
+          reason: "Tighten protection after confirmation",
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const updated = await control();
+        expect(updated.plans[0]!.stopPriceQuote).toBe("98.00");
+        expect(updated.plans[0]!.stopRiskQuote).toBe(initialRisk);
+        expect(updated.lastDecision?.outcome).toBe("protective_stop_tightened");
+
+        engine.invalidate(id);
+        price = "97.50";
+        modelFails = true; // Protection must commit even if research fails after replay.
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await state(id)).openPositions).toHaveLength(0);
+        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
+          "verified",
+        );
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "gapped stop with thin then zero liquidity persists residual without reversing or phantom fills",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine);
+        decision = { ...proposal("long"), leverage: 20, quantityBase: "1.00" };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await state(id)).openPositions).toHaveLength(1);
+        const original = (await state(id)).openPositions[0]!.positionId;
+
+        // A sharp 10% price gap skips the chosen stop: fill ONLY displayed depth.
+        price = "90";
+        depth = "0.25";
+        modelFails = true;
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        let after = await state(id);
+        expect(after.openPositions).toHaveLength(1);
+        expect(after.openPositions[0]!.positionId).toBe(original);
+        expect(Number(after.openPositions[0]!.quantityBase)).toBe(0.75);
+        expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
+          sessionStatus: "paused",
+          runtimeError: "model_unavailable",
+        });
+
+        // Zero exit liquidity must NOT fabricate a stop fill or reverse into a short.
+        depth = "0";
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id));
+        after = await state(id);
+        expect(after.openPositions).toHaveLength(1);
+        expect(Number(after.openPositions[0]!.quantityBase)).toBe(0.75);
+        expect(after.openPositions[0]!.side).toBe("long");
+
+        // On later public depth, the independently protected remainder exits.
+        engine.invalidate(id);
+        depth = "100";
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id));
+        after = await state(id);
+        expect(after.openPositions).toHaveLength(0);
+        expect(after.closedPositions).toBe(1);
+        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
+          "verified",
+        );
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "reports an underwater position as recovered ONLY after net-positive native close",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine);
+        decision = { ...proposal("long"), leverage: 20, quantityBase: "1.00" };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await state(id)).openPositions).toHaveLength(1);
+
+        price = "98";
+        decision = { kind: "no_trade", reason: "Observe a losing position without buying the dip" };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const underwater = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
+        expect(underwater?.status).toBe("verified");
+        if (underwater?.status !== "verified") return;
+        expect(underwater.recovery).toMatchObject({
+          status: "verified",
+          scope: "position_only",
+          completedUnderwater: 0,
+          openUnderwater: 1,
+          recovered: 0,
+          recoveryRatePercent: null,
+        });
+
+        // Exits are the independent protective cycle, not an AI-generated profit claim.
+        price = "110";
+        modelFails = true;
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await state(id)).openPositions).toHaveLength(0);
+        const settled = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
+        expect(settled?.status).toBe("verified");
+        if (settled?.status !== "verified") return;
+        expect(settled.recovery).toMatchObject({
+          status: "verified",
+          scope: "position_only",
+          completedUnderwater: 1,
+          recovered: 1,
+          recoveryRatePercent: "100.00",
+          openUnderwater: 0,
+        });
+        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
+          "verified",
+        );
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "legacy compatibility: charges short marketable-limit scale-ins against the actual native fill price",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["moderate"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine);
+        decision = { ...proposal("short"), leverage: 10, quantityBase: "1.00" };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const initial = await state(id);
+        expect(initial.openPositions).toHaveLength(1);
+        const positionId = initial.openPositions[0]!.positionId;
+        // Reconstruct a persisted pre-stage plan; new submissions require two stages.
+        await legacyRecoveryPlan(id);
+        const plan = async () =>
+          parsePerpetualControl(
+            await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+              where: { ledgerId: id },
+            }),
+          ).plans.find((p) => p.positionId === positionId)!;
+        expect(Number((await plan()).recoveryReserveQuote)).toBe(50);
+
+        // Sell limit 95 crosses the public bid 100. The native exchange
+        // simulation fills at 100; consuming only 95 would leave phantom capacity.
+        decision = {
+          ...proposal("short"),
+          leverage: 10,
+          quantityBase: "0.50",
+          orderType: "limit",
+          limitPriceQuote: "95.00",
+          addToPositionId: positionId,
+          recoverySteps: undefined,
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1.5);
+        expect(Number((await plan()).recoveryReserveQuote)).toBe(0);
+        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
+          "verified",
+        );
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "legacy compatibility: books a recovery reserve on initial fill, prevents over-addition and consumes on approved scale-in",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["moderate"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine);
+        decision = { ...proposal("long"), leverage: 10, quantityBase: "1.00" };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const initial = await state(id);
+        expect(initial.openPositions).toHaveLength(1);
+        const positionId = initial.openPositions[0]!.positionId;
+        // Reconstruct a persisted pre-stage plan; new submissions require two stages.
+        await legacyRecoveryPlan(id);
+        const readPlan = async () =>
+          parsePerpetualControl(
+            await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+              where: { ledgerId: id },
+            }),
+          );
+        const firstPlan = (await readPlan()).plans.find((x) => x.positionId === positionId)!;
+        expect(Number(firstPlan.recoveryReserveQuote)).toBeGreaterThanOrEqual(50);
+        expect(Number(firstPlan.recoveryReservedRiskQuote)).toBeGreaterThan(0);
+        const workspace = await readOwnedPerpetualWorkspace(db.prisma, owner, id);
+        expect(workspace?.recoveryReservations?.[0]?.reservedNotionalQuote).toBe(
+          firstPlan.recoveryReserveQuote,
+        );
+
+        // Model cannot consume more scale-in notional than planned for this position.
+        decision = {
+          ...proposal("long"),
+          leverage: 10,
+          quantityBase: "0.75",
+          addToPositionId: positionId,
+          recoverySteps: undefined,
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await readPlan()).lastDecision?.outcome).toBe("denied_add_unreserved");
+        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1);
+
+        decision = {
+          ...proposal("long"),
+          leverage: 10,
+          quantityBase: "0.50",
+          addToPositionId: positionId,
+          recoverySteps: undefined,
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1.5);
+        const later = (await readPlan()).plans.find((x) => x.positionId === positionId)!;
+        expect(Number(later.recoveryReserveQuote)).toBeLessThan(
+          Number(firstPlan.recoveryReserveQuote),
+        );
+        expect(Number(later.recoveryReservedRiskQuote)).toBeLessThan(
+          Number(firstPlan.recoveryReservedRiskQuote),
+        );
+        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
+          "verified",
+        );
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "persists two price-triggered recovery stages and rejects unconfirmed knife-catching",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["moderate"]))
+          .accounts[0]!.ledgerId;
+        await start(id, engine);
+        decision = {
+          ...proposal("long"),
+          leverage: 10,
+          quantityBase: "1.00",
+          stopPriceQuote: "96",
+          recoverySteps: [
+            { stepId: "first-retest", triggerPriceQuote: "98.5", allocationPercent: 60 },
+            { stepId: "second-retest", triggerPriceQuote: "97", allocationPercent: 40 },
+          ],
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const held = (await state(id)).openPositions;
+        expect(held).toHaveLength(1);
+        const positionId = held[0]!.positionId;
+        const currentControl = async () =>
+          parsePerpetualControl(
+            await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+              where: { ledgerId: id },
+            }),
+          );
+        const original = (await currentControl()).plans.find((x) => x.positionId === positionId)!;
+        expect(original.recoverySteps).toHaveLength(2);
+        expect(original.recoverySteps[0]!.activatedAt).toBeNull();
+        expect(original.recoverySteps[1]!.activatedAt).toBeNull();
+        expect(Number(original.recoverySteps[0]!.remainingNotionalQuote)).toBeGreaterThan(0);
+
+        // The first level is visited after entry, but a price drop is not
+        // automatically a buy signal; the second level has NOT been visited.
+        price = "98";
+        decision = { kind: "no_trade", reason: "Do not buy into an unconfirmed decline" };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const triggered = (await currentControl()).plans.find((x) => x.positionId === positionId)!;
+        expect(triggered.recoverySteps[0]!.activatedAt).not.toBeNull();
+        expect(triggered.recoverySteps[1]!.activatedAt).toBeNull();
+
+        decision = {
+          ...proposal("long"),
+          leverage: 10,
+          stopPriceQuote: "96",
+          quantityBase: "0.10",
+          addToPositionId: positionId,
+          recoverySteps: undefined,
+          recoveryStepId: "second-retest",
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await currentControl()).lastDecision?.outcome).toBe(
+          "denied_recovery_step_not_triggered",
+        );
+
+        decision = {
+          ...proposal("long"),
+          leverage: 10,
+          stopPriceQuote: "96",
+          quantityBase: "0.10",
+          addToPositionId: positionId,
+          recoverySteps: undefined,
+          recoveryStepId: "first-retest",
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await currentControl()).lastDecision?.outcome).toBe(
+          "denied_recovery_step_no_reversal",
+        );
+        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1);
+        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
+          "verified",
+        );
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
   it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
     "cancels native GTC entries on an owner leverage change before a crossed quote",
     async () => {
@@ -1132,4 +1743,135 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     });
     expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))!.openOrders).toHaveLength(0);
   });
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "rejects a fresh position without two booked recovery stages",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = await account();
+        await start(id, engine);
+        decision = { ...proposal("long"), recoverySteps: undefined };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await state(id)).openPositions).toHaveLength(0);
+        const workspace = await readOwnedPerpetualWorkspace(db.prisma, owner, id);
+        expect(workspace?.lastDecision?.outcome).toBe("denied_recovery_plan_invalid");
+        expect(workspace?.recoveryReservations).toHaveLength(0);
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "preserves a held position when a replacement is disallowed, unplanned or over budget",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        let validId = "",
+          validPositionId = "";
+        for (const [strategy, rejection] of [
+          ["conservative", "market"],
+          ["moderate", "plan"],
+          ["aggressive", "risk"],
+        ] as const) {
+          const id = await account(strategy);
+          await start(id, engine);
+          decision = proposal("long");
+          await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+          const held = (await state(id)).openPositions[0]!;
+          decision = {
+            ...proposal("short", rejection === "market" ? "ETH-USDT-SWAP" : "BTC-USDT-SWAP"),
+            ...(rejection === "plan" ? { recoverySteps: undefined } : {}),
+            ...(rejection === "risk" ? { quantityBase: "90" } : {}),
+            replacePositionId: held.positionId,
+          };
+          await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+          expect((await state(id)).openPositions).toEqual([held]);
+          expect((await state(id)).closedPositions).toBe(0);
+          const workspace = await readOwnedPerpetualWorkspace(db.prisma, owner, id);
+          if (rejection !== "market") expect(workspace?.lastDecision?.outcome).toMatch(/^denied_/);
+          validId = id;
+          validPositionId = held.positionId;
+        }
+        decision = { ...proposal("short"), replacePositionId: validPositionId };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(validId, true));
+        const replaced = await state(validId);
+        expect(replaced.openPositions).toHaveLength(1);
+        expect(replaced.openPositions[0]?.side).toBe("short");
+        expect(replaced.openPositions[0]?.positionId).not.toBe(validPositionId);
+        expect(replaced.closedPositions).toBe(1);
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "does not use a completed pre-trigger reversal to consume a newly activated stage",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = await account();
+        await start(id, engine);
+        decision = {
+          ...proposal("long"),
+          leverage: 10,
+          stopPriceQuote: "96",
+          recoverySteps: [
+            { stepId: "first-retest", triggerPriceQuote: "98.5", allocationPercent: 60 },
+            { stepId: "second-retest", triggerPriceQuote: "97", allocationPercent: 40 },
+          ],
+        };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const positionId = (await state(id)).openPositions[0]!.positionId;
+        price = "98";
+        const fetchSnapshot = async (instrument: string) => {
+          const observed = await snapshot(instrument);
+          const end = Math.floor(Date.now() / 3600000) * 3600000;
+          const history = Array.from({ length: 24 }, (_, index) => ({
+            ...observed.history[0]!,
+            openedAt: new Date(end - (24 - index) * 3600000).toISOString(),
+            durationMs: 3600000 as const,
+            open: "60",
+            high: "75",
+            low: index === 8 ? "50" : index === 16 ? "50.2" : "55",
+            close: index === 23 ? "70" : "60",
+            confirmed: true as const,
+          }));
+          return { ...observed, history };
+        };
+        decision = {
+          ...proposal("long"),
+          leverage: 10,
+          stopPriceQuote: "96",
+          quantityBase: "0.10",
+          addToPositionId: positionId,
+          recoverySteps: undefined,
+          recoveryStepId: "first-retest",
+        };
+        await handlePerpetualPaperWake(
+          { ...worker(), engine, fetchSnapshot },
+          await payload(id, true),
+        );
+        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1);
+        const workspace = await readOwnedPerpetualWorkspace(db.prisma, owner, id);
+        expect(workspace?.runtimeError).toBeNull();
+        expect(workspace?.lastDecision?.outcome).toBe("denied_recovery_step_no_reversal");
+        expect(workspace?.recoveryReservations?.[0]?.stages?.[0]?.activatedAt).not.toBeNull();
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
 });
