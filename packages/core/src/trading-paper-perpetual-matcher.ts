@@ -1,9 +1,9 @@
-import {
-  type PaperExperimentStrategy,
-  type PaperExperimentVenue,
-  type PaperHedgeSide,
-  paperExperimentHedgeBucket,
+import type {
+  PaperExperimentStrategy,
+  PaperExperimentVenue,
+  PaperHedgeSide,
 } from "./trading-paper-experiments.js";
+import { paperExperimentHedgeBucket } from "./trading-paper-experiments.js";
 
 const SCALE = 100_000_000n;
 const AMOUNT = /^(?:0|[1-9]\d{0,11})(?:\.\d{1,8})?$/;
