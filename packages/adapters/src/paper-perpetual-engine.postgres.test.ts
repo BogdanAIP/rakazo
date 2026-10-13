@@ -201,14 +201,15 @@ suite("native futures simulator journal against PostgreSQL", () => {
         expect(await engine.apply(config, prior!.transitions, batch)).toEqual(output);
       }
       await db.prisma.$transaction(async (tx) => {
-        const preceding = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId);
-        const beforeAgain = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId);
+        const opts = { transactionScopedReuse: true };
+        const preceding = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId, opts);
+        const beforeAgain = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId, opts);
         if (preceding) expect(beforeAgain).toBe(preceding);
         await appendPerpetualEngineBatchInTransaction(tx, owner, write);
-        const advanced = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId);
+        const advanced = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId, opts);
         expect(advanced?.snapshot).toEqual(output);
         expect(advanced?.transitions).toHaveLength(batch.sequence);
-        const advancedAgain = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId);
+        const advancedAgain = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId, opts);
         expect(advancedAgain).toBe(advanced);
       });
       expect(
