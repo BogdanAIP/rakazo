@@ -5,6 +5,8 @@ import {
   appendPerpetualEngineBatchInTransaction,
   createDb,
   createOwnedPerpetualExperimentAccounts,
+  perpetualPaperHash,
+  perpetualPaperJson,
   readOwnedPerpetualPaperJournal,
   readOwnedPerpetualWorkspace,
   recoverPerpetualEngineInTransaction,
@@ -264,4 +266,115 @@ suite("native futures simulator journal against PostgreSQL", () => {
     });
     await expect(read()).rejects.toThrow("PAPER engine journal integrity failed");
   }, 60000);
+
+  it.skipIf(!process.env.PAPER_LONG_JOURNAL_ROWS)(
+    "audits long PAPER journal in PostgreSQL within the recovery budget",
+    async () => {
+      // This stress fixture synthesizes flat-account projections. It measures
+      // persisted hash-chain verification, not native execution throughput.
+      // Optional PAPER_LONG_JOURNAL_NATIVE=1 additionally measures true replay.
+      const count = Number(process.env.PAPER_LONG_JOURNAL_ROWS);
+      if (!Number.isSafeInteger(count) || count < 100 || count > 50000)
+        throw new Error("Set PAPER_LONG_JOURNAL_ROWS to an integer from 100 to 50000");
+      const accountId = (
+        await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["conservative"])
+      ).accounts[0]!.ledgerId;
+      const setup = { ...config, accountId };
+      const initialInput = input(1);
+      const initialOutput = await engine.apply(setup, [], initialInput);
+      if (initialOutput.positions.length || initialOutput.events.length)
+        throw new Error("Stress fixture expected an empty native starting account");
+      const first = await db.prisma.$transaction((tx) =>
+        appendPerpetualEngineBatchInTransaction(tx, owner, {
+          config: setup,
+          input: initialInput,
+          output: initialOutput,
+          batchId: "load:1",
+          expectedHead: null,
+        }),
+      );
+      let head = first.headSha256;
+      let lastOutput = initialOutput;
+      const rows: Array<{
+        ledgerId: string;
+        sequence: number;
+        batchId: string;
+        input: ReturnType<typeof perpetualPaperJson>;
+        output: ReturnType<typeof perpetualPaperJson>;
+        inputSha256: string;
+        outputSha256: string;
+        previousSha256: string;
+        chainSha256: string;
+      }> = [];
+      const seedStart = Date.now();
+      for (let sequence = 2; sequence <= count; sequence++) {
+        const event = input(sequence);
+        // No orders, funding, fills, fee changes or position changes exist in
+        // this fixture; only native clock and transition sequence advance.
+        const result = {
+          ...initialOutput,
+          sequence,
+          clockNs: event.quotes[0]!.atNs,
+          events: [],
+          eventCount: 0,
+        };
+        const inputHash = perpetualPaperHash(event);
+        const outputHash = perpetualPaperHash(result);
+        const nextHead = perpetualPaperHash([head, inputHash, outputHash]);
+        rows.push({
+          ledgerId: accountId,
+          sequence,
+          batchId: "load:" + sequence,
+          input: perpetualPaperJson(event),
+          output: perpetualPaperJson(result),
+          inputSha256: inputHash,
+          outputSha256: outputHash,
+          previousSha256: head,
+          chainSha256: nextHead,
+        });
+        head = nextHead;
+        lastOutput = result;
+        if (rows.length === 500 || sequence === count) {
+          const insert = rows.splice(0, rows.length);
+          await db.prisma.$transaction(async (tx) => {
+            await tx.tradingPaperPerpetualEngineBatch.createMany({ data: insert });
+            await tx.tradingPaperPerpetualEngine.update({
+              where: { ledgerId: accountId },
+              data: {
+                sequence,
+                headSha256: head,
+                projection: perpetualPaperJson(lastOutput),
+                projectionSha256: perpetualPaperHash(lastOutput),
+              },
+            });
+          });
+        }
+      }
+      const seededMs = Date.now() - seedStart;
+      const scanStart = Date.now();
+      const verified = await db.prisma.$transaction(
+        (tx) => recoverPerpetualEngineInTransaction(tx, owner, accountId),
+        { timeout: 60000 },
+      );
+      const verifiedMs = Date.now() - scanStart;
+      expect(verified?.transitions).toHaveLength(count);
+      expect(verified?.headSha256).toBe(head);
+      expect(verified?.snapshot?.sequence).toBe(count);
+      console.info(
+        "PAPER_LONG_JOURNAL " +
+          JSON.stringify({ rows: count, seededMs, verifiedMs, targetMs: 60000 }),
+      );
+      expect(verifiedMs).toBeLessThan(60000);
+      if (process.env.PAPER_LONG_JOURNAL_NATIVE === "1") {
+        engine.invalidate(accountId);
+        const replayStart = Date.now();
+        await engine.prepare(setup, verified!.transitions);
+        const replayMs = Date.now() - replayStart;
+        console.info("PAPER_LONG_JOURNAL_NATIVE " + JSON.stringify({ rows: count, replayMs }));
+        expect(engine.requiresRecovery(accountId)).toBe(false);
+      }
+      engine.invalidate(accountId);
+    },
+    900000,
+  );
 });
