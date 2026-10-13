@@ -152,6 +152,49 @@ export class NautilusPaperProcess {
     return operation;
   }
 
+  /** Replays a bounded group in one IPC round trip, but preserves and validates
+   * every intermediate native output; no journal entry may be skipped.
+   */
+  applyMany(batches: readonly NautilusPaperBatch[]): Promise<NautilusPaperSnapshot[]> {
+    if (!batches.length || batches.length > 16)
+      return Promise.reject(new Error("Invalid native replay group"));
+    const operation = this.queue.then(async () => {
+      const raw = await this.request({ action: "apply_many", batches }, 60_000);
+      if (!Array.isArray(raw) || raw.length !== batches.length) {
+        this.fail();
+        throw new Error("Invalid Nautilus PAPER replay response");
+      }
+      return raw.map((value: unknown, index: number) => {
+        if (
+          value === null ||
+          typeof value !== "object" ||
+          (value as { version?: unknown }).version !== "nautilus_paper_v1"
+        ) {
+          this.fail();
+          throw new Error("Invalid Nautilus PAPER replay item");
+        }
+        const parsed = Snapshot.safeParse({
+          ...value,
+          version: "paper_engine_snapshot_v1",
+          engineId: "nautilus",
+        });
+        if (
+          !parsed.success ||
+          parsed.data.engineVersion !== "1.231.0" ||
+          parsed.data.accountId !== this.accountId ||
+          parsed.data.marginMode !== "account_wide" ||
+          parsed.data.sequence !== batches[index]!.sequence
+        ) {
+          this.fail();
+          throw new Error("Nautilus PAPER replay identity mismatch");
+        }
+        return parsed.data;
+      });
+    });
+    this.queue = operation.catch(() => undefined);
+    return operation;
+  }
+
   private request(value: unknown, timeoutMs = 15_000): Promise<unknown> {
     if (this.failed || this.pending) return Promise.reject(new Error("Nautilus PAPER unavailable"));
     return new Promise((resolve, reject) => {
