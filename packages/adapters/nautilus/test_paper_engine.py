@@ -48,6 +48,41 @@ class EngineTest(unittest.TestCase):
         finally:
             replay.dispose()
 
+    def test_known_contract_terms_refresh_only_while_flat_and_replay_deterministically(self):
+        initial = config()
+        updated = dict(initial["instruments"][0], priceIncrement="0.10",
+                       quantityIncrement="0.10", minimumBase="0.10",
+                       maximumBase="50.00", maintenanceRate="0.007",
+                       makerFeeRate="0.002", takerFeeRate="0.002")
+        first = batch(1)
+        second = batch(2)
+        second["registerInstruments"] = [updated]
+        third = batch(3, [order("refreshed", "LONG", "buy", quantity="0.10")],
+                      price="100.10")
+        inputs, expected = [first, second, third], []
+        engine = PaperEngine(config())
+        try:
+            for item in inputs:
+                expected.append(engine.apply(item))
+            self.assertEqual(str(engine.instruments["BTC-USDT-SWAP"].price_increment), "0.10")
+            self.assertEqual(str(engine.instruments["BTC-USDT-SWAP"].size_increment), "0.10")
+            self.assertEqual(expected[-1]["positions"][0]["quantityBase"], "0.10")
+        finally:
+            engine.dispose()
+        restored = PaperEngine(config())
+        try:
+            for item, output in zip(inputs, expected):
+                self.assertEqual(restored.apply(json.loads(json.dumps(item))), output)
+        finally:
+            restored.dispose()
+        held = PaperEngine(config())
+        try:
+            held.apply(batch(1, [order("held", "LONG", "buy")]))
+            with self.assertRaisesRegex(ValueError, "settled account"):
+                held.apply(second)
+        finally:
+            held.dispose()
+
     def test_hedge_funding_partial_close_and_recovery_at_all_presets(self):
         inputs = [batch(1,[order("one","LONG","buy")]),
                   batch(2,[order("two","SHORT","sell")]),
