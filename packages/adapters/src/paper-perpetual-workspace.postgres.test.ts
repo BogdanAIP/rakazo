@@ -410,7 +410,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       decision,
     });
     await expect(
-      controlPerpetualPaperWorkspace(deps(), owner, make(0, {kind: "no_trade", reason: "Idle"})),
+      controlPerpetualPaperWorkspace(deps(), owner, make(0, { kind: "no_trade", reason: "Idle" })),
     ).rejects.toThrow("requires an active");
 
     await start(id, undefined, ["BTC-USDT-SWAP"], "chatgpt-r");
@@ -418,26 +418,33 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     expect(first).toMatchObject({ researchMode: "chatgpt-r", pendingChatgptProposal: null });
     await expect(
       controlPerpetualPaperWorkspace(
-        deps(), owner,
+        deps(),
+        owner,
         make(first.revision, proposal("long", "SOL-USDT-SWAP")),
       ),
     ).rejects.toThrow("outside owner-approved");
     await controlPerpetualPaperWorkspace(
-      deps(), owner, make(first.revision, { kind: "no_trade", reason: "ChatGPT: нет сигнала" }),
+      deps(),
+      owner,
+      make(first.revision, { kind: "no_trade", reason: "ChatGPT: нет сигнала" }),
     );
     const queued = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
     expect(queued.pendingChatgptProposal).toMatchObject({ commandId, kind: "no_trade" });
     expect(queued.revision).toBe(first.revision + 1);
     await expect(
-      controlPerpetualPaperWorkspace(
-        deps(), owner, { ...make(queued.revision, { kind: "no_trade", reason: "Changed" }), commandId: randomUUID() },
-      ),
+      controlPerpetualPaperWorkspace(deps(), owner, {
+        ...make(queued.revision, { kind: "no_trade", reason: "Changed" }),
+        commandId: randomUUID(),
+      }),
     ).rejects.toThrow("still pending");
     await expect(
       controlPerpetualPaperWorkspace(
         deps(),
         { spaceId: owner.spaceId, userId: "not-the-owner" },
-        { ...make(queued.revision, { kind: "no_trade", reason: "wrong owner" }), commandId: randomUUID() },
+        {
+          ...make(queued.revision, { kind: "no_trade", reason: "wrong owner" }),
+          commandId: randomUUID(),
+        },
       ),
     ).rejects.toThrow();
 
@@ -468,17 +475,13 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         const id = await account();
         await start(id, engine, ["BTC-USDT-SWAP"], "chatgpt-r");
         const status = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
-        await controlPerpetualPaperWorkspace(
-          { ...deps(), engine },
-          owner,
-          {
-            action: "submit_chatgpt_proposal",
-            ledgerId: id,
-            commandId: randomUUID(),
-            expectedRevision: status.revision,
-            decision: proposal("long"),
-          },
-        );
+        await controlPerpetualPaperWorkspace({ ...deps(), engine }, owner, {
+          action: "submit_chatgpt_proposal",
+          ledgerId: id,
+          commandId: randomUUID(),
+          expectedRevision: status.revision,
+          decision: proposal("long"),
+        });
         modelFails = true;
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         expect(calls).toHaveLength(0);

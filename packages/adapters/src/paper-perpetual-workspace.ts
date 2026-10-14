@@ -243,86 +243,86 @@ export async function handlePerpetualPaperWake(
             ? submitted.decision
             : { kind: "no_trade", reason: "Нет действующего предложения ChatGPT через R" };
       } else {
-      failure = "model_unavailable";
-      // Each PAPER account owns its dedicated bot, so resolve that bot's model
-      // selection instead of silently falling back to the space-wide default.
-      model = await deps.resolveModel({ ...owner, botId: current.row.botId });
-      const preset = getPaperExperimentPreset(current.state.strategy);
-      const executionFees = current.control.instruments.map((instrument) => {
-        const fees =
-          current.engineConfig?.instruments.find((terms) => terms.instrument === instrument) ??
-          (deps.engine ? PAPER_OKX_LV1_FEES : { makerFeeRate: "0.001", takerFeeRate: "0.001" });
-        return { instrument, makerFeeRate: fees.makerFeeRate, takerFeeRate: fees.takerFeeRate };
-      });
-      const result = await invokePaperSkillDecision(deps.runtime, {
-        owner,
-        model,
-        botId: current.row.botId,
-        threadId: current.row.threadId,
-        runId:
-          "paper-futures-research:" + key.ledgerId + ":" + key.revision + ":" + key.scheduledFor,
-        instructions: [
-          "You research a virtual PAPER futures account. Return exactly one JSON decision matching the supplied schema.",
-          "Use the selected Market Skill and supplied public OKX data. Never request exchange keys, real orders, account tools or delegation.",
-          "Select an independent strategy suitable for this profile. Compare all allowed instruments and decide no_trade, a new proposal, a partial reduce-only exit, or close an existing position.",
-          "Long and short positions are independent hedge lots. Opposite positions never cancel automatically. quantityBase is BASE currency, not contract count. You may hedge via a new opposite-side proposal if gross risk and remaining position slots allow it; a full close can free a slot for a later hedge.",
-          "For reduce, specify an existing positionId and a positive quantityBase no greater than the held quantity, aligned to the contract lot increment; protect remaining lots. This never opens a new position. Opposite-side same-instrument hedges are independent ideas, but same-instrument same-side scale-ins share ONE per-idea loss budget across all lots.",
-          "Use a stop and a profitable take-profit. Respect leverage, per-idea loss, daily loss, total open stop risk and position count caps. Futures have NO legacy fixed USDT gross-exposure cap; a trusted equity-based portfolio stress guard checks the full gross exposure.",
-          "A volatile wick can stop out a good thesis; use the advisory ATR/wick context and public candles to assess stop distance. The diagnostic is a descriptive sample, not a trading signal, not a liquidation guarantee and not authority to delete or widen an existing protective exit.",
-          "Plan recovery BEFORE the FIRST new position: propose plannedRecoveryNotionalQuote in USDT as your total optional future add capacity for that idea, or accept the independent automatic minimum of 50% of the initial position notional. This capacity is booked in the portfolio gross-stress, margin and stop-risk limits and cannot be spent on unrelated positions. Do NOT send automatic averaging orders. Explain why the reserve is enough or choose no_trade if the combined plan is unsafe.",
-          "For a fresh new PAPER position, supply recoverySteps of EXACTLY two objects: {stepId,triggerPriceQuote,allocationPercent}. Allocation percentages must be positive integers totaling 100, with distinct IDs, ordered toward the protective HARD stop; for Long: stop < second trigger < first trigger < entry, and for Short: entry < first trigger < second trigger < stop. The fixed hard stop must be FURTHER away than the deepest planned averaging level. If such a plan would exhaust risk/capital, propose no_trade or a smaller initial position; never widen an existing stop to fit.",
-          "A recoverySteps plan books OPTIONAL positions; it never places standing averaging orders. The live verified quote must visit a particular trigger AFTER the initial position is open; then a new confirmed two-pivot/neckline reversal plus whole-account stress authorization is mandatory. For an addition specify recoveryStepId from the persisted protectionPlans. Do not invent triggered stages or override original limits.",
-          "To scale into an existing position, use proposal.addToPositionId with a real matching position id, instrument, side, current leverage and EXACT existing stop/take-profit; each additional fill consumes the same whole-idea stop-loss risk. If the existing position is underwater, a new scale-in must pass the independent 20+ confirmed-candle two-pivot and neckline-break structure gate, PLUS a fresh whole-account risk check; a new lower low alone never licenses a fill. The technical pattern is not a guarantee.",
-          "For addToPositionId, the requested add must fit the remaining pre-booked recovery reserve shown under protectionPlans, in addition to every fresh risk and chart confirmation. A bigger recovery reserve requires a separately auditable plan revision; you cannot silently use another idea's booked capacity.",
-          "To free a slot for a hedge or rotate an inferior position, use proposal.replacePositionId (NOT with addToPositionId). This requests closing that position first and entering the new proposal ONLY if the old position is fully closed and fresh independent risk checks still pass. A partial unfilled exit means no new entry. Never assume a replacement succeeded.",
-          "If verified market movement permits a strictly safer protective stop, choose tighten_stop with positionId and stopPriceQuote. For long the new stop must be HIGHER than the old one but still BELOW the current mark; for short LOWER than the old one but still ABOVE the current mark. Stops are never widened or removed, and an existing risk budget is not credited just because the stop moved.",
-          "Average daily return targets for a 14-day evaluation are research benchmarks, not per-session quotas. Long holds, short holds and no_trade are permitted; never trade to meet a target.",
-          "Stop loss must budget entry and exit at the highest nonnegative supplied maker/taker rate for that instrument and include the adverse slippage reserve. Fee rates are decimal fractions of filled notional, not margin; marketable limits can be taker. Round quantity DOWN to lotIncrementBase.",
-          "This simulator uses account-wide margin. Reserve gross initial margin for BOTH hedge legs plus fees. While any position is open, use its existing leverage for all new entries; owner maxLeverage is a ceiling. Maintenance and funding consume equity.",
-          "Only choose a position when the public evidence supports it. Otherwise explain no_trade. Never invent prices or balance fields.",
-          "Respond in Russian in rationale/reason. Your proposal is independently checked and may be denied by execution rules.",
-        ].join("\n"),
-        skill: { provenance: prepared.provenance, content: prepared.skillContent },
-        data: {
-          snapshots,
-          volatilityContext: snapshots.map((row) => ({
-            instrument: row.market.symbol,
-            summary: summarizePaperVolatilityContext(row.history),
-          })),
-          preset: {
-            id: preset.id,
-            initialBalanceQuote: preset.initialBalanceQuote,
-            maxPerIdeaRiskQuote: preset.maxPerIdeaRiskQuote,
-            maxDailyLossQuote: preset.maxDailyLossQuote,
-            maxOpenRiskQuote: preset.maxOpenRiskQuote,
-            maxLeverage: current.control.maxLeverage ?? preset.maxLeverage,
-            maxConcurrentPositions: preset.maxConcurrentPositions,
-            positionMode: preset.positionMode,
-            researchMode: preset.researchMode,
+        failure = "model_unavailable";
+        // Each PAPER account owns its dedicated bot, so resolve that bot's model
+        // selection instead of silently falling back to the space-wide default.
+        model = await deps.resolveModel({ ...owner, botId: current.row.botId });
+        const preset = getPaperExperimentPreset(current.state.strategy);
+        const executionFees = current.control.instruments.map((instrument) => {
+          const fees =
+            current.engineConfig?.instruments.find((terms) => terms.instrument === instrument) ??
+            (deps.engine ? PAPER_OKX_LV1_FEES : { makerFeeRate: "0.001", takerFeeRate: "0.001" });
+          return { instrument, makerFeeRate: fees.makerFeeRate, takerFeeRate: fees.takerFeeRate };
+        });
+        const result = await invokePaperSkillDecision(deps.runtime, {
+          owner,
+          model,
+          botId: current.row.botId,
+          threadId: current.row.threadId,
+          runId:
+            "paper-futures-research:" + key.ledgerId + ":" + key.revision + ":" + key.scheduledFor,
+          instructions: [
+            "You research a virtual PAPER futures account. Return exactly one JSON decision matching the supplied schema.",
+            "Use the selected Market Skill and supplied public OKX data. Never request exchange keys, real orders, account tools or delegation.",
+            "Select an independent strategy suitable for this profile. Compare all allowed instruments and decide no_trade, a new proposal, a partial reduce-only exit, or close an existing position.",
+            "Long and short positions are independent hedge lots. Opposite positions never cancel automatically. quantityBase is BASE currency, not contract count. You may hedge via a new opposite-side proposal if gross risk and remaining position slots allow it; a full close can free a slot for a later hedge.",
+            "For reduce, specify an existing positionId and a positive quantityBase no greater than the held quantity, aligned to the contract lot increment; protect remaining lots. This never opens a new position. Opposite-side same-instrument hedges are independent ideas, but same-instrument same-side scale-ins share ONE per-idea loss budget across all lots.",
+            "Use a stop and a profitable take-profit. Respect leverage, per-idea loss, daily loss, total open stop risk and position count caps. Futures have NO legacy fixed USDT gross-exposure cap; a trusted equity-based portfolio stress guard checks the full gross exposure.",
+            "A volatile wick can stop out a good thesis; use the advisory ATR/wick context and public candles to assess stop distance. The diagnostic is a descriptive sample, not a trading signal, not a liquidation guarantee and not authority to delete or widen an existing protective exit.",
+            "Plan recovery BEFORE the FIRST new position: propose plannedRecoveryNotionalQuote in USDT as your total optional future add capacity for that idea, or accept the independent automatic minimum of 50% of the initial position notional. This capacity is booked in the portfolio gross-stress, margin and stop-risk limits and cannot be spent on unrelated positions. Do NOT send automatic averaging orders. Explain why the reserve is enough or choose no_trade if the combined plan is unsafe.",
+            "For a fresh new PAPER position, supply recoverySteps of EXACTLY two objects: {stepId,triggerPriceQuote,allocationPercent}. Allocation percentages must be positive integers totaling 100, with distinct IDs, ordered toward the protective HARD stop; for Long: stop < second trigger < first trigger < entry, and for Short: entry < first trigger < second trigger < stop. The fixed hard stop must be FURTHER away than the deepest planned averaging level. If such a plan would exhaust risk/capital, propose no_trade or a smaller initial position; never widen an existing stop to fit.",
+            "A recoverySteps plan books OPTIONAL positions; it never places standing averaging orders. The live verified quote must visit a particular trigger AFTER the initial position is open; then a new confirmed two-pivot/neckline reversal plus whole-account stress authorization is mandatory. For an addition specify recoveryStepId from the persisted protectionPlans. Do not invent triggered stages or override original limits.",
+            "To scale into an existing position, use proposal.addToPositionId with a real matching position id, instrument, side, current leverage and EXACT existing stop/take-profit; each additional fill consumes the same whole-idea stop-loss risk. If the existing position is underwater, a new scale-in must pass the independent 20+ confirmed-candle two-pivot and neckline-break structure gate, PLUS a fresh whole-account risk check; a new lower low alone never licenses a fill. The technical pattern is not a guarantee.",
+            "For addToPositionId, the requested add must fit the remaining pre-booked recovery reserve shown under protectionPlans, in addition to every fresh risk and chart confirmation. A bigger recovery reserve requires a separately auditable plan revision; you cannot silently use another idea's booked capacity.",
+            "To free a slot for a hedge or rotate an inferior position, use proposal.replacePositionId (NOT with addToPositionId). This requests closing that position first and entering the new proposal ONLY if the old position is fully closed and fresh independent risk checks still pass. A partial unfilled exit means no new entry. Never assume a replacement succeeded.",
+            "If verified market movement permits a strictly safer protective stop, choose tighten_stop with positionId and stopPriceQuote. For long the new stop must be HIGHER than the old one but still BELOW the current mark; for short LOWER than the old one but still ABOVE the current mark. Stops are never widened or removed, and an existing risk budget is not credited just because the stop moved.",
+            "Average daily return targets for a 14-day evaluation are research benchmarks, not per-session quotas. Long holds, short holds and no_trade are permitted; never trade to meet a target.",
+            "Stop loss must budget entry and exit at the highest nonnegative supplied maker/taker rate for that instrument and include the adverse slippage reserve. Fee rates are decimal fractions of filled notional, not margin; marketable limits can be taker. Round quantity DOWN to lotIncrementBase.",
+            "This simulator uses account-wide margin. Reserve gross initial margin for BOTH hedge legs plus fees. While any position is open, use its existing leverage for all new entries; owner maxLeverage is a ceiling. Maintenance and funding consume equity.",
+            "Only choose a position when the public evidence supports it. Otherwise explain no_trade. Never invent prices or balance fields.",
+            "Respond in Russian in rationale/reason. Your proposal is independently checked and may be denied by execution rules.",
+          ].join("\n"),
+          skill: { provenance: prepared.provenance, content: prepared.skillContent },
+          data: {
+            snapshots,
+            volatilityContext: snapshots.map((row) => ({
+              instrument: row.market.symbol,
+              summary: summarizePaperVolatilityContext(row.history),
+            })),
+            preset: {
+              id: preset.id,
+              initialBalanceQuote: preset.initialBalanceQuote,
+              maxPerIdeaRiskQuote: preset.maxPerIdeaRiskQuote,
+              maxDailyLossQuote: preset.maxDailyLossQuote,
+              maxOpenRiskQuote: preset.maxOpenRiskQuote,
+              maxLeverage: current.control.maxLeverage ?? preset.maxLeverage,
+              maxConcurrentPositions: preset.maxConcurrentPositions,
+              positionMode: preset.positionMode,
+              researchMode: preset.researchMode,
+            },
+            researchTargetAverageDailyReturnPercent:
+              preset.id === "conservative" ? 1 : preset.id === "moderate" ? 2 : 3,
+            futuresStressPolicy: {
+              adverseMarketMovePercent:
+                preset.id === "conservative" ? 35 : preset.id === "moderate" ? 25 : 20,
+              minimumEquityRemainingAfterStressPercent: 25,
+              minimumGrossMaintenanceReservePercent: 2,
+              grossHedgeLegsCountSeparately: true,
+              noStaticNotionalCap: true,
+              longPriceCollapseScenarioPercent: 100,
+              shortPriceRallyScenarioPercent: 200,
+              survivalReservePercent: 25,
+              liquidationImpossible: false,
+            },
+            account: current.state,
+            protectionPlans: current.control.plans,
+            allowedInstruments: current.control.instruments,
+            executionFees,
+            slippageReserveBpsPerSide: 10,
           },
-          researchTargetAverageDailyReturnPercent:
-            preset.id === "conservative" ? 1 : preset.id === "moderate" ? 2 : 3,
-          futuresStressPolicy: {
-            adverseMarketMovePercent:
-              preset.id === "conservative" ? 35 : preset.id === "moderate" ? 25 : 20,
-            minimumEquityRemainingAfterStressPercent: 25,
-            minimumGrossMaintenanceReservePercent: 2,
-            grossHedgeLegsCountSeparately: true,
-            noStaticNotionalCap: true,
-            longPriceCollapseScenarioPercent: 100,
-            shortPriceRallyScenarioPercent: 200,
-            survivalReservePercent: 25,
-            liquidationImpossible: false,
-          },
-          account: current.state,
-          protectionPlans: current.control.plans,
-          allowedInstruments: current.control.instruments,
-          executionFees,
-          slippageReserveBpsPerSide: 10,
-        },
-        schema: z.toJSONSchema(PaperPerpetualDecisionSchema),
-      });
-      decision = PaperPerpetualDecisionSchema.parse(result);
+          schema: z.toJSONSchema(PaperPerpetualDecisionSchema),
+        });
+        decision = PaperPerpetualDecisionSchema.parse(result);
       }
       if (
         !deps.engine &&
@@ -346,8 +346,8 @@ export async function handlePerpetualPaperWake(
       snapshots,
       decision,
       current.control.researchMode === "chatgpt-r" &&
-      current.control.pendingChatgptProposal &&
-      Date.parse(current.control.pendingChatgptProposal.expiresAt) > current.now.getTime()
+        current.control.pendingChatgptProposal &&
+        Date.parse(current.control.pendingChatgptProposal.expiresAt) > current.now.getTime()
         ? { provider: "chatgpt-r-submission", modelId: "external-unattested" }
         : model
           ? { provider: model.provider, modelId: model.id }

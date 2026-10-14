@@ -275,18 +275,18 @@ export async function commandOwnedPerpetualWorkspace(
           if (
             control.pendingChatgptProposal &&
             Date.parse(control.pendingChatgptProposal.expiresAt) > clock
-          ) throw new Error("Previous ChatGPT/R proposal is still pending");
+          )
+            throw new Error("Previous ChatGPT/R proposal is still pending");
           const decision = input.decision;
-          if (
-            decision.kind === "proposal" &&
-            !control.instruments.includes(decision.instrument)
-          ) throw new Error("Proposal instrument outside owner-approved session markets");
+          if (decision.kind === "proposal" && !control.instruments.includes(decision.instrument))
+            throw new Error("Proposal instrument outside owner-approved session markets");
           if (
             (decision.kind === "close" ||
               decision.kind === "reduce" ||
               decision.kind === "tighten_stop") &&
             !state.openPositions.some((position) => position.positionId === decision.positionId)
-          ) throw new Error("ChatGPT/R proposal references an unknown open position");
+          )
+            throw new Error("ChatGPT/R proposal references an unknown open position");
           control.pendingChatgptProposal = {
             commandId: input.commandId,
             submittedAt: now.toISOString(),

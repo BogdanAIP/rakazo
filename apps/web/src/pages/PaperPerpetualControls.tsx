@@ -234,7 +234,8 @@ export function PaperPerpetualControls({
     setError(null);
     try {
       const result = await rpc.trading.perpetualMarketPrepare({ ledgerId, researchMode });
-      if (result.status === "ready") setReview({ preparation: result, instruments, duration, researchMode });
+      if (result.status === "ready")
+        setReview({ preparation: result, instruments, duration, researchMode });
       else
         setError(
           result.reason === "engine_not_configured"
@@ -249,7 +250,9 @@ export function PaperPerpetualControls({
       setPending(false);
     }
   }
-  async function command(action: Exclude<PaperPerpetualCommand["action"], "submit_chatgpt_proposal">) {
+  async function command(
+    action: Exclude<PaperPerpetualCommand["action"], "submit_chatgpt_proposal">,
+  ) {
     if (!status || pending) return;
     const base = { ledgerId, commandId: crypto.randomUUID(), expectedRevision: status.revision };
     let input: PaperPerpetualCommand;
@@ -348,7 +351,8 @@ export function PaperPerpetualControls({
             Источник решений:{" "}
             {verified.researchMode === "chatgpt-r"
               ? "ChatGPT через R (ручная отправка)"
-              : "модель Rakazo"}.
+              : "модель Rakazo"}
+            .
           </p>
           {verified.pendingChatgptProposal && (
             <p role="status" className="text-sm">
@@ -637,8 +641,8 @@ export function PaperPerpetualControls({
                   <p className="text-sm">
                     {review.researchMode === "chatgpt-r"
                       ? "ChatGPT/R: предложения отправляются вручную через R; без них новых входов не будет."
-                      : "Модель Rakazo: исследование выполняется автономно по расписанию."}
-                    {" "}Все решения проходят штатный Risk Manager. Защитные проверки — раз в минуту.
+                      : "Модель Rakazo: исследование выполняется автономно по расписанию."}{" "}
+                    Все решения проходят штатный Risk Manager. Защитные проверки — раз в минуту.
                   </p>
                   <p className="text-sm">
                     После остановки входов защитные выходы разрешены ещё 24 часа. Окончание срока не
