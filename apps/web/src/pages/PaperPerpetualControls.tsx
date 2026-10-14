@@ -3,6 +3,7 @@ import type {
   PaperPerpetualPreparation,
   PaperPerpetualWorkspaceStatus,
   PaperVenueLeverageLimits,
+  TradingScanOutput,
 } from "@rakazo/contracts";
 import { getPaperExperimentPreset, PAPER_OKX_LV1_FEES } from "@rakazo/core";
 import { Button } from "@rakazo/ui-web";
@@ -87,7 +88,12 @@ export function PaperPerpetualControls({
   onChanged: () => void;
 }) {
   const [status, setStatus] = useState<PaperPerpetualWorkspaceStatus | null>(null);
-  const [symbols, setSymbols] = useState("BTC-USDT-SWAP, ETH-USDT-SWAP, SOL-USDT-SWAP");
+  const [symbols, setSymbols] = useState("");
+  const [marketScan, setMarketScan] = useState<TradingScanOutput | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [minTurnoverMillions, setMinTurnoverMillions] = useState(5);
+  const [maxSpreadBps, setMaxSpreadBps] = useState(20);
+  const [marketQuery, setMarketQuery] = useState("");
   const [leverage, setLeverage] = useState(1);
   const [limits, setLimits] = useState<PaperVenueLeverageLimits[]>([]);
   const [duration, setDuration] = useState(20160);
@@ -140,6 +146,61 @@ export function PaperPerpetualControls({
     } finally {
       setPending(false);
     }
+  }
+  async function scanPerpetualMarkets() {
+    if (
+      !Number.isFinite(minTurnoverMillions) ||
+      minTurnoverMillions < 0.1 ||
+      minTurnoverMillions > 1000 ||
+      !Number.isFinite(maxSpreadBps) ||
+      maxSpreadBps < 1 ||
+      maxSpreadBps > 200
+    ) {
+      setError("Проверьте фильтры: объём 0,1–1000 млн USDT, спред 1–200 б.п.");
+      return;
+    }
+    setScanning(true);
+    setMarketScan(null);
+    setError(null);
+    try {
+      const scan = await rpc.trading.list({
+        venue: "okx",
+        kind: "perpetual",
+        allowedQuotes: ["USDT"],
+        minQuoteVolume24h: minTurnoverMillions * 1_000_000,
+        maxSpreadBps,
+        maxDataAgeMs: 60_000,
+      });
+      setMarketScan(scan);
+    } catch {
+      setError("Не удалось получить свежий список бессрочных фьючерсов OKX. Выбор не изменён.");
+    } finally {
+      setScanning(false);
+    }
+  }
+  function useScannedSymbols(next: string[]) {
+    if (!marketScan || Date.now() - Date.parse(marketScan.fetchedAt) > 90_000) {
+      setError("Результаты сканирования устарели. Обновите список OKX.");
+      return;
+    }
+    if (next.length > 8) {
+      setError("Для одной PAPER-сессии можно выбрать не более 8 инструментов.");
+      return;
+    }
+    setSymbols(next.join(", "));
+    setLimits([]);
+    setError(null);
+  }
+  function toggleScannedSymbol(symbol: string) {
+    const current = symbols
+      .split(/[,\\s]+/)
+      .filter(Boolean)
+      .map((value) => value.toUpperCase());
+    useScannedSymbols(
+      current.includes(symbol)
+        ? current.filter((value) => value !== symbol)
+        : [...current, symbol],
+    );
   }
   async function prepare() {
     const instruments = symbols
@@ -222,6 +283,15 @@ export function PaperPerpetualControls({
       setPending(false);
     }
   }
+  const selectedSymbols = symbols
+    .split(/[,\\s]+/)
+    .filter(Boolean)
+    .map((symbol) => symbol.toUpperCase());
+  const scanFresh =
+    marketScan !== null && Date.now() - Date.parse(marketScan.fetchedAt) <= 90_000;
+  const visibleCandidates = (marketScan?.candidates ?? [])
+    .filter(({ market }) => market.symbol.includes(marketQuery.trim().toUpperCase()))
+    .slice(0, 40);
   const verified = status?.status === "verified" && status.managed ? status : null;
   const preset = verified ? getPaperExperimentPreset(verified.strategy) : null;
   const mayStart =
@@ -330,8 +400,119 @@ export function PaperPerpetualControls({
           </section>
           {mayStart && (
             <>
+              <section className="space-y-3 rounded-xl border border-border p-3" aria-label="Сканер фьючерсного рынка">
+                <div>
+                  <p className="font-medium">Рынок · OKX USDT-SWAP</p>
+                  <p className="text-xs text-muted-foreground">
+                    Публичные котировки всех доступных бессрочных контрактов. Отбор по
+                    ликвидности и спреду, не по прогнозируемой прибыли. Объём в USDT оценён
+                    по среднему bid/ask; это не точный биржевой оборот.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="text-sm" htmlFor="futures-min-volume">
+                    Минимальный объём · млн USDT/24 ч
+                    <input
+                      id="futures-min-volume"
+                      type="number"
+                      min={0.1}
+                      max={1000}
+                      step={0.1}
+                      value={minTurnoverMillions}
+                      disabled={scanning || pending || !!review}
+                      className="mt-1 w-full rounded-lg border border-border bg-background p-2"
+                      onChange={(e) => setMinTurnoverMillions(Number(e.target.value))}
+                    />
+                  </label>
+                  <label className="text-sm" htmlFor="futures-max-spread">
+                    Максимальный спред · б.п.
+                    <input
+                      id="futures-max-spread"
+                      type="number"
+                      min={1}
+                      max={200}
+                      step={1}
+                      value={maxSpreadBps}
+                      disabled={scanning || pending || !!review}
+                      className="mt-1 w-full rounded-lg border border-border bg-background p-2"
+                      onChange={(e) => setMaxSpreadBps(Number(e.target.value))}
+                    />
+                  </label>
+                </div>
+                <Button
+                  variant="outline"
+                  disabled={scanning || pending || !!review}
+                  onClick={() => void scanPerpetualMarkets()}
+                >
+                  {scanning ? "Обновление рынка..." : "Сканировать фьючерсы OKX"}
+                </Button>
+                {marketScan && (
+                  <>
+                    <p className="text-xs text-muted-foreground" role="status">
+                      {dateTime(marketScan.fetchedAt)} · прошли фильтр:
+                      {" "}{marketScan.candidates.length} · исключены:
+                      {" "}{marketScan.excluded.length}.
+                      {!scanFresh && " Данные устарели — выполните новое сканирование."}
+                    </p>
+                    <Button
+                      variant="outline"
+                      disabled={!scanFresh || pending || !!review || marketScan.candidates.length === 0}
+                      onClick={() =>
+                        useScannedSymbols(
+                          marketScan.candidates.slice(0, 8).map((item) => item.market.symbol),
+                        )
+                      }
+                    >
+                      Выбрать топ-8 по ликвидности
+                    </Button>
+                    <label className="block text-sm" htmlFor="futures-market-search">
+                      Поиск среди прошедших фильтр
+                    </label>
+                    <input
+                      id="futures-market-search"
+                      type="search"
+                      className="w-full rounded-lg border border-border bg-background p-2 text-sm"
+                      placeholder="Например: XRP, LINK, DOGE"
+                      value={marketQuery}
+                      onChange={(e) => setMarketQuery(e.target.value)}
+                    />
+                    <div className="max-h-72 space-y-1 overflow-y-auto" aria-label="Подходящие бессрочные фьючерсы">
+                      {visibleCandidates.map(({ market, ticker, spreadBps }) => (
+                        <div
+                          key={market.symbol}
+                          className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2 text-sm"
+                        >
+                          <div>
+                            <p className="font-medium">{market.symbol}</p>
+                            <p className="text-xs text-muted-foreground">
+                              ≈{(Number(ticker.quoteVolume24h) / 1_000_000).toLocaleString("ru-RU", {
+                                maximumFractionDigits: 1,
+                              })} млн USDT/сутки · спред {spreadBps.toFixed(1)} б.п.
+                            </p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            disabled={!scanFresh || pending || !!review}
+                            onClick={() => toggleScannedSymbol(market.symbol)}
+                          >
+                            {selectedSymbols.includes(market.symbol) ? "Убрать" : "Добавить"}
+                          </Button>
+                        </div>
+                      ))}
+                      {visibleCandidates.length === 0 && (
+                        <p className="text-sm text-muted-foreground">Нет совпадений по текущему фильтру.</p>
+                      )}
+                    </div>
+                    {marketScan.candidates.length > visibleCandidates.length && (
+                      <p className="text-xs text-muted-foreground">
+                        Показаны первые 40 совпадений; поиск работает по всему списку.
+                      </p>
+                    )}
+                  </>
+                )}
+              </section>
               <label className="block text-sm" htmlFor="futures-pairs">
-                Пары для анализа
+                Пары для PAPER-сессии · выбрано {selectedSymbols.length} из 8
               </label>
               <input
                 id="futures-pairs"
@@ -341,6 +522,10 @@ export function PaperPerpetualControls({
                 disabled={pending || !!review}
                 onChange={(e) => setSymbols(e.target.value)}
               />
+              <p className="text-xs text-muted-foreground">
+                Список можно уточнить вручную. Сканер ничего не покупает и не запускает.
+                Для входов по-прежнему требуется отдельное подтверждение PAPER-сессии.
+              </p>
               <label className="block text-sm" htmlFor="futures-duration">
                 Длительность новых входов
               </label>
