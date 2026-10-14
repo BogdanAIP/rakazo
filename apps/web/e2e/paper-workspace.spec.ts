@@ -422,6 +422,11 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
         ledgerId,
       ),
     ).toMatchObject({ maxLeverage: 3 });
+    // The journal refresh triggered by saving leverage must not unmount the
+    // controls and silently discard the explicitly selected market universe.
+    await expect(page.locator("#futures-pairs")).toHaveValue(
+      "BTC-USDT-SWAP, ETH-USDT-SWAP, SOL-USDT-SWAP",
+    );
     await captureScreenshot(page, testInfo, "futures-leverage-setting");
     await expect(page.getByLabel("Источник торговых решений")).toHaveValue("chatgpt-r");
     await page.getByLabel("Длительность новых входов").selectOption("15");
