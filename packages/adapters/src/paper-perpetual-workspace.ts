@@ -79,7 +79,11 @@ export async function controlPerpetualPaperWorkspace(
   owner: PerpetualOwner,
   command: PaperPerpetualCommand,
 ) {
-  if (command.action === "start" && !deps.engine && process.env.NODE_ENV !== "test")
+  if (
+    (command.action === "start" || command.action === "submit_chatgpt_proposal") &&
+    !deps.engine &&
+    process.env.NODE_ENV !== "test"
+  )
     throw new Error("PAPER futures engine not configured");
   const limits =
     command.action === "set_leverage"
