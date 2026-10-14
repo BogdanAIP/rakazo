@@ -182,7 +182,7 @@ export const PaperPerpetualWorkspaceStatusSchema = z.object({
       commandId: z.string().uuid(),
       submittedAt: IsoDate,
       expiresAt: IsoDate,
-      kind: PaperPerpetualDecisionSchema.options[0].shape.kind.or(z.enum(["proposal", "close", "reduce", "tighten_stop"])),
+      kind: z.enum(["no_trade", "proposal", "close", "reduce", "tighten_stop"]),
     })
     .nullable()
     .default(null),
