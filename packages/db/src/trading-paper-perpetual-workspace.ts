@@ -135,6 +135,8 @@ const initialControl = (): PerpetualControl => ({
   protectionExpiresAt: null,
   instruments: [],
   source: null,
+  researchMode: "model",
+  pendingChatgptProposal: null,
   orders: [],
   plans: [],
   closeAll: false,
@@ -258,7 +260,43 @@ export async function commandOwnedPerpetualWorkspace(
           throw new Error("Futures session changed; refresh the account");
         const now = await perpetualDatabaseClock(tx);
         const clock = now.getTime();
-        if (input.action === "set_leverage") {
+        if (input.action === "submit_chatgpt_proposal") {
+          if (
+            control.sessionStatus !== "active" ||
+            control.researchMode !== "chatgpt-r" ||
+            !control.source ||
+            !control.expiresAt ||
+            Date.parse(control.expiresAt) <= clock ||
+            control.closeAll ||
+            control.orders.length
+          ) {
+            throw new Error("ChatGPT/R proposal requires an active, idle PAPER research session");
+          }
+          if (
+            control.pendingChatgptProposal &&
+            Date.parse(control.pendingChatgptProposal.expiresAt) > clock
+          ) throw new Error("Previous ChatGPT/R proposal is still pending");
+          const decision = input.decision;
+          if (
+            decision.kind === "proposal" &&
+            !control.instruments.includes(decision.instrument)
+          ) throw new Error("Proposal instrument outside owner-approved session markets");
+          if (
+            (decision.kind === "close" ||
+              decision.kind === "reduce" ||
+              decision.kind === "tighten_stop") &&
+            !state.openPositions.some((position) => position.positionId === decision.positionId)
+          ) throw new Error("ChatGPT/R proposal references an unknown open position");
+          control.pendingChatgptProposal = {
+            commandId: input.commandId,
+            submittedAt: now.toISOString(),
+            expiresAt: new Date(clock + 120_000).toISOString(),
+            decision,
+          };
+          // A one-time owner submission triggers the existing protected worker;
+          // it does not allocate capital or execute exchange/broker commands.
+          control.lastResearchAt = null;
+        } else if (input.action === "set_leverage") {
           for (const instrument of input.instruments) {
             const evidence = limits.find((l) => l.instrument === instrument);
             const gross = state.openPositions
@@ -278,6 +316,7 @@ export async function commandOwnedPerpetualWorkspace(
             if (result.status !== "allowed") throw new Error("Futures leverage setting refused");
           }
           control.maxLeverage = input.maxLeverage;
+          control.pendingChatgptProposal = null;
           control.orders = [];
           control.lastResearchAt = null;
         } else if (input.action === "start") {
@@ -298,6 +337,8 @@ export async function commandOwnedPerpetualWorkspace(
           ).toISOString();
           control.instruments = input.instruments;
           control.source = input.source;
+          control.researchMode = input.researchMode;
+          control.pendingChatgptProposal = null;
           control.plans = [];
           control.lastResearchAt = null;
         } else if (input.action === "protect") {
@@ -309,6 +350,7 @@ export async function commandOwnedPerpetualWorkspace(
             ),
           ).toISOString();
         } else {
+          control.pendingChatgptProposal = null;
           control.sessionStatus = input.action === "pause" ? "paused" : "ended";
           control.orders = [];
           if (input.action !== "close_all" && control.protectionExpiresAt) {
@@ -405,6 +447,15 @@ export async function readOwnedPerpetualWorkspace(
           protectionExpiresAt: control.protectionExpiresAt,
           runtimeError: control.runtimeError,
           instruments: control.instruments,
+          researchMode: control.researchMode,
+          pendingChatgptProposal: control.pendingChatgptProposal
+            ? {
+                commandId: control.pendingChatgptProposal.commandId,
+                submittedAt: control.pendingChatgptProposal.submittedAt,
+                expiresAt: control.pendingChatgptProposal.expiresAt,
+                kind: control.pendingChatgptProposal.decision.kind,
+              }
+            : null,
           lastDecision: control.lastDecision,
           openOrders: control.orders.map((o) => ({
             orderId: o.orderId,
@@ -451,6 +502,8 @@ export async function readOwnedPerpetualWorkspace(
           protectionExpiresAt: null,
           runtimeError: "integrity_blocked",
           instruments: [],
+          researchMode: "model" as const,
+          pendingChatgptProposal: null,
           lastDecision: null,
           openOrders: [],
           pendingClose: false,
@@ -610,6 +663,17 @@ export async function recordPerpetualResearchTick(
             throw new Error("Futures research integrity failed");
           return existing;
         }
+        if (model?.provider === "chatgpt-r-submission") {
+          const pending = control.pendingChatgptProposal;
+          if (
+            control.researchMode !== "chatgpt-r" ||
+            !pending ||
+            Date.parse(pending.expiresAt) <= clock.getTime() ||
+            perpetualPaperHash(pending.decision) !== perpetualPaperHash(decision)
+          ) {
+            throw new Error("Expired or changed ChatGPT/R proposal refused before risk gate");
+          }
+        }
         if (decision.kind !== "no_trade") {
           const now = await perpetualDatabaseClock(tx);
           if (
@@ -620,6 +684,15 @@ export async function recordPerpetualResearchTick(
           )
             return null;
           await verifyPerpetualSource(tx, owner, control.source);
+        }
+        if (model?.provider === "chatgpt-r-submission") {
+          await savePerpetualControl(
+            tx,
+            key.ledgerId,
+            row.revision,
+            { ...control, pendingChatgptProposal: null },
+            row.nextScheduledFor,
+          );
         }
         return tx.tradingPaperPerpetualTick.create({
           data: {
