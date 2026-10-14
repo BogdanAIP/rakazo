@@ -29,7 +29,7 @@
     "test:e2e": "maestro test .maestro/smoke.yaml"
   },
   "dependencies": {
-    "@expo/metro-runtime": "57.0.16",
+    "@expo/metro-runtime": "57.0.17",
     "@rakazo/chat-ui": "workspace:*",
     "@rakazo/contracts": "workspace:*",
     "@rakazo/core": "workspace:*",
