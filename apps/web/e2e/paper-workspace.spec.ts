@@ -424,8 +424,6 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
     ).toMatchObject({ maxLeverage: 3 });
     await captureScreenshot(page, testInfo, "futures-leverage-setting");
     await expect(page.getByLabel("Источник торговых решений")).toHaveValue("chatgpt-r");
-    // This existing E2E exercises the model-led flow; ChatGPT/R is covered by native PG tests.
-    await page.getByLabel("Источник торговых решений").selectOption("model");
     await page.getByLabel("Длительность новых входов").selectOption("15");
     await page.getByRole("button", { name: "Проверить запуск фьючерсов" }).click();
     await expect(page.getByLabel("Проверка запуска фьючерсов")).toBeVisible();
@@ -438,6 +436,41 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
     expect(await db.prisma.tradingPaperPerpetualEvent.count({ where: { ledgerId } })).toBe(0);
     await captureScreenshot(page, testInfo, "futures-reviewed-start");
     await page.getByRole("button", { name: "Запустить PAPER-фьючерсы", exact: true }).click();
+    // Exercise the authenticated ChatGPT/R submission path; no model or Codex OAuth is required.
+    const chatgptPaperSession = await readOwnedPerpetualWorkspace(
+      db.prisma,
+      { spaceId: ledger.spaceId, userId: ledger.ownerUserId },
+      ledgerId,
+    );
+    expect(chatgptPaperSession?.researchMode).toBe("chatgpt-r");
+    const chatgptRResponse = await page.request.post("/rpc/trading/perpetualWorkspaceCommand", {
+      headers: { "x-rakazo-space-id": ledger.spaceId },
+      data: {
+        json: {
+          action: "submit_chatgpt_proposal",
+          ledgerId,
+          commandId: randomUUID(),
+          expectedRevision: chatgptPaperSession!.revision,
+          decision: {
+            kind: "proposal",
+            instrument: "BTC-USDT-SWAP",
+            side: "long",
+            leverage: 2,
+            quantityBase: "1",
+            orderType: "market",
+            limitPriceQuote: null,
+            stopPriceQuote: "97",
+            takeProfitPriceQuote: "110",
+            recoverySteps: [
+              { stepId: "first-retest", triggerPriceQuote: "97.8", allocationPercent: 50 },
+              { stepId: "second-retest", triggerPriceQuote: "97.4", allocationPercent: 50 },
+            ],
+            rationale: "ChatGPT/R approved research proposal for virtual PAPER only",
+          },
+        },
+      },
+    });
+    expect(chatgptRResponse.ok(), await chatgptRResponse.text()).toBe(true);
     await expect(
       page
         .getByRole("table", { name: "Открытые фьючерсные позиции" })
