@@ -423,6 +423,9 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
       ),
     ).toMatchObject({ maxLeverage: 3 });
     await captureScreenshot(page, testInfo, "futures-leverage-setting");
+    await expect(page.getByLabel("Источник торговых решений")).toHaveValue("chatgpt-r");
+    // This existing E2E exercises the model-led flow; ChatGPT/R is covered by native PG tests.
+    await page.getByLabel("Источник торговых решений").selectOption("model");
     await page.getByLabel("Длительность новых входов").selectOption("15");
     await page.getByRole("button", { name: "Проверить запуск фьючерсов" }).click();
     await expect(page.getByLabel("Проверка запуска фьючерсов")).toBeVisible();
