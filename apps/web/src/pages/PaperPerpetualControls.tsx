@@ -130,6 +130,15 @@ export function PaperPerpetualControls({
       window.clearInterval(timer);
     };
   }, [ledgerId]);
+  // Each virtual ledger must have an independently reviewed market selection.
+  useEffect(() => {
+    setSymbols("");
+    setMarketScan(null);
+    setMarketQuery("");
+    setLimits([]);
+    setReview(null);
+    setError(null);
+  }, [ledgerId]);
   useEffect(() => {
     if (status?.status === "verified") setLeverage(status.maxLeverage);
     setLimits([]);
@@ -359,7 +368,11 @@ export function PaperPerpetualControls({
             <p className="text-sm">Плечо новых входов: до {verified.maxLeverage}×</p>
             <Button
               variant="outline"
-              disabled={pending || !!review}
+              disabled={
+                pending ||
+                !!review ||
+                (verified.sessionStatus !== "active" && selectedSymbols.length === 0)
+              }
               onClick={() => void checkLeverage()}
             >
               Проверить плечо
@@ -545,6 +558,12 @@ export function PaperPerpetualControls({
                 disabled={pending || !!review}
                 onChange={(e) => setSymbols(e.target.value)}
               />
+              {selectedSymbols.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Сначала отсканируйте рынок и подберите криптовалюты для этого счёта.
+                  Проверка плеча и подготовка сессии станут доступны после выбора.
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">
                 Список можно уточнить вручную. Сканер ничего не покупает и не запускает. Для входов
                 по-прежнему требуется отдельное подтверждение PAPER-сессии.
