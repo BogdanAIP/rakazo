@@ -178,7 +178,7 @@ export function PaperPerpetualControls({
       setScanning(false);
     }
   }
-  function useScannedSymbols(next: string[]) {
+  function applyScannedSymbols(next: string[]) {
     if (!marketScan || Date.now() - Date.parse(marketScan.fetchedAt) > 90_000) {
       setError("Результаты сканирования устарели. Обновите список OKX.");
       return;
@@ -196,7 +196,7 @@ export function PaperPerpetualControls({
       .split(/[,\\s]+/)
       .filter(Boolean)
       .map((value) => value.toUpperCase());
-    useScannedSymbols(
+    applyScannedSymbols(
       current.includes(symbol) ? current.filter((value) => value !== symbol) : [...current, symbol],
     );
   }
@@ -459,7 +459,7 @@ export function PaperPerpetualControls({
                         !scanFresh || pending || !!review || marketScan.candidates.length === 0
                       }
                       onClick={() =>
-                        useScannedSymbols(
+                        applyScannedSymbols(
                           marketScan.candidates.slice(0, 8).map((item) => item.market.symbol),
                         )
                       }
@@ -477,7 +477,7 @@ export function PaperPerpetualControls({
                       value={marketQuery}
                       onChange={(e) => setMarketQuery(e.target.value)}
                     />
-                    <div
+                    <section
                       className="max-h-72 space-y-1 overflow-y-auto"
                       aria-label="Подходящие бессрочные фьючерсы"
                     >
@@ -510,7 +510,7 @@ export function PaperPerpetualControls({
                           Нет совпадений по текущему фильтру.
                         </p>
                       )}
-                    </div>
+                    </section>
                     {marketScan.candidates.length > visibleCandidates.length && (
                       <p className="text-xs text-muted-foreground">
                         Показаны первые 40 совпадений; поиск работает по всему списку.
