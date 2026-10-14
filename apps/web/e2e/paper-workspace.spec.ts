@@ -417,9 +417,9 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
       "BTC-USDT-SWAP, ETH-USDT-SWAP, SOL-USDT-SWAP",
     );
     await page.getByLabel("Поиск среди прошедших фильтр").fill("ETH");
-    await expect(page.getByRole("region", { name: "Подходящие бессрочные фьючерсы" })).toContainText(
-      "ETH-USDT-SWAP",
-    );
+    await expect(
+      page.getByRole("region", { name: "Подходящие бессрочные фьючерсы" }),
+    ).toContainText("ETH-USDT-SWAP");
     await page.unroute("**/rpc/trading/list");
     await page.getByLabel("Длительность новых входов").selectOption("15");
     await page.getByRole("button", { name: "Проверить запуск фьючерсов" }).click();
