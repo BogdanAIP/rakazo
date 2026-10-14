@@ -225,8 +225,7 @@ export function PaperPerpetualJournalPanel() {
   }
   // Never render stale financial data or controls from the previously
   // selected ledger during the first frame of a ledger switch.
-  const verified =
-    journal?.status === "verified" && journal.ledgerId === ledgerId ? journal : null;
+  const verified = journal?.status === "verified" && journal.ledgerId === ledgerId ? journal : null;
   return (
     <div
       className="space-y-5"
