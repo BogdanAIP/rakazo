@@ -193,7 +193,7 @@ export function PaperPerpetualControls({
   }
   function toggleScannedSymbol(symbol: string) {
     const current = symbols
-      .split(/[,\\s]+/)
+      .split(/[,\s]+/)
       .filter(Boolean)
       .map((value) => value.toUpperCase());
     applyScannedSymbols(
@@ -282,7 +282,7 @@ export function PaperPerpetualControls({
     }
   }
   const selectedSymbols = symbols
-    .split(/[,\\s]+/)
+    .split(/[,\s]+/)
     .filter(Boolean)
     .map((symbol) => symbol.toUpperCase());
   const scanFresh = marketScan !== null && Date.now() - Date.parse(marketScan.fetchedAt) <= 90_000;
