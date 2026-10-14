@@ -249,7 +249,10 @@ export const appContract = {
         }),
       ),
     perpetualMarketPrepare: oc
-      .input(z.object({ ledgerId: z.string().min(1).max(128) }))
+      .input(z.object({
+        ledgerId: z.string().min(1).max(128),
+        researchMode: z.enum(["model", "chatgpt-r"]).optional(),
+      }))
       .output(PaperPerpetualPreparationSchema),
     perpetualLeverageRead: oc
       .input(PaperLeverageReadInputSchema)
