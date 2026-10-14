@@ -4,6 +4,7 @@ import { buildSkillMd } from "@rakazo/core";
 import {
   createDb,
   fillApprovedTradingPaperReservation,
+  parsePerpetualControl,
   readOwnedPerpetualWorkspace,
   readTradingPaperWorkerFillPreflight,
   readTradingPaperWorkerMarketTargetPreflight,
@@ -442,12 +443,33 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
     await captureScreenshot(page, testInfo, "futures-reviewed-start");
     await page.getByRole("button", { name: "Запустить PAPER-фьючерсы", exact: true }).click();
     // Exercise the authenticated ChatGPT/R submission path; no model or Codex OAuth is required.
+    // Read the hash-verified saved control first: fallback statuses intentionally
+    // report model as a fail-closed default when ledger recovery cannot verify yet.
+    const persisted = await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+      where: { ledgerId },
+    });
+    expect(parsePerpetualControl(persisted).researchMode).toBe("chatgpt-r");
+    // A worker may be committing the first protection tick concurrently; wait
+    // for a VERIFIED read instead of comparing fields of an integrity-blocked fallback.
+    await expect
+      .poll(
+        async () => {
+          const state = await readOwnedPerpetualWorkspace(
+            db.prisma,
+            { spaceId: ledger.spaceId, userId: ledger.ownerUserId },
+            ledgerId,
+          );
+          return state?.status === "verified" ? state.researchMode : "await_verified_ledger";
+        },
+        { timeout: 20_000 },
+      )
+      .toBe("chatgpt-r");
     const chatgptPaperSession = await readOwnedPerpetualWorkspace(
       db.prisma,
       { spaceId: ledger.spaceId, userId: ledger.ownerUserId },
       ledgerId,
     );
-    expect(chatgptPaperSession?.researchMode).toBe("chatgpt-r");
+    expect(chatgptPaperSession?.status).toBe("verified");
     const chatgptRResponse = await page.request.post("/rpc/trading/perpetualWorkspaceCommand", {
       headers: { "x-rakazo-space-id": ledger.spaceId },
       data: {
