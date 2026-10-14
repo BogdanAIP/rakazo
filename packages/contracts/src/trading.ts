@@ -234,6 +234,7 @@ export type TradingResolvedResearchApprovalScope = z.infer<
 /** Read-only, user-invoked market prefilter. It creates no orders or buy/sell signals. */
 export const TradingScanRequestSchema = z.object({
   venue: z.enum(["bingx", "okx"]).default("bingx"),
+  kind: z.enum(["spot", "perpetual"]).default("spot"),
   allowedQuotes: z
     .array(z.string().regex(/^[A-Z0-9]{2,20}$/))
     .min(1)
