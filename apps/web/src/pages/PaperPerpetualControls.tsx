@@ -197,9 +197,7 @@ export function PaperPerpetualControls({
       .filter(Boolean)
       .map((value) => value.toUpperCase());
     useScannedSymbols(
-      current.includes(symbol)
-        ? current.filter((value) => value !== symbol)
-        : [...current, symbol],
+      current.includes(symbol) ? current.filter((value) => value !== symbol) : [...current, symbol],
     );
   }
   async function prepare() {
@@ -287,8 +285,7 @@ export function PaperPerpetualControls({
     .split(/[,\\s]+/)
     .filter(Boolean)
     .map((symbol) => symbol.toUpperCase());
-  const scanFresh =
-    marketScan !== null && Date.now() - Date.parse(marketScan.fetchedAt) <= 90_000;
+  const scanFresh = marketScan !== null && Date.now() - Date.parse(marketScan.fetchedAt) <= 90_000;
   const visibleCandidates = (marketScan?.candidates ?? [])
     .filter(({ market }) => market.symbol.includes(marketQuery.trim().toUpperCase()))
     .slice(0, 40);
@@ -400,13 +397,16 @@ export function PaperPerpetualControls({
           </section>
           {mayStart && (
             <>
-              <section className="space-y-3 rounded-xl border border-border p-3" aria-label="Сканер фьючерсного рынка">
+              <section
+                className="space-y-3 rounded-xl border border-border p-3"
+                aria-label="Сканер фьючерсного рынка"
+              >
                 <div>
                   <p className="font-medium">Рынок · OKX USDT-SWAP</p>
                   <p className="text-xs text-muted-foreground">
-                    Публичные котировки всех доступных бессрочных контрактов. Отбор по
-                    ликвидности и спреду, не по прогнозируемой прибыли. Объём в USDT оценён
-                    по среднему bid/ask; это не точный биржевой оборот.
+                    Публичные котировки всех доступных бессрочных контрактов. Отбор по ликвидности и
+                    спреду, не по прогнозируемой прибыли. Объём в USDT оценён по среднему bid/ask;
+                    это не точный биржевой оборот.
                   </p>
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -449,14 +449,15 @@ export function PaperPerpetualControls({
                 {marketScan && (
                   <>
                     <p className="text-xs text-muted-foreground" role="status">
-                      {dateTime(marketScan.fetchedAt)} · прошли фильтр:
-                      {" "}{marketScan.candidates.length} · исключены:
-                      {" "}{marketScan.excluded.length}.
+                      {dateTime(marketScan.fetchedAt)} · прошли фильтр:{" "}
+                      {marketScan.candidates.length} · исключены: {marketScan.excluded.length}.
                       {!scanFresh && " Данные устарели — выполните новое сканирование."}
                     </p>
                     <Button
                       variant="outline"
-                      disabled={!scanFresh || pending || !!review || marketScan.candidates.length === 0}
+                      disabled={
+                        !scanFresh || pending || !!review || marketScan.candidates.length === 0
+                      }
                       onClick={() =>
                         useScannedSymbols(
                           marketScan.candidates.slice(0, 8).map((item) => item.market.symbol),
@@ -476,7 +477,10 @@ export function PaperPerpetualControls({
                       value={marketQuery}
                       onChange={(e) => setMarketQuery(e.target.value)}
                     />
-                    <div className="max-h-72 space-y-1 overflow-y-auto" aria-label="Подходящие бессрочные фьючерсы">
+                    <div
+                      className="max-h-72 space-y-1 overflow-y-auto"
+                      aria-label="Подходящие бессрочные фьючерсы"
+                    >
                       {visibleCandidates.map(({ market, ticker, spreadBps }) => (
                         <div
                           key={market.symbol}
@@ -485,9 +489,11 @@ export function PaperPerpetualControls({
                           <div>
                             <p className="font-medium">{market.symbol}</p>
                             <p className="text-xs text-muted-foreground">
-                              ≈{(Number(ticker.quoteVolume24h) / 1_000_000).toLocaleString("ru-RU", {
+                              ≈
+                              {(Number(ticker.quoteVolume24h) / 1_000_000).toLocaleString("ru-RU", {
                                 maximumFractionDigits: 1,
-                              })} млн USDT/сутки · спред {spreadBps.toFixed(1)} б.п.
+                              })}{" "}
+                              млн USDT/сутки · спред {spreadBps.toFixed(1)} б.п.
                             </p>
                           </div>
                           <Button
@@ -500,7 +506,9 @@ export function PaperPerpetualControls({
                         </div>
                       ))}
                       {visibleCandidates.length === 0 && (
-                        <p className="text-sm text-muted-foreground">Нет совпадений по текущему фильтру.</p>
+                        <p className="text-sm text-muted-foreground">
+                          Нет совпадений по текущему фильтру.
+                        </p>
                       )}
                     </div>
                     {marketScan.candidates.length > visibleCandidates.length && (
@@ -523,8 +531,8 @@ export function PaperPerpetualControls({
                 onChange={(e) => setSymbols(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Список можно уточнить вручную. Сканер ничего не покупает и не запускает.
-                Для входов по-прежнему требуется отдельное подтверждение PAPER-сессии.
+                Список можно уточнить вручную. Сканер ничего не покупает и не запускает. Для входов
+                по-прежнему требуется отдельное подтверждение PAPER-сессии.
               </p>
               <label className="block text-sm" htmlFor="futures-duration">
                 Длительность новых входов

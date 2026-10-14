@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchOkxPublicCatalog, fetchOkxPublicPerpetualTickers, fetchOkxPublicSpotTickers } from "./trading-okx-public.js";
+import {
+  fetchOkxPublicCatalog,
+  fetchOkxPublicPerpetualTickers,
+  fetchOkxPublicSpotTickers,
+} from "./trading-okx-public.js";
 
 const now = new Date("2026-10-03T10:00:00.000Z");
 const futureExpiry = "1798790400000";
