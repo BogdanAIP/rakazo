@@ -442,15 +442,24 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
     expect(await db.prisma.tradingPaperPerpetualEvent.count({ where: { ledgerId } })).toBe(0);
     await captureScreenshot(page, testInfo, "futures-reviewed-start");
     await page.getByRole("button", { name: "Запустить PAPER-фьючерсы", exact: true }).click();
+    // Clicking only dispatches an async Start handler; it does NOT await its RPC.
+    // Wait for the DB revision/session to be committed before reading the control.
+    // Do not mistake the prior, correctly idle "model" mode for a bad Start.
+    await expect
+      .poll(
+        async () => {
+          const row = await db.prisma.tradingPaperPerpetualWorkspace.findUnique({
+            where: { ledgerId },
+          });
+          if (!row || row.revision < 2) return "await_start_commit";
+          const control = parsePerpetualControl(row);
+          if (control.sessionStatus !== "active") return "await_active_session";
+          return control.researchMode;
+        },
+        { timeout: 20_000 },
+      )
+      .toBe("chatgpt-r");
     // Exercise the authenticated ChatGPT/R submission path; no model or Codex OAuth is required.
-    // Read the hash-verified saved control first: fallback statuses intentionally
-    // report model as a fail-closed default when ledger recovery cannot verify yet.
-    const persisted = await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
-      where: { ledgerId },
-    });
-    expect(parsePerpetualControl(persisted).researchMode).toBe("chatgpt-r");
-    // A worker may be committing the first protection tick concurrently; wait
-    // for a VERIFIED read instead of comparing fields of an integrity-blocked fallback.
     await expect
       .poll(
         async () => {
