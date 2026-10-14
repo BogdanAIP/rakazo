@@ -324,6 +324,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     ledgerId: string,
     engine?: PaperPerpetualEngine,
     instruments = ["BTC-USDT-SWAP", "SOL-USDT-SWAP"],
+    researchMode: "model" | "chatgpt-r" = "model",
   ) {
     const prepared = await readOwnedMarketPreparedResearch(db.prisma, owner, {
       semanticKey: "futures.data",
@@ -332,6 +333,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     const status = await readOwnedPerpetualWorkspace(db.prisma, owner, ledgerId);
     const command = {
       action: "start" as const,
+      researchMode,
       ledgerId,
       commandId: randomUUID(),
       expectedRevision: status!.revision,
@@ -379,6 +381,102 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       scheduledFor: now.toISOString(),
     };
   }
+
+  it("only accepts owner ChatGPT/R research for an active, unchanged PAPER session", async () => {
+    const id = await account();
+    const commandId = randomUUID();
+    const make = (expectedRevision: number, decision: PaperPerpetualDecision) => ({
+      action: "submit_chatgpt_proposal" as const,
+      ledgerId: id,
+      commandId,
+      expectedRevision,
+      decision,
+    });
+    await expect(
+      controlPerpetualPaperWorkspace(deps(), owner, make(0, {kind: "no_trade", reason: "Idle"})),
+    ).rejects.toThrow("requires an active");
+
+    await start(id, undefined, ["BTC-USDT-SWAP"], "chatgpt-r");
+    const first = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+    expect(first).toMatchObject({ researchMode: "chatgpt-r", pendingChatgptProposal: null });
+    await expect(
+      controlPerpetualPaperWorkspace(
+        deps(), owner,
+        make(first.revision, proposal("long", "SOL-USDT-SWAP")),
+      ),
+    ).rejects.toThrow("outside owner-approved");
+    await controlPerpetualPaperWorkspace(
+      deps(), owner, make(first.revision, { kind: "no_trade", reason: "ChatGPT: нет сигнала" }),
+    );
+    const queued = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+    expect(queued.pendingChatgptProposal).toMatchObject({ commandId, kind: "no_trade" });
+    expect(queued.revision).toBe(first.revision + 1);
+    await expect(
+      controlPerpetualPaperWorkspace(
+        deps(), owner, { ...make(queued.revision, { kind: "no_trade", reason: "Changed" }), commandId: randomUUID() },
+      ),
+    ).rejects.toThrow("still pending");
+    await expect(
+      controlPerpetualPaperWorkspace(
+        deps(),
+        { spaceId: owner.spaceId, userId: "not-the-owner" },
+        { ...make(queued.revision, { kind: "no_trade", reason: "wrong owner" }), commandId: randomUUID() },
+      ),
+    ).rejects.toThrow();
+
+    // External research path must not touch model auth or the LLM runtime.
+    modelFails = true;
+    await handlePerpetualPaperWake(worker(), await payload(id, true));
+    expect(calls).toHaveLength(0);
+    const result = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+    expect(result.pendingChatgptProposal).toBeNull();
+    expect(result.sessionStatus).toBe("active");
+    const ticks = await db.prisma.tradingPaperPerpetualTick.findMany({
+      where: { ledgerId: id, stage: "research" },
+      orderBy: { recordedAt: "desc" },
+      take: 1,
+    });
+    expect(ticks[0]?.modelProvider).toBe("chatgpt-r-submission");
+    expect(ticks[0]?.decision).toMatchObject({ kind: "no_trade", reason: "ChatGPT: нет сигнала" });
+  });
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "executes an explicit ChatGPT/R PAPER proposal only via the existing Nautilus risk engine",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = await account();
+        await start(id, engine, ["BTC-USDT-SWAP"], "chatgpt-r");
+        const status = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+        await controlPerpetualPaperWorkspace(
+          { ...deps(), engine },
+          owner,
+          {
+            action: "submit_chatgpt_proposal",
+            ledgerId: id,
+            commandId: randomUUID(),
+            expectedRevision: status.revision,
+            decision: proposal("long"),
+          },
+        );
+        modelFails = true;
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect(calls).toHaveLength(0);
+        expect((await state(id)).openPositions).toHaveLength(1);
+        const journal = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
+        expect(journal?.status).toBe("verified");
+        const current = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+        expect(current.pendingChatgptProposal).toBeNull();
+        expect(current.lastDecision?.provider).toBe("chatgpt-r-submission");
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
 
   it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
     "reuses protection-only observations but captures fresh quotes for pending and new entries",
