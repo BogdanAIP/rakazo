@@ -5,7 +5,7 @@ import type {
   PaperVenueLeverageLimits,
   TradingScanOutput,
 } from "@rakazo/contracts";
-import { getPaperExperimentPreset, PAPER_OKX_LV1_FEES } from "@rakazo/core";
+import { getPaperExperimentPreset, PAPER_OKX_LV1_FEES, suggestPaperPerpetualCryptoUniverse } from "@rakazo/core";
 import { Button } from "@rakazo/ui-web";
 import { useEffect, useState } from "react";
 import { rpc } from "../lib/rpc";
@@ -291,6 +291,10 @@ export function PaperPerpetualControls({
     .slice(0, 40);
   const verified = status?.status === "verified" && status.managed ? status : null;
   const preset = verified ? getPaperExperimentPreset(verified.strategy) : null;
+  const suggestedCryptoMarkets =
+    marketScan && verified
+      ? suggestPaperPerpetualCryptoUniverse(marketScan, verified.strategy)
+      : null;
   const mayStart =
     verified &&
     verified.sessionStatus !== "active" &&
@@ -457,16 +461,24 @@ export function PaperPerpetualControls({
                     <Button
                       variant="outline"
                       disabled={
-                        !scanFresh || pending || !!review || marketScan.candidates.length === 0
+                        !scanFresh || pending || !!review || !suggestedCryptoMarkets?.symbols.length
                       }
                       onClick={() =>
-                        applyScannedSymbols(
-                          marketScan.candidates.slice(0, 8).map((item) => item.market.symbol),
-                        )
+                        applyScannedSymbols(suggestedCryptoMarkets?.symbols ?? [])
                       }
                     >
-                      Выбрать топ-8 по ликвидности
+                      Подобрать криптовалюты для моего профиля
                     </Button>
+                    {suggestedCryptoMarkets && (
+                      <p className="text-xs text-muted-foreground">
+                        Подбор для профиля «{verified?.strategy}»: пригодных криптопар{" "}
+                        {suggestedCryptoMarkets.eligibleCount}, предложено{" "}
+                        {suggestedCryptoMarkets.symbols.length}. Не классифицированы как
+                        криптовалюты: {suggestedCryptoMarkets.unclassifiedCount}. Это отбор
+                        качества рынка, а не прогноз доходности. После выбора понадобится
+                        отдельное подтверждение запуска.
+                      </p>
+                    )}
                     <label className="block text-sm" htmlFor="futures-market-search">
                       Поиск среди прошедших фильтр
                     </label>
