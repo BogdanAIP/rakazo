@@ -76,7 +76,9 @@ function feeSummary(status: PaperPerpetualWorkspaceStatus | null, instruments: s
     "Тариф симуляции: maker " + rates("makerFeeRate") + ", taker " + rates("takerFeeRate") + "."
   );
 }
+type ResearchMode = "model" | "chatgpt-r";
 type Review = {
+  researchMode: ResearchMode;
   preparation: Extract<PaperPerpetualPreparation, { status: "ready" }>;
   instruments: string[];
   duration: number;
@@ -101,6 +103,7 @@ export function PaperPerpetualControls({
   const [leverage, setLeverage] = useState(1);
   const [limits, setLimits] = useState<PaperVenueLeverageLimits[]>([]);
   const [duration, setDuration] = useState(20160);
+  const [researchMode, setResearchMode] = useState<ResearchMode>("chatgpt-r");
   const [review, setReview] = useState<Review | null>(null);
   const [closeReview, setCloseReview] = useState(false);
   const [pending, setPending] = useState(false);
@@ -230,8 +233,8 @@ export function PaperPerpetualControls({
     setPending(true);
     setError(null);
     try {
-      const result = await rpc.trading.perpetualMarketPrepare({ ledgerId });
-      if (result.status === "ready") setReview({ preparation: result, instruments, duration });
+      const result = await rpc.trading.perpetualMarketPrepare({ ledgerId, researchMode });
+      if (result.status === "ready") setReview({ preparation: result, instruments, duration, researchMode });
       else
         setError(
           result.reason === "engine_not_configured"
@@ -246,7 +249,7 @@ export function PaperPerpetualControls({
       setPending(false);
     }
   }
-  async function command(action: PaperPerpetualCommand["action"]) {
+  async function command(action: Exclude<PaperPerpetualCommand["action"], "submit_chatgpt_proposal">) {
     if (!status || pending) return;
     const base = { ledgerId, commandId: crypto.randomUUID(), expectedRevision: status.revision };
     let input: PaperPerpetualCommand;
@@ -256,6 +259,7 @@ export function PaperPerpetualControls({
         ...base,
         action,
         venue: "okx",
+        researchMode: review.researchMode,
         instruments: review.instruments,
         durationMinutes: review.duration,
         protectionMinutes: 1440,
