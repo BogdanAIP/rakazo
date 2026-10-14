@@ -560,8 +560,8 @@ export function PaperPerpetualControls({
               />
               {selectedSymbols.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  Сначала отсканируйте рынок и подберите криптовалюты для этого счёта.
-                  Проверка плеча и подготовка сессии станут доступны после выбора.
+                  Сначала отсканируйте рынок и подберите криптовалюты для этого счёта. Проверка
+                  плеча и подготовка сессии станут доступны после выбора.
                 </p>
               )}
               <p className="text-xs text-muted-foreground">
