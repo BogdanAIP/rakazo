@@ -227,6 +227,18 @@ export async function handlePerpetualPaperWake(
       ) {
         throw new Error("Closed market history is stale");
       }
+      const fromChatgptR = current.control.researchMode === "chatgpt-r";
+      const submitted = current.control.pendingChatgptProposal;
+      if (fromChatgptR) {
+        // No model call, no background prompt and no entry without an explicit
+        // authenticated owner submission for this still-approved PAPER session.
+        decision =
+          submitted &&
+          Date.parse(submitted.expiresAt) > current.now.getTime() &&
+          Date.parse(submitted.submittedAt) <= current.now.getTime()
+            ? submitted.decision
+            : { kind: "no_trade", reason: "Нет действующего предложения ChatGPT через R" };
+      } else {
       failure = "model_unavailable";
       // Each PAPER account owns its dedicated bot, so resolve that bot's model
       // selection instead of silently falling back to the space-wide default.
@@ -307,6 +319,7 @@ export async function handlePerpetualPaperWake(
         schema: z.toJSONSchema(PaperPerpetualDecisionSchema),
       });
       decision = PaperPerpetualDecisionSchema.parse(result);
+      }
       if (
         !deps.engine &&
         (decision.kind === "reduce" ||
@@ -328,7 +341,13 @@ export async function handlePerpetualPaperWake(
       researchKey,
       snapshots,
       decision,
-      model ? { provider: model.provider, modelId: model.id } : undefined,
+      current.control.researchMode === "chatgpt-r" &&
+      current.control.pendingChatgptProposal &&
+      Date.parse(current.control.pendingChatgptProposal.expiresAt) > current.now.getTime()
+        ? { provider: "chatgpt-r-submission", modelId: "external-unattested" }
+        : model
+          ? { provider: model.provider, modelId: model.id }
+          : undefined,
     );
     // A new or pending intent still needs a post-submission executable book.
     // No-trade native wakes can reuse the already-committed protection evidence.
