@@ -396,7 +396,9 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
     );
     await expect(page.locator("#futures-pairs")).toHaveValue("");
     await page.getByRole("button", { name: "Сканировать фьючерсы OKX" }).click();
-    await expect(page.getByRole("button", { name: "Подобрать криптовалюты для моего профиля" })).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: "Подобрать криптовалюты для моего профиля" }),
+    ).toBeEnabled();
     await page.getByRole("button", { name: "Подобрать криптовалюты для моего профиля" }).click();
     await expect(page.locator("#futures-pairs")).toHaveValue(
       "BTC-USDT-SWAP, ETH-USDT-SWAP, SOL-USDT-SWAP",

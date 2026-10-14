@@ -77,12 +77,20 @@ describe("safe PAPER futures pre-session crypto shortlist", () => {
 
   it("rejects stale or future discovery and never falls back to all symbols", () => {
     const markets = [candidate("BTC", "200000000")];
-    expect(suggestPaperPerpetualCryptoUniverse(
-      scan(markets, new Date(NOW.getTime() - 91_000).toISOString()), "aggressive", NOW,
-    )).toMatchObject({ symbols: [], stale: true });
-    expect(suggestPaperPerpetualCryptoUniverse(
-      scan(markets, new Date(NOW.getTime() + 3_000).toISOString()), "aggressive", NOW,
-    )).toMatchObject({ symbols: [], stale: true });
+    expect(
+      suggestPaperPerpetualCryptoUniverse(
+        scan(markets, new Date(NOW.getTime() - 91_000).toISOString()),
+        "aggressive",
+        NOW,
+      ),
+    ).toMatchObject({ symbols: [], stale: true });
+    expect(
+      suggestPaperPerpetualCryptoUniverse(
+        scan(markets, new Date(NOW.getTime() + 3_000).toISOString()),
+        "aggressive",
+        NOW,
+      ),
+    ).toMatchObject({ symbols: [], stale: true });
     expect(suggestPaperPerpetualCryptoUniverse(scan([]), "conservative", NOW)).toMatchObject({
       symbols: [],
       stale: false,
@@ -95,7 +103,10 @@ describe("safe PAPER futures pre-session crypto shortlist", () => {
       candidate("ETH", "30000000", 8.1),
       candidate("SOL", "29999999", 2),
       candidate("ADA", "40000000", 1, "USD"),
-      { ...candidate("XRP", "60000000"), ticker: { ...candidate("XRP", "60000000").ticker, symbol: "ETH-USDT-SWAP" } },
+      {
+        ...candidate("XRP", "60000000"),
+        ticker: { ...candidate("XRP", "60000000").ticker, symbol: "ETH-USDT-SWAP" },
+      },
       candidate("BTC", "30000000", 8),
     ];
     const out = suggestPaperPerpetualCryptoUniverse(scan(markets), "conservative", NOW);
@@ -108,8 +119,14 @@ describe("safe PAPER futures pre-session crypto shortlist", () => {
     const markets = bases.reverse().map((base) => candidate(base, "50000000"));
     const out = suggestPaperPerpetualCryptoUniverse(scan(markets), "conservative", NOW);
     expect(out.symbols).toEqual([
-      "ADA-USDT-SWAP", "AVAX-USDT-SWAP", "BNB-USDT-SWAP", "BTC-USDT-SWAP",
-      "DOT-USDT-SWAP", "ETH-USDT-SWAP", "LINK-USDT-SWAP", "LTC-USDT-SWAP",
+      "ADA-USDT-SWAP",
+      "AVAX-USDT-SWAP",
+      "BNB-USDT-SWAP",
+      "BTC-USDT-SWAP",
+      "DOT-USDT-SWAP",
+      "ETH-USDT-SWAP",
+      "LINK-USDT-SWAP",
+      "LTC-USDT-SWAP",
     ]);
     expect(out.eligibleCount).toBe(10);
   });

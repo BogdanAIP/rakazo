@@ -8,20 +8,61 @@ import type { PaperExperimentStrategy } from "./trading-paper-experiments.js";
  * This list does not assert listing, tradability, profitability or risk suitability.
  */
 const CORE_CRYPTO = new Set([
-  "BTC", "ETH", "SOL", "XRP", "BNB", "LTC", "LINK", "ADA",
-  "AVAX", "DOT", "BCH", "TRX", "XLM",
+  "BTC",
+  "ETH",
+  "SOL",
+  "XRP",
+  "BNB",
+  "LTC",
+  "LINK",
+  "ADA",
+  "AVAX",
+  "DOT",
+  "BCH",
+  "TRX",
+  "XLM",
 ]);
 const GENERAL_CRYPTO = new Set([
   ...CORE_CRYPTO,
-  "DOGE", "SUI", "NEAR", "APT", "UNI", "ATOM", "AAVE", "FIL",
-  "HBAR", "ETC", "ICP", "INJ", "OP", "ARB", "SEI", "TIA",
-  "ALGO", "VET", "STX", "GRT", "LDO", "ENS", "CRV",
-  "DYDX", "JUP", "PENDLE", "TAO", "ONDO",
+  "DOGE",
+  "SUI",
+  "NEAR",
+  "APT",
+  "UNI",
+  "ATOM",
+  "AAVE",
+  "FIL",
+  "HBAR",
+  "ETC",
+  "ICP",
+  "INJ",
+  "OP",
+  "ARB",
+  "SEI",
+  "TIA",
+  "ALGO",
+  "VET",
+  "STX",
+  "GRT",
+  "LDO",
+  "ENS",
+  "CRV",
+  "DYDX",
+  "JUP",
+  "PENDLE",
+  "TAO",
+  "ONDO",
 ]);
 const HIGH_VARIANCE_CRYPTO = new Set([
   ...GENERAL_CRYPTO,
-  "PEPE", "SHIB", "WIF", "BONK", "FLOKI", "BOME",
-  "POPCAT", "FARTCOIN",
+  "PEPE",
+  "SHIB",
+  "WIF",
+  "BONK",
+  "FLOKI",
+  "BOME",
+  "POPCAT",
+  "FARTCOIN",
 ]);
 
 const POLICIES = {
@@ -51,12 +92,8 @@ export function suggestPaperPerpetualCryptoUniverse(
   });
   const at = Date.parse(snapshot.fetchedAt);
   const today = now.getTime();
-  if (
-    !Number.isFinite(at) ||
-    !Number.isFinite(today) ||
-    at > today + 2_000 ||
-    today - at > 90_000
-  ) return blank(true);
+  if (!Number.isFinite(at) || !Number.isFinite(today) || at > today + 2_000 || today - at > 90_000)
+    return blank(true);
 
   const policy = POLICIES[strategy];
   if (!policy) return blank(true);
@@ -95,10 +132,9 @@ export function suggestPaperPerpetualCryptoUniverse(
     if (!results.has(market.symbol)) results.set(market.symbol, { turnover, spread: spreadBps });
   }
   const symbols = [...results]
-    .sort((a, b) =>
-      b[1].turnover - a[1].turnover ||
-      a[1].spread - b[1].spread ||
-      a[0].localeCompare(b[0]),
+    .sort(
+      (a, b) =>
+        b[1].turnover - a[1].turnover || a[1].spread - b[1].spread || a[0].localeCompare(b[0]),
     )
     .slice(0, 8)
     .map(([symbol]) => symbol);

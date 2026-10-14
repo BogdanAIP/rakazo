@@ -5,7 +5,11 @@ import type {
   PaperVenueLeverageLimits,
   TradingScanOutput,
 } from "@rakazo/contracts";
-import { getPaperExperimentPreset, PAPER_OKX_LV1_FEES, suggestPaperPerpetualCryptoUniverse } from "@rakazo/core";
+import {
+  getPaperExperimentPreset,
+  PAPER_OKX_LV1_FEES,
+  suggestPaperPerpetualCryptoUniverse,
+} from "@rakazo/core";
 import { Button } from "@rakazo/ui-web";
 import { useEffect, useState } from "react";
 import { rpc } from "../lib/rpc";
@@ -463,9 +467,7 @@ export function PaperPerpetualControls({
                       disabled={
                         !scanFresh || pending || !!review || !suggestedCryptoMarkets?.symbols.length
                       }
-                      onClick={() =>
-                        applyScannedSymbols(suggestedCryptoMarkets?.symbols ?? [])
-                      }
+                      onClick={() => applyScannedSymbols(suggestedCryptoMarkets?.symbols ?? [])}
                     >
                       Подобрать криптовалюты для моего профиля
                     </Button>
@@ -474,9 +476,9 @@ export function PaperPerpetualControls({
                         Подбор для профиля «{verified?.strategy}»: пригодных криптопар{" "}
                         {suggestedCryptoMarkets.eligibleCount}, предложено{" "}
                         {suggestedCryptoMarkets.symbols.length}. Не классифицированы как
-                        криптовалюты: {suggestedCryptoMarkets.unclassifiedCount}. Это отбор
-                        качества рынка, а не прогноз доходности. После выбора понадобится
-                        отдельное подтверждение запуска.
+                        криптовалюты: {suggestedCryptoMarkets.unclassifiedCount}. Это отбор качества
+                        рынка, а не прогноз доходности. После выбора понадобится отдельное
+                        подтверждение запуска.
                       </p>
                     )}
                     <label className="block text-sm" htmlFor="futures-market-search">
