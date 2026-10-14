@@ -337,7 +337,7 @@ export async function commandOwnedPerpetualWorkspace(
           ).toISOString();
           control.instruments = input.instruments;
           control.source = input.source;
-          control.researchMode = input.researchMode;
+          control.researchMode = input.researchMode ?? "model";
           control.pendingChatgptProposal = null;
           control.plans = [];
           control.lastResearchAt = null;
@@ -597,6 +597,7 @@ export async function pausePerpetualAfterRestart(
         if (control.sessionStatus !== "active") return;
         control.sessionStatus = "paused";
         control.orders = [];
+        control.pendingChatgptProposal = null;
         control.runtimeError = "restart_paused";
         const now = await perpetualDatabaseClock(tx);
         const { state } = await recoverPerpetualPaperInTransaction(tx, owner, ledgerId);
