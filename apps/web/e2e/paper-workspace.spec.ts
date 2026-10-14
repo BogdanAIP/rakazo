@@ -353,21 +353,6 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
         where: { spaceId: ledger.spaceId, ownerUserId: ledger.ownerUserId },
       }),
     ).toBe(3);
-    await page.getByRole("button", { name: "Проверить плечо", exact: true }).click();
-    await expect(page.getByLabel("Плечо", { exact: true })).toBeVisible();
-    await page.getByLabel("Плечо", { exact: true }).fill("21");
-    await expect(page.getByRole("button", { name: "Сохранить плечо" })).toBeDisabled();
-    await page.getByLabel("Плечо", { exact: true }).fill("3");
-    await page.getByRole("button", { name: "Сохранить плечо" }).click();
-    await expect(page.getByText("Плечо новых входов: до 3×", { exact: true })).toBeVisible();
-    expect(
-      await readOwnedPerpetualWorkspace(
-        db.prisma,
-        { spaceId: ledger.spaceId, userId: ledger.ownerUserId },
-        ledgerId,
-      ),
-    ).toMatchObject({ maxLeverage: 3 });
-    await captureScreenshot(page, testInfo, "futures-leverage-setting");
     // The broad OKX market is publicly scanned; the fixture keeps E2E independent of exchange uptime.
     const marketsCapturedAt = new Date().toISOString();
     const marketCandidates = ["BTC", "ETH", "SOL"].map((base, index) => {
@@ -421,6 +406,21 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
       page.getByRole("region", { name: "Подходящие бессрочные фьючерсы" }),
     ).toContainText("ETH-USDT-SWAP");
     await page.unroute("**/rpc/trading/list");
+    await page.getByRole("button", { name: "Проверить плечо", exact: true }).click();
+    await expect(page.getByLabel("Плечо", { exact: true })).toBeVisible();
+    await page.getByLabel("Плечо", { exact: true }).fill("21");
+    await expect(page.getByRole("button", { name: "Сохранить плечо" })).toBeDisabled();
+    await page.getByLabel("Плечо", { exact: true }).fill("3");
+    await page.getByRole("button", { name: "Сохранить плечо" }).click();
+    await expect(page.getByText("Плечо новых входов: до 3×", { exact: true })).toBeVisible();
+    expect(
+      await readOwnedPerpetualWorkspace(
+        db.prisma,
+        { spaceId: ledger.spaceId, userId: ledger.ownerUserId },
+        ledgerId,
+      ),
+    ).toMatchObject({ maxLeverage: 3 });
+    await captureScreenshot(page, testInfo, "futures-leverage-setting");
     await page.getByLabel("Длительность новых входов").selectOption("15");
     await page.getByRole("button", { name: "Проверить запуск фьючерсов" }).click();
     await expect(page.getByLabel("Проверка запуска фьючерсов")).toBeVisible();
