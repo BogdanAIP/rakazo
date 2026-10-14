@@ -368,6 +368,59 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
       ),
     ).toMatchObject({ maxLeverage: 3 });
     await captureScreenshot(page, testInfo, "futures-leverage-setting");
+    // The broad OKX market is publicly scanned; the fixture keeps E2E independent of exchange uptime.
+    const marketsCapturedAt = new Date().toISOString();
+    const marketCandidates = ["BTC", "ETH", "SOL"].map((base, index) => {
+      const symbol = base + "-USDT-SWAP";
+      return {
+        market: {
+          venue: "okx",
+          kind: "perpetual",
+          symbol,
+          base,
+          quote: "USDT",
+          status: "active",
+          priceIncrement: "0.01",
+          quantityIncrement: "0.001",
+          minNotional: null,
+          expiryAt: null,
+        },
+        ticker: {
+          venue: "okx",
+          kind: "perpetual",
+          symbol,
+          observedAt: marketsCapturedAt,
+          fetchedAt: marketsCapturedAt,
+          bid: "100",
+          ask: "100.01",
+          quoteVolume24h: String(100_000_000 - index * 20_000_000),
+        },
+        spreadBps: 1,
+      };
+    });
+    await page.route("**/rpc/trading/list", (route) =>
+      route.fulfill({
+        json: {
+          json: {
+            fetchedAt: new Date().toISOString(),
+            candidates: marketCandidates,
+            excluded: [],
+          },
+        },
+      }),
+    );
+    await expect(page.locator("#futures-pairs")).toHaveValue("");
+    await page.getByRole("button", { name: "Сканировать фьючерсы OKX" }).click();
+    await expect(page.getByRole("button", { name: "Выбрать топ-8 по ликвидности" })).toBeEnabled();
+    await page.getByRole("button", { name: "Выбрать топ-8 по ликвидности" }).click();
+    await expect(page.locator("#futures-pairs")).toHaveValue(
+      "BTC-USDT-SWAP, ETH-USDT-SWAP, SOL-USDT-SWAP",
+    );
+    await page.getByLabel("Поиск среди прошедших фильтр").fill("ETH");
+    await expect(page.getByRole("region", { name: "Подходящие бессрочные фьючерсы" })).toContainText(
+      "ETH-USDT-SWAP",
+    );
+    await page.unroute("**/rpc/trading/list");
     await page.getByLabel("Длительность новых входов").selectOption("15");
     await page.getByRole("button", { name: "Проверить запуск фьючерсов" }).click();
     await expect(page.getByLabel("Проверка запуска фьючерсов")).toBeVisible();
