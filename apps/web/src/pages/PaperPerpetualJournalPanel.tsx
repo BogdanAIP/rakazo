@@ -84,6 +84,7 @@ export function PaperPerpetualJournalPanel() {
   const [olderPending, setOlderPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const selectedLedger = useRef<string | null>(null);
+  const journalScopeLedger = useRef<string | null>(null);
   const journalEpoch = useRef(0);
   selectedLedger.current = ledgerId;
 
@@ -110,10 +111,16 @@ export function PaperPerpetualJournalPanel() {
   }, [refreshId]);
 
   useEffect(() => {
-    journalEpoch.current += 1;
-    setJournal(null);
-    setEvents([]);
-    setCursor(null);
+    // refreshId is an account-status refresh, not a change of account.
+    // Unmounting the controls after every leverage adjustment would erase
+    // the user's selected market universe before the Start review.
+    if (journalScopeLedger.current !== ledgerId) {
+      journalScopeLedger.current = ledgerId;
+      journalEpoch.current += 1;
+      setJournal(null);
+      setEvents([]);
+      setCursor(null);
+    }
     if (!ledgerId) return;
     let active = true;
     let fetching = false;
@@ -216,7 +223,10 @@ export function PaperPerpetualJournalPanel() {
       setCreating(false);
     }
   }
-  const verified = journal?.status === "verified" ? journal : null;
+  // Never render stale financial data or controls from the previously
+  // selected ledger during the first frame of a ledger switch.
+  const verified =
+    journal?.status === "verified" && journal.ledgerId === ledgerId ? journal : null;
   return (
     <div
       className="space-y-5"
