@@ -344,6 +344,18 @@ export function PaperPerpetualControls({
               {errors[verified.runtimeError] ?? "Сессия требует проверки. Новые входы остановлены."}
             </p>
           )}
+          <p className="text-sm text-muted-foreground">
+            Источник решений:{" "}
+            {verified.researchMode === "chatgpt-r"
+              ? "ChatGPT через R (ручная отправка)"
+              : "модель Rakazo"}.
+          </p>
+          {verified.pendingChatgptProposal && (
+            <p role="status" className="text-sm">
+              Ожидает проверки PAPER-worker: {verified.pendingChatgptProposal.kind} · до{" "}
+              {dateTime(verified.pendingChatgptProposal.expiresAt)}.
+            </p>
+          )}
           {verified.lastDecision && (
             <section className="rounded-xl bg-muted p-3 text-sm" aria-label="Последнее решение ИИ">
               <p className="font-medium">
@@ -572,6 +584,23 @@ export function PaperPerpetualControls({
                 Список можно уточнить вручную. Сканер ничего не покупает и не запускает. Для входов
                 по-прежнему требуется отдельное подтверждение PAPER-сессии.
               </p>
+              <label className="block text-sm" htmlFor="futures-research-mode">
+                Источник торговых решений
+              </label>
+              <select
+                id="futures-research-mode"
+                className="w-full rounded-lg border border-border bg-background p-2 text-sm"
+                value={researchMode}
+                disabled={pending || !!review}
+                onChange={(e) => setResearchMode(e.target.value as ResearchMode)}
+              >
+                <option value="chatgpt-r">ChatGPT через R · предложения вручную</option>
+                <option value="model">Модель Rakazo · автономное исследование</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Без нового предложения ChatGPT/R бот не открывает позиции. Защита уже открытых
+                позиций остаётся у PAPER-движка.
+              </p>
               <label className="block text-sm" htmlFor="futures-duration">
                 Длительность новых входов
               </label>
@@ -606,10 +635,10 @@ export function PaperPerpetualControls({
                     {review.preparation.name}.
                   </p>
                   <p className="text-sm">
-                    Фоновый PAPER-worker пока использует модель, подключённую к Rakazo. ChatGPT
-                    через R предназначен для интерактивного анализа рынка и журнала, но не заменяет
-                    автономный пяти-минутный цикл. Каждый вход проходит лимиты счёта. Проверка
-                    позиций — раз в минуту, анализ — раз в 5 минут.
+                    {review.researchMode === "chatgpt-r"
+                      ? "ChatGPT/R: предложения отправляются вручную через R; без них новых входов не будет."
+                      : "Модель Rakazo: исследование выполняется автономно по расписанию."}
+                    {" "}Все решения проходят штатный Risk Manager. Защитные проверки — раз в минуту.
                   </p>
                   <p className="text-sm">
                     После остановки входов защитные выходы разрешены ещё 24 часа. Окончание срока не
