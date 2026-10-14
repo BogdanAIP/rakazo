@@ -116,7 +116,7 @@ export const PaperPerpetualCommandSchema = z.discriminatedUnion("action", [
     .object({
       ...Base,
       action: z.literal("start"),
-      researchMode: z.enum(["model", "chatgpt-r"]).default("model"),
+      researchMode: z.enum(["model", "chatgpt-r"]).optional(),
       venue: z.literal("okx"),
       instruments: z
         .array(Instrument)
