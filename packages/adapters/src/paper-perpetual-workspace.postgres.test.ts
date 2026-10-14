@@ -382,6 +382,23 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     };
   }
 
+  it("never calls a model or creates a trade without a fresh ChatGPT/R submission", async () => {
+    const id = await account();
+    await start(id, undefined, ["BTC-USDT-SWAP"], "chatgpt-r");
+    modelFails = true;
+    decision = proposal("long");
+    await handlePerpetualPaperWake(worker(), await payload(id, true));
+    expect(calls).toHaveLength(0);
+    expect((await state(id)).openPositions).toHaveLength(0);
+    const status = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+    expect(status).toMatchObject({
+      researchMode: "chatgpt-r",
+      sessionStatus: "active",
+      runtimeError: null,
+      pendingChatgptProposal: null,
+    });
+  });
+
   it("only accepts owner ChatGPT/R research for an active, unchanged PAPER session", async () => {
     const id = await account();
     const commandId = randomUUID();
