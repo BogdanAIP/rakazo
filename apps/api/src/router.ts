@@ -70,6 +70,7 @@ import {
   fetchOkxPaperPerpetualSnapshot,
   fetchOkxPublicCatalog,
   fetchOkxPublicPerpContext,
+  fetchOkxPublicPerpetualTickers,
   fetchOkxPublicSpotTickers,
   forgetBotSecret,
   getBotSecretMetadata,
@@ -1162,12 +1163,23 @@ export function createRouter(deps: RouterDeps) {
       list: authed.trading.list.handler(async ({ input }) => {
         if (input.venue === "okx") {
           const catalog = await fetchOkxPublicCatalog();
-          const markets = catalog.markets.filter((market) => market.kind === "spot");
-          const tickers = await fetchOkxPublicSpotTickers(markets);
+          const markets = catalog.markets.filter(
+            (market) =>
+              market.kind === input.kind && (input.kind !== "perpetual" || market.quote === "USDT"),
+          );
+          const tickers =
+            input.kind === "perpetual"
+              ? await fetchOkxPublicPerpetualTickers(markets)
+              : await fetchOkxPublicSpotTickers(markets);
           return {
             fetchedAt: new Date().toISOString(),
             ...scanTradingMarkets(markets, tickers, input, new Date()),
           };
+        }
+        if (input.kind === "perpetual") {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Perpetual liquidity scanning currently supports OKX USDT-SWAP only",
+          });
         }
         const snapshot = await fetchBingxPublicSpotSnapshot();
         return {
