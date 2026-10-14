@@ -204,7 +204,11 @@ async function fetchOkxPublicTickers(
         (type === "SWAP" && (market.quote !== "USDT" || !market.symbol.endsWith("-USDT-SWAP"))),
     )
   ) {
-    throw new Error("OKX tickers require matching market type and USDT perpetuals only");
+    throw new Error(
+      type === "SPOT"
+        ? "OKX spot tickers require OKX spot markets only"
+        : "OKX perpetual tickers require matching USDT perpetuals only",
+    );
   }
   const known = new Set(
     markets.filter((market) => market.status === "active").map((m) => m.symbol),
