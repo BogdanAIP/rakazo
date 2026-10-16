@@ -32,6 +32,7 @@ import {
   readPerpetualWake,
   recordPerpetualResearchTick,
 } from "@rakazo/db";
+import { getLogger } from "@rakazo/logging";
 import { z } from "zod";
 import { invokePaperSkillDecision } from "./paper-skill-decision.js";
 import { fetchOkxPaperPerpetualSnapshot } from "./trading-okx-perp.js";
@@ -384,7 +385,8 @@ export async function handlePerpetualPaperWake(
     await commit(researchKey, execution);
     failure = "queue_unavailable";
     await enqueueNext(deps, owner, key.ledgerId, key.revision);
-  } catch {
+  } catch (error) {
+    getLogger().error("paper perpetual wake failed", error, { "paper.failure": failure });
     if (deps.engine)
       await cancelPerpetualEngineOrders(deps.prisma, owner, key.ledgerId, deps.engine).catch(
         () => undefined,
