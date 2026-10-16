@@ -131,6 +131,28 @@ export async function fetchOkxPaperPerpetualSnapshot(
   const tiers = allTiers.filter((row) => row.tier === "1");
   if (tiers.length !== 1) throw new Error("First maintenance tier unavailable");
   const tier = tiers[0]!;
+  // OKX publishes inclusive ranges: the next tier can begin one lot after
+  // the preceding maximum. Normalize that untradeable gap to a shared boundary,
+  // where the core deliberately applies the stricter adjacent leverage limit.
+  const leverageTiers = allTiers.map((row, index) => {
+    const min = amount(toBase(row.minSz));
+    const max = amount(toBase(row.maxSz));
+    const previous = index === 0 ? 0n : amount(toBase(allTiers[index - 1]!.maxSz));
+    if (
+      max < min ||
+      max <= previous ||
+      (min !== previous && !(index > 0 && min === previous + amount(lotBase)))
+    ) {
+      throw new Error("Non-contiguous perpetual position tiers");
+    }
+    return {
+      id: row.tier,
+      minQuantityBase: format(previous),
+      maxQuantityBase: format(max),
+      maxLeverage: Number(row.maxLever),
+    };
+  });
+
   const mmr = (amount(tier.mmr) * 10000n + scale - 1n) / scale;
   if (mmr < 1n || mmr > 1000n) throw new Error("Unsupported maintenance tier");
   const [context, history] = await Promise.all([
@@ -181,12 +203,7 @@ export async function fetchOkxPaperPerpetualSnapshot(
           .update(JSON.stringify([instrument, allTiers]))
           .digest("hex"),
       observedAt: now.toISOString(),
-      tiers: allTiers.map((row) => ({
-        id: row.tier,
-        minQuantityBase: toBase(row.minSz),
-        maxQuantityBase: toBase(row.maxSz),
-        maxLeverage: Number(row.maxLever),
-      })),
+      tiers: leverageTiers,
     },
     book: {
       venue: "okx",
