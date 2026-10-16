@@ -996,7 +996,7 @@ export function createRouter(deps: RouterDeps) {
           } catch {
             return { status: "unavailable" as const, reason: "market_not_ready" as const };
           }
-          if (input.researchMode !== "chatgpt-r") {
+          if (input.researchMode !== "external") {
             try {
               if (!deps.resolvePaperResearchModel) throw new Error("Model unavailable");
               await deps.resolvePaperResearchModel(
@@ -1048,7 +1048,7 @@ export function createRouter(deps: RouterDeps) {
       ),
       perpetualWorkspaceCommand: authed.trading.perpetualWorkspaceCommand.handler(
         async ({ context, input }) => {
-          if (input.action === "start" && input.researchMode !== "chatgpt-r") {
+          if (input.action === "start" && input.researchMode !== "external") {
             if (!deps.resolvePaperResearchModel) throw new ORPCError("CONFLICT");
             await deps.resolvePaperResearchModel(
               await perpetualResearchModelScope(context.actor, input.ledgerId),

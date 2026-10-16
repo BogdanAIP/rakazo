@@ -61,7 +61,25 @@ export function parsePerpetualControl(row: {
 }): PerpetualControl {
   if (perpetualPaperHash(row.control) !== row.controlSha256)
     throw new PerpetualPaperIntegrityError("Futures control integrity failed");
-  return PerpetualControlSchema.parse(row.control);
+  // Verify legacy JSON before translating its pre-release client branding.
+  // New commands and persisted controls use only the external capability.
+  let control = row.control;
+  if (control && typeof control === "object" && !Array.isArray(control)) {
+    const value = control as Record<string, unknown>;
+    if (value.researchMode === "chatgpt-r" || "pendingChatgptProposal" in value) {
+      if ("pendingExternalProposal" in value && "pendingChatgptProposal" in value)
+        throw new PerpetualPaperIntegrityError("Conflicting external proposal aliases");
+      const { pendingChatgptProposal, ...rest } = value;
+      control = {
+        ...rest,
+        researchMode: value.researchMode === "chatgpt-r" ? "external" : value.researchMode,
+        ...(Object.hasOwn(value, "pendingChatgptProposal")
+          ? { pendingExternalProposal: pendingChatgptProposal }
+          : {}),
+      };
+    }
+  }
+  return PerpetualControlSchema.parse(control);
 }
 export async function perpetualDatabaseClock(tx: Prisma.TransactionClient): Promise<Date> {
   const [row] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`;
@@ -136,7 +154,7 @@ const initialControl = (): PerpetualControl => ({
   instruments: [],
   source: null,
   researchMode: "model",
-  pendingChatgptProposal: null,
+  pendingExternalProposal: null,
   orders: [],
   plans: [],
   closeAll: false,
@@ -260,23 +278,23 @@ export async function commandOwnedPerpetualWorkspace(
           throw new Error("Futures session changed; refresh the account");
         const now = await perpetualDatabaseClock(tx);
         const clock = now.getTime();
-        if (input.action === "submit_chatgpt_proposal") {
+        if (input.action === "submit_external_proposal") {
           if (
             control.sessionStatus !== "active" ||
-            control.researchMode !== "chatgpt-r" ||
+            control.researchMode !== "external" ||
             !control.source ||
             !control.expiresAt ||
             Date.parse(control.expiresAt) <= clock ||
             control.closeAll ||
             control.orders.length
           ) {
-            throw new Error("ChatGPT/R proposal requires an active, idle PAPER research session");
+            throw new Error("External proposal requires an active, idle PAPER research session");
           }
           if (
-            control.pendingChatgptProposal &&
-            Date.parse(control.pendingChatgptProposal.expiresAt) > clock
+            control.pendingExternalProposal &&
+            Date.parse(control.pendingExternalProposal.expiresAt) > clock
           )
-            throw new Error("Previous ChatGPT/R proposal is still pending");
+            throw new Error("Previous External proposal is still pending");
           const decision = input.decision;
           if (decision.kind === "proposal" && !control.instruments.includes(decision.instrument))
             throw new Error("Proposal instrument outside owner-approved session markets");
@@ -286,8 +304,8 @@ export async function commandOwnedPerpetualWorkspace(
               decision.kind === "tighten_stop") &&
             !state.openPositions.some((position) => position.positionId === decision.positionId)
           )
-            throw new Error("ChatGPT/R proposal references an unknown open position");
-          control.pendingChatgptProposal = {
+            throw new Error("External proposal references an unknown open position");
+          control.pendingExternalProposal = {
             commandId: input.commandId,
             submittedAt: now.toISOString(),
             expiresAt: new Date(clock + 120_000).toISOString(),
@@ -316,7 +334,7 @@ export async function commandOwnedPerpetualWorkspace(
             if (result.status !== "allowed") throw new Error("Futures leverage setting refused");
           }
           control.maxLeverage = input.maxLeverage;
-          control.pendingChatgptProposal = null;
+          control.pendingExternalProposal = null;
           control.orders = [];
           control.lastResearchAt = null;
         } else if (input.action === "start") {
@@ -338,7 +356,7 @@ export async function commandOwnedPerpetualWorkspace(
           control.instruments = input.instruments;
           control.source = input.source;
           control.researchMode = input.researchMode ?? "model";
-          control.pendingChatgptProposal = null;
+          control.pendingExternalProposal = null;
           control.plans = [];
           control.lastResearchAt = null;
         } else if (input.action === "protect") {
@@ -350,7 +368,7 @@ export async function commandOwnedPerpetualWorkspace(
             ),
           ).toISOString();
         } else {
-          control.pendingChatgptProposal = null;
+          control.pendingExternalProposal = null;
           control.sessionStatus = input.action === "pause" ? "paused" : "ended";
           control.orders = [];
           if (input.action !== "close_all" && control.protectionExpiresAt) {
@@ -448,12 +466,12 @@ export async function readOwnedPerpetualWorkspace(
           runtimeError: control.runtimeError,
           instruments: control.instruments,
           researchMode: control.researchMode,
-          pendingChatgptProposal: control.pendingChatgptProposal
+          pendingExternalProposal: control.pendingExternalProposal
             ? {
-                commandId: control.pendingChatgptProposal.commandId,
-                submittedAt: control.pendingChatgptProposal.submittedAt,
-                expiresAt: control.pendingChatgptProposal.expiresAt,
-                kind: control.pendingChatgptProposal.decision.kind,
+                commandId: control.pendingExternalProposal.commandId,
+                submittedAt: control.pendingExternalProposal.submittedAt,
+                expiresAt: control.pendingExternalProposal.expiresAt,
+                kind: control.pendingExternalProposal.decision.kind,
               }
             : null,
           lastDecision: control.lastDecision,
@@ -503,7 +521,7 @@ export async function readOwnedPerpetualWorkspace(
           runtimeError: "integrity_blocked",
           instruments: [],
           researchMode: "model" as const,
-          pendingChatgptProposal: null,
+          pendingExternalProposal: null,
           lastDecision: null,
           openOrders: [],
           pendingClose: false,
@@ -597,7 +615,7 @@ export async function pausePerpetualAfterRestart(
         if (control.sessionStatus !== "active") return;
         control.sessionStatus = "paused";
         control.orders = [];
-        control.pendingChatgptProposal = null;
+        control.pendingExternalProposal = null;
         control.runtimeError = "restart_paused";
         const now = await perpetualDatabaseClock(tx);
         const { state } = await recoverPerpetualPaperInTransaction(tx, owner, ledgerId);
@@ -664,15 +682,15 @@ export async function recordPerpetualResearchTick(
             throw new Error("Futures research integrity failed");
           return existing;
         }
-        if (model?.provider === "chatgpt-r-submission") {
-          const pending = control.pendingChatgptProposal;
+        if (model?.provider === "external-proposal") {
+          const pending = control.pendingExternalProposal;
           if (
-            control.researchMode !== "chatgpt-r" ||
+            control.researchMode !== "external" ||
             !pending ||
             Date.parse(pending.expiresAt) <= clock.getTime() ||
             perpetualPaperHash(pending.decision) !== perpetualPaperHash(decision)
           ) {
-            throw new Error("Expired or changed ChatGPT/R proposal refused before risk gate");
+            throw new Error("Expired or changed External proposal refused before risk gate");
           }
         }
         if (decision.kind !== "no_trade") {
@@ -686,12 +704,12 @@ export async function recordPerpetualResearchTick(
             return null;
           await verifyPerpetualSource(tx, owner, control.source);
         }
-        if (model?.provider === "chatgpt-r-submission") {
+        if (model?.provider === "external-proposal") {
           await savePerpetualControl(
             tx,
             key.ledgerId,
             row.revision,
-            { ...control, pendingChatgptProposal: null },
+            { ...control, pendingExternalProposal: null },
             row.nextScheduledFor,
           );
         }

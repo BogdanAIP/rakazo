@@ -116,7 +116,7 @@ export const PaperPerpetualCommandSchema = z.discriminatedUnion("action", [
     .object({
       ...Base,
       action: z.literal("start"),
-      researchMode: z.enum(["model", "chatgpt-r"]).optional(),
+      researchMode: z.enum(["model", "external"]).optional(),
       venue: z.literal("okx"),
       instruments: z
         .array(Instrument)
@@ -141,14 +141,14 @@ export const PaperPerpetualCommandSchema = z.discriminatedUnion("action", [
       maxLeverage: z.number().int().positive().safe(),
     })
     .strict(),
-  /** An authenticated owner submits research to an already active chatgpt-r PAPER session.
+  /** An authenticated owner submits research to an already active external PAPER session.
    * Submission is not a trade: the scheduled worker must capture fresh public books
    * and independently enforce the normal Nautilus risk and policy gates.
    */
   z
     .object({
       ...Base,
-      action: z.literal("submit_chatgpt_proposal"),
+      action: z.literal("submit_external_proposal"),
       decision: PaperPerpetualDecisionSchema,
     })
     .strict(),
@@ -176,8 +176,8 @@ export const PaperPerpetualWorkspaceStatusSchema = z.object({
   protectionExpiresAt: IsoDate.nullable(),
   runtimeError: z.string().nullable(),
   instruments: z.array(Instrument),
-  researchMode: z.enum(["model", "chatgpt-r"]).default("model"),
-  pendingChatgptProposal: z
+  researchMode: z.enum(["model", "external"]).default("model"),
+  pendingExternalProposal: z
     .object({
       commandId: z.string().uuid(),
       submittedAt: IsoDate,
@@ -321,8 +321,8 @@ export const PerpetualControlSchema = z
     protectionExpiresAt: IsoDate.nullable(),
     instruments: z.array(z.string()),
     source: PaperPerpetualSourceSchema.nullable(),
-    researchMode: z.enum(["model", "chatgpt-r"]).default("model"),
-    pendingChatgptProposal: z
+    researchMode: z.enum(["model", "external"]).default("model"),
+    pendingExternalProposal: z
       .object({
         commandId: z.string().uuid(),
         submittedAt: IsoDate,

@@ -81,7 +81,7 @@ export async function controlPerpetualPaperWorkspace(
   command: PaperPerpetualCommand,
 ) {
   if (
-    (command.action === "start" || command.action === "submit_chatgpt_proposal") &&
+    (command.action === "start" || command.action === "submit_external_proposal") &&
     !deps.engine &&
     process.env.NODE_ENV !== "test"
   )
@@ -232,9 +232,9 @@ export async function handlePerpetualPaperWake(
       ) {
         throw new Error("Closed market history is stale");
       }
-      const fromChatgptR = current.control.researchMode === "chatgpt-r";
-      const submitted = current.control.pendingChatgptProposal;
-      if (fromChatgptR) {
+      const fromExternal = current.control.researchMode === "external";
+      const submitted = current.control.pendingExternalProposal;
+      if (fromExternal) {
         // No model call, no background prompt and no entry without an explicit
         // authenticated owner submission for this still-approved PAPER session.
         decision =
@@ -346,10 +346,10 @@ export async function handlePerpetualPaperWake(
       researchKey,
       snapshots,
       decision,
-      current.control.researchMode === "chatgpt-r" &&
-        current.control.pendingChatgptProposal &&
-        Date.parse(current.control.pendingChatgptProposal.expiresAt) > current.now.getTime()
-        ? { provider: "chatgpt-r-submission", modelId: "external-unattested" }
+      current.control.researchMode === "external" &&
+        current.control.pendingExternalProposal &&
+        Date.parse(current.control.pendingExternalProposal.expiresAt) > current.now.getTime()
+        ? { provider: "external-proposal", modelId: "external-unattested" }
         : model
           ? { provider: model.provider, modelId: model.id }
           : undefined,

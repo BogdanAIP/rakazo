@@ -76,7 +76,7 @@ function feeSummary(status: PaperPerpetualWorkspaceStatus | null, instruments: s
     "Тариф симуляции: maker " + rates("makerFeeRate") + ", taker " + rates("takerFeeRate") + "."
   );
 }
-type ResearchMode = "model" | "chatgpt-r";
+type ResearchMode = "model" | "external";
 type Review = {
   researchMode: ResearchMode;
   preparation: Extract<PaperPerpetualPreparation, { status: "ready" }>;
@@ -103,7 +103,7 @@ export function PaperPerpetualControls({
   const [leverage, setLeverage] = useState(1);
   const [limits, setLimits] = useState<PaperVenueLeverageLimits[]>([]);
   const [duration, setDuration] = useState(20160);
-  const [researchMode, setResearchMode] = useState<ResearchMode>("chatgpt-r");
+  const [researchMode, setResearchMode] = useState<ResearchMode>("external");
   const [review, setReview] = useState<Review | null>(null);
   const [closeReview, setCloseReview] = useState(false);
   const [pending, setPending] = useState(false);
@@ -251,7 +251,7 @@ export function PaperPerpetualControls({
     }
   }
   async function command(
-    action: Exclude<PaperPerpetualCommand["action"], "submit_chatgpt_proposal">,
+    action: Exclude<PaperPerpetualCommand["action"], "submit_external_proposal">,
   ) {
     if (!status || pending) return;
     const base = { ledgerId, commandId: crypto.randomUUID(), expectedRevision: status.revision };
@@ -349,15 +349,15 @@ export function PaperPerpetualControls({
           )}
           <p className="text-sm text-muted-foreground">
             Источник решений:{" "}
-            {verified.researchMode === "chatgpt-r"
+            {verified.researchMode === "external"
               ? "ChatGPT через R (ручная отправка)"
               : "модель Rakazo"}
             .
           </p>
-          {verified.pendingChatgptProposal && (
+          {verified.pendingExternalProposal && (
             <p role="status" className="text-sm">
-              Ожидает проверки PAPER-worker: {verified.pendingChatgptProposal.kind} · до{" "}
-              {dateTime(verified.pendingChatgptProposal.expiresAt)}.
+              Ожидает проверки PAPER-worker: {verified.pendingExternalProposal.kind} · до{" "}
+              {dateTime(verified.pendingExternalProposal.expiresAt)}.
             </p>
           )}
           {verified.lastDecision && (
@@ -598,13 +598,15 @@ export function PaperPerpetualControls({
                 disabled={pending || !!review}
                 onChange={(e) => setResearchMode(e.target.value as ResearchMode)}
               >
-                <option value="chatgpt-r">ChatGPT через R · предложения вручную</option>
+                <option value="external">ChatGPT через R · предложения вручную</option>
                 <option value="model">Модель Rakazo · автономное исследование</option>
               </select>
-              <p className="text-xs text-muted-foreground">
-                Без нового предложения ChatGPT/R бот не открывает позиции. Защита уже открытых
-                позиций остаётся у PAPER-движка.
-              </p>
+              {researchMode === "external" && (
+                <p className="text-xs text-muted-foreground">
+                  Без нового предложения ChatGPT/R бот не открывает позиции. Защита уже открытых
+                  позиций остаётся у PAPER-движка.
+                </p>
+              )}
               <label className="block text-sm" htmlFor="futures-duration">
                 Длительность новых входов
               </label>
@@ -639,7 +641,7 @@ export function PaperPerpetualControls({
                     {review.preparation.name}.
                   </p>
                   <p className="text-sm">
-                    {review.researchMode === "chatgpt-r"
+                    {review.researchMode === "external"
                       ? "ChatGPT/R: предложения отправляются вручную через R; без них новых входов не будет."
                       : "Модель Rakazo: исследование выполняется автономно по расписанию."}{" "}
                     Все решения проходят штатный Risk Manager. Защитные проверки — раз в минуту.

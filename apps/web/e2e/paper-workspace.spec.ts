@@ -429,7 +429,16 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
       "BTC-USDT-SWAP, ETH-USDT-SWAP, SOL-USDT-SWAP",
     );
     await captureScreenshot(page, testInfo, "futures-leverage-setting");
-    await expect(page.getByLabel("Источник торговых решений")).toHaveValue("chatgpt-r");
+    await expect(page.getByLabel("Источник торговых решений")).toHaveValue("external");
+    await page.getByLabel("Источник торговых решений").selectOption("model");
+    await expect(
+      page.getByText(/Без нового предложения ChatGPT\/R бот не открывает позиции/),
+    ).not.toBeVisible();
+    await captureScreenshot(page, testInfo, "futures-autonomous-source");
+    await page.getByLabel("Источник торговых решений").selectOption("external");
+    await expect(
+      page.getByText(/Без нового предложения ChatGPT\/R бот не открывает позиции/),
+    ).toBeVisible();
     await page.getByLabel("Длительность новых входов").selectOption("15");
     await page.getByRole("button", { name: "Проверить запуск фьючерсов" }).click();
     await expect(page.getByLabel("Проверка запуска фьючерсов")).toBeVisible();
@@ -458,7 +467,7 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
         },
         { timeout: 20_000 },
       )
-      .toBe("chatgpt-r");
+      .toBe("external");
     // Exercise the authenticated ChatGPT/R submission path; no model or Codex OAuth is required.
     await expect
       .poll(
@@ -472,7 +481,7 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
         },
         { timeout: 20_000 },
       )
-      .toBe("chatgpt-r");
+      .toBe("external");
     const chatgptPaperSession = await readOwnedPerpetualWorkspace(
       db.prisma,
       { spaceId: ledger.spaceId, userId: ledger.ownerUserId },
@@ -483,7 +492,7 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
       headers: { "x-rakazo-space-id": ledger.spaceId },
       data: {
         json: {
-          action: "submit_chatgpt_proposal",
+          action: "submit_external_proposal",
           ledgerId,
           commandId: randomUUID(),
           expectedRevision: chatgptPaperSession!.revision,

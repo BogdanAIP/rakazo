@@ -12,6 +12,7 @@ import type {
   PaperPerpetualSnapshot,
 } from "@rakazo/contracts";
 import { buildSkillMd } from "@rakazo/core";
+import type { Prisma } from "@rakazo/db";
 import {
   commitPerpetualPaperWake,
   createDb,
@@ -324,7 +325,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     ledgerId: string,
     engine?: PaperPerpetualEngine,
     instruments = ["BTC-USDT-SWAP", "SOL-USDT-SWAP"],
-    researchMode: "model" | "chatgpt-r" = "model",
+    researchMode: "model" | "external" = "model",
   ) {
     const prepared = await readOwnedMarketPreparedResearch(db.prisma, owner, {
       semanticKey: "futures.data",
@@ -384,7 +385,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
 
   it("never calls a model or creates a trade without a fresh ChatGPT/R submission", async () => {
     const id = await account();
-    await start(id, undefined, ["BTC-USDT-SWAP"], "chatgpt-r");
+    await start(id, undefined, ["BTC-USDT-SWAP"], "external");
     modelFails = true;
     decision = proposal("long");
     await handlePerpetualPaperWake(worker(), await payload(id, true));
@@ -392,10 +393,10 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     expect((await state(id)).openPositions).toHaveLength(0);
     const status = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
     expect(status).toMatchObject({
-      researchMode: "chatgpt-r",
+      researchMode: "external",
       sessionStatus: "active",
       runtimeError: null,
-      pendingChatgptProposal: null,
+      pendingExternalProposal: null,
     });
   });
 
@@ -403,7 +404,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     const id = await account();
     const commandId = randomUUID();
     const make = (expectedRevision: number, decision: PaperPerpetualDecision) => ({
-      action: "submit_chatgpt_proposal" as const,
+      action: "submit_external_proposal" as const,
       ledgerId: id,
       commandId,
       expectedRevision,
@@ -413,9 +414,9 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       controlPerpetualPaperWorkspace(deps(), owner, make(0, { kind: "no_trade", reason: "Idle" })),
     ).rejects.toThrow("requires an active");
 
-    await start(id, undefined, ["BTC-USDT-SWAP"], "chatgpt-r");
+    await start(id, undefined, ["BTC-USDT-SWAP"], "external");
     const first = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
-    expect(first).toMatchObject({ researchMode: "chatgpt-r", pendingChatgptProposal: null });
+    expect(first).toMatchObject({ researchMode: "external", pendingExternalProposal: null });
     await expect(
       controlPerpetualPaperWorkspace(
         deps(),
@@ -429,7 +430,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       make(first.revision, { kind: "no_trade", reason: "ChatGPT: нет сигнала" }),
     );
     const queued = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
-    expect(queued.pendingChatgptProposal).toMatchObject({ commandId, kind: "no_trade" });
+    expect(queued.pendingExternalProposal).toMatchObject({ commandId, kind: "no_trade" });
     expect(queued.revision).toBe(first.revision + 1);
     await expect(
       controlPerpetualPaperWorkspace(deps(), owner, {
@@ -453,14 +454,14 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     await handlePerpetualPaperWake(worker(), await payload(id, true));
     expect(calls).toHaveLength(0);
     const result = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
-    expect(result.pendingChatgptProposal).toBeNull();
+    expect(result.pendingExternalProposal).toBeNull();
     expect(result.sessionStatus).toBe("active");
     const ticks = await db.prisma.tradingPaperPerpetualTick.findMany({
       where: { ledgerId: id, stage: "research" },
       orderBy: { recordedAt: "desc" },
       take: 1,
     });
-    expect(ticks[0]?.modelProvider).toBe("chatgpt-r-submission");
+    expect(ticks[0]?.modelProvider).toBe("external-proposal");
     expect(ticks[0]?.decision).toMatchObject({ kind: "no_trade", reason: "ChatGPT: нет сигнала" });
   });
 
@@ -473,10 +474,10 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       });
       try {
         const id = await account();
-        await start(id, engine, ["BTC-USDT-SWAP"], "chatgpt-r");
+        await start(id, engine, ["BTC-USDT-SWAP"], "external");
         const status = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
         await controlPerpetualPaperWorkspace({ ...deps(), engine }, owner, {
-          action: "submit_chatgpt_proposal",
+          action: "submit_external_proposal",
           ledgerId: id,
           commandId: randomUUID(),
           expectedRevision: status.revision,
@@ -489,9 +490,66 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         const journal = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
         expect(journal?.status).toBe("verified");
         const current = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
-        expect(current.pendingChatgptProposal).toBeNull();
-        expect(current.lastDecision?.provider).toBe("chatgpt-r-submission");
+        expect(current.pendingExternalProposal).toBeNull();
+        expect(current.lastDecision?.provider).toBe("external-proposal");
       } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "replays native effects after a transaction rollback without duplicate fills",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      let restore: (() => void) | undefined;
+      try {
+        const id = await account();
+        await start(id, engine, ["BTC-USDT-SWAP"], "external");
+        const status = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+        await controlPerpetualPaperWorkspace({ ...deps(), engine }, owner, {
+          action: "submit_external_proposal",
+          ledgerId: id,
+          commandId: randomUUID(),
+          expectedRevision: status.revision,
+          decision: proposal("long"),
+        });
+        type Callback = (tx: Prisma.TransactionClient) => Promise<unknown>;
+        const transact = db.prisma.$transaction.bind(db.prisma) as (
+          action: Callback,
+          options?: unknown,
+        ) => Promise<unknown>;
+        let rolledBack = false;
+        const spy = vi.spyOn(db.prisma, "$transaction").mockImplementation(((
+          action: Callback,
+          options?: unknown,
+        ) =>
+          transact(async (tx) => {
+            const result = await action(tx);
+            if (
+              !rolledBack &&
+              result &&
+              typeof result === "object" &&
+              "outcome" in result &&
+              result.outcome === "filled"
+            ) {
+              rolledBack = true;
+              throw Object.assign(new Error("fixture serialization rollback"), { code: "P2034" });
+            }
+            return result;
+          }, options)) as typeof db.prisma.$transaction);
+        restore = () => spy.mockRestore();
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect(rolledBack).toBe(true);
+        expect((await state(id)).openPositions).toHaveLength(1);
+        expect((await state(id)).acceptedEvents).toBe(1);
+        expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))?.runtimeError).toBeNull();
+      } finally {
+        restore?.();
         engine.dispose();
       }
     },

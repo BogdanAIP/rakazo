@@ -38,6 +38,8 @@ import {
   verifyPerpetualSource,
 } from "./trading-paper-perpetual-workspace.js";
 
+import { withTransactionRetry } from "./transaction-retry.js";
+
 const signed = (s: string) => (s.startsWith("-") ? -amount(s.slice(1)) : amount(s));
 const ns = (date: string | Date) =>
   String(BigInt(date instanceof Date ? date.getTime() : Date.parse(date)) * 1000000n);
@@ -67,7 +69,14 @@ export async function preparePerpetualEngineBeforeMarketFetch(
  * transaction commits. Never retry this transaction with an advanced process.
  * Queue retry recovers only committed batches and compares native output hashes.
  */
-export async function commitPerpetualEngineWake(
+// Retry the whole operation: its failure handler invalidates the native process
+// before another attempt reconstructs only the committed journal.
+export function commitPerpetualEngineWake(
+  ...args: Parameters<typeof commitPerpetualEngineWakeOnce>
+) {
+  return withTransactionRetry(() => commitPerpetualEngineWakeOnce(...args));
+}
+async function commitPerpetualEngineWakeOnce(
   prisma: PrismaClient,
   owner: PerpetualOwner,
   key: Key,
@@ -1101,7 +1110,14 @@ export async function commitPerpetualEngineWake(
 /** Owner pause/end/restart must drain native pending orders even without data.
  * Cancellation barriers have zero liquidity and cannot grant entry authority.
  */
-export async function cancelPerpetualEngineOrders(
+// Retry the whole operation: its failure handler invalidates the native process
+// before another attempt reconstructs only the committed journal.
+export function cancelPerpetualEngineOrders(
+  ...args: Parameters<typeof cancelPerpetualEngineOrdersOnce>
+) {
+  return withTransactionRetry(() => cancelPerpetualEngineOrdersOnce(...args));
+}
+async function cancelPerpetualEngineOrdersOnce(
   prisma: PrismaClient,
   owner: PerpetualOwner,
   ledgerId: string,
