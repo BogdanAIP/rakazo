@@ -36,7 +36,22 @@ export async function fetchOkxPaperPerpetualSnapshot(
 ): Promise<PaperPerpetualSnapshot> {
   if (!/^[A-Z0-9]{1,20}-USDT-SWAP$/.test(instrument))
     throw new Error("Unsupported linear USDT perpetual");
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const publicFetch = options.fetchImpl ?? fetch;
+  const fetchImpl: typeof fetch = async (input, init) => {
+    try {
+      return await publicFetch(input, init);
+    } catch (error) {
+      // Retry one failed keyless GET with a fresh timeout signal. Malformed
+      // responses and stale observations still fail the existing validators.
+      if (
+        !(error instanceof Error) ||
+        !["TimeoutError", "TypeError"].includes(error.name) ||
+        init?.method !== "GET"
+      )
+        throw error;
+      return publicFetch(input, { ...init, signal: AbortSignal.timeout(10_000) });
+    }
+  };
   const get = async (path: string) => {
     const response = await fetchImpl(ORIGIN + path, {
       method: "GET",
@@ -156,8 +171,8 @@ export async function fetchOkxPaperPerpetualSnapshot(
   const mmr = (amount(tier.mmr) * 10000n + scale - 1n) / scale;
   if (mmr < 1n || mmr > 1000n) throw new Error("Unsupported maintenance tier");
   const [context, history] = await Promise.all([
-    fetchOkxPublicPerpContext(market, options),
-    fetchOkxClosedOneHourHistory(market, options),
+    fetchOkxPublicPerpContext(market, { ...options, fetchImpl }),
+    fetchOkxClosedOneHourHistory(market, { ...options, fetchImpl }),
   ]);
   const now = options.now ?? new Date();
   const bookAt = new Date(Number(book.ts)).toISOString();

@@ -255,6 +255,39 @@ describe("PAPER OKX contract units and funding history", () => {
       ).rejects.toThrow("Non-contiguous perpetual position tiers");
     }
   });
+  it("retries one transient public transport failure with a fresh timeout signal", async () => {
+    for (const endpoint of ["/books", "/history-candles", "/mark-price"]) {
+      const fake = publicFixture();
+      const signals: Array<AbortSignal | null | undefined> = [];
+      const fetchImpl: typeof fetch = async (url, init) => {
+        if (new URL(String(url)).pathname.endsWith(endpoint)) {
+          signals.push(init?.signal);
+          if (signals.length === 1)
+            throw new DOMException("Transient public timeout", "TimeoutError");
+        }
+        return fake.fetchImpl(url, init);
+      };
+      const result = await fetchOkxPaperPerpetualSnapshot(market.symbol, { now, fetchImpl });
+      expect(result.market.symbol).toBe(market.symbol);
+      expect(signals).toHaveLength(2);
+      expect(signals[1]).not.toBe(signals[0]);
+    }
+  });
+  it("bounds persistent transport failures to two attempts", async () => {
+    const fake = publicFixture();
+    let attempts = 0;
+    const fetchImpl: typeof fetch = async (url, init) => {
+      if (new URL(String(url)).pathname.endsWith("/books")) {
+        attempts += 1;
+        throw new DOMException("Public timeout", "TimeoutError");
+      }
+      return fake.fetchImpl(url, init);
+    };
+    await expect(fetchOkxPaperPerpetualSnapshot(market.symbol, { now, fetchImpl })).rejects.toThrow(
+      "Public timeout",
+    );
+    expect(attempts).toBe(2);
+  });
   it("accepts bounded public book/mark skew and rejects the exact out-of-range boundaries", async () => {
     for (const shift of [1500, 2000, -30000]) {
       const fake = publicFixture((path, rows) =>
