@@ -159,6 +159,7 @@ function verifyResearchComparison(
   if (!comparison) return;
   const selected = comparison.candidates.filter((candidate) => candidate.verdict === "selected");
   if (
+    comparison.candidates.some((candidate) => !instruments.includes(candidate.instrument)) ||
     Date.parse(comparison.asOf) > now.getTime() ||
     Date.parse(comparison.validUntil) <= now.getTime() ||
     (decision.kind === "proposal"
@@ -298,7 +299,7 @@ export async function commandOwnedPerpetualWorkspace(
             perpetualPaperHash(duplicate.request) !== requestHash
           )
             throw new Error("Conflicting futures command retry");
-          return { revision: duplicate.revision };
+          return { revision: duplicate.revision, duplicate: true };
         }
         if (row.revision !== input.expectedRevision)
           throw new Error("Futures session changed; refresh the account");
@@ -322,9 +323,9 @@ export async function commandOwnedPerpetualWorkspace(
           )
             throw new Error("Previous External proposal is still pending");
           const decision = input.decision;
-          verifyResearchComparison(decision, control.instruments, now, true);
           if (decision.kind === "proposal" && !control.instruments.includes(decision.instrument))
             throw new Error("Proposal instrument outside owner-approved session markets");
+          verifyResearchComparison(decision, control.instruments, now, true);
           if (
             (decision.kind === "close" ||
               decision.kind === "reduce" ||
@@ -471,7 +472,7 @@ export async function commandOwnedPerpetualWorkspace(
             revision,
           },
         });
-        return { revision };
+        return { revision, duplicate: false };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
@@ -890,7 +891,16 @@ export async function readOwnedPerpetualResearchHistory(
       if (!owned) return null;
       const base = { mode: "paper_only" as const, ledgerId };
       const ticks = await tx.tradingPaperPerpetualTick.findMany({
-        where: { ledgerId, stage: "research", modelId: { not: null }, committedAt: { not: null } },
+        where: {
+          ledgerId,
+          stage: "research",
+          committedAt: { not: null },
+          OR: [
+            { decision: { path: ["kind"], not: "no_trade" } },
+            { decision: { path: ["comparison"], not: Prisma.AnyNull } },
+          ],
+        },
+        select: { decision: true, decisionSha256: true, snapshot: true, snapshotSha256: true },
         orderBy: { recordedAt: "desc" },
         take: limit,
       });
@@ -902,13 +912,8 @@ export async function readOwnedPerpetualResearchHistory(
           )
             throw new Error("Research integrity");
           return {
-            id: tick.revision + ":" + tick.scheduledFor.toISOString(),
-            at: tick.recordedAt.toISOString(),
-            revision: tick.revision,
-            outcome: tick.outcome,
+            id: tick.decisionSha256 + ":" + tick.snapshotSha256,
             decision: PaperPerpetualDecisionSchema.parse(tick.decision),
-            provider: tick.modelProvider,
-            model: tick.modelId,
           };
         });
         return { ...base, status: "verified" as const, decisions };

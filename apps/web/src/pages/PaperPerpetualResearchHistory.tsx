@@ -1,9 +1,16 @@
-import type { PaperResearchHistory } from "@rakazo/contracts";
+import type { PaperPerpetualDecision, PaperResearchHistory } from "@rakazo/contracts";
 import { Button } from "@rakazo/ui-web";
 import { useState } from "react";
 import { rpc } from "../lib/rpc";
 import { PaperResearchComparison } from "./PaperResearchComparison";
-import { paperPerpetualOutcomeLabel } from "./paper-perpetual-outcomes";
+
+const decisionLabel: Record<PaperPerpetualDecision["kind"], string> = {
+  proposal: "Предложение входа",
+  no_trade: "Не торговать",
+  close: "Закрытие",
+  reduce: "Сокращение позиции",
+  tighten_stop: "Перенос стопа",
+};
 
 const dateTime = (iso: string) => new Date(iso).toLocaleString("ru-RU");
 
@@ -52,6 +59,9 @@ export function PaperPerpetualResearchHistory({ ledgerId }: { ledgerId: string }
             Не удалось проверить историю решений.
           </p>
         ) : null}
+        <p className="text-xs text-muted-foreground">
+          Результаты исполнения указаны в истории фьючерсных операций.
+        </p>
         {history?.status === "verified" ? (
           history.decisions.length ? (
             <ol className="space-y-3">
@@ -59,7 +69,10 @@ export function PaperPerpetualResearchHistory({ ledgerId }: { ledgerId: string }
                 <li key={record.id}>
                   <details className="rounded-lg bg-muted p-3">
                     <summary className="cursor-pointer text-sm">
-                      {dateTime(record.at)} · {paperPerpetualOutcomeLabel(record.outcome)}
+                      {decisionLabel[record.decision.kind]}
+                      {record.decision.comparison
+                        ? " · " + dateTime(record.decision.comparison.asOf)
+                        : ""}
                     </summary>
                     <p className="mt-2 whitespace-pre-wrap text-sm">
                       {record.decision.kind === "proposal"

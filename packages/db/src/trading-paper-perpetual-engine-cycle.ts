@@ -158,6 +158,29 @@ async function commitPerpetualEngineWakeOnce(
         let outcome = key.stage === "protection" ? "protection_checked" : "no_trade";
         // First protection with no positions need not create a wallet before research.
         if (!prior && !execution.length) {
+          if (key.stage === "research") {
+            if (tick.modelId) {
+              control.lastResearchAt = now.toISOString();
+              control.lastDecision = {
+                at: now.toISOString(),
+                outcome,
+                rationale: decision.kind === "proposal" ? decision.rationale : decision.reason,
+                provider: tick.modelProvider,
+                model: tick.modelId,
+                comparison: decision.comparison,
+              };
+            }
+            control.runtimeError = null;
+            await savePerpetualControl(
+              tx,
+              key.ledgerId,
+              key.revision,
+              control,
+              active
+                ? new Date(Math.max(Date.parse(key.scheduledFor) + 60000, clock + 1000))
+                : null,
+            );
+          }
           await tx.tradingPaperPerpetualTick.update({
             where: { ledgerId_revision_scheduledFor_stage: tickKey },
             data: { outcome, committedAt: now },

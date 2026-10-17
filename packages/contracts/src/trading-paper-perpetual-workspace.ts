@@ -379,12 +379,7 @@ export const PaperResearchHistorySchema = z.object({
     .array(
       z.object({
         id: z.string(),
-        at: IsoDate,
-        revision: z.number().int().nonnegative(),
-        outcome: z.string().nullable(),
         decision: PaperPerpetualDecisionSchema,
-        provider: z.string().nullable(),
-        model: z.string().nullable(),
       }),
     )
     .max(50),
