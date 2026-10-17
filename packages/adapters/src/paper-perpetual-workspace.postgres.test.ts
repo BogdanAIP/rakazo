@@ -718,7 +718,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     ).rejects.toThrow("intact position protection");
     await start(id, undefined, ["BTC-USDT-SWAP"], "external");
     current = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
-    const candidate = proposal("long");
+    const candidate = compared(proposal("long"));
     await controlPerpetualPaperWorkspace(deps(), owner, {
       action: "submit_external_proposal",
       ledgerId: id,

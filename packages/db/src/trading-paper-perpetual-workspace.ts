@@ -799,12 +799,6 @@ export async function recordPerpetualResearchTick(
             throw new Error("Futures research integrity failed");
           return existing;
         }
-        verifyResearchComparison(
-          decision,
-          control.instruments,
-          clock,
-          model?.provider === "external-proposal",
-        );
         if (model?.provider === "external-proposal") {
           const pending = control.pendingExternalProposal;
           if (
@@ -818,8 +812,14 @@ export async function recordPerpetualResearchTick(
             Date.parse(pending.expiresAt) <= clock.getTime() ||
             Date.parse(pending.submittedAt) > clock.getTime()
           )
-            decision = { kind: "no_trade", reason: "Срок предложения ChatGPT через R истёк" };
+            decision = { kind: "no_trade", reason: "Срок внешнего предложения истёк" };
         }
+        verifyResearchComparison(
+          decision,
+          control.instruments,
+          clock,
+          model?.provider === "external-proposal",
+        );
         if (decision.kind !== "no_trade") {
           const now = await perpetualDatabaseClock(tx);
           if (
