@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { tradingPaperDatabaseNow } from "./trading-paper-clock.js";
 import { lockAndVerifyTradingPaperEntrySessionInTransaction } from "./trading-paper-entry-session.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
 import { verifyManagedTradingPaperMarketInTransaction } from "./trading-paper-managed-market.js";
@@ -400,7 +401,12 @@ export async function fillApprovedTradingPaperReservation(
     prisma.$transaction(
       async (tx) => {
         await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
-        await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
+        await auditTradingPaperLifecycleInTransaction(
+          tx,
+          owner,
+          ledgerId,
+          await tradingPaperDatabaseNow(tx),
+        );
         const prior = await readExistingFill(tx, owner, ledgerId, reservationId, evidenceId);
         if (prior) return prior;
 
@@ -429,7 +435,7 @@ export async function fillApprovedTradingPaperReservation(
             "Automatic paper fill requires both F2 and market-target authorities",
           );
         }
-        const authorityNow = new Date();
+        const authorityNow = await tradingPaperDatabaseNow(tx);
         const currentResolvedFillAuthority = resolvedFillAuthority
           ? await verifyTradingPaperResolvedResearchFillAuthorityInTransaction(
               tx,
@@ -552,7 +558,7 @@ export async function fillApprovedTradingPaperReservation(
             "Verified reservation decision is neither open nor released/filled",
           );
         }
-        const now = Date.now();
+        const now = (await tradingPaperDatabaseNow(tx)).getTime();
         const lastAt = recovered.events.at(-1)
           ? Date.parse(recovered.events.at(-1)!.recordedAt)
           : recovered.row.openedAt.getTime();
@@ -591,7 +597,7 @@ export async function fillApprovedTradingPaperReservation(
             owner,
             ledgerId,
             evidence.market,
-            new Date(),
+            new Date(now),
           ))
         )
           return { status: "deny", mode: "paper_only", reason: "paper_resolved_fill_unapproved" };

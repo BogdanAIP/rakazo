@@ -1,13 +1,15 @@
+import type {
+  WindowsHostAdvertisement,
+  WindowsHostCommandEnvelope,
+  WindowsHostCommandResult,
+  WindowsHostHeartbeat,
+  WindowsHostHeartbeatResult,
+  WindowsHostPairingResult,
+} from "@rakazo/contracts";
 import {
-  type WindowsHostAdvertisement,
-  type WindowsHostCommandEnvelope,
   WindowsHostCommandEnvelopeSchema,
   WindowsHostCommandReportSchema,
-  type WindowsHostCommandResult,
-  type WindowsHostHeartbeat,
-  type WindowsHostHeartbeatResult,
   WindowsHostHeartbeatResultSchema,
-  type WindowsHostPairingResult,
   WindowsHostPairingResultSchema,
 } from "@rakazo/contracts";
 
@@ -48,11 +50,27 @@ export class HttpWindowsHostTransport implements WindowsHostTransport {
   constructor(
     private readonly origin: string,
     private readonly fetchImpl: FetchLike = fetch,
-  ) {}
+  ) {
+    const url = new URL(origin);
+    const loopback =
+      url.hostname === "localhost" ||
+      url.hostname === "[::1]" ||
+      /^127(?:\.\d{1,3}){3}$/.test(url.hostname);
+    if (
+      (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) ||
+      url.username ||
+      url.password ||
+      url.pathname !== "/" ||
+      url.search ||
+      url.hash
+    )
+      throw new Error("Windows Host origin must use HTTPS except on loopback");
+  }
 
   async pair(advertisement: WindowsHostAdvertisement, pairingToken: string, signal?: AbortSignal) {
     const response = await this.fetchImpl(this.url("/api/windows-host/pair"), {
       method: "POST",
+      redirect: "error",
       headers: {
         authorization: `Bearer ${pairingToken}`,
         "content-type": "application/json",
@@ -67,6 +85,7 @@ export class HttpWindowsHostTransport implements WindowsHostTransport {
   async heartbeat(heartbeat: WindowsHostHeartbeat, credential: string, signal?: AbortSignal) {
     const response = await this.fetchImpl(this.url("/api/windows-host/heartbeat"), {
       method: "POST",
+      redirect: "error",
       headers: {
         authorization: `Bearer ${credential}`,
         "content-type": "application/json",
@@ -81,6 +100,7 @@ export class HttpWindowsHostTransport implements WindowsHostTransport {
   async poll(hostId: string, credential: string, signal?: AbortSignal) {
     const response = await this.fetchImpl(this.url("/api/windows-host/commands/next"), {
       method: "POST",
+      redirect: "error",
       headers: {
         authorization: `Bearer ${credential}`,
         "content-type": "application/json",
@@ -101,6 +121,7 @@ export class HttpWindowsHostTransport implements WindowsHostTransport {
     const body = WindowsHostCommandReportSchema.parse({ hostId, result });
     const response = await this.fetchImpl(this.url("/api/windows-host/commands/result"), {
       method: "POST",
+      redirect: "error",
       headers: {
         authorization: `Bearer ${credential}`,
         "content-type": "application/json",

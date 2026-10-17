@@ -2224,7 +2224,7 @@ export function ShellPage() {
         setPendingAttachments((current) =>
           current.filter((attachment) => attachment.threadKey !== originThreadKey),
         );
-        // Refresh sidebar status even when a botв†’group reroute navigates away below.
+        // Refresh sidebar status even when a bot→group reroute navigates away below.
         void refreshBots().catch(() => undefined);
         if (reroutedToGroup && groupTarget) {
           navigate(`/app/g/${groupTarget}`);
@@ -6580,7 +6580,7 @@ const MessageView = memo(function MessageView({
               className="flex items-center justify-center gap-2 py-1 text-[13.5px] text-muted-foreground"
             >
               <span>
-                в†Є {to} в†ђ {from}
+                ↪ {to} ← {from}
               </span>
               <span>{block.text}</span>
             </div>
@@ -6829,9 +6829,9 @@ const MessageView = memo(function MessageView({
               <div className="flex flex-col gap-2 rounded-[20px] bg-muted px-5 py-4">
                 {block.lines.map((line) => (
                   <div key={line.k} className="flex items-baseline gap-2.5 text-[15px]">
-                    <span className="text-success">вњ“</span>
+                    <span className="text-success">✓</span>
                     <span className="font-semibold text-white">{line.k}</span>
-                    <span className="text-muted-foreground">в†’</span>
+                    <span className="text-muted-foreground">→</span>
                     <span>{line.v}</span>
                   </div>
                 ))}

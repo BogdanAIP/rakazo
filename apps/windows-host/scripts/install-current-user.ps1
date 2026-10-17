@@ -1,6 +1,14 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidatePattern('^https?://')]
+  [ValidateScript({
+    $uri = $null
+    if (-not [Uri]::TryCreate($_, [UriKind]::Absolute, [ref]$uri)) { throw "Invalid Windows Host origin" }
+    $address = $null
+    $isIp = [Net.IPAddress]::TryParse($uri.DnsSafeHost, [ref]$address)
+    $loopback = $uri.Host -eq 'localhost' -or ($isIp -and [Net.IPAddress]::IsLoopback($address))
+    if (($uri.Scheme -eq 'https' -or ($uri.Scheme -eq 'http' -and $loopback)) -and -not $uri.UserInfo -and $uri.AbsolutePath -eq '/' -and -not $uri.Query -and -not $uri.Fragment) { return $true }
+    throw "Windows Host origin must use HTTPS except on loopback"
+  })]
   [string]$Origin,
   [string]$PairingToken = "",
   [string]$OpenCliProfile = "",

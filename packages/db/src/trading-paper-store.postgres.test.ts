@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { TradingInstrumentSchema, TradingPaperPolicySchema } from "@rakazo/contracts";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createDb } from "./client.js";
 import {
   closeTradingPaperPositionOnAuthorizedProtectiveStop,
@@ -1732,161 +1732,173 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       await first.prisma.tradingPaperReleaseAudit.findMany({ where: { ledgerId } }),
     ).toMatchObject([{ reason: "kill_switch", policyRevision: 2 }]);
   });
-  it("P11C-1 atomically full-fills a B7 hold with a stop guard and idempotent decision", async () => {
-    const ledgerId = `paper-c1-fill-${suffix}`;
-    await createTradingPaperLedger(first.prisma, owner, {
-      ledgerId,
-      openedAt: new Date(Date.now() - 20_000).toISOString(),
-      quoteCurrency: "USDT",
-      initialBalanceQuote: "500",
-    });
-    await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
-      allowedVenues: ["okx"],
-      quoteCurrency: "USDT",
-      maxAgeMs: 60_000,
-      maxSpreadBps: 40,
-      maxTriggerDeviationBps: 50,
-      maxPositions: 2,
-      maxPerIdeaRiskQuote: "20",
-      maxDailyLossQuote: "100",
-      maxOpenRiskQuote: "40",
-      maxTotalExposureQuote: "300",
-      assumedFeeBpsPerSide: 10,
-      assumedSlippageBpsPerSide: 10,
-    });
-    const enable = await makePaperControlEffect(ledgerId, "c1-fill-enable", "enable", 0);
-    await applyApprovedTradingPaperControl(first.prisma, owner, enable.id);
-    const reserveAt = new Date().toISOString();
-    const reserveEvidence = await recordPublicAdapterPaperQuoteEvidence(
-      first.prisma,
-      owner,
-      ledgerId,
-      market,
-      {
-        venue: "okx",
-        kind: "spot",
-        symbol: "SOL-USDT",
-        observedAt: reserveAt,
-        fetchedAt: reserveAt,
-        bid: "100",
-        ask: "100.1",
-        quoteVolume24h: "100000",
-      },
-    );
-    const signal = {
-      kind: "proposal",
-      executionStatus: "research_only",
-      signalId: `c1-fill-signal-${suffix}`,
-      strategyId: "c1-fill",
-      strategyVersion: "1",
-      createdAt: new Date(Date.now() - 1000).toISOString(),
-      expiresAt: new Date(Date.now() + 120_000).toISOString(),
-      evidenceIds: ["research-only"],
-      market,
-      action: "spot_buy",
-      entryTrigger: "100.1",
-      stopLoss: "95",
-      takeProfit: ["110"],
-      invalidation: "fixture",
-      rationale: "Synthetic C1 full-fill verification",
-      riskBudgetQuote: "10",
-      maxSlippageBps: null,
-    } as const;
-    const reserved = await reserveApprovedTradingPaperSignal(
-      first.prisma,
-      owner,
-      ledgerId,
-      signal,
-      reserveEvidence.id,
-    );
-    expect(reserved.status).toBe("reserved");
-    if (reserved.status !== "reserved") throw new Error("expected reservation");
-
-    const fillAt = new Date().toISOString();
-    const fillEvidence = await recordPublicAdapterPaperQuoteEvidence(
-      first.prisma,
-      owner,
-      ledgerId,
-      market,
-      {
-        venue: "okx",
-        kind: "spot",
-        symbol: "SOL-USDT",
-        observedAt: fillAt,
-        fetchedAt: fillAt,
-        bid: "99.99",
-        ask: "100",
-        quoteVolume24h: "100000",
-      },
-    );
-    const filled = await fillApprovedTradingPaperReservation(
-      second.prisma,
-      owner,
-      ledgerId,
-      reserved.reservationId,
-      fillEvidence.id,
-    );
-    expect(filled.status).toBe("filled");
-    if (filled.status !== "filled") throw new Error("expected synthetic fill");
-    expect(filled.mode).toBe("paper_only");
-    expect(filled.quantityBase).toBe(reserved.quantityBase);
-    expect(Number(filled.executedPriceQuote)).toBeLessThanOrEqual(
-      Number(reserved.heldQuote) / Number(reserved.quantityBase),
-    );
-    const state = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);
-    expect(state.reservations).toHaveLength(0);
-    expect(state.positions).toHaveLength(1);
-    expect(state.positions[0]?.positionId).toBe(reserved.reservationId);
-    expect(await first.prisma.tradingPaperStopGuard.count({ where: { ledgerId } })).toBe(1);
-    expect(await first.prisma.tradingPaperFillDecision.count({ where: { ledgerId } })).toBe(1);
-    expect(
-      await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_buy" } }),
-    ).toBe(1);
-    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(2);
-
-    await expect(
-      fillApprovedTradingPaperReservation(
+  it.each([0, -600_000, 600_000])(
+    "P11C-1 full-fills once with worker clock skew %i ms",
+    async (clockSkewMs) => {
+      const variant = clockSkewMs === 0 ? "" : `-${clockSkewMs}`;
+      const ledgerId = `paper-c1-fill-${suffix}${variant}`;
+      await createTradingPaperLedger(first.prisma, owner, {
+        ledgerId,
+        openedAt: new Date(Date.now() - 20_000).toISOString(),
+        quoteCurrency: "USDT",
+        initialBalanceQuote: "500",
+      });
+      await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+        allowedVenues: ["okx"],
+        quoteCurrency: "USDT",
+        maxAgeMs: 60_000,
+        maxSpreadBps: 40,
+        maxTriggerDeviationBps: 50,
+        maxPositions: 2,
+        maxPerIdeaRiskQuote: "20",
+        maxDailyLossQuote: "100",
+        maxOpenRiskQuote: "40",
+        maxTotalExposureQuote: "300",
+        assumedFeeBpsPerSide: 10,
+        assumedSlippageBpsPerSide: 10,
+      });
+      const enable = await makePaperControlEffect(
+        ledgerId,
+        `c1-fill-enable${variant}`,
+        "enable",
+        0,
+      );
+      await applyApprovedTradingPaperControl(first.prisma, owner, enable.id);
+      const reserveAt = new Date().toISOString();
+      const reserveEvidence = await recordPublicAdapterPaperQuoteEvidence(
         first.prisma,
         owner,
         ledgerId,
-        reserved.reservationId,
-        fillEvidence.id,
-      ),
-    ).resolves.toMatchObject({
-      status: "duplicate",
-      fillEventId: filled.fillEventId,
-      executedPriceQuote: filled.executedPriceQuote,
-    });
-    expect(await first.prisma.tradingPaperFillDecision.count({ where: { ledgerId } })).toBe(1);
-    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(2);
+        market,
+        {
+          venue: "okx",
+          kind: "spot",
+          symbol: "SOL-USDT",
+          observedAt: reserveAt,
+          fetchedAt: reserveAt,
+          bid: "100",
+          ask: "100.1",
+          quoteVolume24h: "100000",
+        },
+      );
+      const signal = {
+        kind: "proposal",
+        executionStatus: "research_only",
+        signalId: `c1-fill-signal-${suffix}`,
+        strategyId: "c1-fill",
+        strategyVersion: "1",
+        createdAt: new Date(Date.now() - 1000).toISOString(),
+        expiresAt: new Date(Date.now() + 120_000).toISOString(),
+        evidenceIds: ["research-only"],
+        market,
+        action: "spot_buy",
+        entryTrigger: "100.1",
+        stopLoss: "95",
+        takeProfit: ["110"],
+        invalidation: "fixture",
+        rationale: "Synthetic C1 full-fill verification",
+        riskBudgetQuote: "10",
+        maxSlippageBps: null,
+      } as const;
+      const reserved = await reserveApprovedTradingPaperSignal(
+        first.prisma,
+        owner,
+        ledgerId,
+        signal,
+        reserveEvidence.id,
+      );
+      expect(reserved.status).toBe("reserved");
+      if (reserved.status !== "reserved") throw new Error("expected reservation");
 
-    const changedAt = new Date().toISOString();
-    const changedEvidence = await recordPublicAdapterPaperQuoteEvidence(
-      first.prisma,
-      owner,
-      ledgerId,
-      market,
-      {
-        venue: "okx",
-        kind: "spot",
-        symbol: "SOL-USDT",
-        observedAt: changedAt,
-        fetchedAt: changedAt,
-        bid: "99.98",
-        ask: "99.99",
-        quoteVolume24h: "100000",
-      },
-    );
-    await expect(
-      fillApprovedTradingPaperReservation(
+      const fillAt = new Date().toISOString();
+      const fillEvidence = await recordPublicAdapterPaperQuoteEvidence(
+        first.prisma,
+        owner,
+        ledgerId,
+        market,
+        {
+          venue: "okx",
+          kind: "spot",
+          symbol: "SOL-USDT",
+          observedAt: fillAt,
+          fetchedAt: fillAt,
+          bid: "99.99",
+          ask: "100",
+          quoteVolume24h: "100000",
+        },
+      );
+      const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + clockSkewMs);
+      const filled = await fillApprovedTradingPaperReservation(
         second.prisma,
         owner,
         ledgerId,
         reserved.reservationId,
-        changedEvidence.id,
-      ),
-    ).rejects.toBeInstanceOf(PaperFillConflictError);
-  });
+        fillEvidence.id,
+      ).finally(() => {
+        clock.mockRestore();
+      });
+      expect(filled.status).toBe("filled");
+      if (filled.status !== "filled") throw new Error("expected synthetic fill");
+      expect(filled.mode).toBe("paper_only");
+      expect(filled.quantityBase).toBe(reserved.quantityBase);
+      expect(Number(filled.executedPriceQuote)).toBeLessThanOrEqual(
+        Number(reserved.heldQuote) / Number(reserved.quantityBase),
+      );
+      const state = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);
+      expect(state.reservations).toHaveLength(0);
+      expect(state.positions).toHaveLength(1);
+      expect(state.positions[0]?.positionId).toBe(reserved.reservationId);
+      expect(await first.prisma.tradingPaperStopGuard.count({ where: { ledgerId } })).toBe(1);
+      expect(await first.prisma.tradingPaperFillDecision.count({ where: { ledgerId } })).toBe(1);
+      expect(
+        await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_buy" } }),
+      ).toBe(1);
+      expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(2);
+
+      await expect(
+        fillApprovedTradingPaperReservation(
+          first.prisma,
+          owner,
+          ledgerId,
+          reserved.reservationId,
+          fillEvidence.id,
+        ),
+      ).resolves.toMatchObject({
+        status: "duplicate",
+        fillEventId: filled.fillEventId,
+        executedPriceQuote: filled.executedPriceQuote,
+      });
+      expect(await first.prisma.tradingPaperFillDecision.count({ where: { ledgerId } })).toBe(1);
+      expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(2);
+
+      const changedAt = new Date().toISOString();
+      const changedEvidence = await recordPublicAdapterPaperQuoteEvidence(
+        first.prisma,
+        owner,
+        ledgerId,
+        market,
+        {
+          venue: "okx",
+          kind: "spot",
+          symbol: "SOL-USDT",
+          observedAt: changedAt,
+          fetchedAt: changedAt,
+          bid: "99.98",
+          ask: "99.99",
+          quoteVolume24h: "100000",
+        },
+      );
+      await expect(
+        fillApprovedTradingPaperReservation(
+          second.prisma,
+          owner,
+          ledgerId,
+          reserved.reservationId,
+          changedEvidence.id,
+        ),
+      ).rejects.toBeInstanceOf(PaperFillConflictError);
+    },
+  );
 
   it("P11C-1 refuses adverse fill price and serializes fill against approved disable", async () => {
     const buildReserved = async (label: string) => {

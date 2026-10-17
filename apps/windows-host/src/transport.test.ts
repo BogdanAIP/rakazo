@@ -1,8 +1,5 @@
-import {
-  WINDOWS_HOST_PROTOCOL_VERSION,
-  type WindowsHostAdvertisement,
-  type WindowsHostHeartbeat,
-} from "@rakazo/contracts";
+import type { WindowsHostAdvertisement, WindowsHostHeartbeat } from "@rakazo/contracts";
+import { WINDOWS_HOST_PROTOCOL_VERSION } from "@rakazo/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { HttpWindowsHostTransport } from "./transport.js";
 
@@ -21,8 +18,33 @@ const advertisement: WindowsHostAdvertisement = {
 };
 
 describe("HttpWindowsHostTransport", () => {
+  it.each([
+    "http://api.example.test",
+    "http://192.0.2.1",
+    "http://localhost.evil.test",
+    "http://127.0.0.1.evil.test",
+    "file:///",
+    "https://user:pass@example.test",
+    "https://example.test/path",
+    "https://example.test/?token=fake",
+  ])("rejects unsafe origin %s before fetching", (origin) => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    expect(() => new HttpWindowsHostTransport(origin, fetchImpl)).toThrow();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+  it.each([
+    "https://api.example.test",
+    "http://localhost:3100",
+    "http://127.0.0.1:3100",
+    "http://127.9.8.7:3100",
+    "http://[::1]:3100",
+  ])("accepts HTTPS or explicit loopback %s", (origin) => {
+    expect(() => new HttpWindowsHostTransport(origin, vi.fn<typeof fetch>())).not.toThrow();
+  });
+
   it("keeps the pairing credential out of the JSON body", async () => {
     const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      expect(init?.redirect).toBe("error");
       expect(init?.headers).toMatchObject({ authorization: "Bearer pairing-secret" });
       expect(String(init?.body)).not.toContain("pairing-secret");
       return new Response(
@@ -57,6 +79,7 @@ describe("HttpWindowsHostTransport", () => {
     const credential = "c".repeat(32);
 
     const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      expect(init?.redirect).toBe("error");
       expect(init?.headers).toMatchObject({ authorization: `Bearer ${credential}` });
       expect(String(init?.body)).not.toContain(credential);
       return new Response(
