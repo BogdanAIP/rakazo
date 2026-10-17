@@ -873,15 +873,24 @@ export async function recordPerpetualResearchTick(
   );
 }
 
-/** Reads the existing hash-checked research ticks; it never modifies history. */
+/** Reads hash-checked research inputs in bounded pages, before selecting display rows. */
 export async function readOwnedPerpetualResearchHistory(
   prisma: PrismaClient,
   owner: PerpetualOwner,
   ledgerId: string,
   limit = 20,
+  before?: { revision: number; scheduledFor: string },
 ) {
-  if (!Number.isInteger(limit) || limit < 1 || limit > 50)
-    throw new Error("Invalid research history limit");
+  if (
+    !Number.isInteger(limit) ||
+    limit < 1 ||
+    limit > 50 ||
+    (before &&
+      (!Number.isSafeInteger(before.revision) ||
+        before.revision < 0 ||
+        !Number.isFinite(Date.parse(before.scheduledFor))))
+  )
+    throw new Error("Invalid research history page");
   return prisma.$transaction(
     async (tx) => {
       const owned = await tx.tradingPaperPerpetualLedger.findFirst({
@@ -890,35 +899,67 @@ export async function readOwnedPerpetualResearchHistory(
       });
       if (!owned) return null;
       const base = { mode: "paper_only" as const, ledgerId };
-      const ticks = await tx.tradingPaperPerpetualTick.findMany({
-        where: {
-          ledgerId,
-          stage: "research",
-          committedAt: { not: null },
-          OR: [
-            { decision: { path: ["kind"], not: "no_trade" } },
-            { decision: { path: ["comparison"], not: Prisma.AnyNull } },
-          ],
-        },
-        select: { decision: true, decisionSha256: true, snapshot: true, snapshotSha256: true },
-        orderBy: { recordedAt: "desc" },
-        take: limit,
-      });
+      const decisions: Array<{ id: string; decision: PaperPerpetualDecision }> = [];
+      let cursor = before;
       try {
-        const decisions = ticks.map((tick) => {
-          if (
-            tick.snapshotSha256 !== perpetualPaperHash(tick.snapshot) ||
-            tick.decisionSha256 !== perpetualPaperHash(tick.decision)
-          )
-            throw new Error("Research integrity");
-          return {
-            id: tick.decisionSha256 + ":" + tick.snapshotSha256,
-            decision: PaperPerpetualDecisionSchema.parse(tick.decision),
-          };
-        });
-        return { ...base, status: "verified" as const, decisions };
+        for (let page = 0; page < 5; page++) {
+          const ticks = await tx.tradingPaperPerpetualTick.findMany({
+            where: {
+              ledgerId,
+              stage: "research",
+              committedAt: { not: null },
+              ...(cursor
+                ? {
+                    OR: [
+                      { revision: { lt: cursor.revision } },
+                      {
+                        revision: cursor.revision,
+                        scheduledFor: { lt: new Date(cursor.scheduledFor) },
+                      },
+                    ],
+                  }
+                : {}),
+            },
+            orderBy: [{ revision: "desc" }, { scheduledFor: "desc" }],
+            take: 101,
+            select: {
+              revision: true,
+              scheduledFor: true,
+              decision: true,
+              decisionSha256: true,
+              snapshot: true,
+              snapshotSha256: true,
+            },
+          });
+          // Verify every fetched row before any decision-based display filtering.
+          for (const tick of ticks) {
+            if (
+              tick.snapshotSha256 !== perpetualPaperHash(tick.snapshot) ||
+              tick.decisionSha256 !== perpetualPaperHash(tick.decision)
+            )
+              throw Error("Research integrity");
+          }
+          const batch = ticks.slice(0, 100);
+          for (let index = 0; index < batch.length; index++) {
+            const tick = batch[index]!;
+            cursor = { revision: tick.revision, scheduledFor: tick.scheduledFor.toISOString() };
+            const decision = PaperPerpetualDecisionSchema.parse(tick.decision);
+            if (decision.kind !== "no_trade" || decision.comparison)
+              decisions.push({ id: tick.decisionSha256 + ":" + tick.snapshotSha256, decision });
+            if (decisions.length === limit)
+              return {
+                ...base,
+                status: "verified" as const,
+                decisions,
+                nextBefore: index < batch.length - 1 || ticks.length > 100 ? cursor : null,
+              };
+          }
+          if (ticks.length <= 100)
+            return { ...base, status: "verified" as const, decisions, nextBefore: null };
+        }
+        return { ...base, status: "verified" as const, decisions, nextBefore: cursor ?? null };
       } catch {
-        return { ...base, status: "integrity_blocked" as const, decisions: [] };
+        return { ...base, status: "integrity_blocked" as const, decisions: [], nextBefore: null };
       }
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },

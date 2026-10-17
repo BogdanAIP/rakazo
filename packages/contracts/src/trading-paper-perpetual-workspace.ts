@@ -371,7 +371,11 @@ export const PerpetualControlSchema = z
   .strict();
 export type PerpetualControl = z.infer<typeof PerpetualControlSchema>;
 
+export const PaperResearchHistoryCursorSchema = z
+  .object({ revision: z.number().int().nonnegative().safe(), scheduledFor: IsoDate })
+  .strict();
 export const PaperResearchHistorySchema = z.object({
+  nextBefore: PaperResearchHistoryCursorSchema.nullable(),
   mode: z.literal("paper_only"),
   status: z.enum(["verified", "integrity_blocked"]),
   ledgerId: z.string(),

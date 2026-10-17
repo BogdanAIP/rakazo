@@ -18,12 +18,29 @@ export function PaperPerpetualResearchHistory({ ledgerId }: { ledgerId: string }
   const [history, setHistory] = useState<PaperResearchHistory | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
-  async function load() {
+  async function load(before?: NonNullable<PaperResearchHistory["nextBefore"]>) {
     if (pending) return;
     setPending(true);
     setError(false);
     try {
-      setHistory(await rpc.trading.perpetualResearchRead({ ledgerId, limit: 20 }));
+      const result = await rpc.trading.perpetualResearchRead({
+        ledgerId,
+        limit: 20,
+        ...(before ? { before } : {}),
+      });
+      setHistory((previous) =>
+        before && previous?.status === "verified" && result.status === "verified"
+          ? {
+              ...result,
+              decisions: [
+                ...previous.decisions,
+                ...result.decisions.filter(
+                  (item) => !previous.decisions.some((old) => old.id === item.id),
+                ),
+              ],
+            }
+          : result,
+      );
     } catch {
       setError(true);
     } finally {
@@ -87,8 +104,19 @@ export function PaperPerpetualResearchHistory({ ledgerId }: { ledgerId: string }
               ))}
             </ol>
           ) : (
-            <p className="text-sm text-muted-foreground">Решений пока нет.</p>
+            <p className="text-sm text-muted-foreground">
+              {history.nextBefore ? "В этой части истории решений нет." : "Решений пока нет."}
+            </p>
           )
+        ) : null}
+        {history?.status === "verified" && history.nextBefore ? (
+          <Button
+            variant="outline"
+            disabled={pending}
+            onClick={() => void load(history.nextBefore!)}
+          >
+            Предыдущие решения
+          </Button>
         ) : null}
       </div>
     </details>

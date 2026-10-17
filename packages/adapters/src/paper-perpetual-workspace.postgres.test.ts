@@ -608,7 +608,14 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       ledgerId: id,
       commandId: randomUUID(),
       expectedRevision: next.revision,
-      decision: { kind: "no_trade", reason: "The next review has no new entry" },
+      decision: {
+        kind: "no_trade",
+        reason: "The next review has no new entry",
+        comparison: {
+          ...comparison,
+          candidates: comparison.candidates.map((row) => ({ ...row, verdict: "watch" as const })),
+        },
+      },
     });
     await handlePerpetualPaperWake(worker(), await payload(id, true));
     expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))!.lastDecision?.outcome).toBe(
@@ -616,6 +623,17 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     );
     const history = await readOwnedPerpetualResearchHistory(db.prisma, owner, id, 20);
     expect(history?.status).toBe("verified");
+    const firstPage = await readOwnedPerpetualResearchHistory(db.prisma, owner, id, 1);
+    expect(firstPage?.decisions).toHaveLength(1);
+    expect(firstPage?.nextBefore).not.toBeNull();
+    const secondPage = await readOwnedPerpetualResearchHistory(
+      db.prisma,
+      owner,
+      id,
+      1,
+      firstPage!.nextBefore!,
+    );
+    expect(secondPage?.decisions[0]?.decision.kind).toBe("proposal");
     await db.prisma.tradingPaperPerpetualTick.update({
       where: {
         ledgerId_revision_scheduledFor_stage: {
@@ -628,6 +646,28 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       data: { outcome: "forged_outcome", modelProvider: "forged_provider", modelId: null },
     });
     expect(await readOwnedPerpetualResearchHistory(db.prisma, owner, id, 20)).toEqual(history);
+    const tickKey = {
+      ledgerId_revision_scheduledFor_stage: {
+        ledgerId: id,
+        revision: tick.revision,
+        scheduledFor: tick.scheduledFor,
+        stage: tick.stage,
+      },
+    };
+    await db.prisma.tradingPaperPerpetualTick.update({
+      where: tickKey,
+      data: {
+        decision: perpetualPaperJson({ kind: "no_trade", reason: "Corrupted hidden input" }),
+      },
+    });
+    expect(await readOwnedPerpetualResearchHistory(db.prisma, owner, id)).toMatchObject({
+      status: "integrity_blocked",
+      decisions: [],
+    });
+    await db.prisma.tradingPaperPerpetualTick.update({
+      where: tickKey,
+      data: { decision: perpetualPaperJson(tick.decision) },
+    });
     expect(
       history?.decisions.some(
         (item) =>

@@ -989,6 +989,7 @@ export function createRouter(deps: RouterDeps) {
             context.actor,
             input.ledgerId,
             input.limit,
+            input.before,
           );
           if (!history) throw new ORPCError("NOT_FOUND");
           return history;
