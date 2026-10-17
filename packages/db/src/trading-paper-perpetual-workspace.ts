@@ -640,6 +640,55 @@ export async function readPerpetualWake(
     ),
   );
 }
+
+/** Waiting for external research grants no execution work. Advance only the
+ * owner-scoped scheduler; a flat idle account needs neither quotes nor an engine. */
+export async function completeIdleExternalPerpetualWake(
+  prisma: PrismaClient,
+  owner: PerpetualOwner,
+  key: { ledgerId: string; revision: number; scheduledFor: string },
+) {
+  return withTransactionRetry(() =>
+    prisma.$transaction(
+      async (tx) => {
+        const { row, control } = await lockOwnedPerpetualWorkspace(tx, owner, key.ledgerId);
+        const now = await perpetualDatabaseClock(tx);
+        if (
+          row.revision !== key.revision ||
+          row.nextScheduledFor?.toISOString() !== key.scheduledFor
+        )
+          return true;
+        if (Date.parse(key.scheduledFor) > now.getTime()) return true;
+        const pending = control.pendingExternalProposal;
+        if (
+          control.researchMode !== "external" ||
+          control.closeAll ||
+          control.orders.length ||
+          (pending &&
+            Date.parse(pending.submittedAt) <= now.getTime() &&
+            Date.parse(pending.expiresAt) > now.getTime())
+        )
+          return false;
+        const { state } = await recoverPerpetualPaperInTransaction(tx, owner, key.ledgerId);
+        if (state.openPositions.length) return false;
+        const entries =
+          control.sessionStatus === "active" &&
+          control.expiresAt !== null &&
+          Date.parse(control.expiresAt) > now.getTime();
+        await savePerpetualControl(
+          tx,
+          key.ledgerId,
+          key.revision,
+          { ...control, pendingExternalProposal: null, lastResearchAt: now.toISOString() },
+          entries ? new Date(now.getTime() + 60000) : null,
+        );
+        return true;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    ),
+  );
+}
+
 export async function failPerpetualWake(
   prisma: PrismaClient,
   owner: PerpetualOwner,
