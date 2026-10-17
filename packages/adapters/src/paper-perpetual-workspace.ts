@@ -24,6 +24,7 @@ import {
   commandOwnedPerpetualWorkspace,
   commitPerpetualEngineWake,
   commitPerpetualPaperWake,
+  completeIdleExternalPerpetualWake,
   failPerpetualWake,
   pausePerpetualAfterRestart,
   perpetualMarketSource,
@@ -146,6 +147,13 @@ export async function handlePerpetualPaperWake(
       key.scheduledFor,
     );
     if (!first) return;
+    if (
+      first.control.researchMode === "external" &&
+      (await completeIdleExternalPerpetualWake(deps.prisma, owner, key))
+    ) {
+      await enqueueNext(deps, owner, key.ledgerId, key.revision);
+      return;
+    }
     if (deps.engine)
       await preparePerpetualEngineBeforeMarketFetch(deps.prisma, owner, key.ledgerId, deps.engine);
     const fetchSnapshot = deps.fetchSnapshot ?? fetchOkxPaperPerpetualSnapshot;
@@ -211,7 +219,19 @@ export async function handlePerpetualPaperWake(
     const due =
       !current.control.lastResearchAt ||
       current.now.getTime() - Date.parse(current.control.lastResearchAt) >= 300000;
-    if (current.entries && !current.control.orders.length && due && !priorTick) {
+    const fromExternal = current.control.researchMode === "external";
+    const submitted = current.control.pendingExternalProposal;
+    const hasExternalProposal =
+      submitted &&
+      Date.parse(submitted.submittedAt) <= current.now.getTime() &&
+      Date.parse(submitted.expiresAt) > current.now.getTime();
+    if (
+      current.entries &&
+      !current.control.orders.length &&
+      due &&
+      !priorTick &&
+      (!fromExternal || hasExternalProposal)
+    ) {
       failure = "market_skill_unavailable";
       if (!current.control.source) throw new Error("No selected futures skill");
       const prepared = await readOwnedMarketPreparedResearch(deps.prisma, owner, {
@@ -234,8 +254,6 @@ export async function handlePerpetualPaperWake(
       ) {
         throw new Error("Closed market history is stale");
       }
-      const fromExternal = current.control.researchMode === "external";
-      const submitted = current.control.pendingExternalProposal;
       if (fromExternal) {
         // No model call, no background prompt and no entry without an explicit
         // authenticated owner submission for this still-approved PAPER session.

@@ -465,6 +465,54 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     expect(ticks[0]?.decision).toMatchObject({ kind: "no_trade", reason: "ChatGPT: нет сигнала" });
   });
 
+  it("waits without public data, source loading or native bootstrap when an external account is flat and idle", async () => {
+    const id = await account();
+    await start(id, undefined, ["BTC-USDT-SWAP", "SOL-USDT-SWAP"], "external");
+    modelFails = true;
+    await db.prisma.marketEntry.deleteMany({ where: { spaceId: owner.spaceId } });
+    const fetchSnapshot = vi.fn(async (): Promise<PaperPerpetualSnapshot> => {
+      throw new Error("unused market offline");
+    });
+    const wake = await payload(id, true);
+    await handlePerpetualPaperWake({ ...worker(), fetchSnapshot }, wake);
+    await handlePerpetualPaperWake({ ...worker(), fetchSnapshot }, wake);
+    expect(fetchSnapshot).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+    expect(await db.prisma.tradingPaperPerpetualEngine.count({ where: { ledgerId: id } })).toBe(0);
+    expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
+      sessionStatus: "active",
+      runtimeError: null,
+      pendingExternalProposal: null,
+    });
+    const row = await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+      where: { ledgerId: id },
+    });
+    expect(row.nextScheduledFor!.getTime()).toBeGreaterThan(Date.parse(wake.scheduledFor));
+    await controlPerpetualPaperWorkspace(deps(), owner, {
+      action: "submit_external_proposal",
+      ledgerId: id,
+      commandId: randomUUID(),
+      expectedRevision: row.revision,
+      decision: { kind: "no_trade", reason: "Expired before a worker wake" },
+    });
+    const queued = await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+      where: { ledgerId: id },
+    });
+    const control = parsePerpetualControl(queued);
+    control.pendingExternalProposal!.expiresAt = new Date(0).toISOString();
+    await db.prisma.tradingPaperPerpetualWorkspace.update({
+      where: { ledgerId: id },
+      data: { control: perpetualPaperJson(control), controlSha256: perpetualPaperHash(control) },
+    });
+    await handlePerpetualPaperWake({ ...worker(), fetchSnapshot }, await payload(id, true));
+    expect(fetchSnapshot).not.toHaveBeenCalled();
+    expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
+      sessionStatus: "active",
+      pendingExternalProposal: null,
+      runtimeError: null,
+    });
+  });
+
   it("suppresses expired external proposals using the database clock without mutating audit data", async () => {
     const id = await account();
     await start(id, undefined, ["BTC-USDT-SWAP"], "external");
@@ -523,7 +571,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       });
       try {
         const id = await account();
-        await start(id, engine, ["BTC-USDT-SWAP"], "external");
+        await start(id, engine, ["BTC-USDT-SWAP", "SOL-USDT-SWAP"], "external");
         const first = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
         await controlPerpetualPaperWorkspace({ ...deps(), engine }, owner, {
           action: "submit_external_proposal",
@@ -636,6 +684,19 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         expect(replayed.totalFeesQuote).toBe(held.totalFeesQuote);
         expect(replayed.acceptedEvents).toBe(held.acceptedEvents);
         expect(calls).toHaveLength(0);
+        const protectionFetch = vi.fn(async (instrument: string) => {
+          if (instrument === "SOL-USDT-SWAP") throw new Error("unused selected market offline");
+          return snapshot(instrument);
+        });
+        await handlePerpetualPaperWake(
+          { ...worker(), engine, fetchSnapshot: protectionFetch },
+          await payload(id, true),
+        );
+        expect(protectionFetch.mock.calls.map(([instrument]) => instrument)).toEqual([
+          "BTC-USDT-SWAP",
+        ]);
+        expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))!.runtimeError).toBeNull();
+
         await handlePerpetualPaperWake(
           {
             ...worker(),
