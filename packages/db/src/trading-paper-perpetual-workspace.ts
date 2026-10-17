@@ -780,7 +780,7 @@ export async function recordPerpetualResearchTick(
             Date.parse(pending.expiresAt) <= clock.getTime() ||
             Date.parse(pending.submittedAt) > clock.getTime()
           )
-            decision = { kind: "no_trade", reason: "Срок предложения ChatGPT через R истёк" };
+            decision = { kind: "no_trade", reason: "Срок внешнего предложения истёк" };
         }
         if (decision.kind !== "no_trade") {
           const now = await perpetualDatabaseClock(tx);
