@@ -621,6 +621,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       sessionStatus: "active",
       runtimeError: null,
       pendingExternalProposal: null,
+      lastDecision: { outcome: "no_trade" },
     });
     expect((await state(id)).openPositions).toHaveLength(0);
   });
