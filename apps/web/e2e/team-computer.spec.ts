@@ -1,4 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import {
   activeBotId,
   captureScreenshot,
@@ -128,22 +129,49 @@ test("user control leaves another Team bot's screen available", async ({ page },
 test("a failed control release keeps the computer open for retry", async ({ page }, testInfo) => {
   await signup(page, `team-release-${Date.now()}@rakazo.test`, "password12", "Team Release");
   await completeOnboarding(page);
-  await page.getByTitle("Agent computer").click();
-  await page.getByTestId("computer-preview").hover();
-  await page.getByTestId("computer-preview-open").click();
-  const chrome = page.getByTestId("computer-chrome");
-  const release = chrome.getByRole("button", { name: "Release", exact: true });
-  await expect(release).toBeVisible();
-  await page.route("**/rpc/computer/release", (route) =>
-    route.fulfill({ status: 500, body: "release unavailable" }),
-  );
-  await release.click();
-  await expect(page.getByText("Could not continue", { exact: true }).last()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible();
-  await captureScreenshot(page, testInfo, "48-team-computer-release-retry");
-  await page.unroute("**/rpc/computer/release");
-  await release.click();
-  await expect(page.getByRole("button", { name: "Close computer" })).toBeHidden();
+  let deliverScreen!: () => void;
+  let screenRequested!: () => void;
+  const screenGate = new Promise<void>((resolve) => {
+    deliverScreen = resolve;
+  });
+  const firstScreen = new Promise<void>((resolve) => {
+    screenRequested = resolve;
+  });
+  await page.route("**/rpc/computer/screenUrl", async (route) => {
+    const response = await route.fetch();
+    screenRequested();
+    await screenGate;
+    await route.fulfill({ response });
+  });
+  try {
+    await page.getByTitle("Agent computer").click();
+    await page.getByTestId("computer-preview").hover();
+    await page.getByTestId("computer-preview-open").click();
+    const chrome = page.getByTestId("computer-chrome");
+    const release = chrome.getByRole("button", { name: "Release", exact: true });
+    await expect(release).toBeVisible();
+    await firstScreen;
+    await page.route("**/rpc/computer/release", (route) =>
+      route.fulfill({ status: 500, body: "release unavailable" }),
+    );
+    await release.click();
+    await expect(page.getByText("Could not continue", { exact: true }).last()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible();
+    const screenResponse = page.waitForResponse((response) =>
+      response.url().includes("/rpc/computer/screenUrl"),
+    );
+    deliverScreen();
+    await screenResponse;
+    await expect(page.getByTitle("Bot screen")).toBeVisible();
+    await expect(page.getByRole("alert").filter({ hasText: "Could not continue" })).toBeVisible();
+    await captureScreenshot(page, testInfo, "48-team-computer-release-retry");
+    await page.unroute("**/rpc/computer/release");
+    await release.click();
+    await expect(page.getByRole("button", { name: "Close computer" })).toBeHidden();
+  } finally {
+    deliverScreen();
+    await page.unroute("**/rpc/computer/screenUrl");
+  }
 });
 
 test("an active Team bot must be stopped before user takeover", async ({ page }, testInfo) => {

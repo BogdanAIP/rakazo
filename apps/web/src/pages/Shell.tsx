@@ -679,6 +679,7 @@ export function ShellPage() {
     offsetTop: number;
   } | null>(null);
   const [computerError, setComputerError] = useState<string | null>(null);
+  const [computerReleaseError, setComputerReleaseError] = useState<string | null>(null);
   // Screen-load failures can sit beside a still-valid embed URL; boot and
   // takeover failures must stay visible even when a URL remains.
   const [computerErrorFromScreen, setComputerErrorFromScreen] = useState(false);
@@ -2685,6 +2686,7 @@ export function ShellPage() {
       commitComputer(targetComputer);
       setScreenUrl(targetScreen);
     }
+    setComputerReleaseError(null);
     setComputerOpen(true);
     computerVisible.current = true;
     const needsTakeover = !userHoldsComputerControl(targetComputer, id);
@@ -2711,6 +2713,7 @@ export function ShellPage() {
     async (reason?: ComputerReleaseReason) => {
       const botId = computerBotIdRef.current ?? activeBotId.current;
       if (!botId) return;
+      setComputerReleaseError(null);
       try {
         await rpc.computer.release({ botId, reason });
         if (computerBotIdRef.current !== botId && activeBotId.current !== botId) return;
@@ -2723,8 +2726,7 @@ export function ShellPage() {
         }
       } catch {
         if (computerBotIdRef.current !== botId && activeBotId.current !== botId) return;
-        setComputerError(t`Could not continue`);
-        setComputerErrorFromScreen(false);
+        setComputerReleaseError(t`Could not continue`);
       }
     },
     [t],
@@ -4644,12 +4646,12 @@ export function ShellPage() {
                 </Button>
               </div>
             </div>
-            {sendError ? (
+            {computerReleaseError || sendError ? (
               <div
                 role="alert"
                 className="border-b border-destructive/40 bg-destructive/10 px-[18px] py-2 text-[13px] text-destructive"
               >
-                {sendError}
+                {computerReleaseError ?? sendError}
               </div>
             ) : null}
             <div className="relative min-h-0 flex-1 bg-background">
