@@ -15,6 +15,7 @@ export type ScratchpadToolDeps = {
 export type ScratchpadRow = {
   id: string;
   botId: string;
+  projectId: string | null;
   title: string;
   status: string;
   notes: string;
@@ -26,6 +27,7 @@ export function mapScratchpadItem(row: ScratchpadRow) {
   return {
     id: row.id,
     botId: row.botId,
+    projectId: row.projectId ?? null,
     title: row.title,
     status: coerceScratchpadStatus(row.status),
     notes: row.notes,
@@ -47,6 +49,7 @@ export async function listScratchpadItems(
   input: {
     spaceId: string;
     botId: string;
+    projectId?: string;
     status?: ScratchpadStatus;
     includeDone?: boolean;
   },
@@ -60,6 +63,7 @@ export async function listScratchpadItems(
     where: {
       spaceId: input.spaceId,
       botId: input.botId,
+      ...(input.projectId ? { projectId: input.projectId } : {}),
       ...statusFilter,
     },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],

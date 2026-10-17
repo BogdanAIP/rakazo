@@ -226,6 +226,8 @@ describe("graphical computer spec", () => {
     expect(desktop).toMatch(/x-scheme-handler\/http/);
     expect(desktop).toMatch(/x-scheme-handler\/https/);
     expect(start).not.toMatch(/windowsize 1280 800/);
+    expect(dockerfile).toMatch(/wmctrl/);
+    expect(dockerfile).toMatch(/rakazo-focus-or-launch/);
   });
 
   it("ships a sha256-pinned gh CLI", () => {
@@ -240,6 +242,20 @@ describe("graphical computer spec", () => {
     expect(dockerfile).toMatch(/sha256sum -c/);
     expect(dockerfile).toMatch(/\/usr\/local\/bin --strip-components=2 "gh_/);
     expect(dockerfile).toMatch(/gh --version/);
+  });
+
+  it("ships document text extractors", () => {
+    const root = path.resolve(import.meta.dirname, "../../computer");
+    const dockerfile = readFileSync(path.join(root, "Dockerfile"), "utf8");
+    expect(dockerfile).toMatch(/--no-install-recommends/);
+    expect(dockerfile).toMatch(/\bpoppler-utils\b/);
+    expect(dockerfile).toMatch(/\bpandoc\b/);
+    expect(dockerfile).toMatch(/\bpython3-openpyxl\b/);
+    expect(dockerfile).not.toMatch(/libreoffice/i);
+    expect(dockerfile).toMatch(/pdftotext -v/);
+    expect(dockerfile).toMatch(/pdfinfo -v/);
+    expect(dockerfile).toMatch(/pandoc --version/);
+    expect(dockerfile).toMatch(/import openpyxl/);
   });
 
   it.skipIf(process.platform === "win32")(

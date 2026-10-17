@@ -9,6 +9,7 @@ import {
   CodexCatalogCache,
   createBackgroundJobHandlers,
   createCloudAgentConnection,
+  createConfiguredPaperPerpetualEngine,
   createConnectorStack,
   createJobReconciler,
   createMessagingContextLoader,
@@ -37,14 +38,17 @@ import {
   PipedreamConnector,
   PostgresRealtimeFanout,
   pipedreamConfigFromEnv,
+  RemoteWindowsHostCommandDispatcher,
   reconcileCloudAgents,
   reconcileComputerUpdates,
+  reconcileTradingPaperWorkspaces,
   resolveDeploymentModel,
   resolvePiSessionRoot,
   resolveSandboxProvider,
   ScriptedAgentRuntime,
   SpaceMemoryProviderResolver,
   sandboxProviderOptionsFromEnv,
+  WindowsHostSandboxProvider,
 } from "@rakazo/adapters";
 import { resolveEncryptionKey, resolveSupervisorToken } from "@rakazo/core";
 import {
@@ -52,6 +56,7 @@ import {
   createThreadEvents,
   isTooManyDatabaseConnections,
   parsePositiveInteger,
+  pushSessionExpiresAt,
 } from "@rakazo/db";
 import { SERVICE_NAMES } from "@rakazo/logging";
 import { createRootLogger } from "@rakazo/logging/axiom";
@@ -60,6 +65,17 @@ import { MarkdownMemoryStore } from "@rakazo/memory";
 const logger = createRootLogger(SERVICE_NAMES.worker);
 
 async function main() {
+  const windowsHostEnabled = process.env.RAKAZO_WINDOWS_HOST_ENABLED === "true";
+  const windowsHostApiUrl = process.env.RAKAZO_WINDOWS_HOST_API_INTERNAL_URL?.trim();
+  const windowsHostInternalToken = process.env.RAKAZO_WINDOWS_HOST_INTERNAL_TOKEN?.trim();
+  if (
+    windowsHostEnabled &&
+    (!windowsHostApiUrl || !windowsHostInternalToken || windowsHostInternalToken.length < 32)
+  ) {
+    throw new Error(
+      "RAKAZO_WINDOWS_HOST_API_INTERNAL_URL and a 32+ character RAKAZO_WINDOWS_HOST_INTERNAL_TOKEN are required",
+    );
+  }
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) throw new Error("DATABASE_URL is required");
   // Shared by Prisma, the reconciliation leadership lock, and both graphile-worker
@@ -79,6 +95,7 @@ async function main() {
   const events = createThreadEvents(prisma, realtime, {
     runSecretWriter: createRunSecretWriter(secrets),
   });
+  const perpetualPaperEngine = createConfiguredPaperPerpetualEngine();
   const dataDir = process.env.DATA_DIR ?? "./data";
   const runtime =
     process.env.AGENT_RUNTIME === "scripted"
@@ -87,12 +104,20 @@ async function main() {
   // Same resolver the API uses, so both processes agree on provider, model and key.
   const { key: deploymentModelKey } = resolveDeploymentModel();
   const sandboxProvider = resolveSandboxProvider(process.env);
+  const windowsHostProvider =
+    windowsHostEnabled && windowsHostApiUrl && windowsHostInternalToken
+      ? new WindowsHostSandboxProvider(
+          prisma,
+          new RemoteWindowsHostCommandDispatcher(windowsHostApiUrl, windowsHostInternalToken),
+        )
+      : undefined;
   const sandbox = createRunSandbox(sandboxProvider, {
     ...sandboxProviderOptionsFromEnv(process.env),
     supervisorUrl: process.env.SANDBOX_SUPERVISOR_URL ?? "http://127.0.0.1:7091",
     supervisorToken: sandboxProvider === "docker" ? resolveSupervisorToken(process.env) : undefined,
     dataDir,
     prisma,
+    hostProvider: windowsHostProvider,
   });
   const allowPrivateEndpoint = process.env.MCP_ALLOW_PRIVATE_ENDPOINT === "true";
   const mcpOAuth = new McpOAuthBroker(prisma, secrets, {}, allowPrivateEndpoint);
@@ -162,6 +187,10 @@ async function main() {
     });
   // One provider instance so emulator launches and polls share the same Map.
   const cloudAgent = createCloudAgentConnection();
+  // Shared with the reconciler so a stuck wait uses the same push path as a finish notice.
+  const notifications = new ExpoPushProvider(dataDir, (sessionId) =>
+    pushSessionExpiresAt(prisma, sessionId),
+  );
   const executor = createRunExecutor({
     prisma,
     runtime,
@@ -195,7 +224,7 @@ async function main() {
     mcpAllowPrivateEndpoint: process.env.MCP_ALLOW_PRIVATE_ENDPOINT === "true",
     deploymentModelKey,
     dataDir,
-    notifications: new ExpoPushProvider(dataDir),
+    notifications,
     jobs,
     events,
     messaging: messaging ? createMessagingContextLoader(prisma) : undefined,
@@ -203,6 +232,7 @@ async function main() {
     cloudAgent,
   });
 
+  await reconcileTradingPaperWorkspaces({ prisma, jobs, engine: perpetualPaperEngine }, true);
   const jobHandlers = createBackgroundJobHandlers({
     executor,
     prisma,
@@ -211,6 +241,7 @@ async function main() {
     jobs,
     events,
     workerId: process.pid.toString(),
+    perpetualPaperEngine,
     runtime,
     secretStore: secrets,
     memoryProviders,
@@ -241,9 +272,12 @@ async function main() {
     prisma,
     jobs,
     events,
+    notifications,
     leadership: createPostgresReconciliationLeadership(pool),
     reconcileCloudAgents: () => reconcileCloudAgents({ prisma, jobs, cloudAgent }),
     reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
+    reconcilePaperWorkspaces: () =>
+      reconcileTradingPaperWorkspaces({ prisma, jobs, engine: perpetualPaperEngine }),
   });
   reconciler.start();
 
@@ -255,6 +289,7 @@ async function main() {
       await reconciler.stop();
       await jobHost.stop();
       await jobs.close();
+      perpetualPaperEngine?.dispose();
       await realtime.close();
       await connector.stop();
       await mcp.close();

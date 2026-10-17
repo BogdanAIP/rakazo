@@ -13,6 +13,8 @@ function handlers(): BackgroundJobHandlers {
     "history.compact": vi.fn(async () => undefined),
     "messaging.deliver": vi.fn(async () => undefined),
     "cloud_agent.poll": vi.fn(async () => undefined),
+    "paper.worker-preflight": vi.fn(async () => undefined),
+    "paper.protection-check": vi.fn(async () => undefined),
   };
 }
 

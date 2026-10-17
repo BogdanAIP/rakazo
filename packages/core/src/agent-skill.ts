@@ -415,7 +415,34 @@ function parseSimpleYamlObject(text: string): Record<string, unknown> {
       continue;
     }
     if (raw === "") {
-      // Nested map or list on following indented lines.
+      // Nested map/list or an implicit multi-line plain scalar on following indented lines.
+      // The latter is valid YAML and is used by first-party SKILL.md files such as
+      // google-gemini/gemini-cli descriptions.
+      const continuation: string[] = [];
+      let cursor = i + 1;
+      while (
+        cursor < lines.length &&
+        (/^\s+/.test(lines[cursor] ?? "") || (lines[cursor] ?? "").trim() === "")
+      ) {
+        continuation.push(lines[cursor] ?? "");
+        cursor += 1;
+      }
+
+      const firstContent = continuation.find((value) => value.trim() !== "");
+      const firstNestedLine = firstContent?.replace(/^\s+/, "") ?? "";
+      const startsList = /^-\s+/.test(firstNestedLine);
+      const startsMap = /^([A-Za-z_][\w-]*):\s*(.*)$/.test(firstNestedLine);
+
+      if (firstContent && !startsList && !startsMap) {
+        result[key] = decodeYamlBlockScalar(continuation, {
+          style: ">",
+          chomp: "strip",
+          indent: null,
+        });
+        i = cursor;
+        continue;
+      }
+
       const nested: Record<string, unknown> = {};
       const list: unknown[] = [];
       let mode: "empty" | "map" | "list" = "empty";

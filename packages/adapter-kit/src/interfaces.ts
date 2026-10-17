@@ -1,3 +1,4 @@
+import type { WindowsHostBrowserRequest, WindowsHostBrowserResult } from "@rakazo/contracts";
 import type {
   AdapterContext,
   AdapterDescriptor,
@@ -88,6 +89,12 @@ export interface SandboxProvider {
     request: PageBrowserCommand,
     context: AdapterContext,
   ): Promise<PageBrowserResult>;
+  /** Host-only explicit bearer browser sessions. Do not reuse generic per-bot pageBrowser. */
+  desktopBrowserSession?(
+    computer: ComputerRef,
+    request: WindowsHostBrowserRequest,
+    context: AdapterContext,
+  ): Promise<WindowsHostBrowserResult>;
   /** Allocate or reconnect the computer, returning its reference before fallible setup. */
   provision(
     request: {

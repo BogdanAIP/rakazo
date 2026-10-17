@@ -129,6 +129,7 @@ services:
       CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       SCREEN_PROXY_SECRET: ""
       WAKEUP_DRIVER: graphile
+      RAKAZO_WINDOWS_HOST_API_INTERNAL_URL: http://api:3100
       AGENT_RUNTIME: pi
       # Optional egress proxy (Mainland / corporate). Empty = unset; either case works.
       HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}

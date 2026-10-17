@@ -4,9 +4,15 @@ import {
   botSecretDestinationSchema,
   SecretAskPurpose,
   SecretHttpRequest,
+  TradingResolvedResearchApprovalScopeSchema,
 } from "@rakazo/contracts";
 import { z } from "zod";
 import { allowPrivateHttpSecretOrigins } from "./bot-secrets.js";
+
+// Keep both explicit-approval tool inputs aligned with the canonical v1/v2 scope contract.
+const resolvedResearchApprovalScopeJsonSchema = z.toJSONSchema(
+  TradingResolvedResearchApprovalScopeSchema,
+);
 
 // The owner flag can land in process.env after static imports run (loadRootEnv
 // parses .env once the entry module is already executing), so the model-facing
@@ -149,31 +155,46 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "computer_act",
     description:
-      "Perform up to 24 ordered desktop actions on this bot's computer and return the resulting screen. Batch only predictable actions; stop before an outcome you need to inspect. Action kinds: click, move, down, up, type, key, scroll, wait.",
+      "Perform up to 24 ordered desktop actions on this bot's computer and return the resulting screen. Batch only predictable actions; stop before an outcome you need to inspect. Action kinds: click, move, down, up, type, key, scroll, wait, focus (raises the application's window, launching it if absent).",
     inputSchema: {
       type: "object",
       properties: {
         actions: {
           type: "array",
           items: {
-            type: "object",
-            properties: {
-              kind: {
-                type: "string",
-                enum: ["click", "move", "down", "up", "type", "key", "scroll", "wait"],
+            oneOf: [
+              {
+                type: "object",
+                properties: {
+                  kind: { type: "string", enum: ["focus"] },
+                  application: { type: "string", minLength: 1, pattern: "\\S" },
+                  uri: { type: "string" },
+                },
+                required: ["kind", "application"],
               },
-              x: { type: "number" },
-              y: { type: "number" },
-              button: { type: "string", enum: ["left", "right"] },
-              double: { type: "boolean" },
-              text: { type: "string" },
-              key: { type: "string" },
-              modifiers: { type: "array", items: { type: "string" } },
-              direction: { type: "string", enum: ["up", "down"] },
-              amount: { type: "number" },
-              ms: { type: "number" },
-            },
-            required: ["kind"],
+              {
+                type: "object",
+                properties: {
+                  kind: {
+                    type: "string",
+                    enum: ["click", "move", "down", "up", "type", "key", "scroll", "wait"],
+                  },
+                  x: { type: "number" },
+                  y: { type: "number" },
+                  button: { type: "string", enum: ["left", "right"] },
+                  double: { type: "boolean" },
+                  text: { type: "string" },
+                  key: { type: "string" },
+                  modifiers: { type: "array", items: { type: "string" } },
+                  direction: { type: "string", enum: ["up", "down"] },
+                  amount: { type: "number" },
+                  ms: { type: "number" },
+                  application: { type: "string" },
+                  uri: { type: "string" },
+                },
+                required: ["kind"],
+              },
+            ],
           },
         },
         observe: { type: "boolean" },
@@ -280,7 +301,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "shell",
     description:
-      "Run a command inside this bot's computer. cwd defaults to the bot's folder on a Team Computer and the workspace root on a Private Computer.",
+      "Run a command inside this bot's computer. cwd defaults to the bot's folder on a Team Computer and the workspace root on a Private Computer. Output can arrive while the command is still running; tell the user any one-time code or sign-in URL in that output.",
     inputSchema: {
       type: "object",
       properties: {
@@ -303,7 +324,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "launch_app",
     description:
-      "Launch an installed graphical application on this bot's computer, optionally with a URI, and return the resulting screen.",
+      "Launch an installed graphical application on this bot's computer, or raise its window if already open; optionally with a URI. Returns the resulting screen.",
     inputSchema: {
       type: "object",
       properties: {
@@ -364,8 +385,9 @@ export const builtinAgentTools: ConnectorTool[] = [
     get description() {
       return secretAskToolSurface().description;
     },
-    // Exactly one destination: credential XOR connectionId. Sibling optionals
-    // looked schema-valid to models but the executor rejects both and neither.
+    // The original schema is credential XOR connectionId. The wire schema is one
+    // object, so a valid credential may also carry connectionId; the executor
+    // keeps that credential and uses connectionId only when no credential was sent.
     get inputSchema() {
       return secretAskToolSurface().inputSchema;
     },
@@ -488,6 +510,19 @@ export const builtinAgentTools: ConnectorTool[] = [
         path: { type: "string" },
       },
       required: ["content"],
+    },
+  },
+  {
+    name: "save_shared_memory",
+    description:
+      "Save a Space shared memory document every bot reads. Replaces the full content, so include everything it should keep.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Document name, for example MEMORY.md." },
+        content: { type: "string", description: "The document's complete new content." },
+      },
+      required: ["path", "content"],
     },
   },
   {
@@ -858,6 +893,249 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    name: "paper_trading_control",
+    description:
+      "Propose enabling or disabling Rakazo's synthetic PAPER-ONLY trading capability for one existing ledger at an exact policy revision. Use only when the user explicitly asks for this control change. This always requires a fresh confirmation card; it cannot be auto-reviewed or permanently allowed. It never authorizes live exchange orders, credentials, leverage, futures, wallets, or real funds, and it cannot change risk limits.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["enable", "disable"] },
+        ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+        expected_policy_revision: { type: "integer", minimum: 0 },
+      },
+      required: ["action", "ledger_id", "expected_policy_revision"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "paper_position_control",
+    description:
+      "Propose a short-lived, one-time authorization for a protective synthetic PAPER exit of exactly one already-open position while the paper kill-switch remains latched. Use only when the user explicitly asks to authorize management of that existing paper position. This always requires a fresh confirmation card and cannot be auto-reviewed or permanently allowed. This authorization step does not close the position, enable new entries, contact an exchange, or authorize live trading.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["authorize_protective_stop_exit"] },
+        ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+        position_id: { type: "string", minLength: 1, maxLength: 128 },
+        expected_policy_revision: { type: "integer", minimum: 0 },
+      },
+      required: ["action", "ledger_id", "position_id", "expected_policy_revision"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "paper_worker_control",
+    description:
+      "Propose enabling or disabling a default-deny background PAPER-worker gate for one ledger at an exact paper-policy revision. This always requires a fresh confirmation card and cannot be auto-reviewed or permanently allowed. Enabling records only permission plus a 5-1440 minute cadence; it does not create a schedule, enqueue Graphile work, wake a model, place any order, contact an exchange, or enable live trading.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["enable", "disable"] },
+        ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+        expected_policy_revision: { type: "integer", minimum: 0 },
+        cadence_minutes: { type: "integer", minimum: 5, maximum: 1440 },
+      },
+      required: ["action", "ledger_id", "expected_policy_revision"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "paper_worker_start",
+    description:
+      "Propose scheduling exactly one delayed read-only PAPER worker preflight for one ledger at an exact already-approved worker-gate revision. This always requires a fresh confirmation card and cannot be auto-reviewed or permanently allowed. The configured gate cadence is used; this action does not create recurrence, wake a model, poll market data, mutate the trading ledger, place any order, contact an exchange, or authorize live trading.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+        expected_gate_revision: { type: "integer", minimum: 0 },
+      },
+      required: ["ledger_id", "expected_gate_revision"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "paper_worker_recurrence_control",
+    description:
+      "Propose enabling or disabling explicit permission for future recurring read-only PAPER preflights on one ledger at an exact worker-gate revision. This always requires a fresh confirmation card and cannot be auto-reviewed or permanently allowed. Enabling permission does not enqueue a job, create recurrence, wake a model, poll market data, mutate the trading ledger, place any order, contact an exchange, or authorize live trading.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["enable", "disable"] },
+        ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+        expected_gate_revision: { type: "integer", minimum: 0 },
+      },
+      required: ["action", "ledger_id", "expected_gate_revision"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "paper_worker_market_target_control",
+    description:
+      "Propose enabling or disabling one owner-approved public PAPER market-observation target (OKX or BingX spot symbol) for a ledger at an exact worker-gate revision. This always requires a fresh confirmation card and cannot be auto-reviewed or permanently allowed. It records configuration only: it does not fetch market data, enqueue work, wake a model, mutate virtual money, contact private exchange endpoints, or authorize live trading.",
+    inputSchema: {
+      oneOf: [
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "enable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+            venue: { type: "string", enum: ["okx", "bingx"] },
+            symbol: { type: "string", pattern: "^[A-Z0-9]{1,40}-[A-Z0-9]{1,40}$" },
+          },
+          required: ["action", "ledger_id", "expected_gate_revision", "venue", "symbol"],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "disable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+          },
+          required: ["action", "ledger_id", "expected_gate_revision"],
+          additionalProperties: false,
+        },
+      ],
+    },
+  },
+  {
+    name: "paper_worker_signal_control",
+    description:
+      "Propose enabling or disabling explicit permission for the PAPER worker to use durable breakout_20_1h_v1 research proposals in a future automatic synthetic PAPER reservation stage. This always requires fresh owner confirmation and cannot be auto-reviewed or permanently allowed. Enabling this permission does not reserve or spend virtual funds, create a fill, place an exchange order, use private APIs, or authorize live trading.",
+    inputSchema: {
+      oneOf: [
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "enable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+            strategy_id: { type: "string", const: "breakout_20_1h_v1" },
+          },
+          required: ["action", "ledger_id", "expected_gate_revision", "strategy_id"],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "disable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+          },
+          required: ["action", "ledger_id", "expected_gate_revision"],
+          additionalProperties: false,
+        },
+      ],
+    },
+  },
+  {
+    name: "paper_resolved_research_control",
+    description:
+      "Propose enabling or disabling one exact Market Resolver/Skill research scope for PAPER-only use. This always requires fresh owner confirmation and cannot be auto-reviewed or permanently allowed. It records permission only: it cannot reserve or spend virtual funds, fill or close a position, contact private exchange APIs, sign or broadcast a transaction, place an exchange order, or authorize live trading.",
+    inputSchema: {
+      oneOf: [
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "enable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+            scope: resolvedResearchApprovalScopeJsonSchema,
+          },
+          required: ["action", "ledger_id", "expected_gate_revision", "scope"],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "disable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+          },
+          required: ["action", "ledger_id", "expected_gate_revision"],
+          additionalProperties: false,
+        },
+      ],
+    },
+  },
+  {
+    name: "paper_resolved_research_fill_control",
+    description:
+      "Propose enabling or disabling a separate owner-approved permission for a future synthetic PAPER fill of G2 reservations from one exact Market Resolver/Skill research scope. This always requires fresh owner confirmation and cannot be auto-reviewed or permanently allowed. It records permission only: it does not fill any reservation, fetch market data, contact private exchange APIs, sign or broadcast a transaction, place an exchange order, or authorize live trading.",
+    inputSchema: {
+      oneOf: [
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "enable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+            expected_research_revision: { type: "integer", minimum: 1 },
+            scope: resolvedResearchApprovalScopeJsonSchema,
+          },
+          required: [
+            "action",
+            "ledger_id",
+            "expected_gate_revision",
+            "expected_research_revision",
+            "scope",
+          ],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "disable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+            expected_research_revision: { type: "integer", minimum: 0 },
+          },
+          required: ["action", "ledger_id", "expected_gate_revision", "expected_research_revision"],
+          additionalProperties: false,
+        },
+      ],
+    },
+  },
+  {
+    name: "paper_worker_fill_control",
+    description:
+      "Propose enabling or disabling a separate owner-approved permission for the PAPER worker to automatically attempt a synthetic full fill of an already reserved B7 PAPER hold produced under the exact approved breakout_20_1h_v1 signal-gate revision. This always requires fresh owner confirmation and cannot be auto-reviewed or permanently allowed. Enabling this permission does not fill any reservation, fetch market data, place an exchange order, use private APIs, or authorize live trading.",
+    inputSchema: {
+      oneOf: [
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "enable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+            expected_signal_revision: { type: "integer", minimum: 0 },
+            strategy_id: { type: "string", const: "breakout_20_1h_v1" },
+          },
+          required: [
+            "action",
+            "ledger_id",
+            "expected_gate_revision",
+            "expected_signal_revision",
+            "strategy_id",
+          ],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "disable" },
+            ledger_id: { type: "string", minLength: 1, maxLength: 128 },
+            expected_gate_revision: { type: "integer", minimum: 0 },
+            expected_signal_revision: { type: "integer", minimum: 0 },
+          },
+          required: ["action", "ledger_id", "expected_gate_revision", "expected_signal_revision"],
+          additionalProperties: false,
+        },
+      ],
+    },
+  },
+  {
     name: "spawn_bot",
     description:
       "Create a full, regular bot — the same kind the user creates from the + button. It gets its own thread, computer, and memory, and appears as a peer in the bot list. Do not also call run_subagent. Creating the bot is the whole action. Only set prompt if the user asked that new bot to start work immediately.",
@@ -1028,3 +1306,16 @@ export const agentConnectionTools: ConnectorTool[] = [
     },
   },
 ];
+
+/** Shared documents are read by every bot, so a single save stays bounded. */
+export const MAX_SHARED_MEMORY_CHARS = 4_000;
+
+export function sharedMemorySaveError(args: Record<string, unknown>): string | undefined {
+  const path = String(args.path ?? "").trim();
+  if (!path) return "path is required";
+  const content = String(args.content ?? "");
+  if (content.length > MAX_SHARED_MEMORY_CHARS) {
+    return `content exceeds ${MAX_SHARED_MEMORY_CHARS} characters`;
+  }
+  return undefined;
+}

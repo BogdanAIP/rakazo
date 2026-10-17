@@ -39,6 +39,7 @@ export default defineConfig({
       "infra/sandboxes/supervisor/src/**/*.test.ts",
       "infra/updater/src/**/*.test.ts",
       "apps/desktop/src/**/*.test.ts",
+      "apps/windows-host/src/**/*.test.ts",
       "apps/web/src/**/*.test.{ts,tsx}",
       "apps/mobile/lib/**/*.test.ts",
       "apps/mobile/plugins/**/*.test.js",

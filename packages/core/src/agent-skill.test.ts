@@ -75,6 +75,28 @@ describe("parseSkillMd", () => {
     expect(String(parsed.frontmatter.literal).endsWith("\n")).toBe(true);
   });
 
+  it("parses implicit multiline plain scalars used by first-party Skills", () => {
+    const doc = `---
+name: ci
+description:
+  A specialized skill for Gemini CLI that provides high-performance, fail-fast
+  monitoring of GitHub Actions workflows and automated local verification of CI
+  failures. It handles run discovery automatically—simply provide the branch name.
+compatibility: optional-extra
+---
+
+# Body
+`;
+    const parsed = parseSkillMd(doc);
+    expect("error" in parsed).toBe(false);
+    if ("error" in parsed) return;
+    expect(parsed.description).toBe(
+      "A specialized skill for Gemini CLI that provides high-performance, fail-fast monitoring of GitHub Actions workflows and automated local verification of CI failures. It handles run discovery automatically—simply provide the branch name.",
+    );
+    expect(parsed.frontmatter.description).toBe(parsed.description);
+    expect(parsed.frontmatter.compatibility).toBe("optional-extra");
+  });
+
   it("parses block scalar indicators with chomping and indent hints", () => {
     const doc = `---
 name: Folded

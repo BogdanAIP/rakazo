@@ -23,39 +23,42 @@ export function sandboxKindForBot(envKind: string, computerHost: string | null |
 
 export function createRunSandbox(
   kind: string,
-  opts: SandboxProviderOptions & { prisma?: PrismaClient },
+  opts: SandboxProviderOptions & { prisma?: PrismaClient; hostProvider?: SandboxProvider },
 ): SandboxProvider {
-  if (kind === "desktop") {
-    return new DesktopSandboxProvider({
-      root: opts.dataDir,
-      hostRoots: [homedir()],
-    });
-  }
-  const primary = createSandboxProvider(kind, opts);
-  if (kind !== "docker" || !opts.prisma) return primary;
-  return new HostAwareSandbox(
-    primary,
+  const hostProvider =
+    opts.hostProvider ??
     new DesktopSandboxProvider({
       root: opts.dataDir,
       hostRoots: [homedir()],
-    }),
-    async () => {
-      const settings = await opts.prisma!.deploymentSettings.findUnique({
-        where: { id: "default" },
-      });
-      return settings?.computerHost === "this-mac";
-    },
-  );
+    });
+  if (kind === "desktop") return hostProvider;
+  const primary = createSandboxProvider(kind, opts);
+  if (kind !== "docker" || !opts.prisma) return primary;
+  return new HostAwareSandbox(primary, hostProvider, async () => {
+    const settings = await opts.prisma!.deploymentSettings.findUnique({
+      where: { id: "default" },
+    });
+    return settings?.computerHost === "this-mac";
+  });
 }
 
 export class HostAwareSandbox implements SandboxProvider {
   readonly pageBrowser?: SandboxProvider["pageBrowser"];
+  readonly desktopBrowserSession?: SandboxProvider["desktopBrowserSession"];
 
   constructor(
     private readonly isolated: SandboxProvider,
     private readonly host: SandboxProvider,
     private readonly hostEnabled: () => Promise<boolean>,
   ) {
+    if (host.desktopBrowserSession) {
+      this.desktopBrowserSession = async (computer, request, context) => {
+        if (computer.kind !== "desktop") {
+          throw new Error("Physical desktop browser session requires a desktop computer");
+        }
+        return host.desktopBrowserSession!(computer, request, context);
+      };
+    }
     if (isolated.pageBrowser || host.pageBrowser) {
       this.pageBrowser = (computer, request, context) => {
         const provider = this.route(computer);

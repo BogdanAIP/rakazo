@@ -1,12 +1,18 @@
+import { Buffer } from "node:buffer";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { implement, ORPCError } from "@orpc/server";
 import type {
   AdapterContext,
   AgentHomeStore,
+  AgentRunModel,
   ArtifactStore,
+  ConnectorCall,
   ConnectorCatalogItem,
+  ConnectorRoute,
+  ConnectorTool,
   JobPublisher,
   MemoryStore,
+  PaperPerpetualEngine,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import {
@@ -34,6 +40,7 @@ import {
   applyCodexLiveCatalog,
   applyTeachingDesktopInput,
   archiveBot,
+  assertConnectorToolArgs,
   assertSafeRemoteUrl,
   buildMcpCredentialBlob,
   buildModelConnectPlaintext,
@@ -48,6 +55,8 @@ import {
   computerSupportsTerminal,
   computerSupportsUpdate,
   computerUpdateView,
+  controlPerpetualPaperWorkspace,
+  controlTradingPaperWorkspace,
   createVoiceProvider,
   defaultCatalogModelId,
   deletePushToken,
@@ -56,6 +65,15 @@ import {
   displayBotWorkspacePath,
   enqueueTakeoverContinuation,
   expireComputerControl,
+  fetchBingxPublicSpotSnapshot,
+  fetchOkxClosedOneHourHistory,
+  fetchOkxPaperPerpetualSnapshot,
+  fetchOkxPublicCatalog,
+  fetchOkxPublicPerpContext,
+  fetchOkxPublicPerpetualTickers,
+  fetchOkxPublicSpotTickers,
+  forgetBotSecret,
+  getBotSecretMetadata,
   hasActiveComputerControl,
   isAutoReviewCheckerConfigured,
   isComputerScreenUnavailable,
@@ -63,12 +81,15 @@ import {
   isScratchpadStatus,
   kickModelCredentialRefresh,
   listAvailablePiCatalog,
+  listBotSecretMetadata,
   listPiCatalog,
   listScratchpadItems,
   McpOAuthBroker,
   mapScratchpadItem,
   modelCredentialAuthKindsForSpace,
   modelCredentialDto,
+  normalizeSecretDestination,
+  PushSessionEndedError,
   parseModelSecret,
   pickReusableConnection,
   planLiveConnectionSync,
@@ -93,6 +114,8 @@ import {
   scriptedCatalogEntry,
   selectDefaultCredentialId,
   serializeModelSecret,
+  storeBotSecret,
+  sweepOkxSpotResearch,
   takeoverLeaseMs,
   toComputerRef,
   touchRunningComputer,
@@ -105,32 +128,41 @@ import type { Auth } from "@rakazo/auth";
 import type {
   Actor,
   Bot,
+  BotSecretMetadata,
   ComputerReleaseReason,
   ComputerStatus,
   McpServer,
   Me,
+  PaperPerpetualSnapshot,
   ProductEvent,
   SpaceNavigation,
 } from "@rakazo/contracts";
 import {
   ATTACHMENT_MAX_BYTES,
   appContract,
+  BotSecretAuth,
   ComputerCommandSchema,
   foldComputerCommands,
   IntegrationProviderIdSchema,
   OPENAI_COMPATIBLE_PROVIDER_ID,
+  PaperPerpetualWorkspaceStatusSchema,
+  TradingPaperWorkspaceStatusSchema,
   usableModelId,
+  WindowsHostCapabilitySchema,
 } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
   AttachmentValidationError,
   CALL_CLIENT_NONCE_PREFIX,
   callClientNonce,
+  clampCatalogThinkingLevel,
   containsSecret,
   expandSkillReferencesInPrompt,
   hasMixedOneShotSchedule,
   isOneShotRoutineCrons,
   nextCronDateAcrossStrict,
+  researchClosedHourBreakout,
+  scanTradingMarkets,
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
@@ -143,9 +175,13 @@ import {
   claimEmptySpaceDeletionForMember,
   createExternalConversationRepos,
   createGroupRepos,
+  createOwnedPerpetualExperimentAccounts,
+  createOwnedRpcAccessGrant,
+  createOwnedTradingPaperAccount,
   createRepos,
   createSpaceForMember,
   createThreadMessageInTransaction,
+  createWindowsHostPairing,
   defaultModelCredentialCandidates,
   deleteEmptySpaceForMember,
   deleteUnreferencedCredentialSecret,
@@ -157,14 +193,28 @@ import {
   InvalidSpaceNameError,
   IsolationError,
   issueMessagingLinkCode,
+  listOwnedPerpetualPaperJournals,
+  listOwnedRpcAccessGrants,
+  listOwnedTradingPaperJournals,
+  listWindowsHosts,
   lockOwnedGroup,
   newestModelCredentialOrder,
   newestVoiceCredentialOrder,
   Prisma,
   parseComputerMode,
+  perpetualMarketSource,
+  pushSessionExpiresAt,
+  readOwnedMarketPreparedResearch,
+  readOwnedPerpetualPaperJournal,
+  readOwnedPerpetualResearchHistory,
+  readOwnedPerpetualWorkspace,
+  readOwnedTradingPaperJournal,
+  readOwnedTradingPaperWorkspace,
   releaseSpaceDeletionClaim,
   renewSpaceDeletionClaim,
   restoreBotUnderComputerQuota,
+  revokeOwnedRpcAccessGrant,
+  revokeWindowsHost,
   SPACE_DELETION_CLAIM_TIMEOUT_MS,
   SpaceDeletionInProgressError,
   SpaceLimitError,
@@ -173,6 +223,8 @@ import {
   selectSpaceModelPreference,
   selectSpaceVoicePreference,
   touchGroupUpdatedAt,
+  tradingPaperMarketScope,
+  WindowsHostPairingError,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { deleteAgentSecret, listAgentSecrets, putAgentSecret } from "./agent-secrets.js";
@@ -195,6 +247,7 @@ import {
   toComputerStatus,
 } from "./computer-status.js";
 import { searchIntegrationCatalog } from "./integration-catalog.js";
+import { createMarketService } from "./market.js";
 import {
   dismissMcpServerApprovals,
   resolveMcpApprovalCards,
@@ -214,6 +267,7 @@ import {
   promptFocus,
   startOnboarding,
 } from "./onboarding.js";
+import { listRoutineRuns } from "./routine-runs.js";
 import { listSpaceRuns } from "./runs.js";
 import { addScreenProxyCapability } from "./screen-proxy.js";
 import { querySpaceSearch } from "./search.js";
@@ -260,6 +314,8 @@ const COMPUTER_COMMAND_HISTORY_EVENTS = 200;
 const THREAD_MESSAGE_PAGE_SIZE = 100;
 /** Silence longer than this on a thread stream is indistinguishable from a dead socket. */
 export const HEARTBEAT_MS = 20_000;
+/** A thread stream re-checks its session at least this often while it delivers. */
+export const SESSION_RECHECK_MS = 10_000;
 const EXPORT_MESSAGE_PAGE_SIZE = 500;
 
 async function reconcilePendingConnections(
@@ -452,6 +508,180 @@ function connectionContext(
   };
 }
 
+function projectSummaryDto(row: {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  memoryRevision: number;
+  archivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    description: row.description,
+    memoryRevision: row.memoryRevision,
+    archivedAt: row.archivedAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function projectDto(row: Parameters<typeof projectSummaryDto>[0] & { memory: string }) {
+  return { ...projectSummaryDto(row), memory: row.memory };
+}
+
+function projectResourceDto(row: {
+  id: string;
+  projectId: string;
+  kind: string;
+  ref: string;
+  label: string;
+  metadata: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    kind: row.kind,
+    ref: row.ref,
+    label: row.label,
+    metadata:
+      row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+        ? (row.metadata as Record<string, unknown>)
+        : {},
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+async function ownedProject(
+  deps: Pick<RouterDeps, "prisma">,
+  actor: Pick<Actor, "spaceId" | "userId">,
+  projectId: string,
+) {
+  const project = await deps.prisma.project.findFirst({
+    where: { id: projectId, spaceId: actor.spaceId, userId: actor.userId },
+  });
+  if (!project) throw new IsolationError();
+  return project;
+}
+
+function connectorRouteMatches(
+  actual: ConnectorRoute | undefined,
+  expected: ConnectorRoute,
+): boolean {
+  if (!actual) return false;
+  return (
+    actual.connectorId === expected.connectorId &&
+    actual.toolName === expected.toolName &&
+    (actual.resourceId ?? null) === (expected.resourceId ?? null) &&
+    String(actual.resourceRevision ?? "") === String(expected.resourceRevision ?? "") &&
+    (actual.catalogGroup ?? "") === (expected.catalogGroup ?? "")
+  );
+}
+
+async function capabilityContextForBot(
+  deps: Pick<RouterDeps, "prisma">,
+  actor: Actor,
+  botId: string,
+  operationId: string,
+  signal?: AbortSignal,
+  projectId?: string,
+): Promise<AdapterContext> {
+  const bot = await deps.prisma.bot.findFirst({
+    where: { id: botId, spaceId: actor.spaceId, userId: actor.userId },
+    select: { id: true },
+  });
+  if (!bot) throw new IsolationError();
+  const rows = await deps.prisma.connection.findMany({
+    where: { spaceId: actor.spaceId, userId: actor.userId, status: "connected" },
+    select: {
+      id: true,
+      connectorId: true,
+      provider: true,
+      providerRef: true,
+      displayName: true,
+    },
+  });
+  return {
+    ...connectionContext(actor, operationId, signal),
+    botId,
+    projectId,
+    connectedConnections: rows.map((row) => ({
+      id: row.id,
+      connectorId: row.connectorId,
+      externalId: row.provider,
+      displayName: row.displayName,
+      providerRef: row.providerRef ?? undefined,
+    })),
+    connectedProviders: rows
+      .filter((row) => row.connectorId === "composio")
+      .map((row) => row.provider),
+  };
+}
+
+async function resolveCapabilityTool(
+  deps: Pick<RouterDeps, "connectors">,
+  context: AdapterContext,
+  input: {
+    tool: string;
+    route: ConnectorRoute;
+    args: Record<string, unknown>;
+    executionId?: string;
+  },
+): Promise<{ call: ConnectorCall; tool: ConnectorTool }> {
+  const discovered = await deps.connectors.discoverTools(context);
+  const exposed = discovered.find(
+    (tool) => tool.name === input.tool && connectorRouteMatches(tool.route, input.route),
+  );
+  if (!exposed?.route) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: "Tool is unavailable or its route changed; rediscover tools before calling it.",
+    });
+  }
+  const call: ConnectorCall = {
+    tool: exposed.name,
+    args: input.args,
+    executionId: input.executionId ?? randomUUID(),
+    route: exposed.route,
+  };
+  const resolved = await deps.connectors.resolveCall?.(call, context);
+  const authoritative = resolved ?? { call, tool: exposed };
+  try {
+    assertConnectorToolArgs(authoritative.tool.inputSchema, authoritative.call.args);
+  } catch (error) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: error instanceof Error ? error.message : "Tool arguments are invalid.",
+    });
+  }
+  return authoritative;
+}
+
+async function invokeCapabilityTool(
+  deps: Pick<RouterDeps, "connectors">,
+  call: ConnectorCall,
+  context: AdapterContext,
+) {
+  const logs: string[] = [];
+  let result: unknown;
+  let error: string | null = null;
+  for await (const event of deps.connectors.execute(call, context)) {
+    if (event.type === "log") {
+      if (logs.length < 100) logs.push(event.message.slice(0, 2_000));
+    } else if (event.type === "result") {
+      result = event.data;
+    } else {
+      error = event.message.slice(0, 4_000);
+      break;
+    }
+  }
+  return { logs, ...(result !== undefined ? { result } : {}), error };
+}
 /** Loopback / LAN / Docker-network endpoints: the deployment owner, or everyone under the flag. */
 function mayUsePrivateEndpoint(actor: Actor, deps: Pick<RouterDeps, "env">): boolean {
   return actor.isDeploymentOwner || deps.env.mcpAllowPrivateEndpoint === true;
@@ -497,6 +727,13 @@ function mcpAssignmentDto(row: {
 }
 
 export interface RouterDeps {
+  perpetualPaperEngine?: PaperPerpetualEngine;
+  fetchPerpetualPaperSnapshot?: (instrument: string) => Promise<PaperPerpetualSnapshot>;
+  resolvePaperResearchModel?: (scope: {
+    spaceId: string;
+    userId: string;
+    botId?: string;
+  }) => Promise<AgentRunModel>;
   cloudAgent?: CloudAgentConnection | null;
   prisma: PrismaClient;
   events: ThreadEvents;
@@ -582,6 +819,63 @@ function mapSpaceLifecycleError(error: unknown): unknown {
   return error;
 }
 
+const BOT_SECRET_INPUT_ERRORS = [
+  "Invalid credential destination",
+  "Invalid credential length",
+  "Credential cannot be used with this authentication method",
+  "Remove the existing credential before changing its destination",
+  "Credential limit reached",
+];
+
+/** Map credential validation failures to a bad request without echoing the submitted value. */
+function mapBotSecretStoreError(error: unknown): unknown {
+  if (error instanceof ORPCError) return error;
+  if (
+    error instanceof Error &&
+    BOT_SECRET_INPUT_ERRORS.some((prefix) => error.message.startsWith(prefix))
+  ) {
+    return new ORPCError("BAD_REQUEST", { message: error.message });
+  }
+  // Login decoding failures: a JSON parse message can quote the submitted value, so never forward it.
+  if (error instanceof SyntaxError || (error instanceof Error && error.name === "ZodError")) {
+    return new ORPCError("BAD_REQUEST", {
+      message: "A website login needs a username and password",
+    });
+  }
+  return error;
+}
+
+function botSecretScope(actor: Actor, botId: string) {
+  return { userId: actor.userId, spaceId: actor.spaceId, botId };
+}
+
+function botSecretMetadataDto(row: {
+  name: string;
+  origin: string;
+  auth: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}): BotSecretMetadata {
+  // Unreadable or no-longer-storable destinations become auth:null so the owner UI stays remove-only.
+  const parsed = BotSecretAuth.safeParse(row.auth);
+  let auth: BotSecretMetadata["auth"] = null;
+  if (parsed.success) {
+    try {
+      normalizeSecretDestination({ name: row.name, origin: row.origin, auth: parsed.data });
+      auth = parsed.data;
+    } catch {
+      auth = null;
+    }
+  }
+  return {
+    name: row.name,
+    origin: row.origin,
+    auth,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
 const BOT_INTRO_PROMPT =
   "You were just created. In one reply, say what you understood your role to be from your title, description and instructions, and ask for anything you need to get started.";
 
@@ -628,7 +922,14 @@ export async function enqueueBotIntroRun(deps: RouterDeps, actor: Actor, bot: Bo
 }
 
 export function createRouter(deps: RouterDeps) {
-  const os = implement(appContract).$context<{ actor: Actor | null; signal?: AbortSignal }>();
+  const os = implement(appContract).$context<{
+    actor: Actor | null;
+    /** The signed-in session, so a push token ends with the session that registered it. */
+    sessionId?: string;
+    signal?: AbortSignal;
+    /** Re-runs the request's auth so a long-lived stream notices sign-out and revocation. */
+    stillAuthorized?: () => Promise<boolean>;
+  }>();
   const repos = createRepos(deps.prisma);
   const onboardingDeps = { prisma: deps.prisma, events: deps.events, connectors: deps.connectors };
   const mcpOAuth = deps.mcpOAuth ?? new McpOAuthBroker(deps.prisma, deps.secrets);
@@ -647,6 +948,21 @@ export function createRouter(deps: RouterDeps) {
     dataDir: deps.dataDir,
   });
   const agentSkills = createAgentSkillsService(deps.prisma);
+  const market = createMarketService(deps.prisma);
+  const perpetualResearchModelScope = async (
+    owner: { spaceId: string; userId: string },
+    ledgerId: string,
+  ) => {
+    const account = await deps.prisma.tradingPaperPerpetualWorkspace.findFirst({
+      where: {
+        ledgerId,
+        ledger: { spaceId: owner.spaceId, ownerUserId: owner.userId },
+      },
+      select: { botId: true },
+    });
+    if (!account) throw new ORPCError("NOT_FOUND");
+    return { ...owner, botId: account.botId };
+  };
 
   const authed = os.use(async ({ context, next }) => {
     if (!context.actor) throw new ORPCError("UNAUTHORIZED");
@@ -654,6 +970,301 @@ export function createRouter(deps: RouterDeps) {
   });
 
   return os.router({
+    rpcAccess: {
+      grantCreate: authed.rpcAccess.grantCreate.handler(({ context, input }) =>
+        createOwnedRpcAccessGrant(deps.prisma, context.actor, input),
+      ),
+      grantList: authed.rpcAccess.grantList.handler(({ context }) =>
+        listOwnedRpcAccessGrants(deps.prisma, context.actor),
+      ),
+      grantRevoke: authed.rpcAccess.grantRevoke.handler(({ context, input }) =>
+        revokeOwnedRpcAccessGrant(deps.prisma, context.actor, input.id),
+      ),
+    },
+    trading: {
+      perpetualResearchRead: authed.trading.perpetualResearchRead.handler(
+        async ({ context, input }) => {
+          const history = await readOwnedPerpetualResearchHistory(
+            deps.prisma,
+            context.actor,
+            input.ledgerId,
+            input.limit,
+            input.before,
+          );
+          if (!history) throw new ORPCError("NOT_FOUND");
+          return history;
+        },
+      ),
+      perpetualExperimentsCreate: authed.trading.perpetualExperimentsCreate.handler(
+        ({ context, input }) =>
+          createOwnedPerpetualExperimentAccounts(
+            deps.prisma,
+            context.actor,
+            input.strategy ? [input.strategy] : undefined,
+          ),
+      ),
+      perpetualMarketPrepare: authed.trading.perpetualMarketPrepare.handler(
+        async ({ context, input }) => {
+          const workspace = await readOwnedPerpetualWorkspace(
+            deps.prisma,
+            context.actor,
+            input.ledgerId,
+          );
+          if (workspace?.status !== "verified") throw new ORPCError("NOT_FOUND");
+          if (!deps.perpetualPaperEngine && process.env.NODE_ENV !== "test")
+            return { status: "unavailable" as const, reason: "engine_not_configured" as const };
+          let prepared: Awaited<ReturnType<typeof readOwnedMarketPreparedResearch>>;
+          let scope: ReturnType<typeof perpetualMarketSource>;
+          try {
+            prepared = await readOwnedMarketPreparedResearch(deps.prisma, context.actor, {
+              semanticKey: "futures.data",
+              limit: 50,
+            });
+            scope = perpetualMarketSource(prepared);
+          } catch {
+            return { status: "unavailable" as const, reason: "market_not_ready" as const };
+          }
+          if (input.researchMode !== "external") {
+            try {
+              if (!deps.resolvePaperResearchModel) throw new Error("Model unavailable");
+              await deps.resolvePaperResearchModel(
+                await perpetualResearchModelScope(context.actor, input.ledgerId),
+              );
+            } catch {
+              return { status: "unavailable" as const, reason: "model_not_configured" as const };
+            }
+          }
+          return {
+            status: "ready" as const,
+            name:
+              prepared.selection.status === "ready"
+                ? prepared.selection.implementation.name
+                : "OKX public",
+            scope,
+          };
+        },
+      ),
+      perpetualLeverageRead: authed.trading.perpetualLeverageRead.handler(
+        async ({ context, input }) => {
+          const workspace = await readOwnedPerpetualWorkspace(
+            deps.prisma,
+            context.actor,
+            input.ledgerId,
+          );
+          if (workspace?.status !== "verified") throw new ORPCError("NOT_FOUND");
+          return Promise.all(
+            input.instruments.map(async (instrument) => {
+              const snapshot = await (
+                deps.fetchPerpetualPaperSnapshot ?? fetchOkxPaperPerpetualSnapshot
+              )(instrument);
+              if (!snapshot.leverageLimits) throw new ORPCError("CONFLICT");
+              return snapshot.leverageLimits;
+            }),
+          );
+        },
+      ),
+      perpetualWorkspaceRead: authed.trading.perpetualWorkspaceRead.handler(
+        async ({ context, input }) => {
+          const result = await readOwnedPerpetualWorkspace(
+            deps.prisma,
+            context.actor,
+            input.ledgerId,
+          );
+          if (!result) throw new ORPCError("NOT_FOUND");
+          return PaperPerpetualWorkspaceStatusSchema.parse(result);
+        },
+      ),
+      perpetualWorkspaceCommand: authed.trading.perpetualWorkspaceCommand.handler(
+        async ({ context, input }) => {
+          const resumed =
+            input.action === "resume"
+              ? await readOwnedPerpetualWorkspace(deps.prisma, context.actor, input.ledgerId)
+              : null;
+          if (input.action === "resume" && resumed?.status !== "verified")
+            throw new ORPCError("CONFLICT");
+          const researchMode =
+            input.action === "start" ? input.researchMode : resumed?.researchMode;
+          if (
+            (input.action === "start" || input.action === "resume") &&
+            researchMode !== "external"
+          ) {
+            if (!deps.resolvePaperResearchModel) throw new ORPCError("CONFLICT");
+            await deps.resolvePaperResearchModel(
+              await perpetualResearchModelScope(context.actor, input.ledgerId),
+            );
+          }
+          await controlPerpetualPaperWorkspace(
+            {
+              prisma: deps.prisma,
+              jobs: deps.jobs,
+              fetchSnapshot: deps.fetchPerpetualPaperSnapshot,
+              engine: deps.perpetualPaperEngine,
+            },
+            context.actor,
+            input,
+          );
+          const result = await readOwnedPerpetualWorkspace(
+            deps.prisma,
+            context.actor,
+            input.ledgerId,
+          );
+          if (!result) throw new ORPCError("NOT_FOUND");
+          return PaperPerpetualWorkspaceStatusSchema.parse(result);
+        },
+      ),
+      marketPrepare: authed.trading.marketPrepare.handler(async ({ input, context }) => {
+        const owner = context.actor!;
+        const workspace = await readOwnedTradingPaperWorkspace(deps.prisma, owner, input.ledgerId);
+        if (workspace?.status !== "verified") throw new ORPCError("NOT_FOUND");
+        let prepared: Awaited<ReturnType<typeof readOwnedMarketPreparedResearch>>;
+        try {
+          prepared = await readOwnedMarketPreparedResearch(deps.prisma, owner, {
+            semanticKey: "signal.discovery",
+            limit: 50,
+          });
+          if (prepared.selection.status !== "ready" || !prepared.selection.skill)
+            return { status: "unavailable" as const, reason: "market_not_ready" as const };
+        } catch {
+          return { status: "unavailable" as const, reason: "market_not_ready" as const };
+        }
+        try {
+          if (!deps.resolvePaperResearchModel) throw new Error("Model unavailable");
+          await deps.resolvePaperResearchModel(owner);
+        } catch {
+          return { status: "unavailable" as const, reason: "model_not_configured" as const };
+        }
+        return {
+          status: "ready" as const,
+          name: prepared.selection.implementation.name,
+          variant: prepared.selection.skill.variant,
+          scope: tradingPaperMarketScope(prepared, input.venue),
+        };
+      }),
+      accountCreate: authed.trading.accountCreate.handler(({ context, input }) =>
+        createOwnedTradingPaperAccount(deps.prisma, context.actor, input),
+      ),
+      workspaceRead: authed.trading.workspaceRead.handler(async ({ context, input }) => {
+        const result = await readOwnedTradingPaperWorkspace(
+          deps.prisma,
+          context.actor,
+          input.ledgerId,
+        );
+        if (!result) throw new ORPCError("NOT_FOUND");
+        return TradingPaperWorkspaceStatusSchema.parse(result);
+      }),
+      workspaceCommand: authed.trading.workspaceCommand.handler(async ({ context, input }) => {
+        if (input.action === "start" && input.researchSource?.kind === "market") {
+          if (!deps.resolvePaperResearchModel) throw new ORPCError("CONFLICT");
+          await deps.resolvePaperResearchModel(context.actor!);
+        }
+        await controlTradingPaperWorkspace(
+          { prisma: deps.prisma, jobs: deps.jobs },
+          context.actor,
+          input,
+        );
+        const result = await readOwnedTradingPaperWorkspace(
+          deps.prisma,
+          context.actor,
+          input.ledgerId,
+        );
+        if (!result) throw new ORPCError("NOT_FOUND");
+        return TradingPaperWorkspaceStatusSchema.parse(result);
+      }),
+      // Dedicated authenticated read-only human UI. This cannot append/submit orders.
+      journalList: authed.trading.journalList.handler(({ context }) =>
+        listOwnedTradingPaperJournals(deps.prisma, context.actor),
+      ),
+      journalRead: authed.trading.journalRead.handler(async ({ context, input }) => {
+        const journal = await readOwnedTradingPaperJournal(
+          deps.prisma,
+          context.actor,
+          input.ledgerId,
+          input.beforeSequence,
+        );
+        if (!journal) throw new ORPCError("NOT_FOUND");
+        return journal;
+      }),
+      // Futures is a read-only tab within the same human PAPER journal.
+      perpetualJournalList: authed.trading.perpetualJournalList.handler(({ context }) =>
+        listOwnedPerpetualPaperJournals(deps.prisma, context.actor),
+      ),
+      perpetualJournalRead: authed.trading.perpetualJournalRead.handler(
+        async ({ context, input }) => {
+          const journal = await readOwnedPerpetualPaperJournal(
+            deps.prisma,
+            context.actor,
+            input.ledgerId,
+            input.beforeSequence,
+          );
+          if (!journal) throw new ORPCError("NOT_FOUND");
+          return journal;
+        },
+      ),
+      // User-invoked public GET requests only. No exchange keys, wallet or execution capability.
+      list: authed.trading.list.handler(async ({ input }) => {
+        if (input.venue === "okx") {
+          const catalog = await fetchOkxPublicCatalog();
+          const markets = catalog.markets.filter(
+            (market) =>
+              market.kind === input.kind && (input.kind !== "perpetual" || market.quote === "USDT"),
+          );
+          const tickers =
+            input.kind === "perpetual"
+              ? await fetchOkxPublicPerpetualTickers(markets)
+              : await fetchOkxPublicSpotTickers(markets);
+          return {
+            fetchedAt: new Date().toISOString(),
+            ...scanTradingMarkets(markets, tickers, input, new Date()),
+          };
+        }
+        if (input.kind === "perpetual") {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Perpetual liquidity scanning currently supports OKX USDT-SWAP only",
+          });
+        }
+        const snapshot = await fetchBingxPublicSpotSnapshot();
+        return {
+          fetchedAt: snapshot.fetchedAt,
+          ...scanTradingMarkets(snapshot.markets, snapshot.tickers, input, new Date()),
+        };
+      }),
+      catalog: authed.trading.catalog.handler(() => fetchOkxPublicCatalog()),
+      sweep: authed.trading.sweep.handler(({ input }) => sweepOkxSpotResearch(input)),
+      perpContext: authed.trading.perpContext.handler(async ({ input }) => {
+        const catalog = await fetchOkxPublicCatalog();
+        const market = catalog.markets.find(
+          (item) => item.kind === "perpetual" && item.symbol === input.symbol,
+        );
+        if (!market) throw new ORPCError("NOT_FOUND", { message: "OKX perpetual unavailable" });
+        return fetchOkxPublicPerpContext(market);
+      }),
+      analyze: authed.trading.analyze.handler(async ({ input }) => {
+        const catalog = await fetchOkxPublicCatalog();
+        const market = catalog.markets.find(
+          (candidate) => candidate.symbol === input.symbol && candidate.kind === input.kind,
+        );
+        if (!market)
+          throw new ORPCError("NOT_FOUND", { message: "Public OKX instrument not found" });
+        // Dated futures remain discovery-only pending independent contract sizing
+        // and instrument/risk validation. Fail closed as a NO_TRADE research result.
+        if (market.kind === "dated_future") {
+          const now = new Date();
+          return researchClosedHourBreakout({
+            market,
+            candles: [],
+            fetchedAt: now.toISOString(),
+            now,
+          });
+        }
+        const history = await fetchOkxClosedOneHourHistory(market);
+        return researchClosedHourBreakout({
+          market,
+          candles: history.candles,
+          fetchedAt: history.fetchedAt,
+          now: new Date(),
+        });
+      }),
+    },
     aiConsent: {
       status: authed.aiConsent.status.handler(({ context, input }) =>
         aiConsentStatus(deps, context.actor, input),
@@ -903,6 +1514,55 @@ export function createRouter(deps: RouterDeps) {
         return deploymentDto(deps.prisma, deps.env.sandboxProvider);
       }),
     },
+    windowsHosts: {
+      list: authed.windowsHosts.list.handler(async ({ context }) => {
+        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
+        const hosts = await listWindowsHosts(deps.prisma, context.actor.userId);
+        return hosts.map((host) => {
+          if (host.platform !== "win32") {
+            throw new Error("Stored Windows host platform is invalid");
+          }
+          const capabilities = WindowsHostCapabilitySchema.array().safeParse(host.capabilities);
+          return {
+            ...host,
+            platform: "win32" as const,
+            capabilities: capabilities.success ? capabilities.data : [],
+            revokedAt: host.revokedAt?.toISOString() ?? null,
+            lastSeenAt: host.lastSeenAt?.toISOString() ?? null,
+            createdAt: host.createdAt.toISOString(),
+            updatedAt: host.updatedAt.toISOString(),
+          };
+        });
+      }),
+      createPairing: authed.windowsHosts.createPairing.handler(async ({ context, input }) => {
+        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
+        try {
+          const pairing = await createWindowsHostPairing(deps.prisma, {
+            ownerUserId: context.actor.userId,
+            ...(input.ttlMs === undefined ? {} : { ttlMs: input.ttlMs }),
+          });
+          return {
+            pairingId: pairing.pairingId,
+            pairingToken: pairing.pairingToken,
+            expiresAt: pairing.expiresAt.toISOString(),
+          };
+        } catch (error) {
+          if (error instanceof WindowsHostPairingError) {
+            throw new ORPCError("BAD_REQUEST", { message: error.message });
+          }
+          throw error;
+        }
+      }),
+      revoke: authed.windowsHosts.revoke.handler(async ({ context, input }) => {
+        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
+        const revoked = await revokeWindowsHost(deps.prisma, {
+          ownerUserId: context.actor.userId,
+          hostId: input.hostId,
+        });
+        if (!revoked) throw new ORPCError("NOT_FOUND");
+        return { ok: true as const };
+      }),
+    },
     updater: {
       status: authed.updater.status.handler(async ({ context }) => {
         if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
@@ -946,10 +1606,10 @@ export function createRouter(deps: RouterDeps) {
               refreshExpiredCredential(context.actor, secretId, CHATGPT_OAUTH_PROVIDER),
           },
         );
-        return [
-          ...(live.size > 0 ? applyCodexLiveCatalog(available, auth, live) : available),
-          scriptedCatalogEntry,
-        ];
+        const catalog = live.size > 0 ? applyCodexLiveCatalog(available, auth, live) : available;
+        // The scripted fixture only exists to drive the scripted runtime; a real
+        // runtime cannot execute it, so it stays out of the user-facing catalog.
+        return deps.env.agentRuntime === "scripted" ? [...catalog, scriptedCatalogEntry] : catalog;
       }),
       credentials: authed.models.credentials.handler(async ({ context }) => {
         const rows = await deps.prisma.userModelCredential.findMany({
@@ -978,6 +1638,7 @@ export function createRouter(deps: RouterDeps) {
             ...row,
             isDefault: preference?.isDefault ?? false,
             defaultModel: preference?.modelId ?? null,
+            thinkingLevel: preference?.thinkingLevel ?? null,
           };
           const ciphertext = ciphertextById.get(row.secretId);
           if (!ciphertext) return modelCredentialDto(selected);
@@ -1031,6 +1692,10 @@ export function createRouter(deps: RouterDeps) {
             plaintext,
             label: input.label,
             modelId: input.modelId,
+            // openai-compatible keeps its effort inside the stored endpoint
+            // secret; catalog providers store it on the space preference.
+            thinkingLevel:
+              input.provider === OPENAI_COMPATIBLE_PROVIDER_ID ? undefined : input.thinkingLevel,
             supportsImages: input.supportsImages,
             signal: context.signal,
           },
@@ -1055,6 +1720,7 @@ export function createRouter(deps: RouterDeps) {
           spaceId: context.actor.spaceId,
           provider: input.provider,
           modelId: input.modelId,
+          thinkingLevel: input.thinkingLevel,
           label: input.label,
           signal: context.signal,
         });
@@ -1085,6 +1751,7 @@ export function createRouter(deps: RouterDeps) {
                   login.label ??
                   listPiCatalog().find((entry) => entry.provider === login.provider)?.providerName,
                 modelId: login.modelId,
+                thinkingLevel: login.thinkingLevel,
                 signal: login.signal,
               },
               codexCatalog,
@@ -1204,11 +1871,76 @@ export function createRouter(deps: RouterDeps) {
                   message: authFailure ?? UNAVAILABLE_MODEL_FOR_AUTH_MESSAGE,
                 });
               }
-              await selectSpaceModelPreference(tx, context.actor, credentialId, input.modelId);
+              let thinkingLevel: string | null | undefined = input.thinkingLevel;
+              if (thinkingLevel === undefined) {
+                // The level belongs to the preference's modelId — keep it only when the
+                // stored choice already names this model.
+                const existing = preferences.find(
+                  (preference) => preference.credential.id === credentialId,
+                );
+                thinkingLevel =
+                  existing?.modelId === usableModelId(input.modelId)
+                    ? existing.thinkingLevel
+                    : null;
+              }
+              if (thinkingLevel) {
+                const allowed = await allowedThinkingLevels(
+                  deps,
+                  context.actor,
+                  input.provider,
+                  input.modelId,
+                );
+                thinkingLevel = clampCatalogThinkingLevel(thinkingLevel, allowed);
+              }
+              await selectSpaceModelPreference(
+                tx,
+                context.actor,
+                credentialId,
+                input.modelId,
+                thinkingLevel,
+              );
             },
             { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
           );
         });
+        return { ok: true as const };
+      }),
+      disconnect: authed.models.disconnect.handler(async ({ context, input }) => {
+        // Retire pending sign-ins in every space first — the credentials are
+        // account-wide, so a finishing OAuth session anywhere could otherwise
+        // re-persist a credential the delete below just removed.
+        await deps.oauthLogins.cancelProvider({
+          userId: context.actor.userId,
+          provider: input.provider,
+        });
+        await withSerializableRetry(() =>
+          deps.prisma.$transaction(
+            async (tx) => {
+              const existing = await tx.userModelCredential.findMany({
+                where: { userId: context.actor.userId, provider: input.provider },
+              });
+              if (existing.length === 0) return;
+              const ids = existing.map((row) => row.id);
+              // Credentials belong to the account, not the space — disconnecting
+              // removes them everywhere, matching voice.disconnect. Linked
+              // preferences in other spaces go with their credential.
+              await tx.spaceModelPreference.deleteMany({
+                where: { userId: context.actor.userId, credentialId: { in: ids } },
+              });
+              await tx.userModelCredential.deleteMany({
+                where: { userId: context.actor.userId, id: { in: ids } },
+              });
+              for (const row of existing) {
+                await deleteUnreferencedCredentialSecret(tx, {
+                  credentialKind: "model",
+                  credentialId: row.id,
+                  secretId: row.secretId,
+                });
+              }
+            },
+            { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+          ),
+        );
         return { ok: true as const };
       }),
     },
@@ -1745,6 +2477,14 @@ export function createRouter(deps: RouterDeps) {
         // A half-open stream looks identical to an idle one, so punctuate silence:
         // the client treats any frame as liveness and reconnects once they stop.
         let pending: Promise<IteratorResult<ProductEvent>> | undefined;
+        // Auth ran once when the stream opened. Re-check before delivering more, so a signed-out
+        // or revoked session stops within SESSION_RECHECK_MS, or at the next heartbeat when idle.
+        let authorizedAt = Date.now();
+        const assertStillAuthorized = async () => {
+          if (!context.stillAuthorized || Date.now() - authorizedAt < SESSION_RECHECK_MS) return;
+          if (!(await context.stillAuthorized())) throw new ORPCError("UNAUTHORIZED");
+          authorizedAt = Date.now();
+        };
         try {
           while (!context.signal?.aborted) {
             pending ??= follow.next();
@@ -1756,6 +2496,7 @@ export function createRouter(deps: RouterDeps) {
               }),
             ]).finally(() => clearTimeout(timer));
             if (next === "silent") {
+              await assertStillAuthorized();
               // Keep `pending` so the in-flight read stays the next event in order.
               yield {
                 id: "heartbeat",
@@ -1773,6 +2514,8 @@ export function createRouter(deps: RouterDeps) {
             pending = undefined;
             if (next.done) return;
             const event = next.value;
+            // Filtered peer events also restart the heartbeat, so check before skipping them.
+            await assertStillAuthorized();
             if (await isPeerRun(deps.prisma, event.runId, peerRunCache)) {
               if (!shouldForwardPeerThreadEvent(event)) continue;
             }
@@ -2475,7 +3218,14 @@ export function createRouter(deps: RouterDeps) {
             : undefined;
         const mapped = {
           ...(input.kind === "key"
-            ? { kind: "key" as const, key: String(input.payload.key ?? ""), sensitive }
+            ? {
+                kind: "key" as const,
+                key: String(input.payload.key ?? ""),
+                modifiers: Array.isArray(input.payload.modifiers)
+                  ? input.payload.modifiers.map((value) => String(value))
+                  : undefined,
+                sensitive,
+              }
             : input.kind === "clipboard"
               ? {
                   kind: "clipboard" as const,
@@ -2572,6 +3322,120 @@ export function createRouter(deps: RouterDeps) {
           }
         }
         return { path: input.path, content };
+      }),
+      exec: authed.computer.exec.handler(async ({ context, input }) => {
+        let bot = await repos.getBot(context.actor, input.botId);
+        if (await expireStaleComputerControl(deps, bot.computer)) {
+          bot = await repos.getBot(context.actor, input.botId);
+        }
+        const computer = bot.computer;
+        if (!computer?.providerRef || computer.state !== "running") {
+          throw new ORPCError("BAD_REQUEST", { message: "computer must be running" });
+        }
+        if (computer.kind !== "desktop") {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Direct host execution requires a physical desktop computer",
+          });
+        }
+        if (!hasActiveComputerControl(computer) || computer.controlBotId !== bot.id) {
+          throw new ORPCError("FORBIDDEN", { message: "Take control first." });
+        }
+
+        let stdout = "";
+        let stderr = "";
+        let code = -1;
+        for await (const event of deps.sandbox.execute(
+          toComputerRef(computer),
+          {
+            argv: input.argv,
+            cwd: input.cwd,
+            timeoutMs: input.timeoutMs,
+          },
+          computerContext(context.actor, bot.id, "exec"),
+        )) {
+          if (event.type === "stdout") stdout += event.data;
+          else if (event.type === "stderr") stderr += event.data;
+          else code = event.code;
+          if (Buffer.byteLength(stdout, "utf8") + Buffer.byteLength(stderr, "utf8") > 65_536) {
+            throw new ORPCError("BAD_REQUEST", { message: "Process output exceeded 64 KiB" });
+          }
+        }
+        await keepComputerAwake(deps, computer.id);
+        return { stdout, stderr, code };
+      }),
+      browser: authed.computer.browser.handler(async ({ context, input }) => {
+        let bot = await repos.getBot(context.actor, input.botId);
+        if (await expireStaleComputerControl(deps, bot.computer)) {
+          bot = await repos.getBot(context.actor, input.botId);
+        }
+        const computer = bot.computer;
+        if (!computer?.providerRef || computer.state !== "running") {
+          throw new ORPCError("BAD_REQUEST", { message: "computer must be running" });
+        }
+        if (computer.kind !== "desktop" || !deps.sandbox.desktopBrowserSession) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Direct signed-in browser access requires a physical desktop computer",
+          });
+        }
+        if (!hasActiveComputerControl(computer) || computer.controlBotId !== bot.id) {
+          throw new ORPCError("FORBIDDEN", { message: "Take control first." });
+        }
+
+        const result = await deps.sandbox.desktopBrowserSession(
+          toComputerRef(computer),
+          input.request,
+          computerContext(context.actor, bot.id, "browser"),
+        );
+        await keepComputerAwake(deps, computer.id);
+        return {
+          ok: result.ok,
+          ...(result.sessionToken === undefined ? {} : { sessionToken: result.sessionToken }),
+          ...(result.completed === undefined ? {} : { completed: result.completed }),
+          ...(result.uncertain === undefined ? {} : { uncertain: result.uncertain }),
+          ...(result.url === undefined ? {} : { url: result.url }),
+          ...(result.title === undefined ? {} : { title: result.title }),
+          ...(result.tree === undefined ? {} : { tree: result.tree }),
+          ...(result.elements === undefined ? {} : { elements: result.elements }),
+          ...(result.error === undefined ? {} : { error: result.error }),
+        };
+      }),
+      observe: authed.computer.observe.handler(async ({ context, input }) => {
+        let bot = await repos.getBot(context.actor, input.botId);
+        if (await expireStaleComputerControl(deps, bot.computer)) {
+          bot = await repos.getBot(context.actor, input.botId);
+        }
+        if (!bot.computer?.providerRef || bot.computer.state !== "running") {
+          throw new ORPCError("BAD_REQUEST", { message: "computer must be running" });
+        }
+
+        const computer = bot.computer;
+        let observation: Awaited<ReturnType<SandboxProvider["observe"]>>;
+        try {
+          observation = await deps.sandbox.observe(
+            toComputerRef(computer),
+            await computerScreenContext(deps.prisma, context.actor, computer.id, bot.id, "observe"),
+          );
+        } catch (error) {
+          if (isComputerScreenUnavailable(error)) {
+            throw new ORPCError("CONFLICT", {
+              message: error instanceof Error ? error.message : "computer screen unavailable",
+            });
+          }
+          await clearGoneSandbox(deps, computer, error);
+          throw new ORPCError("CONFLICT", { message: "computer is no longer running" });
+        }
+
+        await keepComputerAwake(deps, computer.id);
+        return {
+          frameId: observation.frameId,
+          capturedAt: observation.capturedAt,
+          mimeType: observation.mimeType,
+          imageBase64: Buffer.from(observation.image).toString("base64"),
+          width: observation.width,
+          height: observation.height,
+          cursor: observation.cursor,
+          activeWindow: observation.activeWindow,
+        };
       }),
       downloadFile: authed.computer.downloadFile.handler(async ({ context, input }) => {
         const bot = await repos.getBot(context.actor, input.botId);
@@ -2854,6 +3718,9 @@ export function createRouter(deps: RouterDeps) {
       ),
     },
     routines: {
+      history: authed.routines.history.handler(async ({ context, input }) =>
+        listRoutineRuns(deps.prisma, context.actor, input.routineId, input.before),
+      ),
       list: authed.routines.list.handler(async ({ context, input }) => {
         await repos.getBot(context.actor, input.botId);
         return listRoutinesDto(deps, context.actor, input.botId);
@@ -3121,6 +3988,7 @@ export function createRouter(deps: RouterDeps) {
           {
             spaceId: context.actor.spaceId,
             botId: input.botId,
+            projectId: input.projectId,
             status: input.status,
             includeDone: input.includeDone ?? false,
           },
@@ -3128,10 +3996,12 @@ export function createRouter(deps: RouterDeps) {
       }),
       create: authed.scratchpad.create.handler(async ({ context, input }) => {
         await repos.getBot(context.actor, input.botId);
+        if (input.projectId) await ownedProject(deps, context.actor, input.projectId);
         const row = await deps.prisma.scratchpadItem.create({
           data: {
             spaceId: context.actor.spaceId,
             botId: input.botId,
+            projectId: input.projectId ?? null,
             userId: context.actor.userId,
             title: input.title.trim(),
             status: input.status,
@@ -3149,12 +4019,14 @@ export function createRouter(deps: RouterDeps) {
           },
         });
         if (!existing) throw new IsolationError();
+        if (input.projectId) await ownedProject(deps, context.actor, input.projectId);
         if (input.status !== undefined && !isScratchpadStatus(input.status)) {
           throw new ORPCError("BAD_REQUEST", { message: "Invalid scratchpad status." });
         }
         const row = await deps.prisma.scratchpadItem.update({
           where: { id: existing.id },
           data: {
+            ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
             ...(input.title !== undefined ? { title: input.title.trim() } : {}),
             ...(input.status !== undefined ? { status: input.status } : {}),
             ...(input.notes !== undefined ? { notes: input.notes.trim() } : {}),
@@ -3175,6 +4047,172 @@ export function createRouter(deps: RouterDeps) {
         return { ok: true as const };
       }),
     },
+    projects: {
+      list: authed.projects.list.handler(async ({ context, input }) => {
+        const rows = await deps.prisma.project.findMany({
+          where: {
+            spaceId: context.actor.spaceId,
+            userId: context.actor.userId,
+            ...(input.includeArchived ? {} : { archivedAt: null }),
+          },
+          orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
+        });
+        return rows.map(projectSummaryDto);
+      }),
+      get: authed.projects.get.handler(async ({ context, input }) => {
+        const row = await deps.prisma.project.findFirst({
+          where: {
+            spaceId: context.actor.spaceId,
+            userId: context.actor.userId,
+            ...(input.projectId ? { id: input.projectId } : { slug: input.slug }),
+          },
+        });
+        if (!row) throw new IsolationError();
+        return projectDto(row);
+      }),
+      create: authed.projects.create.handler(async ({ context, input }) => {
+        const existing = await deps.prisma.project.findFirst({
+          where: {
+            spaceId: context.actor.spaceId,
+            userId: context.actor.userId,
+            slug: input.slug,
+          },
+          select: { id: true },
+        });
+        if (existing) {
+          throw new ORPCError("CONFLICT", { message: "A project with this slug already exists." });
+        }
+        const row = await deps.prisma.project.create({
+          data: {
+            spaceId: context.actor.spaceId,
+            userId: context.actor.userId,
+            slug: input.slug,
+            name: input.name,
+            description: input.description.trim(),
+            memory: input.memory,
+          },
+        });
+        return projectDto(row);
+      }),
+      update: authed.projects.update.handler(async ({ context, input }) => {
+        const existing = await ownedProject(deps, context.actor, input.projectId);
+        const common = {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.description !== undefined ? { description: input.description.trim() } : {}),
+          ...(input.archived !== undefined
+            ? { archivedAt: input.archived ? new Date() : null }
+            : {}),
+        };
+        if (input.memory !== undefined) {
+          const changed = await deps.prisma.project.updateMany({
+            where: {
+              id: existing.id,
+              spaceId: context.actor.spaceId,
+              userId: context.actor.userId,
+              memoryRevision: input.expectedMemoryRevision,
+            },
+            data: {
+              ...common,
+              memory: input.memory,
+              memoryRevision: { increment: 1 },
+            },
+          });
+          if (changed.count !== 1) {
+            throw new ORPCError("CONFLICT", {
+              message: "Project memory changed concurrently; reload the project before updating.",
+            });
+          }
+          const row = await deps.prisma.project.findUniqueOrThrow({ where: { id: existing.id } });
+          return projectDto(row);
+        }
+        const row = await deps.prisma.project.update({
+          where: { id: existing.id },
+          data: common,
+        });
+        return projectDto(row);
+      }),
+      context: authed.projects.context.handler(async ({ context, input }) => {
+        const project = await ownedProject(deps, context.actor, input.projectId);
+        const [resources, tasks] = await Promise.all([
+          deps.prisma.projectResource.findMany({
+            where: {
+              spaceId: context.actor.spaceId,
+              userId: context.actor.userId,
+              projectId: project.id,
+            },
+            orderBy: [{ kind: "asc" }, { label: "asc" }, { createdAt: "asc" }],
+          }),
+          deps.prisma.scratchpadItem.findMany({
+            where: {
+              spaceId: context.actor.spaceId,
+              userId: context.actor.userId,
+              projectId: project.id,
+              status: { in: ["open", "parked"] },
+            },
+            orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+          }),
+        ]);
+        return {
+          project: projectDto(project),
+          resources: resources.map(projectResourceDto),
+          openTasks: tasks.map(mapScratchpadItem),
+        };
+      }),
+      resources: {
+        list: authed.projects.resources.list.handler(async ({ context, input }) => {
+          const project = await ownedProject(deps, context.actor, input.projectId);
+          const rows = await deps.prisma.projectResource.findMany({
+            where: {
+              spaceId: context.actor.spaceId,
+              userId: context.actor.userId,
+              projectId: project.id,
+            },
+            orderBy: [{ kind: "asc" }, { label: "asc" }, { createdAt: "asc" }],
+          });
+          return rows.map(projectResourceDto);
+        }),
+        upsert: authed.projects.resources.upsert.handler(async ({ context, input }) => {
+          const project = await ownedProject(deps, context.actor, input.projectId);
+          const row = await deps.prisma.projectResource.upsert({
+            where: {
+              projectId_kind_ref: {
+                projectId: project.id,
+                kind: input.kind,
+                ref: input.ref,
+              },
+            },
+            create: {
+              spaceId: context.actor.spaceId,
+              userId: context.actor.userId,
+              projectId: project.id,
+              kind: input.kind,
+              ref: input.ref,
+              label: input.label,
+              metadata: input.metadata as Prisma.InputJsonValue,
+            },
+            update: {
+              label: input.label,
+              metadata: input.metadata as Prisma.InputJsonValue,
+            },
+          });
+          return projectResourceDto(row);
+        }),
+        remove: authed.projects.resources.remove.handler(async ({ context, input }) => {
+          const row = await deps.prisma.projectResource.findFirst({
+            where: {
+              id: input.resourceId,
+              spaceId: context.actor.spaceId,
+              userId: context.actor.userId,
+            },
+            select: { id: true },
+          });
+          if (!row) throw new IsolationError();
+          await deps.prisma.projectResource.delete({ where: { id: row.id } });
+          return { ok: true as const };
+        }),
+      },
+    },
+
     skills: {
       list: authed.skills.list.handler(async ({ context, input }) => {
         await repos.getBot(context.actor, input.botId);
@@ -3227,6 +4265,43 @@ export function createRouter(deps: RouterDeps) {
         agentSkills.remove(context.actor, input.skillId),
       ),
     },
+    market: {
+      search: authed.market.search.handler(({ context, input }) =>
+        market.search(context.actor, input),
+      ),
+      get: authed.market.get.handler(({ context, input }) => market.get(context.actor, input)),
+      resolve: authed.market.resolve.handler(({ context, input }) =>
+        market.resolve(context.actor, input),
+      ),
+      select: authed.market.select.handler(({ context, input }) =>
+        market.select(context.actor, input),
+      ),
+      prepare: authed.market.prepare.handler(({ context, input }) =>
+        market.prepare(context.actor, input),
+      ),
+      importGithub: authed.market.importGithub.handler(({ context, input }) =>
+        market.importGithub(context.actor, input, context.signal),
+      ),
+      importGithubBatch: authed.market.importGithubBatch.handler(({ context, input }) =>
+        market.importGithubBatch(context.actor, input.items, context.signal),
+      ),
+      import: authed.market.import.handler(({ context, input }) =>
+        market.importEntry(context.actor, input),
+      ),
+      importBatch: authed.market.importBatch.handler(({ context, input }) =>
+        market.importBatch(context.actor, input.items),
+      ),
+      adapt: authed.market.adapt.handler(({ context, input }) =>
+        market.adapt(context.actor, input),
+      ),
+      evaluate: authed.market.evaluate.handler(({ context, input }) =>
+        market.evaluate(context.actor, input),
+      ),
+      install: authed.market.install.handler(async ({ context, input }) => {
+        const selected = await market.materializeForInstall(context.actor, input);
+        return agentSkills.create(context.actor, { content: selected.content });
+      }),
+    },
     capabilities: {
       list: authed.capabilities.list.handler(async ({ context }) => {
         const rows = await deps.prisma.capabilityInstall.findMany({
@@ -3244,6 +4319,65 @@ export function createRouter(deps: RouterDeps) {
           createdAt: row.createdAt.toISOString(),
         }));
       }),
+      tools: authed.capabilities.tools.handler(async ({ context, input }) => {
+        const adapterContext = await capabilityContextForBot(
+          deps,
+          context.actor,
+          input.botId,
+          "capabilities.tools",
+          context.signal,
+        );
+        const query = input.query.toLowerCase();
+        const tools = await deps.connectors.discoverTools(adapterContext);
+        return tools
+          .filter((tool): tool is ConnectorTool & { route: ConnectorRoute } => Boolean(tool.route))
+          .filter((tool) => {
+            if (!query) return true;
+            return (
+              tool.name.toLowerCase().includes(query) ||
+              tool.description.toLowerCase().includes(query) ||
+              (tool.route.catalogGroup ?? "").toLowerCase().includes(query)
+            );
+          })
+          .slice(0, input.limit)
+          .map((tool) => ({
+            name: tool.name,
+            description: tool.description.slice(0, 4_000),
+            inputSchema: tool.inputSchema,
+            readOnly: tool.readOnly === true,
+            route: tool.route,
+          }));
+      }),
+      read: authed.capabilities.read.handler(async ({ context, input }) => {
+        const adapterContext = await capabilityContextForBot(
+          deps,
+          context.actor,
+          input.botId,
+          "capabilities.read",
+          context.signal,
+        );
+        const resolved = await resolveCapabilityTool(deps, adapterContext, input);
+        if (resolved.tool.readOnly !== true) {
+          throw new ORPCError("FORBIDDEN", {
+            message: "This tool is not declared read-only; call capabilities/execute explicitly.",
+          });
+        }
+        return invokeCapabilityTool(deps, resolved.call, adapterContext);
+      }),
+      execute: authed.capabilities.execute.handler(async ({ context, input }) => {
+        if (input.projectId) await ownedProject(deps, context.actor, input.projectId);
+        const adapterContext = await capabilityContextForBot(
+          deps,
+          context.actor,
+          input.botId,
+          "capabilities.execute",
+          context.signal,
+          input.projectId,
+        );
+        const resolved = await resolveCapabilityTool(deps, adapterContext, input);
+        return invokeCapabilityTool(deps, resolved.call, adapterContext);
+      }),
+
       catalogSearch: authed.capabilities.catalogSearch.handler(async ({ context, input }) => {
         const baseUrl =
           deps.env.integrationsCatalogUrl ??
@@ -4987,6 +6121,42 @@ export function createRouter(deps: RouterDeps) {
         deleteAgentSecret({ prisma: deps.prisma, secrets: deps.secrets }, context.actor, input.id),
       ),
     },
+    botSecrets: {
+      list: authed.botSecrets.list.handler(async ({ context, input }) => {
+        const bot = await repos.getBot(context.actor, input.botId);
+        const rows = await listBotSecretMetadata(
+          deps.prisma,
+          botSecretScope(context.actor, bot.id),
+        );
+        return rows.map(botSecretMetadataDto);
+      }),
+      put: authed.botSecrets.put.handler(async ({ context, input }) => {
+        const bot = await repos.getBot(context.actor, input.botId);
+        const scope = botSecretScope(context.actor, bot.id);
+        let row: Awaited<ReturnType<typeof getBotSecretMetadata>>;
+        try {
+          row = await deps.prisma.$transaction(async (tx) => {
+            await storeBotSecret({
+              tx,
+              secretStore: deps.secrets,
+              scope,
+              destination: input.destination,
+              plaintext: input.value,
+            });
+            return getBotSecretMetadata(tx, scope, input.destination.name);
+          });
+        } catch (error) {
+          throw mapBotSecretStoreError(error);
+        }
+        if (!row) throw new ORPCError("CONFLICT", { message: "Credential was not saved" });
+        return botSecretMetadataDto(row);
+      }),
+      remove: authed.botSecrets.remove.handler(async ({ context, input }) => {
+        const bot = await repos.getBot(context.actor, input.botId);
+        await forgetBotSecret(deps.prisma, botSecretScope(context.actor, bot.id), input.name);
+        return { ok: true as const };
+      }),
+    },
     approvalRules: {
       list: authed.approvalRules.list.handler(async ({ context }) => {
         const rows = await deps.prisma.actionApprovalRule.findMany({
@@ -5231,7 +6401,19 @@ export function createRouter(deps: RouterDeps) {
     },
     notifications: {
       registerPush: authed.notifications.registerPush.handler(async ({ context, input }) => {
-        await savePushToken(deps.dataDir, context.actor.userId, input.token);
+        const sessionId = context.sessionId;
+        if (!sessionId) throw new ORPCError("UNAUTHORIZED");
+        try {
+          await savePushToken(deps.dataDir, context.actor.userId, input.token, sessionId, {
+            sessionActive: async () => {
+              const expiresAt = await pushSessionExpiresAt(deps.prisma, sessionId);
+              return expiresAt !== null && expiresAt.getTime() > Date.now();
+            },
+          });
+        } catch (error) {
+          if (error instanceof PushSessionEndedError) throw new ORPCError("UNAUTHORIZED");
+          throw error;
+        }
         return { ok: true as const };
       }),
       unregisterPush: authed.notifications.unregisterPush.handler(async ({ context }) => {
@@ -5567,6 +6749,41 @@ async function modelSetup(deps: RouterDeps, actor: Actor) {
   };
 }
 
+/**
+ * Thinking levels a caller may set for a provider/model. Catalog models answer from
+ * `thinkingLevels`; unknown catalog ids return undefined (no check). OpenAI-compatible
+ * connections only advertise levels when the stored endpoint's saved model matches.
+ */
+async function allowedThinkingLevels(
+  deps: RouterDeps,
+  actor: Actor,
+  provider: string,
+  modelId: string,
+): Promise<string[] | undefined> {
+  if (provider !== OPENAI_COMPATIBLE_PROVIDER_ID) {
+    return listPiCatalog().find((item) => item.provider === provider && item.id === modelId)
+      ?.thinkingLevels;
+  }
+  let allowed: string[] | undefined = ["off"];
+  const credential = await findModelCredential(deps.prisma, actor, provider);
+  if (credential && credential.defaultModel === modelId) {
+    const secret = await deps.prisma.secret.findFirst({
+      where: { id: credential.secretId, userId: actor.userId, spaceId: null },
+      select: { ciphertext: true },
+    });
+    if (secret) {
+      try {
+        allowed =
+          modelCredentialDto(credential, deps.secrets.load(secret.ciphertext, credential.secretId))
+            .thinkingLevels ?? allowed;
+      } catch {
+        // Unreadable connections must not advertise reasoning support.
+      }
+    }
+  }
+  return allowed;
+}
+
 async function computerStatus(
   deps: RouterDeps,
   actor: Actor,
@@ -5835,6 +7052,7 @@ async function persistModelCredential(
     plaintext: string;
     label?: string;
     modelId?: string;
+    thinkingLevel?: string | null;
     supportsImages?: boolean;
     signal?: AbortSignal;
   },
@@ -5859,6 +7077,13 @@ async function persistModelCredential(
   ) {
     throw new ORPCError("BAD_REQUEST", { message: authError });
   }
+  const defaultModel =
+    requestedModelId ??
+    defaultCatalogModelId(input.provider, input.plaintext) ??
+    usableModelId(deps.env.defaultModel);
+  const allowedThinking = defaultModel
+    ? await allowedThinkingLevels(deps, actor, input.provider, defaultModel)
+    : undefined;
   const stored = await deps.secrets.put(input.plaintext, {
     operationId: "cred",
     traceId: "cred",
@@ -5907,11 +7132,26 @@ async function persistModelCredential(
               },
             });
         throwIfAborted(input.signal);
-        const defaultModel =
-          requestedModelId ??
-          defaultCatalogModelId(input.provider, input.plaintext) ??
-          usableModelId(deps.env.defaultModel);
-        await selectSpaceModelPreference(tx, actor, credential.id, defaultModel);
+        let thinkingLevel = input.thinkingLevel;
+        if (thinkingLevel === undefined) {
+          // A stored effort only carries over while it still names this model.
+          const previous = await tx.spaceModelPreference.findFirst({
+            where: {
+              spaceId: actor.spaceId,
+              userId: actor.userId,
+              credentialId: credential.id,
+            },
+            select: { modelId: true, thinkingLevel: true },
+          });
+          thinkingLevel =
+            previous?.modelId === usableModelId(defaultModel) ? previous.thinkingLevel : null;
+        }
+        // Connect and limit saves can still carry an effort chosen for the previous
+        // model. Keep it only when this model supports it; otherwise clamp or clear.
+        thinkingLevel = defaultModel
+          ? clampCatalogThinkingLevel(thinkingLevel, allowedThinking)
+          : null;
+        await selectSpaceModelPreference(tx, actor, credential.id, defaultModel, thinkingLevel);
         throwIfAborted(input.signal);
         if (existing) {
           await deleteUnreferencedCredentialSecret(tx, {

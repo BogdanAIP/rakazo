@@ -7,6 +7,13 @@ export * from "./auto-review-factory.js";
 export * from "./background-job-handlers.js";
 export * from "./bot-avatar.js";
 export * from "./bot-messages.js";
+export {
+  forgetBotSecret,
+  getBotSecretMetadata,
+  listBotSecretMetadata,
+  normalizeSecretDestination,
+  storeBotSecret,
+} from "./bot-secrets.js";
 export * from "./box-emulator.js";
 export * from "./box-sandbox.js";
 export * from "./browser-emulator.js";
@@ -65,6 +72,7 @@ export * from "./integration-provider-settings.js";
 export * from "./jev-auto-review.js";
 export * from "./job-reconciler.js";
 export * from "./keyless-http-web.js";
+export { assertConnectorToolArgs } from "./lazy-tool-catalog.js";
 export * from "./mcp-connector.js";
 export * from "./mcp-emulator.js";
 export * from "./mcp-oauth.js";
@@ -78,10 +86,23 @@ export * from "./messaging-team-chat-emulator.js";
 export * from "./model-connect.js";
 export * from "./model-selection.js";
 export * from "./model-vision.js";
+export * from "./nautilus-paper-engine.js";
+export * from "./nautilus-paper-process.js";
 export * from "./none-sandbox.js";
 export * from "./openai-compatible-url.js";
 export * from "./openai-voice.js";
 export * from "./page-browser-session.js";
+export { createConfiguredPaperPerpetualEngine } from "./paper-perpetual-engine-config.js";
+export {
+  controlPerpetualPaperWorkspace,
+  handlePerpetualPaperWake,
+  reconcilePerpetualPaperWorkspaces,
+} from "./paper-perpetual-workspace.js";
+export * from "./paper-workspace.js";
+export {
+  handleManagedPaperWorkerWake,
+  invokePaperMarketSkillResearch,
+} from "./paper-workspace-market.js";
 export * from "./pi-catalog-availability.js";
 export * from "./pi-codex-catalog.js";
 export * from "./pi-credentials.js";
@@ -114,9 +135,18 @@ export * from "./task-catalog.js";
 export * from "./teaching-session.js";
 export * from "./team-chat-messaging.js";
 export * from "./third-party-connector-emulator.js";
+export * from "./trading-bingx-history.js";
+export * from "./trading-bingx-public.js";
+export * from "./trading-history-dataset.js";
+export * from "./trading-okx-history.js";
+export * from "./trading-okx-perp.js";
+export * from "./trading-okx-public.js";
+export * from "./trading-okx-sweep.js";
 export * from "./voice-factory.js";
 export * from "./wakeup.js";
 export * from "./web-limits.js";
 export * from "./web-provider-factory.js";
 export * from "./web-ssrf.js";
 export * from "./web-tools.js";
+export * from "./windows-host-remote-dispatcher.js";
+export * from "./windows-host-sandbox.js";

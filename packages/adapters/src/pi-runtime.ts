@@ -33,13 +33,16 @@ import type {
 import { usableModelId } from "@rakazo/contracts";
 import { getLogger } from "@rakazo/logging";
 import { isToolPauseResult } from "./approval-effect.js";
+import { connectionIdArgument, credentialArgument } from "./bot-secrets.js";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
+import { withCloudflareGatewayAuth } from "./cloudflare-ai-gateway.js";
 import { DEFAULT_OPENROUTER_MODEL_ID } from "./deployment-model.js";
 import {
   normalizeOpenAiToolParameters,
   openAiToolParametersNeedNormalization,
 } from "./openai-tool-parameters.js";
 import { PiRuntimeCredentialStore, toOAuthCredential } from "./pi-credentials.js";
+import { supplementPiModels } from "./pi-current-models.js";
 import { registerLocalProvider } from "./pi-local-provider.js";
 import { codexComputeResidency } from "./pi-oauth.js";
 import {
@@ -52,8 +55,8 @@ import {
   clipToolResultContent,
   clipToolResultText,
   MODEL_STREAM_IDLE_TIMEOUT_MS,
-  MODEL_STREAM_MAX_RETRIES,
   MODEL_STREAM_TIMEOUT_MS,
+  modelStreamMaxRetries,
   REASONING_MODEL_MAX_TOKENS,
   resolveCompletionMaxTokens,
 } from "./pi-runtime-limits.js";
@@ -62,6 +65,8 @@ import {
   type PiSessionHandle,
   type PiSessionRecorder,
 } from "./pi-session.js";
+import type { FinishedShellCommand } from "./shell-command-stream.js";
+import { deliverFinishedShells } from "./shell-command-stream.js";
 import { textContentArg } from "./tool-text.js";
 
 const running = new Map<string, { controller: AbortController; work: Promise<void> }>();
@@ -78,7 +83,9 @@ const toolCallBudgetsByRun = new Map<string, ToolCallBudget>();
 // would run before .env is loaded and miss the local provider entirely.
 let catalogModelsCache: Models | undefined;
 function catalogModels(): Models {
-  catalogModelsCache ??= registerOpenAiCompatibleCatalog(registerLocalProvider(builtinModels()));
+  catalogModelsCache ??= registerOpenAiCompatibleCatalog(
+    registerLocalProvider(supplementPiModels(builtinModels())),
+  );
   return catalogModelsCache;
 }
 const MAX_PARALLEL_SUBAGENTS = 4;
@@ -90,8 +97,11 @@ const SILENT_TOOL_CONTINUATION_PROMPT =
   "Continue the original task from the latest tool result. Do not stop after a tool call; use any remaining tools needed, then give the user the final answer.";
 const SILENT_ALLOWED_TOOL_CONTINUATION_PROMPT =
   "Continue the original task from the latest tool result. If you were instructed to stay silent when there is nothing to report, follow that instruction for the entire final assistant reply. Otherwise use any remaining tools needed, then give the user the final answer.";
-const TOOL_FINAL_RESPONSE_FALLBACK =
-  "I completed the tool step but could not produce a final response. Please ask me to continue.";
+// Shown as a failed-run error, not an assistant message. Asking the user to
+// continue stores that sentence as the reply, and the next "continue" runs
+// tools and misses a final answer again.
+export const MISSING_TOOL_FINAL_RESPONSE_ERROR =
+  "The tools finished, but the model did not write a final answer. Rephrase the request and try again.";
 const DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP = 2;
 // Reasoning-capable models must not start at "off": for OpenRouter, pi-ai maps
 // that to reasoning.effort "none", which 400s on endpoints that mandate
@@ -216,6 +226,7 @@ export class PiAgentRuntime implements AgentRuntime {
           signal,
           depth: 0,
           pausePending: false,
+          pendingShells: [],
         };
         resumeHost = host;
         const tools = toAgentTools(toolDefs, host);
@@ -272,7 +283,7 @@ export class PiAgentRuntime implements AgentRuntime {
               models,
               m,
               ctx,
-              options,
+              withCloudflareGatewayAuth(request.model, options),
               request.model.maxTokens,
               () => selectedModel.credentials?.accessToken ?? apiKey,
             ),
@@ -282,6 +293,16 @@ export class PiAgentRuntime implements AgentRuntime {
               pruneStalePageStateContext(messages),
               request.model.maxImagesPerPrompt,
             ),
+          finishTurn: async (turn, turnSignal) => {
+            await deliverFinishedShells(
+              (text) => {
+                agent.followUp({ role: "user", content: text, timestamp: Date.now() });
+              },
+              host.pendingShells,
+              turn,
+              turnSignal,
+            );
+          },
           prepareNextTurnWithContext: async () => {
             if (!request.claimSteering) return undefined;
             const steering = await request.claimSteering([...seenSteeringIds]);
@@ -318,10 +339,14 @@ export class PiAgentRuntime implements AgentRuntime {
         signal.addEventListener("abort", onAbort);
 
         let streamed = "";
+        let currentMessageStreamed = "";
         let toolCalls = 0;
         let toolActivityShowing = false;
         let silentToolContinuations = 0;
         let toolWorkPendingFinal = false;
+        // Text streamed before this point is tool-turn narration. Only text after
+        // it counts as the final reply, including when the completed message omits it.
+        let streamedBeforePendingFinal = 0;
         agent.subscribe(async (event) => {
           if (event.type === "message_end") {
             await piSession?.appendMessage(event.message);
@@ -338,6 +363,9 @@ export class PiAgentRuntime implements AgentRuntime {
               activity: true,
             });
           }
+          if (event.type === "message_start" && event.message.role === "assistant") {
+            currentMessageStreamed = "";
+          }
           if (
             event.type === "message_update" &&
             event.assistantMessageEvent.type === "text_delta"
@@ -350,15 +378,14 @@ export class PiAgentRuntime implements AgentRuntime {
                 queue.push({ type: "progress", text: "", activity: true });
               }
               streamed += delta;
+              currentMessageStreamed += delta;
               queue.push({ type: "text", text: delta });
             }
           }
           if (event.type === "turn_end") {
             const messageText =
               event.message.role === "assistant" ? assistantText(event.message) : "";
-            const hasToolCalls =
-              event.message.role === "assistant" &&
-              event.message.content.some((part) => part.type === "toolCall");
+            const hasToolCalls = messageHasToolCall(event.message);
             const hasToolResults = event.toolResults.length > 0;
 
             // Text in a turn that also contains a tool call is narration, not a final
@@ -366,11 +393,22 @@ export class PiAgentRuntime implements AgentRuntime {
             if (hasToolCalls && hasToolResults && !host.pausePending) {
               toolWorkPendingFinal = true;
               silentToolContinuations = 0;
+              streamedBeforePendingFinal = streamed.length;
             } else if (toolWorkPendingFinal && !hasToolCalls && !hasToolResults) {
-              if (messageText.trim()) {
+              const streamedFinal = streamed.slice(streamedBeforePendingFinal).trim();
+              if (messageText.trim() || streamedFinal) {
                 toolWorkPendingFinal = false;
                 silentToolContinuations = 0;
+                // A provider can put the answer only on the completed message after
+                // narration already filled `streamed`, so message_end will not emit it.
+                if (messageText.trim() && !streamedFinal) {
+                  streamed += messageText;
+                  queue.push({ type: "text", text: messageText });
+                }
               } else if (
+                // A provider failure is not an empty success. Do not schedule
+                // another model turn that would hide the error.
+                !providerFailureText(event.message) &&
                 !host.pausePending &&
                 silentToolContinuations < MAX_SILENT_TOOL_CONTINUATIONS
               ) {
@@ -387,7 +425,19 @@ export class PiAgentRuntime implements AgentRuntime {
           }
           if (event.type === "message_end" && event.message.role === "assistant") {
             const text = assistantText(event.message);
-            if (text && !streamed) {
+            const streamedThisMessage = currentMessageStreamed;
+            currentMessageStreamed = "";
+            const continued =
+              streamedThisMessage.length > 0 && text.startsWith(streamedThisMessage);
+            const textToEmit = continued ? text.slice(streamedThisMessage.length) : text;
+            const sincePendingFinal = streamed.slice(streamedBeforePendingFinal);
+            const alreadyEmitted =
+              !continued &&
+              (streamedThisMessage.includes(text) || sincePendingFinal.endsWith(text));
+            if (textToEmit && !messageHasToolCall(event.message) && !alreadyEmitted) {
+              streamed += textToEmit;
+              queue.push({ type: "text", text: textToEmit });
+            } else if (text && !streamed) {
               streamed = text;
               queue.push({ type: "text", text });
             }
@@ -429,9 +479,31 @@ export class PiAgentRuntime implements AgentRuntime {
         // errorMessage set. Treat that as a soft stop so the turn still ends
         // with a durable assistant message instead of a failed run.
         const budgetExceeded = host.toolCallBudget.exceeded;
-        const error = agent.state.errorMessage;
+        const terminalMessage = agent.state.messages.at(-1);
+        // pi-agent-core records ordinary provider failures as an empty assistant
+        // message (stopReason "error" / "length") and still resolves the run.
+        // state.errorMessage covers the error stop; the message itself covers a
+        // length stop and any failure that never landed on state.
+        const providerFailure =
+          !budgetExceeded && terminalMessage ? providerFailureText(terminalMessage) : undefined;
+        const error = agent.state.errorMessage || providerFailure;
         if (error && !budgetExceeded) {
           throw new Error(sanitizeProviderError(model.provider, error));
+        }
+        if (!budgetExceeded && terminalMessage && !messageHasToolCall(terminalMessage)) {
+          const terminalText = assistantText(terminalMessage);
+          const sincePendingFinal = streamed.slice(streamedBeforePendingFinal);
+          if (terminalText.trim() && !sincePendingFinal.includes(terminalText)) {
+            const missing =
+              sincePendingFinal && terminalText.startsWith(sincePendingFinal)
+                ? terminalText.slice(sincePendingFinal.length)
+                : terminalText;
+            if (missing) {
+              queue.push({ type: "text", text: missing });
+              streamed += missing;
+              toolWorkPendingFinal = false;
+            }
+          }
         }
         if (budgetExceeded) {
           const budgetMessage = toolCallBudgetExceededMessage(host.toolCallBudget.limit);
@@ -448,10 +520,7 @@ export class PiAgentRuntime implements AgentRuntime {
             // Scheduled/FYI runs may finish after tools with no user-visible text.
             streamed = "";
           } else {
-            // Discard cumulative pre-tool narration from the terminal payload and make the
-            // missing final response visible to the user instead of silently completing.
-            streamed = TOOL_FINAL_RESPONSE_FALLBACK;
-            queue.push({ type: "text", text: streamed });
+            throw new Error(MISSING_TOOL_FINAL_RESPONSE_ERROR);
           }
         } else if (!streamed.trim() && !host.pausePending) {
           streamed = "";
@@ -461,9 +530,7 @@ export class PiAgentRuntime implements AgentRuntime {
             queue.push({ type: "text", text: fallback });
             streamed = fallback;
           } else if (toolWorkPendingFinal && !request.allowSilentEmpty) {
-            // A tool-bearing run must never finish with only a progress/narration message.
-            streamed = TOOL_FINAL_RESPONSE_FALLBACK;
-            queue.push({ type: "text", text: streamed });
+            throw new Error(MISSING_TOOL_FINAL_RESPONSE_ERROR);
           } else if (toolCalls === 0 && !request.allowSilentEmpty) {
             streamed = request.emptyResponseText?.trim() || "No response. Try again.";
             queue.push({ type: "text", text: streamed });
@@ -589,7 +656,7 @@ export function modelsForRequest(
   const store = credentials ?? credentialStoreForRequest(request, provider);
   if (store) {
     return registerOpenAiCompatibleCatalog(
-      registerLocalProvider(builtinModels({ credentials: store })),
+      registerLocalProvider(supplementPiModels(builtinModels({ credentials: store }))),
     );
   }
   if (
@@ -597,7 +664,9 @@ export function modelsForRequest(
     request.model.baseUrl &&
     request.model.id.trim()
   ) {
-    const models = registerOpenAiCompatibleCatalog(registerLocalProvider(builtinModels()));
+    const models = registerOpenAiCompatibleCatalog(
+      registerLocalProvider(supplementPiModels(builtinModels())),
+    );
     return registerOpenAiCompatibleRuntime(models, {
       modelId: request.model.id,
       baseUrl: request.model.baseUrl,
@@ -662,6 +731,7 @@ export function describeToolActivity(toolName: string, args: unknown): string {
   if (toolName === "run_subagent") return `Delegating to helper: ${detail(record.name)}`;
   if (toolName === "create_space") return `Creating space: ${detail(record.name)}`;
   if (toolName === "remember") return "Saving a note to memory";
+  if (toolName === "save_shared_memory") return `Saving shared memory: ${detail(record.path)}`;
   if (toolName === "web_search") return `Searching the web: ${detail(record.query)}`;
   if (toolName === "web_fetch") return `Reading page: ${detail(redactActivityUrl(record.url))}`;
   if (toolName === "skill_read") return `Reading skill: ${detail(record.name)}`;
@@ -788,7 +858,9 @@ function withoutSteeringMessages(
  * value only when `credential` is present, and it validates the destination
  * shape itself. An earlier version of this function listed only
  * label/purpose/connectionId, so every credential the model supplied was
- * dropped here and the saved value had nowhere to go.
+ * dropped here and the saved value had nowhere to go. Top-level destination
+ * fields and a JSON string credential are folded into `credential` so they
+ * are not dropped the same way.
  */
 export function prepareRequestSecretArguments(raw: Record<string, unknown>) {
   const label = raw.label == null ? "" : String(raw.label);
@@ -800,11 +872,13 @@ export function prepareRequestSecretArguments(raw: Record<string, unknown>) {
       })`,
     );
   }
+  const credential = credentialArgument(raw);
+  const connectionId = connectionIdArgument(raw.connectionId);
   return {
     label,
     purpose,
-    ...(raw.connectionId ? { connectionId: String(raw.connectionId) } : {}),
-    ...(raw.credential ? { credential: raw.credential } : {}),
+    ...(connectionId ? { connectionId } : {}),
+    ...(credential !== undefined ? { credential } : {}),
     ...(raw.replace === true ? { replace: true } : {}),
   };
 }
@@ -998,9 +1072,17 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
             };
           }
           if (host.request.executeTool) {
-            const result = tool.route
-              ? await host.request.executeTool(tool.name, args, executionId, tool.route)
-              : await host.request.executeTool(tool.name, args, executionId);
+            const result = await host.request.executeTool(
+              tool.name,
+              args,
+              executionId,
+              tool.route,
+              {
+                onShellStillRunning: (completion) => {
+                  host.pendingShells.push(completion);
+                },
+              },
+            );
             if (isAgentToolExecutionResult(result)) {
               if (isToolPauseResult(result)) host.pausePending = true;
               return boundAgentToolResult(result);
@@ -1096,15 +1178,27 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
     model: subagentModel,
     apiKey: selectedModel.apiKey,
     depth: 1,
+    pendingShells: [],
   };
-  const nested = new Agent({
+  let nested!: Agent;
+  nested = new Agent({
+    finishTurn: async (turn, turnSignal) => {
+      await deliverFinishedShells(
+        (text) => {
+          nested.followUp({ role: "user", content: text, timestamp: Date.now() });
+        },
+        nestedHost.pendingShells,
+        turn,
+        turnSignal,
+      );
+    },
     sessionId: conversationSessionId(host.request.threadId, host.request.botId, agentId),
     streamFn: (m, ctx, options) =>
       reliableModelStream(
         selectedModel.models,
         m,
         ctx,
-        options,
+        withCloudflareGatewayAuth(requestModel, options),
         requestModel.maxTokens,
         () => selectedModel.credentials?.accessToken ?? selectedModel.apiKey,
       ),
@@ -1214,7 +1308,7 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
     // Shared-budget abort leaves errorMessage on the nested agent; surface it as a
     // completed stop rather than a failed subagent chip.
     const budgetExceeded = host.toolCallBudget.exceeded;
-    const error = nested.state.errorMessage;
+    const error = nested.state.errorMessage || providerFailureText(nested.state.messages.at(-1));
     if (error && !budgetExceeded) {
       const message = sanitizeProviderError(subagentModel.provider, error);
       host.queue.push({ type: "subagent", agentId, name, task, status: "failed", result: message });
@@ -1249,7 +1343,10 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
 
 /** Build AgentTool.parameters for a connector tool, including OpenAI wire fidelity. */
 export function parametersFor(tool: ConnectorTool) {
-  const schema = builtinParameters(tool) ?? safeJsonSchemaParameters(tool);
+  const builtin = builtinParameters(tool);
+  const schema = builtin
+    ? withDeclaredDescriptions(builtin, tool.inputSchema)
+    : safeJsonSchemaParameters(tool);
   // Type.Union (top-level oneOf/anyOf) serializes without type/properties, and
   // Anthropic rejects a root union, so it is flattened into one object schema.
   // Re-wrap only when needed so Type.Object schemas keep TypeBox Kind metadata.
@@ -1257,6 +1354,30 @@ export function parametersFor(tool: ConnectorTool) {
   return Type.Unsafe(
     normalizeOpenAiToolParameters(JSON.parse(JSON.stringify(schema))),
   ) as unknown as ReturnType<typeof Type.Object>;
+}
+
+/** builtinParameters hand-builds stricter schemas for some tools, and those carried none of
+ * the parameter descriptions the tool declares. Copy each declared description onto the
+ * matching top-level field. The schema is built fresh per call, so this mutates no shared
+ * node. */
+function withDeclaredDescriptions<T>(schema: T, declared: unknown): T {
+  const fields = (schema as { properties?: Record<string, Record<string, unknown>> }).properties;
+  const source = (
+    declared as { properties?: Record<string, { description?: unknown }> } | undefined
+  )?.properties;
+  if (!fields || !source) return schema;
+  for (const [key, spec] of Object.entries(source)) {
+    const field = fields[key];
+    if (
+      field &&
+      field.description === undefined &&
+      typeof spec?.description === "string" &&
+      spec.description
+    ) {
+      field.description = spec.description;
+    }
+  }
+  return schema;
 }
 
 /** A remote MCP server controls its own schemas, so a shape TypeBox cannot express must
@@ -1318,7 +1439,7 @@ function builtinParameters(tool: ConnectorTool) {
       title: Type.Optional(Type.String()),
       instructions: Type.Optional(Type.String()),
       prompt: Type.Optional(Type.String()),
-      computer_mode: Type.Optional(Type.Union([Type.Literal("team"), Type.Literal("dedicated")])),
+      computer_mode: Type.Optional(stringEnum(["team", "dedicated"], {})),
     });
   }
   if (tool.name === "update_bot") {
@@ -1495,11 +1616,12 @@ function isAgentToolExecutionResult(result: unknown): result is AgentToolExecuti
 
 export function jsonSchemaParameters(
   schema: Record<string, unknown>,
+  options: FieldOptions = {},
 ): ReturnType<typeof Type.Object> {
   // Keep intersections intact until parametersFor flattens root combinators.
   // Rebuilding only properties here drops allOf-only fields and their constraints.
   if (Array.isArray(schema.allOf)) {
-    return Type.Unsafe(schema) as unknown as ReturnType<typeof Type.Object>;
+    return Type.Unsafe({ ...schema, ...options }) as unknown as ReturnType<typeof Type.Object>;
   }
   // Top-level oneOf/anyOf (e.g. request_secret's credential XOR connectionId)
   // must stay a union. Falling through to properties would drop the exclusivity
@@ -1512,6 +1634,7 @@ export function jsonSchemaParameters(
   if (alternatives && alternatives.length > 0 && schema.properties == null) {
     return Type.Union(
       alternatives.map((variant) => jsonSchemaParameters(variant as Record<string, unknown>)),
+      options,
     ) as unknown as ReturnType<typeof Type.Object>;
   }
   const properties = (schema.properties ?? {}) as Record<string, unknown>;
@@ -1527,13 +1650,27 @@ export function jsonSchemaParameters(
   // Type.Object defaults to open, which would let connectionId+replace match both
   // anyOf variants after conversion.
   return schema.additionalProperties === false
-    ? Type.Object(fields, { additionalProperties: false })
-    : Type.Object(fields);
+    ? Type.Object(fields, { ...options, additionalProperties: false })
+    : Type.Object(fields, options);
+}
+
+type FieldOptions = { description?: string };
+
+/** Carry the parameter description when rebuilding its TypeBox node. */
+function fieldOptions(definition: Record<string, unknown>): FieldOptions {
+  return typeof definition.description === "string" && definition.description
+    ? { description: definition.description }
+    : {};
+}
+
+/** Use a plain string enum: some gateways discard the allowed values from anyOf/const unions. */
+function stringEnum(values: readonly string[], options: FieldOptions) {
+  return Type.Unsafe<string>({ type: "string", enum: [...values], ...options });
 }
 
 /** TypeBox only builds literals from primitives; anything else throws while the tool list is
  * being assembled, which would take down the whole turn. */
-function enumUnion(values: readonly unknown[]) {
+function enumUnion(values: readonly unknown[], options: FieldOptions = {}) {
   const members = values.map((value) =>
     value === null
       ? Type.Null()
@@ -1541,20 +1678,34 @@ function enumUnion(values: readonly unknown[]) {
         ? Type.Literal(value)
         : undefined,
   );
-  return members.every((member) => member !== undefined) ? Type.Union(members) : undefined;
+  return members.every((member) => member !== undefined) ? Type.Union(members, options) : undefined;
 }
 
 export function jsonField(spec: unknown): ReturnType<typeof Type.String> {
   const definition = spec && typeof spec === "object" ? (spec as Record<string, unknown>) : {};
+  const options = fieldOptions(definition);
   if (Array.isArray(definition.enum) && definition.enum.length > 0) {
-    const union = enumUnion(definition.enum);
+    if (definition.enum.every((value) => typeof value === "string")) {
+      return stringEnum(definition.enum as string[], options) as never;
+    }
+    const union = enumUnion(definition.enum, options);
     if (union) return union as never;
   }
   // A `const` names the only accepted value. Without this it degraded to a bare
   // string, so a discriminator like {type: {const: "bearer"}} told the model
   // nothing about which value to send -- and it guessed, twice.
   if ("const" in definition) {
-    const literal = enumUnion([definition.const]);
+    // Keep `const` (discriminators such as request_secret's auth.type depend on it) and
+    // add the equivalent one-value `enum`, which survives converters that drop `const`.
+    if (typeof definition.const === "string") {
+      return Type.Unsafe<string>({
+        type: "string",
+        const: definition.const,
+        enum: [definition.const],
+        ...options,
+      }) as never;
+    }
+    const literal = enumUnion([definition.const], options);
     if (literal) return literal as never;
   }
   // A discriminated union arrives as oneOf/anyOf with no sibling `type`. Without
@@ -1566,28 +1717,36 @@ export function jsonField(spec: unknown): ReturnType<typeof Type.String> {
       ? definition.anyOf
       : undefined;
   if (variants && variants.length > 0) {
-    return Type.Union(variants.map((variant) => jsonField(variant))) as never;
+    return Type.Union(
+      variants.map((variant) => jsonField(variant)),
+      options,
+    ) as never;
   }
   if (Array.isArray(definition.type) && definition.type.length > 0) {
-    return Type.Union(definition.type.map((type) => jsonField({ ...definition, type }))) as never;
+    // The description belongs on the union, not repeated on every member.
+    const { description: _description, ...member } = definition;
+    return Type.Union(
+      definition.type.map((type) => jsonField({ ...member, type })),
+      options,
+    ) as never;
   }
   const type = "type" in definition ? String(definition.type) : "string";
-  if (type === "null") return Type.Null() as never;
-  if (type === "number" || type === "integer") return Type.Number() as never;
-  if (type === "boolean") return Type.Boolean() as never;
+  if (type === "null") return Type.Null(options) as never;
+  if (type === "number" || type === "integer") return Type.Number(options) as never;
+  if (type === "boolean") return Type.Boolean(options) as never;
   if (type === "array") {
-    const options: {
+    const arrayOptions: FieldOptions & {
       minItems?: number;
       maxItems?: number;
       uniqueItems?: boolean;
-    } = {};
-    if (typeof definition.minItems === "number") options.minItems = definition.minItems;
-    if (typeof definition.maxItems === "number") options.maxItems = definition.maxItems;
-    if (definition.uniqueItems === true) options.uniqueItems = true;
-    return Type.Array(jsonField(definition.items), options) as never;
+    } = { ...options };
+    if (typeof definition.minItems === "number") arrayOptions.minItems = definition.minItems;
+    if (typeof definition.maxItems === "number") arrayOptions.maxItems = definition.maxItems;
+    if (definition.uniqueItems === true) arrayOptions.uniqueItems = true;
+    return Type.Array(jsonField(definition.items), arrayOptions) as never;
   }
-  if (type === "object") return jsonSchemaParameters(definition) as never;
-  return Type.String();
+  if (type === "object") return jsonSchemaParameters(definition, options) as never;
+  return Type.String(options);
 }
 
 function summarizeToolResult(result: unknown) {
@@ -1620,6 +1779,43 @@ function assistantText(message: unknown): string {
         : "",
     )
     .join("");
+}
+
+function messageHasToolCall(message: unknown): boolean {
+  if (!message || typeof message !== "object" || !("content" in message)) return false;
+  const content = (message as { content?: unknown }).content;
+  if (!Array.isArray(content)) return false;
+  return content.some(
+    (part) => !!part && typeof part === "object" && "type" in part && part.type === "toolCall",
+  );
+}
+
+/** Provider failure. Aborts stay on the existing cancel path. */
+export function providerFailureText(message: unknown): string | undefined {
+  if (!message || typeof message !== "object") return undefined;
+  if (!("role" in message) || message.role !== "assistant") return undefined;
+  const stopReason =
+    "stopReason" in message && typeof message.stopReason === "string"
+      ? message.stopReason
+      : undefined;
+  if (stopReason === "aborted") return undefined;
+  const errorMessage =
+    "errorMessage" in message &&
+    typeof message.errorMessage === "string" &&
+    message.errorMessage.trim()
+      ? message.errorMessage.trim()
+      : undefined;
+  const text = assistantText(message).trim();
+  if (stopReason === "error") {
+    if (errorMessage) return errorMessage;
+    if (text) return "The model failed after writing a response.";
+    return "The model failed before writing a response.";
+  }
+  if (stopReason === "length" && !text) {
+    return errorMessage || "The model hit its output limit before writing a response.";
+  }
+  if (errorMessage && !text) return errorMessage;
+  return undefined;
 }
 
 function sanitizeSensitiveText(message: string) {
@@ -1706,6 +1902,8 @@ interface ToolHost {
   signal: AbortSignal;
   depth: number;
   pausePending: boolean;
+  /** Shell commands that returned output and are still running. */
+  pendingShells: Array<Promise<FinishedShellCommand>>;
 }
 
 function toolCallBudgetExceededMessage(limit: number) {
@@ -2066,7 +2264,7 @@ export function reliableStreamOptions(
   let next: ModelsSimpleStreamOptions = {
     ...options,
     timeoutMs: options?.timeoutMs ?? MODEL_STREAM_TIMEOUT_MS,
-    maxRetries: options?.maxRetries ?? MODEL_STREAM_MAX_RETRIES,
+    maxRetries: options?.maxRetries ?? modelStreamMaxRetries(),
     maxTokens: resolveCompletionMaxTokens(
       model.maxTokens,
       configuredMaxTokens,

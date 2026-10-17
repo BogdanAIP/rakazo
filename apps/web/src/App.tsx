@@ -1,17 +1,29 @@
 import { Trans, useLingui } from "@lingui/react/macro";
+import { RemoteImagesContext } from "@rakazo/chat-ui/web";
 import { LOCAL_SETTINGS_PAGE } from "@rakazo/contracts";
 import { Button, Skeleton } from "@rakazo/ui-web";
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { LoadingState } from "./components/ai/primitives";
 import { authClient } from "./lib/auth";
+import { chatGptSessionHandoffNext } from "./lib/chatgpt-session-handoff";
 import { markAfterPaint, markOnce } from "./lib/performance";
+import { getRemoteImagesEnabled, subscribeRemoteImages } from "./lib/remote-images-preference";
 import {
   holdUnreachableGate,
   sessionGate,
   sessionRetryDelayMs,
   showSessionUnavailable,
 } from "./lib/session-gate";
+import { ChatGptSessionBridgePage } from "./pages/ChatGptSessionBridge";
 import { IntegrationSetupPage } from "./pages/IntegrationSetup";
 import { LocalSettingsPage } from "./pages/LocalSettings";
 import { McpOAuthCallbackPage } from "./pages/McpOAuthCallback";
@@ -32,16 +44,30 @@ const WelcomePage = lazy(() =>
 const ArtifactsPage = lazy(() =>
   import("./pages/Artifacts").then((module) => ({ default: module.ArtifactsPage })),
 );
+const PaperJournalPage = lazy(() =>
+  import("./pages/PaperJournal").then((module) => ({ default: module.PaperJournalPage })),
+);
 
 export function App() {
-  if (window.location.pathname === LOCAL_SETTINGS_PAGE) return <LocalSettingsPage />;
-  return <SessionApp />;
+  const loadRemoteImages = useSyncExternalStore(
+    subscribeRemoteImages,
+    getRemoteImagesEnabled,
+    () => false,
+  );
+  return (
+    <RemoteImagesContext.Provider value={loadRemoteImages}>
+      {window.location.pathname === LOCAL_SETTINGS_PAGE ? <LocalSettingsPage /> : <SessionApp />}
+    </RemoteImagesContext.Provider>
+  );
 }
 
 function SessionApp() {
   const [searchParams] = useSearchParams();
+  const requestedNext = searchParams.get("next");
   const signInDestination =
-    searchParams.get("next") === "/integrations/setup" ? "/integrations/setup" : "/app";
+    requestedNext === "/integrations/setup"
+      ? requestedNext
+      : (chatGptSessionHandoffNext(requestedNext) ?? "/app");
   const session = authClient.useSession();
   const gate = sessionGate(session);
   const [holdingUnreachable, setHoldingUnreachable] = useState(false);
@@ -71,6 +97,7 @@ function SessionApp() {
   }
 
   const user = session.data?.user;
+  const sessionToken = session.data?.session.token;
   return (
     <div className="h-full" data-rakazo-app-state="ready">
       <Suspense fallback={<div className="h-full bg-background" />}>
@@ -111,10 +138,29 @@ function SessionApp() {
               )
             }
           />
+          <Route
+            path="/chatgpt/session"
+            element={
+              user && sessionToken ? (
+                <ChatGptSessionBridgePage sessionToken={sessionToken} />
+              ) : (
+                <Navigate
+                  to={`/sign-in?next=${encodeURIComponent(
+                    `/chatgpt/session${window.location.search}`,
+                  )}`}
+                  replace
+                />
+              )
+            }
+          />
           <Route path="/app" element={user ? <ShellPage /> : <Navigate to="/sign-in" replace />} />
           <Route
             path="/app/g/:groupId"
             element={user ? <ShellPage /> : <Navigate to="/sign-in" replace />}
+          />
+          <Route
+            path="/app/paper-journal"
+            element={user ? <PaperJournalPage /> : <Navigate to="/sign-in" replace />}
           />
           <Route
             path="/app/artifacts"

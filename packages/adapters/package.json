@@ -4,7 +4,8 @@
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./win32-relative-path": "./src/desktop-sandbox-win32-path.ts"
   },
   "scripts": {
     "check": "tsc --noEmit -p tsconfig.json",
@@ -24,6 +25,7 @@
     "@modelcontextprotocol/sdk": "1.30.0",
     "@mozilla/readability": "0.6.0",
     "@observablehq/plot": "0.6.17",
+    "@orpc/client": "1.15.0",
     "@rakazo/adapter-kit": "workspace:*",
     "@rakazo/contracts": "workspace:*",
     "@rakazo/core": "workspace:*",

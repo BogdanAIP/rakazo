@@ -7,6 +7,7 @@ import {
   ATTACHMENT_MAX_BASE64_LENGTH,
   ATTACHMENT_MAX_COUNT,
 } from "./attachments.js";
+import { BotSecretMetadata, BotSecretPutInput, StoredBotSecretName } from "./bot-secrets.js";
 import {
   ActionApprovalRuleSchema,
   ActionAutoReviewSettingsSchema,
@@ -23,6 +24,9 @@ import {
   BotSchema,
   BotSectionSchema,
   CapabilityInstallSchema,
+  CapabilityInvocationResultSchema,
+  CapabilityToolRouteSchema,
+  CapabilityToolSchema,
   ComputerModeSchema,
   ComputerReleaseReasonSchema,
   ComputerStatusSchema,
@@ -40,6 +44,15 @@ import {
   GroupDetailSchema,
   GroupSchema,
   IntegrationCatalogResultSchema,
+  MarketAdaptationModeSchema,
+  MarketCatalogEntrySchema,
+  MarketEntryKindSchema,
+  MarketEntrySchema,
+  MarketPreferredVariantSchema,
+  MarketResolverPlanSchema,
+  MarketResolverPreparedResearchSchema,
+  MarketResolverReadOnlySelectionSchema,
+  MarketTrustSchema,
   McpServerConfigInput,
   McpServerSchema,
   MemoryDocumentSchema,
@@ -53,6 +66,10 @@ import {
   ModelConnectInputSchema,
   ModelCredentialSchema,
   ModelOAuthBeginSchema,
+  ProjectResourceSchema,
+  ProjectSchema,
+  ProjectSlugSchema,
+  ProjectSummarySchema,
   REPLY_QUOTE_MAX_LENGTH,
   ReorderBotsInput,
   RoutineSchema,
@@ -68,6 +85,7 @@ import {
   SpaceSchema,
   TaughtSkillSchema,
   TeachRecordingEventSchema,
+  ThinkingLevelSchema,
   ThreadMessagePageSchema,
   ThreadSnapshotSchema,
   UpdateAgentSkillInput,
@@ -87,8 +105,50 @@ import {
   IntegrationSetupStateSchema,
 } from "./integration-settings.js";
 import { MessageReactionSchema } from "./reactions.js";
-import { RunsListOutputSchema } from "./runs.js";
+import {
+  RpcAccessGrantCreatedSchema,
+  RpcAccessGrantCreateSchema,
+  RpcAccessGrantSchema,
+} from "./rpc-access.js";
+import { RoutineHistorySchema, RoutineRunCursorSchema, RunsListOutputSchema } from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
+import {
+  TradingCandleResearchInputSchema,
+  TradingCatalogOutputSchema,
+  TradingPerpContextInputSchema,
+  TradingPerpContextSchema,
+  TradingResearchOutputSchema,
+  TradingScanOutputSchema,
+  TradingScanRequestSchema,
+  TradingSweepOutputSchema,
+  TradingSweepRequestSchema,
+} from "./trading.js";
+import {
+  TradingPaperJournalListOutputSchema,
+  TradingPaperJournalReadInputSchema,
+  TradingPaperJournalReadOutputSchema,
+  TradingPaperPerpetualJournalListOutputSchema,
+  TradingPaperPerpetualJournalReadOutputSchema,
+} from "./trading-paper-journal.js";
+import {
+  PaperLeverageReadInputSchema,
+  PaperVenueLeverageLimitsSchema,
+} from "./trading-paper-leverage.js";
+import {
+  PaperPerpetualCommandSchema,
+  PaperPerpetualPreparationSchema,
+  PaperPerpetualStrategySchema,
+  PaperPerpetualWorkspaceStatusSchema,
+  PaperResearchHistoryCursorSchema,
+  PaperResearchHistorySchema,
+} from "./trading-paper-perpetual-workspace.js";
+import { TradingPaperMarketPreparationSchema } from "./trading-paper-workspace.js";
+import {
+  WindowsHostBrowserRequestSchema,
+  WindowsHostBrowserResultSchema,
+  WindowsHostCapabilitySchema,
+  WindowsHostProcessResultSchema,
+} from "./windows-host.js";
 
 const botId = z.object({ botId: Id });
 const groupId = z.object({ groupId: Id });
@@ -116,6 +176,34 @@ const structuredMentionTarget = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("routine"), id: Id }),
   z.object({ kind: z.literal("connector"), id: Id }),
 ]);
+
+const marketGithubImportInput = z.object({
+  kind: MarketEntryKindSchema,
+  key: z.string().trim().min(1).max(500),
+  name: z.string().trim().min(1).max(120).optional(),
+  description: z.string().trim().max(2_000).optional(),
+  tags: z.array(z.string().trim().min(1).max(80)).max(50).default([]),
+  repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
+  sourcePath: z.string().trim().min(1).max(2_048),
+  sourceRef: z.string().regex(/^[0-9a-f]{40}$/),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+});
+
+const marketImportInput = z.object({
+  kind: MarketEntryKindSchema,
+  key: z.string().trim().min(1).max(500),
+  name: z.string().trim().min(1).max(120).optional(),
+  description: z.string().trim().max(2_000).optional(),
+  tags: z.array(z.string().trim().min(1).max(80)).max(50).default([]),
+  content: z.string().min(1).max(200_000),
+  sourceUrl: z.string().url().max(2_048),
+  repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
+  sourcePath: z.string().max(2_048).optional(),
+  sourceRef: z.string().regex(/^[0-9a-f]{40}$/),
+  license: z.string().max(120).optional(),
+  trust: MarketTrustSchema.default("curated"),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+});
 
 const threadSendInput = threadTarget
   .safeExtend({
@@ -149,7 +237,94 @@ const threadSendInput = threadTarget
     }
   });
 
+import {
+  TradingPaperAccountCreateInputSchema,
+  TradingPaperWorkspaceCommandSchema,
+  TradingPaperWorkspaceStatusSchema,
+} from "./trading-paper-workspace.js";
+
 export const appContract = {
+  rpcAccess: {
+    grantCreate: oc.input(RpcAccessGrantCreateSchema).output(RpcAccessGrantCreatedSchema),
+    grantList: oc.input(z.object({}).strict()).output(z.array(RpcAccessGrantSchema)),
+    grantRevoke: oc
+      .input(z.object({ id: z.string().min(1).max(128) }).strict())
+      .output(z.object({ revoked: z.boolean() })),
+  },
+  trading: {
+    perpetualExperimentsCreate: oc
+      .input(z.object({ strategy: PaperPerpetualStrategySchema.optional() }).strict())
+      .output(
+        z.object({
+          mode: z.literal("paper_only"),
+          accounts: z.array(
+            z.object({ ledgerId: z.string(), strategy: PaperPerpetualStrategySchema }),
+          ),
+        }),
+      ),
+    perpetualMarketPrepare: oc
+      .input(
+        z.object({
+          ledgerId: z.string().min(1).max(128),
+          researchMode: z.enum(["model", "external"]).optional(),
+        }),
+      )
+      .output(PaperPerpetualPreparationSchema),
+    perpetualLeverageRead: oc
+      .input(PaperLeverageReadInputSchema)
+      .output(z.array(PaperVenueLeverageLimitsSchema)),
+    perpetualResearchRead: oc
+      .input(
+        z
+          .object({
+            ledgerId: z.string().min(1).max(128),
+            limit: z.number().int().min(1).max(50).optional(),
+            before: PaperResearchHistoryCursorSchema.optional(),
+          })
+          .strict(),
+      )
+      .output(PaperResearchHistorySchema),
+    perpetualWorkspaceRead: oc
+      .input(z.object({ ledgerId: z.string().min(1).max(128) }))
+      .output(PaperPerpetualWorkspaceStatusSchema),
+    perpetualWorkspaceCommand: oc
+      .input(PaperPerpetualCommandSchema)
+      .output(PaperPerpetualWorkspaceStatusSchema),
+    marketPrepare: oc
+      .input(z.object({ ledgerId: z.string().min(1).max(128), venue: z.enum(["okx", "bingx"]) }))
+      .output(TradingPaperMarketPreparationSchema),
+    accountCreate: oc
+      .input(TradingPaperAccountCreateInputSchema)
+      .output(z.object({ ledgerId: z.string() })),
+    workspaceRead: oc
+      .input(z.object({ ledgerId: z.string().min(1).max(128) }))
+      .output(TradingPaperWorkspaceStatusSchema),
+    workspaceCommand: oc
+      .input(TradingPaperWorkspaceCommandSchema)
+      .output(TradingPaperWorkspaceStatusSchema),
+    /** Public-market shortlist only; no private keys, order placement or account state. */
+    list: oc.input(TradingScanRequestSchema).output(TradingScanOutputSchema),
+    /** CEX spot, perpetual and dated-future public metadata, not private account instruments. */
+    catalog: oc.input(z.object({})).output(TradingCatalogOutputSchema),
+    /** Research-only reproducible proposal / NO_TRADE from confirmed candles. */
+    analyze: oc.input(TradingCandleResearchInputSchema).output(TradingResearchOutputSchema),
+    /** A capped public-market research sweep; no orders, account or key access. */
+    sweep: oc.input(TradingSweepRequestSchema).output(TradingSweepOutputSchema),
+    /** Authenticated owner-only, verified read-only PAPER journal dashboard. */
+    journalList: oc.input(z.object({})).output(TradingPaperJournalListOutputSchema),
+    journalRead: oc
+      .input(TradingPaperJournalReadInputSchema)
+      .output(TradingPaperJournalReadOutputSchema),
+    /** Futures is a tab of the same journal; both routes are read-only. */
+    perpetualJournalList: oc
+      .input(z.object({}))
+      .output(TradingPaperPerpetualJournalListOutputSchema),
+    perpetualJournalRead: oc
+      .input(TradingPaperJournalReadInputSchema)
+      .output(TradingPaperPerpetualJournalReadOutputSchema),
+    /** Public derivative context only; no collateral, leverage or order controls. */
+    perpContext: oc.input(TradingPerpContextInputSchema).output(TradingPerpContextSchema),
+  },
   aiConsent: {
     status: oc.input(AiConsentQuerySchema).output(AiConsentStatusSchema),
     allow: oc
@@ -188,6 +363,48 @@ export const appContract = {
       )
       .output(DeploymentSettingsSchema),
   },
+  windowsHosts: {
+    list: oc.output(
+      z.array(
+        z.object({
+          id: z.string().min(1).max(200),
+          installationId: z.string().uuid(),
+          hostname: z.string().min(1).max(255),
+          platform: z.literal("win32"),
+          release: z.string().min(1).max(128),
+          arch: z.string().min(1).max(32),
+          protocolVersion: z.string().min(1).max(64),
+          runtimeVersion: z.string().min(1).max(64),
+          capabilities: z.array(WindowsHostCapabilitySchema).max(32),
+          revokedAt: IsoDate.nullable(),
+          lastSeenAt: IsoDate.nullable(),
+          createdAt: IsoDate,
+          updatedAt: IsoDate,
+        }),
+      ),
+    ),
+    createPairing: oc
+      .input(
+        z.object({
+          ttlMs: z
+            .number()
+            .int()
+            .min(1_000)
+            .max(30 * 60_000)
+            .optional(),
+        }),
+      )
+      .output(
+        z.object({
+          pairingId: z.string().min(1).max(200),
+          pairingToken: z.string().min(32).max(4096),
+          expiresAt: IsoDate,
+        }),
+      ),
+    revoke: oc
+      .input(z.object({ hostId: z.string().min(1).max(200) }))
+      .output(z.object({ ok: z.literal(true) })),
+  },
   /**
    * Deployment-owner product updates. When the Compose updater sidecar is reachable, these proxy
    * to its `/state` `/plan` `/apply` contract. Rollback stays on the sidecar for ops only and is
@@ -216,6 +433,7 @@ export const appContract = {
           provider: z.string(),
           label: z.string().optional(),
           modelId: z.string().optional(),
+          thinkingLevel: ThinkingLevelSchema.nullable().optional(),
         }),
       )
       .output(ModelOAuthBeginSchema),
@@ -236,7 +454,16 @@ export const appContract = {
       .input(z.object({ loginId: z.string() }))
       .output(z.object({ ok: z.literal(true) })),
     setDefault: oc
-      .input(z.object({ provider: z.string(), modelId: z.string() }))
+      .input(
+        z.object({
+          provider: z.string(),
+          modelId: z.string(),
+          thinkingLevel: ThinkingLevelSchema.nullable().optional(),
+        }),
+      )
+      .output(z.object({ ok: z.literal(true) })),
+    disconnect: oc
+      .input(z.object({ provider: z.string().trim().min(1) }))
       .output(z.object({ ok: z.literal(true) })),
   },
   bots: {
@@ -400,6 +627,36 @@ export const appContract = {
     readFile: oc
       .input(z.object({ botId: Id, path: z.string() }))
       .output(z.object({ path: z.string(), content: z.string() })),
+    exec: oc
+      .input(
+        z.object({
+          botId: Id,
+          argv: z.array(z.string().min(1).max(4_096)).min(1).max(16),
+          cwd: z.string().max(4_096).optional(),
+          timeoutMs: z.number().int().min(100).max(18_000).default(10_000),
+        }),
+      )
+      .output(WindowsHostProcessResultSchema),
+    browser: oc
+      .input(
+        z.object({
+          botId: Id,
+          request: WindowsHostBrowserRequestSchema,
+        }),
+      )
+      .output(WindowsHostBrowserResultSchema),
+    observe: oc.input(botId).output(
+      z.object({
+        frameId: z.string(),
+        capturedAt: z.string(),
+        mimeType: z.enum(["image/png", "image/jpeg"]),
+        imageBase64: z.string(),
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+        cursor: z.object({ x: z.number().nonnegative(), y: z.number().nonnegative() }).optional(),
+        activeWindow: z.object({ id: z.string(), title: z.string().optional() }).optional(),
+      }),
+    ),
     downloadFile: oc
       .input(z.object({ botId: Id, path: z.string().min(1) }))
       .output(z.object({ path: z.string(), contentBase64: z.string() })),
@@ -445,6 +702,9 @@ export const appContract = {
   },
   routines: {
     list: oc.input(botId).output(z.array(RoutineSchema)),
+    history: oc
+      .input(z.object({ routineId: Id, before: RoutineRunCursorSchema.optional() }))
+      .output(RoutineHistorySchema),
     create: oc.input(CreateRoutineInput).output(RoutineSchema),
     update: oc
       .input(
@@ -501,6 +761,7 @@ export const appContract = {
       .input(
         z.object({
           botId: Id,
+          projectId: Id.optional(),
           status: ScratchpadItemStatusSchema.optional(),
           includeDone: z.boolean().optional(),
         }),
@@ -511,6 +772,7 @@ export const appContract = {
       .input(
         z.object({
           itemId: Id,
+          projectId: Id.nullable().optional(),
           title: z.string().min(1).max(200).optional(),
           status: ScratchpadItemStatusSchema.optional(),
           notes: z.string().max(4_000).optional(),
@@ -519,6 +781,81 @@ export const appContract = {
       .output(ScratchpadItemSchema),
     remove: oc.input(z.object({ itemId: Id })).output(z.object({ ok: z.literal(true) })),
   },
+  projects: {
+    list: oc
+      .input(z.object({ includeArchived: z.boolean().default(false) }))
+      .output(z.array(ProjectSummarySchema)),
+    get: oc
+      .input(
+        z
+          .object({ projectId: Id.optional(), slug: ProjectSlugSchema.optional() })
+          .superRefine((input, ctx) => {
+            if (!input.projectId && !input.slug) {
+              ctx.addIssue({
+                code: "custom",
+                message: "Provide projectId or slug",
+                path: ["projectId"],
+              });
+            }
+          }),
+      )
+      .output(ProjectSchema),
+    create: oc
+      .input(
+        z.object({
+          slug: ProjectSlugSchema,
+          name: z.string().trim().min(1).max(160),
+          description: z.string().max(4_000).default(""),
+          memory: z.string().max(100_000).default(""),
+        }),
+      )
+      .output(ProjectSchema),
+    update: oc
+      .input(
+        z
+          .object({
+            projectId: Id,
+            name: z.string().trim().min(1).max(160).optional(),
+            description: z.string().max(4_000).optional(),
+            memory: z.string().max(100_000).optional(),
+            expectedMemoryRevision: z.number().int().positive().optional(),
+            archived: z.boolean().optional(),
+          })
+          .superRefine((input, ctx) => {
+            if (input.memory !== undefined && input.expectedMemoryRevision === undefined) {
+              ctx.addIssue({
+                code: "custom",
+                message: "expectedMemoryRevision is required when updating project memory",
+                path: ["expectedMemoryRevision"],
+              });
+            }
+          }),
+      )
+      .output(ProjectSchema),
+    context: oc.input(z.object({ projectId: Id })).output(
+      z.object({
+        project: ProjectSchema,
+        resources: z.array(ProjectResourceSchema),
+        openTasks: z.array(ScratchpadItemSchema),
+      }),
+    ),
+    resources: {
+      list: oc.input(z.object({ projectId: Id })).output(z.array(ProjectResourceSchema)),
+      upsert: oc
+        .input(
+          z.object({
+            projectId: Id,
+            kind: z.string().regex(/^[a-z][a-z0-9._-]{0,79}$/),
+            ref: z.string().trim().min(1).max(2_048),
+            label: z.string().trim().max(240).default(""),
+            metadata: z.record(z.string(), z.unknown()).default({}),
+          }),
+        )
+        .output(ProjectResourceSchema),
+      remove: oc.input(z.object({ resourceId: Id })).output(z.object({ ok: z.literal(true) })),
+    },
+  },
+
   skills: {
     list: oc.input(botId).output(z.array(TaughtSkillSchema)),
     get: oc.input(z.object({ skillId: Id })).output(TaughtSkillSchema),
@@ -569,8 +906,186 @@ export const appContract = {
     update: oc.input(UpdateAgentSkillInput).output(AgentSkillSchema),
     remove: oc.input(z.object({ skillId: Id })).output(z.object({ ok: z.literal(true) })),
   },
+  market: {
+    search: oc
+      .input(
+        z.object({
+          query: z.string().trim().max(200).default(""),
+          kind: MarketEntryKindSchema.optional(),
+          limit: z.number().int().min(1).max(100).default(20),
+        }),
+      )
+      .output(z.array(MarketCatalogEntrySchema)),
+    get: oc
+      .input(
+        z
+          .object({
+            entryId: Id.optional(),
+            kind: MarketEntryKindSchema.optional(),
+            key: z.string().min(1).max(500).optional(),
+          })
+          .superRefine((input, ctx) => {
+            const byId = Boolean(input.entryId);
+            const byKey = Boolean(input.kind && input.key);
+            if (byId === byKey) {
+              ctx.addIssue({
+                code: "custom",
+                message: "Provide entryId or kind + key",
+                path: ["entryId"],
+              });
+            }
+          }),
+      )
+      .output(MarketEntrySchema),
+    resolve: oc
+      .input(
+        z.object({
+          semanticKey: z
+            .string()
+            .trim()
+            .min(1)
+            .max(120)
+            .regex(/^[a-z][a-z0-9._-]*$/),
+          resolverKey: z.string().trim().min(1).max(500).optional(),
+          expectedDigest: z
+            .string()
+            .regex(/^[0-9a-f]{64}$/)
+            .optional(),
+          requireReadOnly: z.boolean().default(false),
+          allowedKinds: z
+            .array(z.enum(["mcp", "api", "cli", "native", "computer", "browser"]))
+            .max(6)
+            .optional(),
+          limit: z.number().int().min(1).max(32).default(32),
+        }),
+      )
+      .output(MarketResolverPlanSchema),
+    select: oc
+      .input(
+        z.object({
+          semanticKey: z
+            .string()
+            .trim()
+            .min(1)
+            .max(120)
+            .regex(/^[a-z][a-z0-9._-]*$/),
+          resolverKey: z.string().trim().min(1).max(500).optional(),
+          expectedDigest: z
+            .string()
+            .regex(/^[0-9a-f]{64}$/)
+            .optional(),
+          allowedKinds: z
+            .array(z.enum(["mcp", "api", "cli", "native", "computer", "browser"]))
+            .max(6)
+            .optional(),
+          limit: z.number().int().min(1).max(32).default(32),
+        }),
+      )
+      .output(MarketResolverReadOnlySelectionSchema),
+    prepare: oc
+      .input(
+        z.object({
+          semanticKey: z
+            .string()
+            .trim()
+            .min(1)
+            .max(120)
+            .regex(/^[a-z][a-z0-9._-]*$/),
+          resolverKey: z.string().trim().min(1).max(500).optional(),
+          expectedDigest: z
+            .string()
+            .regex(/^[0-9a-f]{64}$/)
+            .optional(),
+          allowedKinds: z
+            .array(z.enum(["mcp", "api", "cli", "native", "computer", "browser"]))
+            .max(6)
+            .optional(),
+          limit: z.number().int().min(1).max(32).default(32),
+        }),
+      )
+      .output(MarketResolverPreparedResearchSchema),
+    importGithub: oc.input(marketGithubImportInput).output(MarketEntrySchema),
+    importGithubBatch: oc
+      .input(
+        z.object({
+          items: z.array(marketGithubImportInput).min(1).max(100),
+        }),
+      )
+      .output(z.array(MarketCatalogEntrySchema)),
+    import: oc.input(marketImportInput).output(MarketEntrySchema),
+    importBatch: oc
+      .input(
+        z.object({
+          items: z.array(marketImportInput).min(1).max(100),
+        }),
+      )
+      .output(z.array(MarketCatalogEntrySchema)),
+    adapt: oc
+      .input(
+        z.object({
+          entryId: Id,
+          expectedDigest: z.string().regex(/^[0-9a-f]{64}$/),
+          mode: MarketAdaptationModeSchema,
+          content: z.string().min(1).max(200_000),
+        }),
+      )
+      .output(MarketEntrySchema),
+    evaluate: oc
+      .input(
+        z.object({
+          entryId: Id,
+          expectedDigest: z.string().regex(/^[0-9a-f]{64}$/),
+          preferredVariant: MarketPreferredVariantSchema,
+          metrics: z.record(z.string(), z.unknown()).default({}),
+          note: z.string().max(2_000).optional(),
+        }),
+      )
+      .output(MarketEntrySchema),
+    install: oc
+      .input(
+        z.object({
+          entryId: Id,
+          variant: MarketPreferredVariantSchema.optional(),
+          nameOverride: z.string().trim().min(1).max(80).optional(),
+        }),
+      )
+      .output(AgentSkillSchema),
+  },
   capabilities: {
     list: oc.output(z.array(CapabilityInstallSchema)),
+    tools: oc
+      .input(
+        z.object({
+          botId: Id,
+          query: z.string().trim().max(200).default(""),
+          limit: z.number().int().min(1).max(100).default(50),
+        }),
+      )
+      .output(z.array(CapabilityToolSchema)),
+    read: oc
+      .input(
+        z.object({
+          botId: Id,
+          tool: z.string().min(1).max(300),
+          route: CapabilityToolRouteSchema,
+          args: z.record(z.string(), z.unknown()).default({}),
+          executionId: z.string().min(1).max(160).optional(),
+        }),
+      )
+      .output(CapabilityInvocationResultSchema),
+    execute: oc
+      .input(
+        z.object({
+          botId: Id,
+          projectId: Id.optional(),
+          tool: z.string().min(1).max(300),
+          route: CapabilityToolRouteSchema,
+          args: z.record(z.string(), z.unknown()).default({}),
+          executionId: z.string().min(1).max(160).optional(),
+        }),
+      )
+      .output(CapabilityInvocationResultSchema),
+
     catalogSearch: oc
       .input(
         z.object({
@@ -804,7 +1319,8 @@ export const appContract = {
   },
   notifications: {
     registerPush: oc
-      .input(z.object({ token: z.string().min(8).max(512) }))
+      // No whitespace: the token store keeps the registering session on the next line.
+      .input(z.object({ token: z.string().min(8).max(512).regex(/^\S+$/) }))
       .output(z.object({ ok: z.literal(true) })),
     unregisterPush: oc.output(z.object({ ok: z.literal(true) })),
   },
@@ -859,6 +1375,13 @@ export const appContract = {
     list: oc.output(z.array(AgentSecretSchema)),
     put: oc.input(AgentSecretInputSchema).output(AgentSecretSchema),
     remove: oc.input(z.object({ id: Id })).output(z.object({ ok: z.literal(true) })),
+  },
+  botSecrets: {
+    list: oc.input(z.object({ botId: Id })).output(z.array(BotSecretMetadata)),
+    put: oc.input(BotSecretPutInput).output(BotSecretMetadata),
+    remove: oc
+      .input(z.object({ botId: Id, name: StoredBotSecretName }))
+      .output(z.object({ ok: z.literal(true) })),
   },
 };
 

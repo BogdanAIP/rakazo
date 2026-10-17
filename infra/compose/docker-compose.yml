@@ -109,6 +109,7 @@ services:
       DATA_DIR: /data
       SANDBOX_SUPERVISOR_URL: http://supervisor:7091
       WAKEUP_DRIVER: graphile
+      RAKAZO_WINDOWS_HOST_API_INTERNAL_URL: http://api:3100
       SANDBOX_PROVIDER: docker
       CLOUD_AGENT_PROVIDER: ${CLOUD_AGENT_PROVIDER:-none}
       CLOUD_AGENT_SPACE_ID: ${CLOUD_AGENT_SPACE_ID:-}

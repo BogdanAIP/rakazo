@@ -1,0 +1,965 @@
+import { randomUUID } from "node:crypto";
+import type { TradingResolvedResearchEnvelope } from "@rakazo/contracts";
+import { resolvedTradingResearchApprovalScope } from "@rakazo/core";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createDb, type Prisma } from "./client.js";
+import { fillApprovedResolvedTradingPaperReservation } from "./trading-paper-fill.js";
+import { auditTradingPaperLifecycle } from "./trading-paper-lifecycle-audit.js";
+import { recordPublicAdapterPaperQuoteEvidence } from "./trading-paper-quote-evidence.js";
+import { reserveApprovedResolvedTradingPaperSignal } from "./trading-paper-reserve.js";
+import {
+  applyApprovedTradingPaperResolvedResearchFillControl,
+  readTradingPaperResolvedResearchFillPreflight,
+  readVerifiedTradingPaperResolvedResearchFillGate,
+} from "./trading-paper-resolved-research-fill-gate.js";
+import {
+  applyApprovedTradingPaperResolvedResearchControl,
+  readTradingPaperResolvedResearchPreflight,
+  readVerifiedTradingPaperResolvedResearchGate,
+} from "./trading-paper-resolved-research-gate.js";
+import { readVerifiedTradingPaperResolvedResearchAutomaticStopCandidates } from "./trading-paper-resolved-research-stop-preflight.js";
+import {
+  applyApprovedTradingPaperControl,
+  createDisabledTradingPaperRiskPolicy,
+} from "./trading-paper-risk-policy.js";
+import { createTradingPaperLedger } from "./trading-paper-store.js";
+import { applyApprovedTradingPaperWorkerControl } from "./trading-paper-worker-gate.js";
+
+const databaseUrl = process.env.DATABASE_URL;
+const describePostgres =
+  process.env.VERIFY_DATABASE && databaseUrl ? describe.sequential : describe.skip;
+
+describePostgres("resolved research PAPER gate PostgreSQL authorization", () => {
+  const suffix = randomUUID();
+  const owner = {
+    userId: `resolved-research-user-${suffix}`,
+    spaceId: `resolved-research-space-${suffix}`,
+  };
+  const orgId = `resolved-research-org-${suffix}`;
+  let first: ReturnType<typeof createDb>;
+  let second: ReturnType<typeof createDb>;
+
+  beforeAll(async () => {
+    first = createDb(databaseUrl!, { poolMax: 2, applicationName: "resolved-research-first" });
+    second = createDb(databaseUrl!, { poolMax: 2, applicationName: "resolved-research-second" });
+    const createdAt = new Date();
+    await first.prisma.user.create({
+      data: {
+        id: owner.userId,
+        name: "Resolved Research Fixture",
+        email: `${owner.userId}@rakazo.test`,
+        emailVerified: false,
+      },
+    });
+    await first.prisma.organization.create({
+      data: { id: orgId, name: "Resolved Research Fixture", slug: orgId, createdAt },
+    });
+    await first.prisma.member.create({
+      data: {
+        id: `resolved-research-member-${suffix}`,
+        organizationId: orgId,
+        userId: owner.userId,
+        role: "member",
+        createdAt,
+      },
+    });
+    await first.prisma.space.create({
+      data: {
+        id: owner.spaceId,
+        organizationId: orgId,
+        name: "Resolved Research Fixture",
+        isDefault: false,
+        createdByUserId: owner.userId,
+      },
+    });
+    await first.prisma.spaceMember.create({
+      data: {
+        id: `resolved-research-space-member-${suffix}`,
+        spaceId: owner.spaceId,
+        organizationId: orgId,
+        userId: owner.userId,
+        role: "owner",
+        createdAt,
+      },
+    });
+  });
+
+  afterAll(async () => {
+    if (!first || !second) return;
+    try {
+      await first.prisma.organization.deleteMany({ where: { id: orgId } });
+      await first.prisma.user.deleteMany({ where: { id: owner.userId } });
+    } finally {
+      await Promise.allSettled([first.prisma.$disconnect(), second.prisma.$disconnect()]);
+      await Promise.allSettled([first.pool.end(), second.pool.end()]);
+    }
+  });
+
+  const makeEffect = async (kind: string, label: string, request: Prisma.InputJsonValue) => {
+    const botId = `resolved-research-bot-${label}-${suffix}`;
+    const threadId = `resolved-research-thread-${label}-${suffix}`;
+    const taskId = `resolved-research-task-${label}-${suffix}`;
+    const runId = `resolved-research-run-${label}-${suffix}`;
+    await first.prisma.bot.create({
+      data: {
+        id: botId,
+        spaceId: owner.spaceId,
+        userId: owner.userId,
+        name: "Resolved Research Helper",
+        color: "#000000",
+      },
+    });
+    await first.prisma.thread.create({
+      data: { id: threadId, spaceId: owner.spaceId, botId, userId: owner.userId },
+    });
+    await first.prisma.task.create({
+      data: {
+        id: taskId,
+        spaceId: owner.spaceId,
+        botId,
+        threadId,
+        userId: owner.userId,
+        prompt: "resolved research helper",
+        status: "running",
+      },
+    });
+    await first.prisma.run.create({
+      data: {
+        id: runId,
+        spaceId: owner.spaceId,
+        botId,
+        threadId,
+        taskId,
+        userId: owner.userId,
+        status: "running",
+        trigger: "user",
+      },
+    });
+    return first.prisma.externalEffect.create({
+      data: {
+        id: `resolved-research-effect-${label}-${suffix}`,
+        spaceId: owner.spaceId,
+        runId,
+        kind,
+        idempotencyKey: `resolved-research-key-${label}-${suffix}`,
+        status: "executing",
+        request,
+      },
+    });
+  };
+
+  const envelope = (overrides: Partial<TradingResolvedResearchEnvelope> = {}) =>
+    ({
+      schemaVersion: "trading-resolved-research-v1",
+      mode: "research_only",
+      executionAuthority: "none",
+      provenance: {
+        semanticKey: "signal.discovery",
+        resolverKey: "signal.discovery",
+        resolverDigest: "a".repeat(64),
+        implementation: {
+          name: "CCXT trading-signal Agent Skill",
+          kind: "api",
+          reference: "market:ccxt/ccxt:trading-signal",
+          priority: 1,
+          readOnly: true,
+        },
+        skill: {
+          marketEntryId: `market-skill-${suffix}`,
+          marketKey: "ccxt.trading-signal",
+          sourceDigest: "b".repeat(64),
+          variant: "rccl",
+          contentSha256: "c".repeat(64),
+        },
+        resolvedAt: new Date(Date.now() - 2_000).toISOString(),
+      },
+      signal: {
+        kind: "proposal",
+        executionStatus: "research_only",
+        signalId: `resolved-proposal-${suffix}`,
+        strategyId: "resolver_signal_v1",
+        strategyVersion: "1",
+        createdAt: new Date(Date.now() - 1_000).toISOString(),
+        expiresAt: new Date(Date.now() + 120_000).toISOString(),
+        evidenceIds: [`resolver-evidence-${suffix}`],
+        market: {
+          venue: "okx",
+          kind: "spot",
+          symbol: "SOL-USDT",
+          base: "SOL",
+          quote: "USDT",
+          status: "active",
+          priceIncrement: "0.01",
+          quantityIncrement: "0.01",
+          minNotional: "5",
+          expiryAt: null,
+        },
+        action: "spot_buy",
+        entryTrigger: "100",
+        stopLoss: "95",
+        takeProfit: ["110"],
+        invalidation: "fixture",
+        rationale: "generic resolver gate fixture",
+        riskBudgetQuote: null,
+        maxSlippageBps: null,
+      },
+      ...overrides,
+    }) satisfies TradingResolvedResearchEnvelope;
+
+  it("authorizes exactly one Resolver/Skill scope and invalidates it when worker authority changes", async () => {
+    const ledgerId = `resolved-research-ledger-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: new Date(Date.now() - 60_000).toISOString(),
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "500",
+    });
+    await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+      allowedVenues: ["okx", "bingx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "300",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    });
+
+    const paper = await makeEffect("paper_trading_control", "paper-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 0,
+    });
+    await applyApprovedTradingPaperControl(first.prisma, owner, paper.id);
+
+    const worker = await makeEffect("paper_worker_control", "worker-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 1,
+      cadence_minutes: 15,
+    });
+    await applyApprovedTradingPaperWorkerControl(first.prisma, owner, worker.id);
+
+    const research = envelope();
+    const scope = resolvedTradingResearchApprovalScope(research);
+    expect(
+      await readVerifiedTradingPaperResolvedResearchGate(first.prisma, owner, ledgerId),
+    ).toEqual({
+      configured: false,
+      mode: "paper_only",
+      ledgerId,
+      enabled: false,
+    });
+
+    const eventsBefore = await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } });
+    const outboxBefore = await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } });
+
+    const enable = await makeEffect("paper_resolved_research_control", "research-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_gate_revision: 1,
+      scope,
+    });
+    await expect(
+      applyApprovedTradingPaperResolvedResearchControl(second.prisma, owner, enable.id),
+    ).resolves.toMatchObject({
+      ok: true,
+      enabled: true,
+      scope,
+      policyRevision: 1,
+      gateRevision: 1,
+      researchRevision: 1,
+    });
+    await expect(
+      readTradingPaperResolvedResearchPreflight(first.prisma, owner, ledgerId, research),
+    ).resolves.toMatchObject({
+      status: "ready",
+      scope,
+      signalId: research.signal.signalId,
+      gateRevision: 1,
+      researchRevision: 1,
+      researchApprovalEffectId: enable.id,
+    });
+
+    const differentImplementation = envelope({
+      provenance: {
+        ...research.provenance,
+        implementation: {
+          ...research.provenance.implementation,
+          reference: "market:okx/agent-trade-kit:okx-cex-market",
+        },
+      },
+    });
+    await expect(
+      readTradingPaperResolvedResearchPreflight(
+        second.prisma,
+        owner,
+        ledgerId,
+        differentImplementation,
+      ),
+    ).resolves.toMatchObject({
+      status: "deny",
+      reason: "resolved_research_scope_mismatch",
+    });
+
+    const changedSkillVariant = envelope({
+      provenance: {
+        ...research.provenance,
+        skill: {
+          ...research.provenance.skill!,
+          variant: "wrapped",
+        },
+      },
+    });
+    await expect(
+      readTradingPaperResolvedResearchPreflight(
+        second.prisma,
+        owner,
+        ledgerId,
+        changedSkillVariant,
+      ),
+    ).resolves.toMatchObject({
+      status: "deny",
+      reason: "resolved_research_scope_mismatch",
+    });
+
+    const changedInstructions = envelope({
+      provenance: {
+        ...research.provenance,
+        skill: {
+          ...research.provenance.skill!,
+          contentSha256: "d".repeat(64),
+        },
+      },
+    });
+    await expect(
+      readTradingPaperResolvedResearchPreflight(
+        second.prisma,
+        owner,
+        ledgerId,
+        changedInstructions,
+      ),
+    ).resolves.toMatchObject({
+      status: "deny",
+      reason: "resolved_research_scope_mismatch",
+    });
+
+    const disableWorker = await makeEffect("paper_worker_control", "worker-disable", {
+      action: "disable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 1,
+    });
+    await applyApprovedTradingPaperWorkerControl(first.prisma, owner, disableWorker.id);
+    await expect(
+      readTradingPaperResolvedResearchPreflight(second.prisma, owner, ledgerId, research),
+    ).resolves.toMatchObject({
+      status: "deny",
+      reason: "worker_preflight_denied",
+      workerReason: "worker_gate_disabled",
+    });
+
+    const reenableWorker = await makeEffect("paper_worker_control", "worker-reenable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 1,
+      cadence_minutes: 15,
+    });
+    await applyApprovedTradingPaperWorkerControl(first.prisma, owner, reenableWorker.id);
+    await expect(
+      readTradingPaperResolvedResearchPreflight(second.prisma, owner, ledgerId, research),
+    ).resolves.toMatchObject({
+      status: "deny",
+      reason: "resolved_research_gate_worker_changed",
+      currentGateRevision: 3,
+    });
+
+    const disable = await makeEffect("paper_resolved_research_control", "research-disable", {
+      action: "disable",
+      ledger_id: ledgerId,
+      expected_gate_revision: 3,
+    });
+    await expect(
+      applyApprovedTradingPaperResolvedResearchControl(second.prisma, owner, disable.id),
+    ).resolves.toMatchObject({
+      ok: true,
+      enabled: false,
+      scope: null,
+      researchRevision: 2,
+    });
+    await expect(
+      readTradingPaperResolvedResearchPreflight(first.prisma, owner, ledgerId, research),
+    ).resolves.toMatchObject({
+      status: "deny",
+      reason: "resolved_research_gate_disabled",
+    });
+
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(
+      eventsBefore,
+    );
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+      outboxBefore,
+    );
+  });
+
+  it("creates only a B7 PAPER reserve with immutable G1 provenance and replays idempotently", async () => {
+    const ledgerId = `resolved-reserve-ledger-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: new Date(Date.now() - 60_000).toISOString(),
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "500",
+    });
+    await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+      allowedVenues: ["okx", "bingx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "300",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    });
+
+    const paper = await makeEffect("paper_trading_control", "g2-paper-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 0,
+    });
+    await applyApprovedTradingPaperControl(first.prisma, owner, paper.id);
+    const worker = await makeEffect("paper_worker_control", "g2-worker-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 1,
+      cadence_minutes: 15,
+    });
+    await applyApprovedTradingPaperWorkerControl(first.prisma, owner, worker.id);
+
+    const research = envelope();
+    const scope = resolvedTradingResearchApprovalScope(research);
+    const approval = await makeEffect("paper_resolved_research_control", "g2-research-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_gate_revision: 1,
+      scope,
+    });
+    await applyApprovedTradingPaperResolvedResearchControl(first.prisma, owner, approval.id);
+    const authority = await readTradingPaperResolvedResearchPreflight(
+      first.prisma,
+      owner,
+      ledgerId,
+      research,
+    );
+    if (authority.status !== "ready") {
+      throw new Error(`Expected G1 authority, got ${authority.reason}`);
+    }
+
+    const observedAt = new Date().toISOString();
+    const evidence = await recordPublicAdapterPaperQuoteEvidence(
+      first.prisma,
+      owner,
+      ledgerId,
+      research.signal.kind === "proposal" ? research.signal.market : null,
+      {
+        venue: "okx",
+        kind: "spot",
+        symbol: "SOL-USDT",
+        observedAt,
+        fetchedAt: observedAt,
+        bid: "99.9",
+        ask: "100",
+        quoteVolume24h: "1000000",
+      },
+    );
+
+    const created = await reserveApprovedResolvedTradingPaperSignal(
+      second.prisma,
+      owner,
+      ledgerId,
+      research,
+      evidence.id,
+      authority,
+    );
+    expect(created).toMatchObject({
+      status: "reserved",
+      mode: "paper_only",
+      signalId: research.signal.signalId,
+      policyRevision: 1,
+    });
+    if (created.status !== "reserved") throw new Error("Expected G2 reserve");
+
+    const decision = await first.prisma.tradingPaperReservationDecision.findUniqueOrThrow({
+      where: {
+        ledgerId_reservationId: { ledgerId, reservationId: created.reservationId },
+      },
+    });
+    expect(decision.policyApprovalEffectId).toBe(approval.id);
+    const use = await first.prisma.tradingPaperResolvedResearchReserveUse.findUniqueOrThrow({
+      where: {
+        ledgerId_reservationId: { ledgerId, reservationId: created.reservationId },
+      },
+    });
+    expect(use).toMatchObject({
+      signalId: research.signal.signalId,
+      researchApprovalEffectId: approval.id,
+      policyRevision: 1,
+      gateRevision: 1,
+      researchRevision: 1,
+      evidenceId: evidence.id,
+      reserveEventSequence: created.eventSequence,
+    });
+    expect(await first.prisma.tradingPaperFillDecision.count({ where: { ledgerId } })).toBe(0);
+
+    await expect(
+      reserveApprovedResolvedTradingPaperSignal(
+        first.prisma,
+        owner,
+        ledgerId,
+        research,
+        evidence.id,
+        authority,
+      ),
+    ).resolves.toMatchObject({
+      status: "duplicate",
+      reservationId: created.reservationId,
+      eventSequence: created.eventSequence,
+    });
+    expect(
+      await first.prisma.tradingPaperResolvedResearchReserveUse.count({ where: { ledgerId } }),
+    ).toBe(1);
+  });
+  it("keeps generic Resolver fills behind a separate explicit permission-only G3 gate", async () => {
+    const ledgerId = `resolved-fill-gate-ledger-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: new Date(Date.now() - 60_000).toISOString(),
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "500",
+    });
+    await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+      allowedVenues: ["okx", "bingx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "300",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    });
+
+    const paper = await makeEffect("paper_trading_control", "g3-paper-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 0,
+    });
+    await applyApprovedTradingPaperControl(first.prisma, owner, paper.id);
+    const worker = await makeEffect("paper_worker_control", "g3-worker-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 1,
+      cadence_minutes: 15,
+    });
+    await applyApprovedTradingPaperWorkerControl(first.prisma, owner, worker.id);
+
+    const research = envelope({
+      signal: {
+        ...(envelope().signal.kind === "proposal" ? envelope().signal : {}),
+        kind: "proposal",
+        executionStatus: "research_only",
+        signalId: `resolved-g3-proposal-${suffix}`,
+        strategyId: "resolver_signal_v1",
+        strategyVersion: "1",
+        createdAt: new Date(Date.now() - 1_000).toISOString(),
+        expiresAt: new Date(Date.now() + 120_000).toISOString(),
+        evidenceIds: [`resolved-g3-evidence-${suffix}`],
+        market: {
+          venue: "okx",
+          kind: "spot",
+          symbol: "SOL-USDT",
+          base: "SOL",
+          quote: "USDT",
+          status: "active",
+          priceIncrement: "0.01",
+          quantityIncrement: "0.01",
+          minNotional: "5",
+          expiryAt: null,
+        },
+        action: "spot_buy",
+        entryTrigger: "100",
+        stopLoss: "95",
+        takeProfit: ["110"],
+        invalidation: "fixture",
+        rationale: "G3 permission-only fixture",
+        riskBudgetQuote: null,
+        maxSlippageBps: null,
+      },
+    });
+    const scope = resolvedTradingResearchApprovalScope(research);
+    const researchApproval = await makeEffect(
+      "paper_resolved_research_control",
+      "g3-research-enable",
+      {
+        action: "enable",
+        ledger_id: ledgerId,
+        expected_gate_revision: 1,
+        scope,
+      },
+    );
+    await applyApprovedTradingPaperResolvedResearchControl(
+      first.prisma,
+      owner,
+      researchApproval.id,
+    );
+
+    expect(
+      await readVerifiedTradingPaperResolvedResearchFillGate(first.prisma, owner, ledgerId),
+    ).toEqual({
+      configured: false,
+      mode: "paper_only",
+      ledgerId,
+      enabled: false,
+    });
+    const eventsBefore = await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } });
+    const outboxBefore = await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } });
+
+    const fillApproval = await makeEffect(
+      "paper_resolved_research_fill_control",
+      "g3-fill-enable",
+      {
+        action: "enable",
+        ledger_id: ledgerId,
+        expected_gate_revision: 1,
+        expected_research_revision: 1,
+        scope,
+      },
+    );
+    await expect(
+      applyApprovedTradingPaperResolvedResearchFillControl(second.prisma, owner, fillApproval.id),
+    ).resolves.toMatchObject({
+      ok: true,
+      enabled: true,
+      scope,
+      policyRevision: 1,
+      gateRevision: 1,
+      researchRevision: 1,
+      fillRevision: 1,
+    });
+    await expect(
+      readTradingPaperResolvedResearchFillPreflight(first.prisma, owner, ledgerId),
+    ).resolves.toMatchObject({
+      status: "ready",
+      scope,
+      gateRevision: 1,
+      researchRevision: 1,
+      fillRevision: 1,
+      fillApprovalEffectId: fillApproval.id,
+      researchApprovalEffectId: researchApproval.id,
+    });
+
+    const disableWorker = await makeEffect("paper_worker_control", "g3-worker-disable", {
+      action: "disable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 1,
+    });
+    await applyApprovedTradingPaperWorkerControl(first.prisma, owner, disableWorker.id);
+    await expect(
+      readTradingPaperResolvedResearchFillPreflight(second.prisma, owner, ledgerId),
+    ).resolves.toMatchObject({
+      status: "deny",
+      reason: "resolved_research_preflight_denied",
+      researchReason: "worker_preflight_denied",
+    });
+
+    const disableFill = await makeEffect(
+      "paper_resolved_research_fill_control",
+      "g3-fill-disable",
+      {
+        action: "disable",
+        ledger_id: ledgerId,
+        expected_gate_revision: 1,
+        expected_research_revision: 1,
+      },
+    );
+    await expect(
+      applyApprovedTradingPaperResolvedResearchFillControl(first.prisma, owner, disableFill.id),
+    ).resolves.toMatchObject({
+      ok: true,
+      enabled: false,
+      scope: null,
+      fillRevision: 2,
+    });
+    await expect(
+      readTradingPaperResolvedResearchFillPreflight(second.prisma, owner, ledgerId),
+    ).resolves.toMatchObject({
+      status: "deny",
+      reason: "resolved_fill_gate_disabled",
+    });
+
+    expect(await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(
+      eventsBefore,
+    );
+    expect(await first.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+      outboxBefore,
+    );
+    expect(await first.prisma.tradingPaperReservationDecision.count({ where: { ledgerId } })).toBe(
+      0,
+    );
+    expect(await first.prisma.tradingPaperFillDecision.count({ where: { ledgerId } })).toBe(0);
+  });
+  it("fills one G2 reserve only under fresh G3 authority and records immutable G4 provenance", async () => {
+    const ledgerId = `resolved-g4-fill-ledger-${suffix}`;
+    await createTradingPaperLedger(first.prisma, owner, {
+      ledgerId,
+      openedAt: new Date(Date.now() - 60_000).toISOString(),
+      quoteCurrency: "USDT",
+      initialBalanceQuote: "500",
+    });
+    await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+      allowedVenues: ["okx", "bingx"],
+      quoteCurrency: "USDT",
+      maxAgeMs: 60_000,
+      maxSpreadBps: 40,
+      maxTriggerDeviationBps: 50,
+      maxPositions: 2,
+      maxPerIdeaRiskQuote: "20",
+      maxDailyLossQuote: "100",
+      maxOpenRiskQuote: "40",
+      maxTotalExposureQuote: "300",
+      assumedFeeBpsPerSide: 10,
+      assumedSlippageBpsPerSide: 10,
+    });
+
+    const paper = await makeEffect("paper_trading_control", "g4-paper-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 0,
+    });
+    await applyApprovedTradingPaperControl(first.prisma, owner, paper.id);
+    const worker = await makeEffect("paper_worker_control", "g4-worker-enable", {
+      action: "enable",
+      ledger_id: ledgerId,
+      expected_policy_revision: 1,
+      cadence_minutes: 15,
+    });
+    await applyApprovedTradingPaperWorkerControl(first.prisma, owner, worker.id);
+
+    const baseResearch = envelope();
+    if (baseResearch.signal.kind !== "proposal") throw new Error("Expected proposal fixture");
+    const research = {
+      ...baseResearch,
+      signal: {
+        ...baseResearch.signal,
+        signalId: `resolved-g4-proposal-${suffix}`,
+        createdAt: new Date(Date.now() - 1_000).toISOString(),
+        expiresAt: new Date(Date.now() + 120_000).toISOString(),
+      },
+    } satisfies TradingResolvedResearchEnvelope;
+    const scope = resolvedTradingResearchApprovalScope(research);
+
+    const researchApproval = await makeEffect(
+      "paper_resolved_research_control",
+      "g4-research-enable",
+      {
+        action: "enable",
+        ledger_id: ledgerId,
+        expected_gate_revision: 1,
+        scope,
+      },
+    );
+    await applyApprovedTradingPaperResolvedResearchControl(
+      first.prisma,
+      owner,
+      researchApproval.id,
+    );
+    const researchAuthority = await readTradingPaperResolvedResearchPreflight(
+      first.prisma,
+      owner,
+      ledgerId,
+      research,
+    );
+    if (researchAuthority.status !== "ready") {
+      throw new Error(`Expected G1 authority, got ${researchAuthority.reason}`);
+    }
+
+    const reserveObservedAt = new Date().toISOString();
+    const reserveEvidence = await recordPublicAdapterPaperQuoteEvidence(
+      first.prisma,
+      owner,
+      ledgerId,
+      research.signal.market,
+      {
+        venue: "okx",
+        kind: "spot",
+        symbol: "SOL-USDT",
+        observedAt: reserveObservedAt,
+        fetchedAt: reserveObservedAt,
+        bid: "99.9",
+        ask: "100",
+        quoteVolume24h: "1000000",
+      },
+    );
+    const reserved = await reserveApprovedResolvedTradingPaperSignal(
+      first.prisma,
+      owner,
+      ledgerId,
+      research,
+      reserveEvidence.id,
+      researchAuthority,
+    );
+    if (reserved.status !== "reserved") {
+      throw new Error(`Expected G2 reserve, got ${reserved.status}`);
+    }
+
+    const fillApproval = await makeEffect(
+      "paper_resolved_research_fill_control",
+      "g4-fill-enable",
+      {
+        action: "enable",
+        ledger_id: ledgerId,
+        expected_gate_revision: 1,
+        expected_research_revision: 1,
+        scope,
+      },
+    );
+    await applyApprovedTradingPaperResolvedResearchFillControl(
+      first.prisma,
+      owner,
+      fillApproval.id,
+    );
+    const fillAuthority = await readTradingPaperResolvedResearchFillPreflight(
+      second.prisma,
+      owner,
+      ledgerId,
+    );
+    if (fillAuthority.status !== "ready") {
+      throw new Error(`Expected G3 authority, got ${fillAuthority.reason}`);
+    }
+
+    const fillObservedAt = new Date().toISOString();
+    const fillEvidence = await recordPublicAdapterPaperQuoteEvidence(
+      second.prisma,
+      owner,
+      ledgerId,
+      research.signal.market,
+      {
+        venue: "okx",
+        kind: "spot",
+        symbol: "SOL-USDT",
+        observedAt: fillObservedAt,
+        fetchedAt: fillObservedAt,
+        bid: "99.9",
+        ask: "100",
+        quoteVolume24h: "1000000",
+      },
+    );
+    const filled = await fillApprovedResolvedTradingPaperReservation(
+      second.prisma,
+      owner,
+      ledgerId,
+      reserved.reservationId,
+      fillEvidence.id,
+      fillAuthority,
+    );
+    expect(filled).toMatchObject({
+      status: "filled",
+      mode: "paper_only",
+      reservationId: reserved.reservationId,
+      signalId: research.signal.signalId,
+      policyRevision: 1,
+    });
+    if (filled.status !== "filled") throw new Error(`Expected G4 fill, got ${filled.status}`);
+
+    const use = await first.prisma.tradingPaperResolvedResearchFillUse.findUniqueOrThrow({
+      where: {
+        ledgerId_reservationId: { ledgerId, reservationId: reserved.reservationId },
+      },
+    });
+    expect(use).toMatchObject({
+      signalId: research.signal.signalId,
+      fillApprovalEffectId: fillApproval.id,
+      researchApprovalEffectId: researchApproval.id,
+      policyRevision: 1,
+      gateRevision: 1,
+      researchRevision: 1,
+      fillRevision: 1,
+      reserveEvidenceId: reserveEvidence.id,
+      evidenceId: fillEvidence.id,
+      reserveEventSequence: reserved.eventSequence,
+      fillEventSequence: filled.fillEventSequence,
+    });
+    await expect(auditTradingPaperLifecycle(first.prisma, owner, ledgerId)).resolves.toMatchObject({
+      status: "verified",
+      mode: "paper_only",
+      ledgerId,
+      reservationDecisions: 1,
+      fillDecisions: 1,
+      openPositions: 1,
+    });
+
+    await expect(
+      readVerifiedTradingPaperResolvedResearchAutomaticStopCandidates(
+        first.prisma,
+        owner,
+        ledgerId,
+      ),
+    ).resolves.toEqual({
+      status: "ready",
+      mode: "paper_only",
+      ledgerId,
+      positions: [
+        {
+          mode: "paper_only",
+          ledgerId,
+          positionId: reserved.reservationId,
+          signalId: research.signal.signalId,
+          venue: "okx",
+          symbol: "SOL-USDT",
+          quantityBase: filled.quantityBase,
+          stopPriceQuote: filled.stopPriceQuote,
+          scope,
+          policyRevision: 1,
+          gateRevision: 1,
+          researchRevision: 1,
+          fillRevision: 1,
+          fillApprovalEffectId: fillApproval.id,
+          researchApprovalEffectId: researchApproval.id,
+          fillEventSequence: filled.fillEventSequence,
+        },
+      ],
+    });
+
+    await expect(
+      fillApprovedResolvedTradingPaperReservation(
+        first.prisma,
+        owner,
+        ledgerId,
+        reserved.reservationId,
+        fillEvidence.id,
+        fillAuthority,
+      ),
+    ).resolves.toMatchObject({
+      status: "duplicate",
+      reservationId: reserved.reservationId,
+      fillEventSequence: filled.fillEventSequence,
+    });
+    expect(
+      await first.prisma.tradingPaperResolvedResearchFillUse.count({ where: { ledgerId } }),
+    ).toBe(1);
+    expect(
+      await first.prisma.tradingPaperLedgerOutbox.count({
+        where: { ledgerId, status: { not: "pending" } },
+      }),
+    ).toBe(0);
+  });
+});
