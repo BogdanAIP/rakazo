@@ -65,6 +65,7 @@ export class NautilusPaperProcess {
     | { resolve: (result: unknown) => void; reject: (error: Error) => void }
     | undefined;
   private failed = false;
+  private failureReason = "unavailable";
   private queue: Promise<unknown> = Promise.resolve();
 
   private constructor(options: { pythonCommand: string; scriptPath: string }, accountId: string) {
@@ -91,8 +92,8 @@ export class NautilusPaperProcess {
         this.fail();
       }
     });
-    this.child.once("error", () => this.fail());
-    this.child.once("exit", () => this.fail());
+    this.child.once("error", () => this.fail("spawn_failed"));
+    this.child.once("exit", (code) => this.fail("process_exited", code));
   }
 
   static async start(
@@ -196,9 +197,10 @@ export class NautilusPaperProcess {
   }
 
   private request(value: unknown, timeoutMs = 15_000): Promise<unknown> {
-    if (this.failed || this.pending) return Promise.reject(new Error("Nautilus PAPER unavailable"));
+    if (this.failed || this.pending)
+      return Promise.reject(new Error(`Nautilus PAPER unavailable (${this.failureReason})`));
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => this.fail(), timeoutMs);
+      const timer = setTimeout(() => this.fail("request_timeout"), timeoutMs);
       this.pending = {
         resolve: (result) => {
           clearTimeout(timer);
@@ -209,21 +211,25 @@ export class NautilusPaperProcess {
           reject(error);
         },
       };
-      this.child.stdin.write(JSON.stringify(value) + "\n", (error) => {
-        if (error) this.fail();
+      this.child.stdin.write(`${JSON.stringify(value)}\n`, (error) => {
+        if (error) this.fail("write_failed");
       });
     });
   }
 
-  private fail(): void {
+  private fail(reason = "protocol_violation", exitCode?: number | null): void {
+    if (this.failed) return;
     this.failed = true;
+    this.failureReason = Number.isInteger(exitCode) ? `${reason}, exit=${exitCode}` : reason;
     const pending = this.pending;
     this.pending = undefined;
-    pending?.reject(new Error("Nautilus PAPER unavailable; reconcile committed inputs"));
+    pending?.reject(
+      new Error(`Nautilus PAPER unavailable (${this.failureReason}); reconcile committed inputs`),
+    );
     this.child.kill();
   }
 
   dispose(): void {
-    this.fail();
+    this.fail("disposed");
   }
 }
