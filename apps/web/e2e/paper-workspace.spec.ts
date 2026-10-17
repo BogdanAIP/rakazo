@@ -540,6 +540,28 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
       ledgerId,
     );
     expect(paused).toMatchObject({ sessionStatus: "paused", openOrders: [] });
+    const held = await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+      where: { ledgerId },
+    });
+    const heldPlans = parsePerpetualControl(held).plans;
+    await page.getByRole("button", { name: "Проверить возобновление", exact: true }).click();
+    await expect(page.getByLabel("Проверка возобновления фьючерсов")).toBeVisible();
+    await page.locator("#futures-resume-duration").selectOption("15");
+    await captureScreenshot(page, testInfo, "futures-reviewed-resume");
+    await page.getByRole("button", { name: "Возобновить PAPER-фьючерсы", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "ИИ-торговля · Торговая сессия", exact: true }),
+    ).toBeVisible();
+    const resumed = await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+      where: { ledgerId },
+    });
+    expect(parsePerpetualControl(resumed)).toMatchObject({
+      sessionStatus: "active",
+      researchMode: "external",
+      plans: heldPlans,
+    });
+    expect(resumed.revision).toBeGreaterThan(held.revision);
+    await captureScreenshot(page, testInfo, "futures-resumed-with-position");
     await page.getByRole("button", { name: "Закрыть все виртуальные позиции" }).click();
     await page.getByRole("button", { name: "Подтвердить виртуальное закрытие" }).click();
     if (!process.env.PAPER_NAUTILUS_PYTHON)

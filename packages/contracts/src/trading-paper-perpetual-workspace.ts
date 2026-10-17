@@ -131,6 +131,14 @@ export const PaperPerpetualCommandSchema = z.discriminatedUnion("action", [
   z
     .object({
       ...Base,
+      action: z.literal("resume"),
+      durationMinutes: z.number().int().min(15).max(20160),
+      protectionMinutes: z.number().int().min(15).max(1440),
+    })
+    .strict(),
+  z
+    .object({
+      ...Base,
       action: z.literal("set_leverage"),
       venue: z.literal("okx"),
       instruments: z

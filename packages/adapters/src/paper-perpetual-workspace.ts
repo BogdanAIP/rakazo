@@ -81,7 +81,9 @@ export async function controlPerpetualPaperWorkspace(
   command: PaperPerpetualCommand,
 ) {
   if (
-    (command.action === "start" || command.action === "submit_external_proposal") &&
+    (command.action === "start" ||
+      command.action === "resume" ||
+      command.action === "submit_external_proposal") &&
     !deps.engine &&
     process.env.NODE_ENV !== "test"
   )

@@ -106,6 +106,7 @@ export function PaperPerpetualControls({
   const [researchMode, setResearchMode] = useState<ResearchMode>("external");
   const [review, setReview] = useState<Review | null>(null);
   const [closeReview, setCloseReview] = useState(false);
+  const [resumeReview, setResumeReview] = useState<number | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -140,6 +141,7 @@ export function PaperPerpetualControls({
     setMarketQuery("");
     setLimits([]);
     setReview(null);
+    setResumeReview(null);
     setError(null);
   }, [ledgerId]);
   useEffect(() => {
@@ -268,6 +270,15 @@ export function PaperPerpetualControls({
         protectionMinutes: 1440,
         source: review.preparation.scope,
       };
+    } else if (action === "resume") {
+      if (resumeReview === null) return;
+      input = {
+        ...base,
+        expectedRevision: resumeReview,
+        action,
+        durationMinutes: duration,
+        protectionMinutes: 1440,
+      };
     } else if (action === "set_leverage") {
       if (!limits.length) return;
       input = {
@@ -285,13 +296,13 @@ export function PaperPerpetualControls({
       setStatus(await rpc.trading.perpetualWorkspaceCommand(input));
       setReview(null);
       setCloseReview(false);
+      setResumeReview(null);
       onChanged();
     } catch {
       setReview(null);
       setCloseReview(false);
-      setError(
-        "Команда не выполнена. Обновите состояние; перед новым запуском закройте позиции предыдущей сессии.",
-      );
+      setResumeReview(null);
+      setError("Команда не выполнена. Обновите состояние счёта и повторите проверку.");
       try {
         setStatus(await rpc.trading.perpetualWorkspaceRead({ ledgerId }));
       } catch {
@@ -319,6 +330,12 @@ export function PaperPerpetualControls({
     verified &&
     verified.sessionStatus !== "active" &&
     openPositions === 0 &&
+    !verified.openOrders.length &&
+    !verified.pendingClose;
+  const mayResume =
+    verified &&
+    verified.sessionStatus === "paused" &&
+    openPositions > 0 &&
     !verified.openOrders.length &&
     !verified.pendingClose;
   return (
@@ -669,6 +686,17 @@ export function PaperPerpetualControls({
             </>
           )}
           <div className="flex flex-wrap gap-2">
+            {mayResume && resumeReview === null && (
+              <Button
+                disabled={pending || closeReview}
+                onClick={() => {
+                  setDuration(15);
+                  setResumeReview(verified.revision);
+                }}
+              >
+                Проверить возобновление
+              </Button>
+            )}
             {verified.sessionStatus === "active" && (
               <Button variant="outline" disabled={pending} onClick={() => void command("pause")}>
                 Пауза новых фьючерсных входов
@@ -698,6 +726,41 @@ export function PaperPerpetualControls({
               </>
             )}
           </div>
+          {resumeReview !== null && mayResume && (
+            <section
+              className="space-y-3 rounded-xl border border-border p-4"
+              aria-label="Проверка возобновления фьючерсов"
+            >
+              <p className="text-sm">
+                Продолжить входы: {verified.instruments.join(", ")}. Позиции, стопы и резервы
+                сохраняются. Защита — минимум 24 часа после окончания входов.
+              </p>
+              <label className="block text-sm" htmlFor="futures-resume-duration">
+                Длительность новых входов
+              </label>
+              <select
+                id="futures-resume-duration"
+                className="rounded-lg border border-border bg-background p-2 text-sm"
+                value={duration}
+                disabled={pending}
+                onChange={(e) => setDuration(Number(e.target.value))}
+              >
+                <option value={15}>15 минут</option>
+                <option value={60}>1 час</option>
+                <option value={240}>4 часа</option>
+                <option value={1440}>1 день</option>
+                <option value={20160}>14 дней</option>
+              </select>
+              <div className="flex gap-2">
+                <Button disabled={pending} onClick={() => void command("resume")}>
+                  Возобновить PAPER-фьючерсы
+                </Button>
+                <Button variant="outline" disabled={pending} onClick={() => setResumeReview(null)}>
+                  Отмена
+                </Button>
+              </div>
+            </section>
+          )}
           {closeReview && (
             <section
               className="space-y-3 rounded-xl border border-border p-4"
@@ -723,7 +786,7 @@ export function PaperPerpetualControls({
               Ожидается исполнение виртуального закрытия. Проверяйте остаток позиций.
             </p>
           )}
-          {verified.sessionStatus !== "active" && openPositions > 0 && (
+          {verified.sessionStatus !== "active" && openPositions > 0 && !mayResume && (
             <p className="text-sm text-muted-foreground">
               Перед новым запуском закройте позиции предыдущей сессии. Защита продолжает работать до
               указанного срока.

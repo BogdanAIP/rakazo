@@ -359,6 +359,37 @@ export async function commandOwnedPerpetualWorkspace(
           control.pendingExternalProposal = null;
           control.plans = [];
           control.lastResearchAt = null;
+        } else if (input.action === "resume") {
+          if (
+            control.sessionStatus !== "paused" ||
+            !control.startedAt ||
+            !control.source ||
+            !control.instruments.length ||
+            control.closeAll ||
+            control.orders.length
+          )
+            throw new Error("Only a paused, settled-order PAPER session can resume");
+          const positionIds = new Set(state.openPositions.map((position) => position.positionId));
+          if (
+            control.plans.length !== positionIds.size ||
+            new Set(control.plans.map((plan) => plan.positionId)).size !== positionIds.size ||
+            control.plans.some((plan) => !positionIds.has(plan.positionId)) ||
+            state.openPositions.some(
+              (position) => !control.instruments.includes(position.instrument),
+            )
+          )
+            throw new Error("Resume requires intact position protection plans");
+          await verifyPerpetualSource(tx, owner, control.source);
+          control.sessionStatus = "active";
+          control.expiresAt = new Date(clock + input.durationMinutes * 60000).toISOString();
+          control.protectionExpiresAt = new Date(
+            Math.max(
+              Date.parse(control.protectionExpiresAt ?? now.toISOString()),
+              Date.parse(control.expiresAt) + input.protectionMinutes * 60000,
+            ),
+          ).toISOString();
+          control.pendingExternalProposal = null;
+          control.lastResearchAt = null;
         } else if (input.action === "protect") {
           if (!state.openPositions.length) throw new Error("No futures positions need protection");
           control.protectionExpiresAt = new Date(
@@ -466,14 +497,18 @@ export async function readOwnedPerpetualWorkspace(
           runtimeError: control.runtimeError,
           instruments: control.instruments,
           researchMode: control.researchMode,
-          pendingExternalProposal: control.pendingExternalProposal
-            ? {
-                commandId: control.pendingExternalProposal.commandId,
-                submittedAt: control.pendingExternalProposal.submittedAt,
-                expiresAt: control.pendingExternalProposal.expiresAt,
-                kind: control.pendingExternalProposal.decision.kind,
-              }
-            : null,
+          pendingExternalProposal:
+            active &&
+            control.pendingExternalProposal &&
+            Date.parse(control.pendingExternalProposal.submittedAt) <= now.getTime() &&
+            Date.parse(control.pendingExternalProposal.expiresAt) > now.getTime()
+              ? {
+                  commandId: control.pendingExternalProposal.commandId,
+                  submittedAt: control.pendingExternalProposal.submittedAt,
+                  expiresAt: control.pendingExternalProposal.expiresAt,
+                  kind: control.pendingExternalProposal.decision.kind,
+                }
+              : null,
           lastDecision: control.lastDecision,
           openOrders: control.orders.map((o) => ({
             orderId: o.orderId,
