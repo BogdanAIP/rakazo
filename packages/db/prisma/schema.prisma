@@ -22,6 +22,7 @@ model AiDataConsent {
 }
 
 model User {
+  rpcAccessGrants RpcAccessGrant[]
   aiDataConsents AiDataConsent[]
   id                          String                       @id
   name                        String
@@ -173,6 +174,7 @@ model Member {
 }
 
 model Space {
+  rpcAccessGrants RpcAccessGrant[]
   aiDataConsents AiDataConsent[]
   id                          String                       @id
   organizationId              String
@@ -2256,4 +2258,21 @@ model TradingPaperPerpetualEngineBatch {
   @@id([ledgerId, sequence])
   @@unique([ledgerId, batchId])
   @@map("trading_paper_perpetual_engine_batches")
+}
+
+/** Finite owner-issued RPC access. Only hashes are stored; grants have no browser session. */
+model RpcAccessGrant {
+  id String @id
+  spaceId String
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  ownerUserId String
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  label String
+  procedures Json
+  tokenSha256 String @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  @@index([spaceId, ownerUserId, createdAt], map: "rpc_access_grants_owner_idx")
+  @@map("rpc_access_grants")
 }

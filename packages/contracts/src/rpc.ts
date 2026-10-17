@@ -105,6 +105,11 @@ import {
   IntegrationSetupStateSchema,
 } from "./integration-settings.js";
 import { MessageReactionSchema } from "./reactions.js";
+import {
+  RpcAccessGrantCreatedSchema,
+  RpcAccessGrantCreateSchema,
+  RpcAccessGrantSchema,
+} from "./rpc-access.js";
 import { RoutineHistorySchema, RoutineRunCursorSchema, RunsListOutputSchema } from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
 import {
@@ -237,6 +242,13 @@ import {
 } from "./trading-paper-workspace.js";
 
 export const appContract = {
+  rpcAccess: {
+    grantCreate: oc.input(RpcAccessGrantCreateSchema).output(RpcAccessGrantCreatedSchema),
+    grantList: oc.input(z.object({}).strict()).output(z.array(RpcAccessGrantSchema)),
+    grantRevoke: oc
+      .input(z.object({ id: z.string().min(1).max(128) }).strict())
+      .output(z.object({ revoked: z.boolean() })),
+  },
   trading: {
     perpetualExperimentsCreate: oc
       .input(z.object({ strategy: PaperPerpetualStrategySchema.optional() }).strict())
