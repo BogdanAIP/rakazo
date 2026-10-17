@@ -562,6 +562,55 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
     });
     expect(resumed.revision).toBeGreaterThan(held.revision);
     await captureScreenshot(page, testInfo, "futures-resumed-with-position");
+
+    // Scoped connector access is created through the normal signed-in owner,
+    // then exercised with fetch (no ambient browser cookies).
+    const accessResponse = await page.request.post("/rpc/rpcAccess/grantCreate", {
+      headers: { "x-rakazo-space-id": ledger.spaceId },
+      data: {
+        json: {
+          label: "PAPER connector fixture",
+          durationMinutes: 15,
+          procedures: ["trading/perpetualWorkspaceRead"],
+        },
+      },
+    });
+    expect(accessResponse.ok()).toBe(true);
+    const access = (await accessResponse.json()).json;
+    const callWithAccess = (procedure: string, input: unknown, spaceId = ledger.spaceId) =>
+      fetch(new URL("/rpc/" + procedure, page.url()), {
+        method: "POST",
+        headers: {
+          authorization: "Bearer " + access.token,
+          "content-type": "application/json",
+          "x-rakazo-space-id": spaceId,
+        },
+        body: JSON.stringify({ json: input }),
+      });
+    const scopedRead = await callWithAccess("trading/perpetualWorkspaceRead", { ledgerId });
+    expect(scopedRead.status).toBe(200);
+    expect((await scopedRead.json()).json).toMatchObject({ ledgerId, status: "verified" });
+    expect((await callWithAccess("me", {})).status).toBe(401);
+    expect(
+      (
+        await callWithAccess("rpcAccess/grantCreate", {
+          label: "forbidden",
+          durationMinutes: 15,
+          procedures: ["trading/list"],
+        })
+      ).status,
+    ).toBe(401);
+    expect(
+      (await callWithAccess("trading/perpetualWorkspaceRead", { ledgerId }, "another-space"))
+        .status,
+    ).toBe(401);
+    const revokeResponse = await page.request.post("/rpc/rpcAccess/grantRevoke", {
+      headers: { "x-rakazo-space-id": ledger.spaceId },
+      data: { json: { id: access.id } },
+    });
+    expect(revokeResponse.ok()).toBe(true);
+    expect((await callWithAccess("trading/perpetualWorkspaceRead", { ledgerId })).status).toBe(401);
+
     await page.getByRole("button", { name: "Закрыть все виртуальные позиции" }).click();
     await page.getByRole("button", { name: "Подтвердить виртуальное закрытие" }).click();
     if (!process.env.PAPER_NAUTILUS_PYTHON)

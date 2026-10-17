@@ -176,6 +176,7 @@ import {
   createExternalConversationRepos,
   createGroupRepos,
   createOwnedPerpetualExperimentAccounts,
+  createOwnedRpcAccessGrant,
   createOwnedTradingPaperAccount,
   createRepos,
   createSpaceForMember,
@@ -193,6 +194,7 @@ import {
   IsolationError,
   issueMessagingLinkCode,
   listOwnedPerpetualPaperJournals,
+  listOwnedRpcAccessGrants,
   listOwnedTradingPaperJournals,
   listWindowsHosts,
   lockOwnedGroup,
@@ -210,6 +212,7 @@ import {
   releaseSpaceDeletionClaim,
   renewSpaceDeletionClaim,
   restoreBotUnderComputerQuota,
+  revokeOwnedRpcAccessGrant,
   revokeWindowsHost,
   SPACE_DELETION_CLAIM_TIMEOUT_MS,
   SpaceDeletionInProgressError,
@@ -966,6 +969,17 @@ export function createRouter(deps: RouterDeps) {
   });
 
   return os.router({
+    rpcAccess: {
+      grantCreate: authed.rpcAccess.grantCreate.handler(({ context, input }) =>
+        createOwnedRpcAccessGrant(deps.prisma, context.actor, input),
+      ),
+      grantList: authed.rpcAccess.grantList.handler(({ context }) =>
+        listOwnedRpcAccessGrants(deps.prisma, context.actor),
+      ),
+      grantRevoke: authed.rpcAccess.grantRevoke.handler(({ context, input }) =>
+        revokeOwnedRpcAccessGrant(deps.prisma, context.actor, input.id),
+      ),
+    },
     trading: {
       perpetualExperimentsCreate: authed.trading.perpetualExperimentsCreate.handler(
         ({ context, input }) =>

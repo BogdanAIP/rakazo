@@ -3,6 +3,8 @@ import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { appContract } from "@rakazo/contracts";
 import * as z from "zod";
+import type { RpcTarget } from "./chatgpt-rpc-targets.js";
+import { configuredRpcTarget } from "./chatgpt-rpc-targets.js";
 
 export type ProcedureMode = "read" | "write" | "destructive" | "stream";
 
@@ -203,6 +205,7 @@ const TRADING_READ_ONLY_PROCEDURES = new Set([
 ]);
 
 export function classifyProcedure(procedure: string): ProcedureMode {
+  if (procedure === "rpcAccess/grantList") return "read";
   if (procedure === "threads/subscribe") return "stream";
   if (procedure === "trading/sweep") return "read";
   if (procedure === "trading/perpContext") return "read";
@@ -243,7 +246,13 @@ function apiBase(): string {
   return (process.env.RAKAZO_API_URL ?? "http://127.0.0.1:3100").replace(/\/$/, "");
 }
 
-function rpcHeaders(): Headers {
+function rpcHeaders(target?: RpcTarget): Headers {
+  if (target)
+    return new Headers({
+      authorization: "Bearer " + target.accessToken,
+      origin: target.origin,
+      "x-rakazo-space-id": target.spaceId,
+    });
   const token = process.env.RAKAZO_SESSION_TOKEN?.trim();
   if (!token) {
     throw new Error(
@@ -267,15 +276,15 @@ type DynamicRpcProcedure = (
 
 let rpcClient: unknown;
 
-function rakazoRpcClient(): unknown {
-  if (rpcClient) return rpcClient;
+function rakazoRpcClient(target?: RpcTarget): unknown {
+  if (!target && rpcClient) return rpcClient;
 
-  rpcClient = createORPCClient(
+  const client = createORPCClient(
     new RPCLink({
-      url: () => `${apiBase()}/rpc`,
-      headers: () => rpcHeaders(),
+      url: () => `${target?.apiUrl.replace(/\/$/, "") ?? apiBase()}/rpc`,
+      headers: () => rpcHeaders(target),
       fetch: async (request, init) => {
-        const response = await fetch(request, init);
+        const response = await fetch(request, target ? { ...init, redirect: "error" } : init);
         const declared = Number(response.headers.get("content-length") ?? "0");
         if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) {
           await response.body?.cancel().catch(() => undefined);
@@ -285,13 +294,14 @@ function rakazoRpcClient(): unknown {
       },
     }),
   );
-  return rpcClient;
+  if (!target) rpcClient = client;
+  return client;
 }
 
 function rpcProcedure(procedure: string): DynamicRpcProcedure {
   procedureContract(procedure);
 
-  let node = rakazoRpcClient();
+  let node = rakazoRpcClient(configuredRpcTarget(procedure));
   for (const segment of procedure.split("/")) {
     if ((typeof node !== "object" && typeof node !== "function") || node === null) {
       throw new Error(`Rakazo RPC client has no procedure: ${procedure}`);

@@ -81,6 +81,7 @@ import {
   provisionMessagingIdentity,
   pushSessionExpiresAt,
   requireMembership,
+  resolveRpcAccessGrant,
 } from "@rakazo/db";
 import type { Logger } from "@rakazo/logging";
 import {
@@ -608,6 +609,22 @@ export async function createApp(
   });
   mountLocalSettings(app, { token: env.desktopStackToken, prisma, rpc });
   const requestSession = async (request: Request) => {
+    const authorization = request.headers.get("authorization") ?? "";
+    if (/^Bearer\s+rkg_/i.test(authorization)) {
+      const path = new URL(request.url).pathname;
+      if (!path.startsWith("/rpc/")) return null;
+      const grant = await resolveRpcAccessGrant(
+        prisma,
+        authorization.replace(/^Bearer\s+/i, ""),
+        path.slice(5),
+        request.headers.get("x-rakazo-space-id"),
+      );
+      if (!grant) return null;
+      const actor = await actorFromMembership(
+        requireMembership(prisma, grant.userId, grant.spaceId),
+      );
+      return actor ? { actor, sessionId: undefined } : null;
+    }
     const session = await auth.api.getSession({ headers: sessionHeaders(request) });
     if (!session?.user) return null;
     const actor = await actorFromMembership(
