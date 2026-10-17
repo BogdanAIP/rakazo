@@ -670,6 +670,49 @@ export async function completeIdleExternalPerpetualWake(
   );
 }
 
+/** Expired entry authority must not strand an already protected position.
+ * Keep the control/ledger intact and advance only the owner-scoped scheduler.
+ * All time and identity decisions are made under the DB transaction lock. */
+export async function reschedulePerpetualProtectionAfterResearchExpiry(
+  prisma: PrismaClient,
+  owner: PerpetualOwner,
+  key: { ledgerId: string; revision: number; scheduledFor: string },
+) {
+  return withTransactionRetry(() =>
+    prisma.$transaction(
+      async (tx) => {
+        const { row, control } = await lockOwnedPerpetualWorkspace(tx, owner, key.ledgerId);
+        const now = await perpetualDatabaseClock(tx);
+        if (
+          row.revision !== key.revision ||
+          row.nextScheduledFor?.toISOString() !== key.scheduledFor ||
+          Date.parse(key.scheduledFor) > now.getTime()
+        )
+          return false;
+        const entries =
+          control.sessionStatus === "active" &&
+          control.expiresAt !== null &&
+          Date.parse(control.expiresAt) > now.getTime();
+        if (entries) return false;
+        const { state } = await recoverPerpetualPaperInTransaction(tx, owner, key.ledgerId);
+        const protects =
+          state.openPositions.length > 0 &&
+          control.protectionExpiresAt !== null &&
+          Date.parse(control.protectionExpiresAt) > now.getTime();
+        if (!protects) return false;
+        await savePerpetualControl(
+          tx,
+          key.ledgerId,
+          key.revision,
+          control,
+          new Date(now.getTime() + 60000),
+        );
+        return true;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    ),
+  );
+}
 export async function failPerpetualWake(
   prisma: PrismaClient,
   owner: PerpetualOwner,
