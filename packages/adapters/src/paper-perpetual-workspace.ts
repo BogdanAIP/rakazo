@@ -102,6 +102,10 @@ export async function controlPerpetualPaperWorkspace(
         )
       : [];
   const receipt = await commandOwnedPerpetualWorkspace(deps.prisma, owner, command, limits);
+  if (receipt.duplicate) {
+    await enqueueNext(deps, owner, command.ledgerId, receipt.revision);
+    return;
+  }
   try {
     if (deps.engine)
       await cancelPerpetualEngineOrders(
@@ -167,8 +171,15 @@ export async function handlePerpetualPaperWake(
     ];
     // Flat-account bootstrap still registers selected markets. With exposure,
     // only instruments needing protection can block the protective stage.
+    const flatExternalNoTrade =
+      first.control.researchMode === "external" &&
+      first.control.pendingExternalProposal?.decision.kind === "no_trade";
     const protection = await read(
-      activeProtectionSymbols.length ? activeProtectionSymbols : first.control.instruments,
+      activeProtectionSymbols.length
+        ? activeProtectionSymbols
+        : flatExternalNoTrade
+          ? []
+          : first.control.instruments,
     );
     const commit = (
       stage: {
@@ -242,7 +253,15 @@ export async function handlePerpetualPaperWake(
       });
       perpetualMarketSource(prepared);
       failure = "market_data_unavailable";
-      snapshots = await read(current.control.instruments);
+      const affectedPosition =
+        submitted && "positionId" in submitted.decision ? submitted.decision.positionId : null;
+      snapshots = await read(
+        fromExternal && submitted?.decision.kind !== "proposal"
+          ? current.state.openPositions
+              .filter((position) => position.positionId === affectedPosition)
+              .map((position) => position.instrument)
+          : current.control.instruments,
+      );
       if (
         snapshots.some(
           (s) =>

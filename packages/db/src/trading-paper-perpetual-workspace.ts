@@ -272,7 +272,7 @@ export async function commandOwnedPerpetualWorkspace(
             perpetualPaperHash(duplicate.request) !== requestHash
           )
             throw new Error("Conflicting futures command retry");
-          return { revision: duplicate.revision };
+          return { revision: duplicate.revision, duplicate: true };
         }
         if (row.revision !== input.expectedRevision)
           throw new Error("Futures session changed; refresh the account");
@@ -439,7 +439,7 @@ export async function commandOwnedPerpetualWorkspace(
             revision,
           },
         });
-        return { revision };
+        return { revision, duplicate: false };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
