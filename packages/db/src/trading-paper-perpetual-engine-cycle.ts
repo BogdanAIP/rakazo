@@ -429,7 +429,11 @@ async function commitPerpetualEngineWakeOnce(
               !old.state.openPositions.some((x) => x.positionId === decision.replacePositionId)
             )
               outcome = "denied_replace_unknown";
-            else if (clock - tick.recordedAt.getTime() > 120000) outcome = "expired_research";
+            else if (
+              clock - tick.recordedAt.getTime() > 120000 ||
+              (decision.comparison && Date.parse(decision.comparison.validUntil) <= clock)
+            )
+              outcome = "expired_research";
             else
               control.orders = [
                 {
@@ -440,7 +444,11 @@ async function commitPerpetualEngineWakeOnce(
                   ideaRiskSpentQuote: "0",
                   submittedAt: tick.recordedAt.toISOString(),
                   expiresAt: new Date(
-                    Math.min(tick.recordedAt.getTime() + 300000, Date.parse(control.expiresAt!)),
+                    Math.min(
+                      tick.recordedAt.getTime() + 300000,
+                      Date.parse(control.expiresAt!),
+                      decision.comparison ? Date.parse(decision.comparison.validUntil) : Infinity,
+                    ),
                   ).toISOString(),
                 },
               ];

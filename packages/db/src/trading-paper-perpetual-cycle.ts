@@ -304,7 +304,11 @@ export async function commitPerpetualPaperWake(
           if (!active) control.orders = [];
           if (active && decision.kind === "proposal" && !control.orders.length) {
             if (!control.instruments.includes(decision.instrument)) outcome = "denied_market";
-            else if (clock - tick.recordedAt.getTime() > 120000) outcome = "expired_research";
+            else if (
+              clock - tick.recordedAt.getTime() > 120000 ||
+              (decision.comparison && Date.parse(decision.comparison.validUntil) <= clock)
+            )
+              outcome = "expired_research";
             else {
               control.orders = [
                 {
@@ -321,7 +325,11 @@ export async function commitPerpetualPaperWake(
                   ideaRiskSpentQuote: "0",
                   submittedAt: tick.recordedAt.toISOString(),
                   expiresAt: new Date(
-                    Math.min(tick.recordedAt.getTime() + 5 * 60000, Date.parse(control.expiresAt!)),
+                    Math.min(
+                      tick.recordedAt.getTime() + 300000,
+                      Date.parse(control.expiresAt!),
+                      decision.comparison ? Date.parse(decision.comparison.validUntil) : Infinity,
+                    ),
                   ).toISOString(),
                 },
               ];

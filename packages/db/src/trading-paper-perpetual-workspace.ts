@@ -670,6 +670,18 @@ export async function completeIdleExternalPerpetualWake(
             Date.parse(pending.expiresAt) > now.getTime())
         )
           return false;
+        const recordedResearch = await tx.tradingPaperPerpetualTick.findUnique({
+          where: {
+            ledgerId_revision_scheduledFor_stage: {
+              ledgerId: key.ledgerId,
+              revision: key.revision,
+              scheduledFor: new Date(key.scheduledFor),
+              stage: "research",
+            },
+          },
+          select: { committedAt: true },
+        });
+        if (recordedResearch && !recordedResearch.committedAt) return false;
         const { state } = await recoverPerpetualPaperInTransaction(tx, owner, key.ledgerId);
         if (state.openPositions.length) return false;
         const entries =
