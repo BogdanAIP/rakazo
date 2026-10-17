@@ -750,7 +750,12 @@ export async function fillApprovedTradingPaperReservation(
             },
           );
         }
-        await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
+        await auditTradingPaperLifecycleInTransaction(
+          tx,
+          owner,
+          ledgerId,
+          await tradingPaperDatabaseNow(tx),
+        );
         return {
           status: "filled",
           mode: "paper_only",

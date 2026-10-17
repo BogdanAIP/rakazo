@@ -6,6 +6,7 @@ import {
 } from "@rakazo/contracts";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { tradingPaperDatabaseNow } from "./trading-paper-clock.js";
 import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import {
   assessTradingPaperResolvedResearchScopeAuthorityInTransaction,
@@ -941,7 +942,7 @@ export async function applyApprovedTradingPaperResolvedResearchFillControl(
             request.ledgerId,
             request.scope,
             request.expectedResearchRevision,
-            new Date(),
+            await tradingPaperDatabaseNow(tx),
           );
           if (research.status !== "ready") {
             if (

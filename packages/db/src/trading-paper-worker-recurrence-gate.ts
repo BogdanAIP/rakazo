@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { tradingPaperDatabaseNow } from "./trading-paper-clock.js";
 import { assessTradingPaperWorkerWakePreflightInTransaction } from "./trading-paper-worker-gate.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
@@ -391,7 +392,7 @@ export async function applyApprovedTradingPaperWorkerRecurrenceControl(
             tx,
             owner,
             request.ledgerId,
-            new Date(),
+            await tradingPaperDatabaseNow(tx),
           );
           if (preflight.status !== "ready") {
             return complete({

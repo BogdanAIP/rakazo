@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { tradingPaperDatabaseNow } from "./trading-paper-clock.js";
 import { verifyPublicPaperQuoteEvidenceInTransaction } from "./trading-paper-quote-evidence.js";
 import {
   type TradingPaperWorkerMarketTargetAuthority,
@@ -838,7 +839,7 @@ export async function applyApprovedTradingPaperWorkerFillControl(
             tx,
             owner,
             request.ledgerId,
-            new Date(),
+            await tradingPaperDatabaseNow(tx),
           );
           if (signal.status !== "ready") {
             return complete({

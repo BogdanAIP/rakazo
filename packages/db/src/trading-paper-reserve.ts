@@ -372,7 +372,12 @@ export async function reserveApprovedTradingPaperSignal(
     prisma.$transaction(
       async (tx) => {
         await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
-        await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
+        await auditTradingPaperLifecycleInTransaction(
+          tx,
+          owner,
+          ledgerId,
+          await tradingPaperDatabaseNow(tx),
+        );
         const currentPolicy = await verifyTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
         const decisionNow = (await tradingPaperDatabaseNow(tx)).getTime();
         let sessionForReserve: {
@@ -432,7 +437,7 @@ export async function reserveApprovedTradingPaperSignal(
             tx,
             owner,
             ledgerId,
-            new Date(),
+            await tradingPaperDatabaseNow(tx),
           );
           if (
             currentAuthority.status !== "ready" ||
@@ -651,7 +656,12 @@ export async function reserveApprovedTradingPaperSignal(
             },
           );
         }
-        await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
+        await auditTradingPaperLifecycleInTransaction(
+          tx,
+          owner,
+          ledgerId,
+          await tradingPaperDatabaseNow(tx),
+        );
         return {
           status: "reserved",
           mode: "paper_only",
@@ -677,7 +687,12 @@ export async function reserveApprovedTradingPaperSignal(
     return withTransactionRetry(() =>
       prisma.$transaction(
         async (tx) => {
-          await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
+          await auditTradingPaperLifecycleInTransaction(
+            tx,
+            owner,
+            ledgerId,
+            await tradingPaperDatabaseNow(tx),
+          );
           const existing = await readExistingDecision(tx, owner, ledgerId, proposal, evidenceId);
           if (!existing) throw error;
           if (resolvedResearch) {
@@ -686,7 +701,7 @@ export async function reserveApprovedTradingPaperSignal(
               owner,
               resolvedResearch.authority,
               resolvedResearch.envelope,
-              new Date(),
+              await tradingPaperDatabaseNow(tx),
             );
             if (!currentAuthority) throw error;
             const verifiedUse = await verifyTradingPaperResolvedResearchReserveUseInTransaction(

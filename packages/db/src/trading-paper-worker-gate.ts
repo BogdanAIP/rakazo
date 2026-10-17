@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { tradingPaperDatabaseNow } from "./trading-paper-clock.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
 import {
   lockTradingPaperRiskPolicyInTransaction,
@@ -457,7 +458,7 @@ export async function applyApprovedTradingPaperWorkerControl(
             tx,
             owner,
             request.ledgerId,
-            new Date(),
+            await tradingPaperDatabaseNow(tx),
           );
           if (lifecycle.openReservations > 0) {
             return fail("reconciliation_required");

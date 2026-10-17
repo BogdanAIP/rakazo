@@ -1710,8 +1710,24 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       (await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId)).reservations,
     ).toHaveLength(1);
 
+    const realNow = Date.now.bind(Date);
+    for (const skew of [-600_000, 600_000]) {
+      const clock = vi.spyOn(Date, "now").mockImplementation(() => realNow() + skew);
+      await expect(
+        reconcileTradingPaperReservations(second.prisma, owner, ledgerId).finally(() =>
+          clock.mockRestore(),
+        ),
+      ).resolves.toEqual({ released: 0, reason: "expired" });
+    }
     const disable = await makePaperControlEffect(ledgerId, "b8-kill-disable", "disable", 1);
-    await applyApprovedTradingPaperControl(second.prisma, owner, disable.id);
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => realNow() + 600_000);
+    await applyApprovedTradingPaperControl(second.prisma, owner, disable.id).finally(() =>
+      clock.mockRestore(),
+    );
+    const release = await first.prisma.tradingPaperLedgerEvent.findFirstOrThrow({
+      where: { ledgerId, kind: "release" },
+    });
+    expect(Math.abs(release.recordedAt.getTime() - realNow())).toBeLessThan(5_000);
 
     const policyAfter = await readVerifiedTradingPaperRiskPolicy(first.prisma, owner, ledgerId);
     expect(policyAfter).toMatchObject({
@@ -2936,11 +2952,14 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       "c11-authorize",
       policyBefore.revision,
     );
+    const beforeClock = Date.now();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(beforeClock + 600_000);
     const authorized = await applyApprovedTradingPaperProtectiveExitControl(
       second.prisma,
       owner,
       effect.id,
-    );
+    ).finally(() => vi.useRealTimers());
     expect(authorized).toMatchObject({
       ok: true,
       mode: "paper_only",
@@ -2952,6 +2971,8 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       killSwitch: true,
     });
     if (!authorized.ok) throw new Error("expected protective exit authority");
+    expect(Date.parse(authorized.authorizedAt)).toBeGreaterThanOrEqual(beforeClock - 2_000);
+    expect(Date.parse(authorized.authorizedAt)).toBeLessThanOrEqual(Date.now() + 2_000);
     expect(Date.parse(authorized.expiresAt)).toBeGreaterThan(Date.parse(authorized.authorizedAt));
     expect(Date.parse(authorized.expiresAt) - Date.parse(authorized.authorizedAt)).toBe(60_000);
 

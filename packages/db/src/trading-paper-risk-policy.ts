@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { type TradingPaperPolicy, TradingPaperPolicySchema } from "@rakazo/contracts";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { tradingPaperDatabaseNow } from "./trading-paper-clock.js";
 import {
   auditTradingPaperLifecycleInTransaction,
   PaperLifecycleAuditError,
@@ -199,7 +200,8 @@ export async function applyApprovedTradingPaperControl(
         )
           throw new PaperRiskPolicyIntegrityError("Paper control lacks explicit approved effect");
         const request = parseControlRequest(effect.request);
-        await requireOwnedLedger(tx, owner, request.ledgerId);
+        await lockTradingPaperRiskPolicyInTransaction(tx, owner, request.ledgerId);
+        const now = await tradingPaperDatabaseNow(tx);
         const verified = await verifyTradingPaperRiskPolicyInTransaction(
           tx,
           owner,
@@ -257,7 +259,7 @@ export async function applyApprovedTradingPaperControl(
             tx,
             owner,
             request.ledgerId,
-            new Date(),
+            now,
           );
           if (lifecycle.openReservations > 0) {
             return complete({
@@ -277,7 +279,7 @@ export async function applyApprovedTradingPaperControl(
         let releaseAuditAvailable = true;
         if (request.action === "disable") {
           try {
-            await auditTradingPaperLifecycleInTransaction(tx, owner, request.ledgerId, new Date());
+            await auditTradingPaperLifecycleInTransaction(tx, owner, request.ledgerId, now);
           } catch (error) {
             if (
               error instanceof PaperLifecycleAuditError ||
@@ -333,7 +335,7 @@ export async function applyApprovedTradingPaperControl(
             request.ledgerId,
             "kill_switch",
             nextRevision,
-            Date.now(),
+            now.getTime(),
           );
         }
         return complete({

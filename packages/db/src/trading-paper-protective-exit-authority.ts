@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { tradingPaperDatabaseNow } from "./trading-paper-clock.js";
 import { auditTradingPaperLifecycleInTransaction } from "./trading-paper-lifecycle-audit.js";
 import {
   lockTradingPaperRiskPolicyInTransaction,
@@ -519,7 +520,7 @@ export async function applyApprovedTradingPaperProtectiveExitControl(
         if (verified.policy.enabled || !verified.policy.killSwitch) {
           return fail("policy_must_remain_disabled");
         }
-        const now = new Date();
+        const now = await tradingPaperDatabaseNow(tx);
         const lifecycle = await auditTradingPaperLifecycleInTransaction(
           tx,
           owner,

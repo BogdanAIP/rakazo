@@ -1,5 +1,6 @@
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { tradingPaperDatabaseNow } from "./trading-paper-clock.js";
 import { releaseTradingPaperReservationsInTransaction } from "./trading-paper-release.js";
 import {
   lockTradingPaperRiskPolicyInTransaction,
@@ -30,7 +31,7 @@ export async function reconcileTradingPaperReservations(
           ledgerId,
           reason,
           verified.revision,
-          Date.now(),
+          (await tradingPaperDatabaseNow(tx)).getTime(),
         );
         return { released: result.released, reason };
       },
