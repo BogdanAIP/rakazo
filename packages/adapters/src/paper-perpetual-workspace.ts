@@ -32,6 +32,7 @@ import {
   readOwnedMarketPreparedResearch,
   readPerpetualWake,
   recordPerpetualResearchTick,
+  reschedulePerpetualProtectionAfterResearchExpiry,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { z } from "zod";
@@ -394,7 +395,13 @@ export async function handlePerpetualPaperWake(
           ? { provider: model.provider, modelId: model.id }
           : undefined,
     );
-    if (!recorded) return;
+    if (!recorded) {
+      // Entry permission may expire after protection but before research commit.
+      // A held position still needs its next independently authorized wake.
+      if (await reschedulePerpetualProtectionAfterResearchExpiry(deps.prisma, owner, key))
+        await enqueueNext(deps, owner, key.ledgerId, key.revision);
+      return;
+    }
     decision = PaperPerpetualDecisionSchema.parse(recorded.decision);
     // A new or pending intent still needs a post-submission executable book.
     // No-trade native wakes can reuse the already-committed protection evidence.

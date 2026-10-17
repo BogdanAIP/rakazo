@@ -1026,6 +1026,70 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
   );
 
   it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "continues protected wake scheduling when entry permission expires during research",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = await account();
+        await start(id, engine, ["BTC-USDT-SWAP"], "model");
+        decision = proposal("long");
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        const held = await state(id);
+        expect(held.openPositions).toHaveLength(1);
+        const key = await payload(id, true);
+        const previous = await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+          where: { ledgerId: id },
+        });
+        const controls = parsePerpetualControl(previous);
+        let callsAfterEntry = 0;
+        await handlePerpetualPaperWake(
+          {
+            ...worker(),
+            engine,
+            fetchSnapshot: async (instrument) => {
+              callsAfterEntry += 1;
+              if (callsAfterEntry === 2) {
+                const expired = { ...controls, expiresAt: new Date(0).toISOString() };
+                await db.prisma.tradingPaperPerpetualWorkspace.update({
+                  where: { ledgerId: id },
+                  data: {
+                    control: perpetualPaperJson(expired),
+                    controlSha256: perpetualPaperHash(expired),
+                  },
+                });
+              }
+              return snapshot(instrument);
+            },
+          },
+          key,
+        );
+        expect(callsAfterEntry).toBeGreaterThanOrEqual(2);
+        const after = await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+          where: { ledgerId: id },
+        });
+        const afterControl = parsePerpetualControl(after);
+        expect(after.revision).toBe(previous.revision);
+        expect(after.nextScheduledFor?.getTime()).toBeGreaterThan(Date.parse(key.scheduledFor));
+        expect(afterControl.sessionStatus).toBe("active");
+        expect(afterControl.runtimeError).toBeNull();
+        expect((await state(id)).openPositions).toEqual(held.openPositions);
+        expect(enqueue).toHaveBeenCalled();
+        await handlePerpetualPaperWake({ ...worker(), engine }, key);
+        const retried = await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+          where: { ledgerId: id },
+        });
+        expect(retried.nextScheduledFor?.toISOString()).toBe(after.nextScheduledFor?.toISOString());
+        expect((await state(id)).openPositions).toEqual(held.openPositions);
+      } finally {
+        engine.dispose();
+      }
+    },
+    120000,
+  );
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
     "explicitly resumes native held positions without losing plans, renewing retries or replaying old entries",
     async () => {
       const engine = new NautilusPaperEngine({
