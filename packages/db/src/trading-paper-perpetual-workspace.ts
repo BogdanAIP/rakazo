@@ -371,6 +371,7 @@ export async function commandOwnedPerpetualWorkspace(
             throw new Error("Only a paused, settled-order PAPER session can resume");
           const positionIds = new Set(state.openPositions.map((position) => position.positionId));
           if (
+            positionIds.size === 0 ||
             control.plans.length !== positionIds.size ||
             new Set(control.plans.map((plan) => plan.positionId)).size !== positionIds.size ||
             control.plans.some((plan) => !positionIds.has(plan.positionId)) ||
@@ -771,11 +772,15 @@ export async function recordPerpetualResearchTick(
           if (
             control.researchMode !== "external" ||
             !pending ||
-            Date.parse(pending.expiresAt) <= clock.getTime() ||
             perpetualPaperHash(pending.decision) !== perpetualPaperHash(decision)
           ) {
-            throw new Error("Expired or changed External proposal refused before risk gate");
+            throw new Error("Changed External proposal refused before risk gate");
           }
+          if (
+            Date.parse(pending.expiresAt) <= clock.getTime() ||
+            Date.parse(pending.submittedAt) > clock.getTime()
+          )
+            decision = { kind: "no_trade", reason: "Срок предложения ChatGPT через R истёк" };
         }
         if (decision.kind !== "no_trade") {
           const now = await perpetualDatabaseClock(tx);

@@ -562,6 +562,69 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     }
   });
 
+  it("rejects flat Resume and consumes a proposal expiring during research as no-trade", async () => {
+    const id = await account();
+    await start(id, undefined, ["BTC-USDT-SWAP"], "external");
+    let current = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+    await controlPerpetualPaperWorkspace(deps(), owner, {
+      action: "pause",
+      ledgerId: id,
+      expectedRevision: current.revision,
+      commandId: randomUUID(),
+    });
+    current = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+    await expect(
+      controlPerpetualPaperWorkspace(deps(), owner, {
+        action: "resume",
+        ledgerId: id,
+        expectedRevision: current.revision,
+        commandId: randomUUID(),
+        durationMinutes: 15,
+        protectionMinutes: 1440,
+      }),
+    ).rejects.toThrow("intact position protection");
+    await start(id, undefined, ["BTC-USDT-SWAP"], "external");
+    current = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+    const candidate = proposal("long");
+    await controlPerpetualPaperWorkspace(deps(), owner, {
+      action: "submit_external_proposal",
+      ledgerId: id,
+      expectedRevision: current.revision,
+      commandId: randomUUID(),
+      decision: candidate,
+    });
+    const key = { ...(await payload(id, true)), stage: "research" as const };
+    const row = await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+      where: { ledgerId: id },
+    });
+    const control = parsePerpetualControl(row);
+    control.pendingExternalProposal!.expiresAt = new Date(0).toISOString();
+    await db.prisma.tradingPaperPerpetualWorkspace.update({
+      where: { ledgerId: id },
+      data: { control: perpetualPaperJson(control), controlSha256: perpetualPaperHash(control) },
+    });
+    const recorded = await recordPerpetualResearchTick(
+      db.prisma,
+      owner,
+      { ...key, revision: row.revision },
+      [],
+      candidate,
+      {
+        provider: "external-proposal",
+        modelId: "external-unattested",
+      },
+    );
+    expect(recorded?.decision).toMatchObject({ kind: "no_trade" });
+    await handlePerpetualPaperWake(worker(), key);
+    current = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+    expect(current).toMatchObject({
+      sessionStatus: "active",
+      runtimeError: null,
+      pendingExternalProposal: null,
+    });
+    expect((await state(id)).openPositions).toHaveLength(0);
+  });
+
   it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
     "explicitly resumes native held positions without losing plans, renewing retries or replaying old entries",
     async () => {

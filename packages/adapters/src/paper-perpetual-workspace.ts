@@ -360,7 +360,7 @@ export async function handlePerpetualPaperWake(
       }
     }
     failure = "research_commit_unavailable";
-    await recordPerpetualResearchTick(
+    const recorded = await recordPerpetualResearchTick(
       deps.prisma,
       owner,
       researchKey,
@@ -374,6 +374,8 @@ export async function handlePerpetualPaperWake(
           ? { provider: model.provider, modelId: model.id }
           : undefined,
     );
+    if (!recorded) return;
+    decision = PaperPerpetualDecisionSchema.parse(recorded.decision);
     // A new or pending intent still needs a post-submission executable book.
     // No-trade native wakes can reuse the already-committed protection evidence.
     failure = "market_data_unavailable";
