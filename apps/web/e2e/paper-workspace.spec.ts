@@ -244,7 +244,7 @@ test("PAPER spot and futures share one journal page with separate verified owner
     "true",
   );
   await expect(page.getByRole("heading", { name: "Фьючерсы · PAPER" })).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Стратегия и виртуальный счёт" })).toHaveValue(
+  await expect(page.getByRole("combobox", { name: "Профиль и виртуальный счёт" })).toHaveValue(
     futuresId,
   );
   await expect(page.getByRole("heading", { name: "Открытые фьючерсные позиции" })).toBeVisible();
@@ -278,8 +278,8 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
   await page.goto("/app/paper-journal");
   await page.getByRole("tab", { name: "Фьючерсы" }).click();
   await page.getByRole("button", { name: "Создать три фьючерсных счёта", exact: true }).click();
-  await expect(page.getByLabel("Стратегия и виртуальный счёт")).not.toHaveValue("");
-  const ledgerId = await page.getByLabel("Стратегия и виртуальный счёт").inputValue();
+  await expect(page.getByLabel("Профиль и виртуальный счёт")).not.toHaveValue("");
+  const ledgerId = await page.getByLabel("Профиль и виртуальный счёт").inputValue();
   const db = createDb(process.env.DATABASE_URL!);
   try {
     const ledger = await db.prisma.tradingPaperPerpetualLedger.findUniqueOrThrow({
@@ -511,6 +511,26 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
               { stepId: "second-retest", triggerPriceQuote: "97.4", allocationPercent: 50 },
             ],
             rationale: "ChatGPT/R approved research proposal for virtual PAPER only",
+            comparison: {
+              asOf: new Date().toISOString(),
+              validUntil: new Date(Date.now() + 600000).toISOString(),
+              method: "Сравнение закрытых H1 свечей",
+              profileRationale: "Размер ограничен риском выбранного профиля.",
+              candidates: [
+                {
+                  instrument: "BTC-USDT-SWAP",
+                  verdict: "selected",
+                  reason: "Подтверждённый сигнал и допустимый защитный план",
+                  facts: [{ name: "Цена fixture", value: "100" }],
+                },
+                {
+                  instrument: "SOL-USDT-SWAP",
+                  verdict: "rejected",
+                  reason: "Нет отдельного подтверждения",
+                  facts: [],
+                },
+              ],
+            },
           },
         },
       },
@@ -531,6 +551,23 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
     } else await expect(page.getByRole("cell", { name: "Открытие", exact: true })).toBeVisible();
     await expect(page.getByLabel("Последнее решение ИИ")).toContainText("Исполнено");
     await expect(page.getByLabel("Сравнение фьючерсных профилей").getByRole("row")).toHaveCount(4);
+    await page.getByText("Сравнение кандидатов", { exact: true }).click();
+    await expect(page.getByRole("table", { name: "Сравнение кандидатов" })).toContainText(
+      "Нет отдельного подтверждения",
+    );
+    await captureScreenshot(page, testInfo, "futures-research-comparison");
+
+    const researchHistory = page.getByLabel("Последние решения", { exact: true });
+    await researchHistory.locator("summary").first().focus();
+    await page.keyboard.press("Enter");
+    await expect(researchHistory.getByRole("listitem")).toHaveCount(1);
+    await researchHistory.getByRole("listitem").first().locator("summary").first().click();
+    await researchHistory.getByText("Сравнение кандидатов", { exact: true }).click();
+    await expect(
+      researchHistory.getByRole("table", { name: "Сравнение кандидатов" }),
+    ).toContainText("Нет отдельного подтверждения");
+    await captureScreenshot(page, testInfo, "futures-research-history");
+
     await captureScreenshot(page, testInfo, "futures-worker-filled-journal");
     await page.getByRole("button", { name: "Пауза новых фьючерсных входов" }).click();
     await expect(page.getByRole("heading", { name: /Защита открытых позиций/ })).toBeVisible();

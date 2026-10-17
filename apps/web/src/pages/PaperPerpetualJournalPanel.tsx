@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { rpc } from "../lib/rpc";
 import { PaperPerpetualComparison } from "./PaperPerpetualComparison";
 import { PaperPerpetualControls } from "./PaperPerpetualControls";
+import { PaperPerpetualResearchHistory } from "./PaperPerpetualResearchHistory";
 
 type VerifiedJournal = Extract<TradingPaperPerpetualJournalReadOutput, { status: "verified" }>;
 type PerpetualEvent = VerifiedJournal["events"][number];
@@ -240,7 +241,7 @@ export function PaperPerpetualJournalPanel() {
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <label htmlFor="futures-account-strategy" className="text-sm">
-            Стратегия
+            Профиль риска
           </label>
           <select
             id="futures-account-strategy"
@@ -265,7 +266,7 @@ export function PaperPerpetualJournalPanel() {
           </Button>
         </div>
         <label htmlFor="paper-perpetual-ledger" className="mb-2 mt-4 block text-sm font-medium">
-          Стратегия и виртуальный счёт
+          Профиль и виртуальный счёт
         </label>
         <select
           id="paper-perpetual-ledger"
@@ -299,6 +300,9 @@ export function PaperPerpetualJournalPanel() {
           onChanged={() => setRefreshId((n) => n + 1)}
         />
       )}
+      {verified && ledgerId ? (
+        <PaperPerpetualResearchHistory key={ledgerId} ledgerId={ledgerId} />
+      ) : null}
       {error && (
         <p role="alert" className="rounded-xl border border-destructive/50 p-4 text-sm">
           {error}

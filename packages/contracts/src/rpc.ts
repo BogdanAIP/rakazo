@@ -139,6 +139,8 @@ import {
   PaperPerpetualPreparationSchema,
   PaperPerpetualStrategySchema,
   PaperPerpetualWorkspaceStatusSchema,
+  PaperResearchHistoryCursorSchema,
+  PaperResearchHistorySchema,
 } from "./trading-paper-perpetual-workspace.js";
 import { TradingPaperMarketPreparationSchema } from "./trading-paper-workspace.js";
 import {
@@ -271,6 +273,17 @@ export const appContract = {
     perpetualLeverageRead: oc
       .input(PaperLeverageReadInputSchema)
       .output(z.array(PaperVenueLeverageLimitsSchema)),
+    perpetualResearchRead: oc
+      .input(
+        z
+          .object({
+            ledgerId: z.string().min(1).max(128),
+            limit: z.number().int().min(1).max(50).optional(),
+            before: PaperResearchHistoryCursorSchema.optional(),
+          })
+          .strict(),
+      )
+      .output(PaperResearchHistorySchema),
     perpetualWorkspaceRead: oc
       .input(z.object({ ledgerId: z.string().min(1).max(128) }))
       .output(PaperPerpetualWorkspaceStatusSchema),

@@ -26,6 +26,7 @@ export * from "./trading-paper-ledger.js";
 export * from "./trading-paper-leverage.js";
 export * from "./trading-paper-perpetual-engine.js";
 export * from "./trading-paper-perpetual-workspace.js";
+export * from "./trading-paper-research-comparison.js";
 export * from "./trading-paper-workspace.js";
 export * from "./trading-replay.js";
 export * from "./trading-walkforward.js";

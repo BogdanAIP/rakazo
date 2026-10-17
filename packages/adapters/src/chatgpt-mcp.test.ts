@@ -61,6 +61,7 @@ describe("ChatGPT Rakazo procedure projection", () => {
       "trading/perpetualMarketPrepare",
       "trading/perpetualLeverageRead",
       "trading/perpetualWorkspaceRead",
+      "trading/perpetualResearchRead",
       "trading/perpetualJournalList",
       "trading/perpetualJournalRead",
       "trading/marketPrepare",

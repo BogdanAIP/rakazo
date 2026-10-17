@@ -196,6 +196,7 @@ const TRADING_READ_ONLY_PROCEDURES = new Set([
   "trading/perpetualMarketPrepare",
   "trading/perpetualLeverageRead",
   "trading/perpetualWorkspaceRead",
+  "trading/perpetualResearchRead",
   "trading/marketPrepare",
   "trading/workspaceRead",
   "trading/journalList",

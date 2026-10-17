@@ -24,6 +24,7 @@ import {
   commandOwnedPerpetualWorkspace,
   commitPerpetualEngineWake,
   commitPerpetualPaperWake,
+  completeIdleExternalPerpetualWake,
   failPerpetualWake,
   pausePerpetualAfterRestart,
   perpetualMarketSource,
@@ -31,6 +32,7 @@ import {
   readOwnedMarketPreparedResearch,
   readPerpetualWake,
   recordPerpetualResearchTick,
+  reschedulePerpetualProtectionAfterResearchExpiry,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { z } from "zod";
@@ -101,6 +103,10 @@ export async function controlPerpetualPaperWorkspace(
         )
       : [];
   const receipt = await commandOwnedPerpetualWorkspace(deps.prisma, owner, command, limits);
+  if (receipt.duplicate) {
+    await enqueueNext(deps, owner, command.ledgerId, receipt.revision);
+    return;
+  }
   try {
     if (deps.engine)
       await cancelPerpetualEngineOrders(
@@ -146,6 +152,13 @@ export async function handlePerpetualPaperWake(
       key.scheduledFor,
     );
     if (!first) return;
+    if (
+      first.control.researchMode === "external" &&
+      (await completeIdleExternalPerpetualWake(deps.prisma, owner, key))
+    ) {
+      await enqueueNext(deps, owner, key.ledgerId, key.revision);
+      return;
+    }
     if (deps.engine)
       await preparePerpetualEngineBeforeMarketFetch(deps.prisma, owner, key.ledgerId, deps.engine);
     const fetchSnapshot = deps.fetchSnapshot ?? fetchOkxPaperPerpetualSnapshot;
@@ -159,8 +172,15 @@ export async function handlePerpetualPaperWake(
     ];
     // Flat-account bootstrap still registers selected markets. With exposure,
     // only instruments needing protection can block the protective stage.
+    const flatExternalNoTrade =
+      first.control.researchMode === "external" &&
+      first.control.pendingExternalProposal?.decision.kind === "no_trade";
     const protection = await read(
-      activeProtectionSymbols.length ? activeProtectionSymbols : first.control.instruments,
+      activeProtectionSymbols.length
+        ? activeProtectionSymbols
+        : flatExternalNoTrade
+          ? []
+          : first.control.instruments,
     );
     const commit = (
       stage: {
@@ -211,7 +231,19 @@ export async function handlePerpetualPaperWake(
     const due =
       !current.control.lastResearchAt ||
       current.now.getTime() - Date.parse(current.control.lastResearchAt) >= 300000;
-    if (current.entries && !current.control.orders.length && due && !priorTick) {
+    const fromExternal = current.control.researchMode === "external";
+    const submitted = current.control.pendingExternalProposal;
+    const hasExternalProposal =
+      submitted &&
+      Date.parse(submitted.submittedAt) <= current.now.getTime() &&
+      Date.parse(submitted.expiresAt) > current.now.getTime();
+    if (
+      current.entries &&
+      !current.control.orders.length &&
+      due &&
+      !priorTick &&
+      (!fromExternal || hasExternalProposal)
+    ) {
       failure = "market_skill_unavailable";
       if (!current.control.source) throw new Error("No selected futures skill");
       const prepared = await readOwnedMarketPreparedResearch(deps.prisma, owner, {
@@ -222,7 +254,15 @@ export async function handlePerpetualPaperWake(
       });
       perpetualMarketSource(prepared);
       failure = "market_data_unavailable";
-      snapshots = await read(current.control.instruments);
+      const affectedPosition =
+        submitted && "positionId" in submitted.decision ? submitted.decision.positionId : null;
+      snapshots = await read(
+        fromExternal && submitted?.decision.kind !== "proposal"
+          ? current.state.openPositions
+              .filter((position) => position.positionId === affectedPosition)
+              .map((position) => position.instrument)
+          : current.control.instruments,
+      );
       if (
         snapshots.some(
           (s) =>
@@ -234,8 +274,6 @@ export async function handlePerpetualPaperWake(
       ) {
         throw new Error("Closed market history is stale");
       }
-      const fromExternal = current.control.researchMode === "external";
-      const submitted = current.control.pendingExternalProposal;
       if (fromExternal) {
         // No model call, no background prompt and no entry without an explicit
         // authenticated owner submission for this still-approved PAPER session.
@@ -268,6 +306,7 @@ export async function handlePerpetualPaperWake(
             "You research a virtual PAPER futures account. Return exactly one JSON decision matching the supplied schema.",
             "Use the selected Market Skill and supplied public OKX data. Never request exchange keys, real orders, account tools or delegation.",
             "Select an independent strategy suitable for this profile. Compare all allowed instruments and decide no_trade, a new proposal, a partial reduce-only exit, or close an existing position.",
+            "Include comparison with asOf, validUntil (at most 30 minutes after asOf), method, profileRationale, and candidates: {instrument, verdict: selected|rejected|watch, reason, facts:[{name,value}]}. For a proposal select exactly its instrument; for no_trade or management select none. Use the supplied capture times and real public facts. Explain suitability for this risk profile beyond its leverage ceiling.",
             "Long and short positions are independent hedge lots. Opposite positions never cancel automatically. quantityBase is BASE currency, not contract count. You may hedge via a new opposite-side proposal if gross risk and remaining position slots allow it; a full close can free a slot for a later hedge.",
             "For reduce, specify an existing positionId and a positive quantityBase no greater than the held quantity, aligned to the contract lot increment; protect remaining lots. This never opens a new position. Opposite-side same-instrument hedges are independent ideas, but same-instrument same-side scale-ins share ONE per-idea loss budget across all lots.",
             "Use a stop and a profitable take-profit. Respect leverage, per-idea loss, daily loss, total open stop risk and position count caps. Futures have NO legacy fixed USDT gross-exposure cap; a trusted equity-based portfolio stress guard checks the full gross exposure.",
@@ -342,7 +381,7 @@ export async function handlePerpetualPaperWake(
       }
     }
     failure = "research_commit_unavailable";
-    await recordPerpetualResearchTick(
+    const recorded = await recordPerpetualResearchTick(
       deps.prisma,
       owner,
       researchKey,
@@ -356,6 +395,14 @@ export async function handlePerpetualPaperWake(
           ? { provider: model.provider, modelId: model.id }
           : undefined,
     );
+    if (!recorded) {
+      // Entry permission may expire after protection but before research commit.
+      // A held position still needs its next independently authorized wake.
+      if (await reschedulePerpetualProtectionAfterResearchExpiry(deps.prisma, owner, key))
+        await enqueueNext(deps, owner, key.ledgerId, key.revision);
+      return;
+    }
+    decision = PaperPerpetualDecisionSchema.parse(recorded.decision);
     // A new or pending intent still needs a post-submission executable book.
     // No-trade native wakes can reuse the already-committed protection evidence.
     failure = "market_data_unavailable";
