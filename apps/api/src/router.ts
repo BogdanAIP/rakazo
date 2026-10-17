@@ -996,13 +996,15 @@ export function createRouter(deps: RouterDeps) {
           } catch {
             return { status: "unavailable" as const, reason: "market_not_ready" as const };
           }
-          try {
-            if (!deps.resolvePaperResearchModel) throw new Error("Model unavailable");
-            await deps.resolvePaperResearchModel(
-              await perpetualResearchModelScope(context.actor, input.ledgerId),
-            );
-          } catch {
-            return { status: "unavailable" as const, reason: "model_not_configured" as const };
+          if (input.researchMode !== "external") {
+            try {
+              if (!deps.resolvePaperResearchModel) throw new Error("Model unavailable");
+              await deps.resolvePaperResearchModel(
+                await perpetualResearchModelScope(context.actor, input.ledgerId),
+              );
+            } catch {
+              return { status: "unavailable" as const, reason: "model_not_configured" as const };
+            }
           }
           return {
             status: "ready" as const,
@@ -1046,7 +1048,18 @@ export function createRouter(deps: RouterDeps) {
       ),
       perpetualWorkspaceCommand: authed.trading.perpetualWorkspaceCommand.handler(
         async ({ context, input }) => {
-          if (input.action === "start") {
+          const resumed =
+            input.action === "resume"
+              ? await readOwnedPerpetualWorkspace(deps.prisma, context.actor, input.ledgerId)
+              : null;
+          if (input.action === "resume" && resumed?.status !== "verified")
+            throw new ORPCError("CONFLICT");
+          const researchMode =
+            input.action === "start" ? input.researchMode : resumed?.researchMode;
+          if (
+            (input.action === "start" || input.action === "resume") &&
+            researchMode !== "external"
+          ) {
             if (!deps.resolvePaperResearchModel) throw new ORPCError("CONFLICT");
             await deps.resolvePaperResearchModel(
               await perpetualResearchModelScope(context.actor, input.ledgerId),

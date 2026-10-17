@@ -1,7 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { PaperPerpetualDecisionSchema } from "./trading-paper-perpetual-workspace.js";
+import {
+  PaperPerpetualCommandSchema,
+  PaperPerpetualDecisionSchema,
+} from "./trading-paper-perpetual-workspace.js";
 
 describe("AI PAPER futures portfolio decision schema", () => {
+  it("resumes only a bounded existing scope and rejects scope overrides", () => {
+    const resume = {
+      action: "resume",
+      ledgerId: "paper-futures:fixture",
+      commandId: "b7e0b8b5-c03d-4dc0-a2fb-8883371f8029",
+      expectedRevision: 4,
+      durationMinutes: 15,
+      protectionMinutes: 1440,
+    };
+    expect(PaperPerpetualCommandSchema.parse(resume)).toEqual(resume);
+    for (const extra of [
+      { durationMinutes: 0 },
+      { durationMinutes: 20161 },
+      { protectionMinutes: 1441 },
+      { researchMode: "model" },
+      { maxLeverage: 100 },
+      { instruments: ["ETH-USDT-SWAP"] },
+      { source: {} },
+    ])
+      expect(PaperPerpetualCommandSchema.safeParse({ ...resume, ...extra }).success).toBe(false);
+  });
+
   it("accepts a bounded partial reduction intent with no direct exchange authority", () => {
     const decision = PaperPerpetualDecisionSchema.parse({
       kind: "reduce",

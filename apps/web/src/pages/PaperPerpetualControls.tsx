@@ -76,7 +76,9 @@ function feeSummary(status: PaperPerpetualWorkspaceStatus | null, instruments: s
     "Тариф симуляции: maker " + rates("makerFeeRate") + ", taker " + rates("takerFeeRate") + "."
   );
 }
+type ResearchMode = "model" | "external";
 type Review = {
+  researchMode: ResearchMode;
   preparation: Extract<PaperPerpetualPreparation, { status: "ready" }>;
   instruments: string[];
   duration: number;
@@ -101,8 +103,10 @@ export function PaperPerpetualControls({
   const [leverage, setLeverage] = useState(1);
   const [limits, setLimits] = useState<PaperVenueLeverageLimits[]>([]);
   const [duration, setDuration] = useState(20160);
+  const [researchMode, setResearchMode] = useState<ResearchMode>("external");
   const [review, setReview] = useState<Review | null>(null);
   const [closeReview, setCloseReview] = useState(false);
+  const [resumeReview, setResumeReview] = useState<number | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -137,6 +141,7 @@ export function PaperPerpetualControls({
     setMarketQuery("");
     setLimits([]);
     setReview(null);
+    setResumeReview(null);
     setError(null);
   }, [ledgerId]);
   useEffect(() => {
@@ -230,8 +235,9 @@ export function PaperPerpetualControls({
     setPending(true);
     setError(null);
     try {
-      const result = await rpc.trading.perpetualMarketPrepare({ ledgerId });
-      if (result.status === "ready") setReview({ preparation: result, instruments, duration });
+      const result = await rpc.trading.perpetualMarketPrepare({ ledgerId, researchMode });
+      if (result.status === "ready")
+        setReview({ preparation: result, instruments, duration, researchMode });
       else
         setError(
           result.reason === "engine_not_configured"
@@ -246,7 +252,9 @@ export function PaperPerpetualControls({
       setPending(false);
     }
   }
-  async function command(action: PaperPerpetualCommand["action"]) {
+  async function command(
+    action: Exclude<PaperPerpetualCommand["action"], "submit_external_proposal">,
+  ) {
     if (!status || pending) return;
     const base = { ledgerId, commandId: crypto.randomUUID(), expectedRevision: status.revision };
     let input: PaperPerpetualCommand;
@@ -256,10 +264,20 @@ export function PaperPerpetualControls({
         ...base,
         action,
         venue: "okx",
+        researchMode: review.researchMode,
         instruments: review.instruments,
         durationMinutes: review.duration,
         protectionMinutes: 1440,
         source: review.preparation.scope,
+      };
+    } else if (action === "resume") {
+      if (resumeReview === null) return;
+      input = {
+        ...base,
+        expectedRevision: resumeReview,
+        action,
+        durationMinutes: duration,
+        protectionMinutes: 1440,
       };
     } else if (action === "set_leverage") {
       if (!limits.length) return;
@@ -278,13 +296,13 @@ export function PaperPerpetualControls({
       setStatus(await rpc.trading.perpetualWorkspaceCommand(input));
       setReview(null);
       setCloseReview(false);
+      setResumeReview(null);
       onChanged();
     } catch {
       setReview(null);
       setCloseReview(false);
-      setError(
-        "Команда не выполнена. Обновите состояние; перед новым запуском закройте позиции предыдущей сессии.",
-      );
+      setResumeReview(null);
+      setError("Команда не выполнена. Обновите состояние счёта и повторите проверку.");
       try {
         setStatus(await rpc.trading.perpetualWorkspaceRead({ ledgerId }));
       } catch {
@@ -314,6 +332,12 @@ export function PaperPerpetualControls({
     openPositions === 0 &&
     !verified.openOrders.length &&
     !verified.pendingClose;
+  const mayResume =
+    verified &&
+    verified.sessionStatus === "paused" &&
+    openPositions > 0 &&
+    !verified.openOrders.length &&
+    !verified.pendingClose;
   return (
     <section
       className="space-y-4 rounded-2xl border border-border bg-card p-5"
@@ -338,6 +362,19 @@ export function PaperPerpetualControls({
           {verified.runtimeError && (
             <p role="status" className="text-sm text-destructive">
               {errors[verified.runtimeError] ?? "Сессия требует проверки. Новые входы остановлены."}
+            </p>
+          )}
+          <p className="text-sm text-muted-foreground">
+            Источник решений:{" "}
+            {verified.researchMode === "external"
+              ? "ChatGPT через R (ручная отправка)"
+              : "модель Rakazo"}
+            .
+          </p>
+          {verified.pendingExternalProposal && (
+            <p role="status" className="text-sm">
+              Ожидает проверки PAPER-worker: {verified.pendingExternalProposal.kind} · до{" "}
+              {dateTime(verified.pendingExternalProposal.expiresAt)}.
             </p>
           )}
           {verified.lastDecision && (
@@ -568,6 +605,25 @@ export function PaperPerpetualControls({
                 Список можно уточнить вручную. Сканер ничего не покупает и не запускает. Для входов
                 по-прежнему требуется отдельное подтверждение PAPER-сессии.
               </p>
+              <label className="block text-sm" htmlFor="futures-research-mode">
+                Источник торговых решений
+              </label>
+              <select
+                id="futures-research-mode"
+                className="w-full rounded-lg border border-border bg-background p-2 text-sm"
+                value={researchMode}
+                disabled={pending || !!review}
+                onChange={(e) => setResearchMode(e.target.value as ResearchMode)}
+              >
+                <option value="external">ChatGPT через R · предложения вручную</option>
+                <option value="model">Модель Rakazo · автономное исследование</option>
+              </select>
+              {researchMode === "external" && (
+                <p className="text-xs text-muted-foreground">
+                  Без нового предложения ChatGPT/R бот не открывает позиции. Защита уже открытых
+                  позиций остаётся у PAPER-движка.
+                </p>
+              )}
               <label className="block text-sm" htmlFor="futures-duration">
                 Длительность новых входов
               </label>
@@ -602,10 +658,10 @@ export function PaperPerpetualControls({
                     {review.preparation.name}.
                   </p>
                   <p className="text-sm">
-                    Фоновый PAPER-worker пока использует модель, подключённую к Rakazo. ChatGPT
-                    через R предназначен для интерактивного анализа рынка и журнала, но не заменяет
-                    автономный пяти-минутный цикл. Каждый вход проходит лимиты счёта. Проверка
-                    позиций — раз в минуту, анализ — раз в 5 минут.
+                    {review.researchMode === "external"
+                      ? "ChatGPT/R: предложения отправляются вручную через R; без них новых входов не будет."
+                      : "Модель Rakazo: исследование выполняется автономно по расписанию."}{" "}
+                    Все решения проходят штатный Risk Manager. Защитные проверки — раз в минуту.
                   </p>
                   <p className="text-sm">
                     После остановки входов защитные выходы разрешены ещё 24 часа. Окончание срока не
@@ -630,6 +686,17 @@ export function PaperPerpetualControls({
             </>
           )}
           <div className="flex flex-wrap gap-2">
+            {mayResume && resumeReview === null && (
+              <Button
+                disabled={pending || closeReview}
+                onClick={() => {
+                  setDuration(15);
+                  setResumeReview(verified.revision);
+                }}
+              >
+                Проверить возобновление
+              </Button>
+            )}
             {verified.sessionStatus === "active" && (
               <Button variant="outline" disabled={pending} onClick={() => void command("pause")}>
                 Пауза новых фьючерсных входов
@@ -659,6 +726,41 @@ export function PaperPerpetualControls({
               </>
             )}
           </div>
+          {resumeReview !== null && mayResume && (
+            <section
+              className="space-y-3 rounded-xl border border-border p-4"
+              aria-label="Проверка возобновления фьючерсов"
+            >
+              <p className="text-sm">
+                Продолжить входы: {verified.instruments.join(", ")}. Позиции, стопы и резервы
+                сохраняются. Защита — минимум 24 часа после окончания входов.
+              </p>
+              <label className="block text-sm" htmlFor="futures-resume-duration">
+                Длительность новых входов
+              </label>
+              <select
+                id="futures-resume-duration"
+                className="rounded-lg border border-border bg-background p-2 text-sm"
+                value={duration}
+                disabled={pending}
+                onChange={(e) => setDuration(Number(e.target.value))}
+              >
+                <option value={15}>15 минут</option>
+                <option value={60}>1 час</option>
+                <option value={240}>4 часа</option>
+                <option value={1440}>1 день</option>
+                <option value={20160}>14 дней</option>
+              </select>
+              <div className="flex gap-2">
+                <Button disabled={pending} onClick={() => void command("resume")}>
+                  Возобновить PAPER-фьючерсы
+                </Button>
+                <Button variant="outline" disabled={pending} onClick={() => setResumeReview(null)}>
+                  Отмена
+                </Button>
+              </div>
+            </section>
+          )}
           {closeReview && (
             <section
               className="space-y-3 rounded-xl border border-border p-4"
@@ -684,7 +786,7 @@ export function PaperPerpetualControls({
               Ожидается исполнение виртуального закрытия. Проверяйте остаток позиций.
             </p>
           )}
-          {verified.sessionStatus !== "active" && openPositions > 0 && (
+          {verified.sessionStatus !== "active" && openPositions > 0 && !mayResume && (
             <p className="text-sm text-muted-foreground">
               Перед новым запуском закройте позиции предыдущей сессии. Защита продолжает работать до
               указанного срока.
