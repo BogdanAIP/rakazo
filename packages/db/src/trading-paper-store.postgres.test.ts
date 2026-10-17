@@ -2058,262 +2058,277 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       ).toBe(0);
     }
   });
-  it("P11C-2 closes only after persisted stop trigger and replays idempotently", async () => {
-    const ledgerId = `paper-c2-stop-${suffix}`;
-    await createTradingPaperLedger(first.prisma, owner, {
-      ledgerId,
-      openedAt: new Date(Date.now() - 30_000).toISOString(),
-      quoteCurrency: "USDT",
-      initialBalanceQuote: "500",
-    });
-    await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
-      allowedVenues: ["okx"],
-      quoteCurrency: "USDT",
-      maxAgeMs: 60_000,
-      maxSpreadBps: 40,
-      maxTriggerDeviationBps: 50,
-      maxPositions: 2,
-      maxPerIdeaRiskQuote: "20",
-      maxDailyLossQuote: "100",
-      maxOpenRiskQuote: "40",
-      maxTotalExposureQuote: "300",
-      assumedFeeBpsPerSide: 10,
-      assumedSlippageBpsPerSide: 10,
-    });
-    const enable = await makePaperControlEffect(ledgerId, "c2-stop-enable", "enable", 0);
-    await applyApprovedTradingPaperControl(first.prisma, owner, enable.id);
-    const reserveAt = new Date().toISOString();
-    const reserveEvidence = await recordPublicAdapterPaperQuoteEvidence(
-      first.prisma,
-      owner,
-      ledgerId,
-      market,
-      {
-        venue: "okx",
-        kind: "spot",
-        symbol: "SOL-USDT",
-        observedAt: reserveAt,
-        fetchedAt: reserveAt,
-        bid: "100",
-        ask: "100.1",
-        quoteVolume24h: "100000",
-      },
-    );
-    const signal = {
-      kind: "proposal",
-      executionStatus: "research_only",
-      signalId: `c2-stop-signal-${suffix}`,
-      strategyId: "c2-stop",
-      strategyVersion: "1",
-      createdAt: new Date(Date.now() - 1000).toISOString(),
-      expiresAt: new Date(Date.now() + 120_000).toISOString(),
-      evidenceIds: ["research-only"],
-      market,
-      action: "spot_buy",
-      entryTrigger: "100.1",
-      stopLoss: "95",
-      takeProfit: ["110"],
-      invalidation: "fixture",
-      rationale: "Synthetic C2 stop close verification",
-      riskBudgetQuote: "10",
-      maxSlippageBps: null,
-    } as const;
-    const reserved = await reserveApprovedTradingPaperSignal(
-      first.prisma,
-      owner,
-      ledgerId,
-      signal,
-      reserveEvidence.id,
-    );
-    if (reserved.status !== "reserved") throw new Error("expected reservation");
-    const fillAt = new Date().toISOString();
-    const fillEvidence = await recordPublicAdapterPaperQuoteEvidence(
-      first.prisma,
-      owner,
-      ledgerId,
-      market,
-      {
-        venue: "okx",
-        kind: "spot",
-        symbol: "SOL-USDT",
-        observedAt: fillAt,
-        fetchedAt: fillAt,
-        bid: "99.99",
-        ask: "100",
-        quoteVolume24h: "100000",
-      },
-    );
-    const filled = await fillApprovedTradingPaperReservation(
-      first.prisma,
-      owner,
-      ledgerId,
-      reserved.reservationId,
-      fillEvidence.id,
-    );
-    if (filled.status !== "filled") throw new Error("expected fill");
+  it.each([0, -600_000, 600_000])(
+    "P11C-2 closes and replays with process clock skew %i ms",
+    async (clockSkew) => {
+      const ledgerId =
+        clockSkew === 0 ? `paper-c2-stop-${suffix}` : `paper-c2-stop-${suffix}-${clockSkew}`;
+      await createTradingPaperLedger(first.prisma, owner, {
+        ledgerId,
+        openedAt: new Date(Date.now() - 30_000).toISOString(),
+        quoteCurrency: "USDT",
+        initialBalanceQuote: "500",
+      });
+      await createDisabledTradingPaperRiskPolicy(first.prisma, owner, ledgerId, {
+        allowedVenues: ["okx"],
+        quoteCurrency: "USDT",
+        maxAgeMs: 60_000,
+        maxSpreadBps: 40,
+        maxTriggerDeviationBps: 50,
+        maxPositions: 2,
+        maxPerIdeaRiskQuote: "20",
+        maxDailyLossQuote: "100",
+        maxOpenRiskQuote: "40",
+        maxTotalExposureQuote: "300",
+        assumedFeeBpsPerSide: 10,
+        assumedSlippageBpsPerSide: 10,
+      });
+      const enable = await makePaperControlEffect(
+        ledgerId,
+        `c2-stop-enable-${clockSkew}`,
+        "enable",
+        0,
+      );
+      await applyApprovedTradingPaperControl(first.prisma, owner, enable.id);
+      const reserveAt = new Date().toISOString();
+      const reserveEvidence = await recordPublicAdapterPaperQuoteEvidence(
+        first.prisma,
+        owner,
+        ledgerId,
+        market,
+        {
+          venue: "okx",
+          kind: "spot",
+          symbol: "SOL-USDT",
+          observedAt: reserveAt,
+          fetchedAt: reserveAt,
+          bid: "100",
+          ask: "100.1",
+          quoteVolume24h: "100000",
+        },
+      );
+      const signal = {
+        kind: "proposal",
+        executionStatus: "research_only",
+        signalId: `c2-stop-signal-${suffix}`,
+        strategyId: "c2-stop",
+        strategyVersion: "1",
+        createdAt: new Date(Date.now() - 1000).toISOString(),
+        expiresAt: new Date(Date.now() + 120_000).toISOString(),
+        evidenceIds: ["research-only"],
+        market,
+        action: "spot_buy",
+        entryTrigger: "100.1",
+        stopLoss: "95",
+        takeProfit: ["110"],
+        invalidation: "fixture",
+        rationale: "Synthetic C2 stop close verification",
+        riskBudgetQuote: "10",
+        maxSlippageBps: null,
+      } as const;
+      const reserved = await reserveApprovedTradingPaperSignal(
+        first.prisma,
+        owner,
+        ledgerId,
+        signal,
+        reserveEvidence.id,
+      );
+      if (reserved.status !== "reserved") throw new Error("expected reservation");
+      const fillAt = new Date().toISOString();
+      const fillEvidence = await recordPublicAdapterPaperQuoteEvidence(
+        first.prisma,
+        owner,
+        ledgerId,
+        market,
+        {
+          venue: "okx",
+          kind: "spot",
+          symbol: "SOL-USDT",
+          observedAt: fillAt,
+          fetchedAt: fillAt,
+          bid: "99.99",
+          ask: "100",
+          quoteVolume24h: "100000",
+        },
+      );
+      const filled = await fillApprovedTradingPaperReservation(
+        first.prisma,
+        owner,
+        ledgerId,
+        reserved.reservationId,
+        fillEvidence.id,
+      );
+      if (filled.status !== "filled") throw new Error("expected fill");
 
-    const safeAt = new Date().toISOString();
-    const safeEvidence = await recordPublicAdapterPaperQuoteEvidence(
-      first.prisma,
-      owner,
-      ledgerId,
-      market,
-      {
-        venue: "okx",
-        kind: "spot",
-        symbol: "SOL-USDT",
-        observedAt: safeAt,
-        fetchedAt: safeAt,
-        bid: "95.5",
-        ask: "95.51",
-        quoteVolume24h: "100000",
-      },
-    );
-    await expect(
-      closeTradingPaperPositionOnStop(
+      const safeAt = new Date().toISOString();
+      const safeEvidence = await recordPublicAdapterPaperQuoteEvidence(
+        first.prisma,
+        owner,
+        ledgerId,
+        market,
+        {
+          venue: "okx",
+          kind: "spot",
+          symbol: "SOL-USDT",
+          observedAt: safeAt,
+          fetchedAt: safeAt,
+          bid: "95.5",
+          ask: "95.51",
+          quoteVolume24h: "100000",
+        },
+      );
+      await expect(
+        closeTradingPaperPositionOnStop(
+          second.prisma,
+          owner,
+          ledgerId,
+          reserved.reservationId,
+          safeEvidence.id,
+        ),
+      ).resolves.toMatchObject({ status: "deny", reason: "stop_not_triggered" });
+      expect(
+        (await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId)).positions,
+      ).toHaveLength(1);
+
+      const stopAt = new Date().toISOString();
+      const stopEvidence = await recordPublicAdapterPaperQuoteEvidence(
+        first.prisma,
+        owner,
+        ledgerId,
+        market,
+        {
+          venue: "okx",
+          kind: "spot",
+          symbol: "SOL-USDT",
+          observedAt: stopAt,
+          fetchedAt: stopAt,
+          bid: "94.99",
+          ask: "95",
+          quoteVolume24h: "100000",
+        },
+      );
+      const realNow = Date.now.bind(Date);
+      const clock = vi.spyOn(Date, "now").mockImplementation(() => realNow() + clockSkew);
+      const closed = await closeTradingPaperPositionOnStop(
         second.prisma,
         owner,
         ledgerId,
         reserved.reservationId,
-        safeEvidence.id,
-      ),
-    ).resolves.toMatchObject({ status: "deny", reason: "stop_not_triggered" });
-    expect(
-      (await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId)).positions,
-    ).toHaveLength(1);
+        stopEvidence.id,
+      ).finally(() => clock.mockRestore());
+      expect(closed.status).toBe("closed");
+      if (closed.status !== "closed") throw new Error("expected stop close");
+      expect(Number(closed.executedPriceQuote)).toBeLessThan(95);
+      const finalState = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);
+      expect(finalState.positions).toHaveLength(0);
+      expect(Number(finalState.realizedPnlQuote)).toBeLessThan(0);
+      expect(await first.prisma.tradingPaperStopGuard.count({ where: { ledgerId } })).toBe(0);
+      expect(await first.prisma.tradingPaperCloseDecision.count({ where: { ledgerId } })).toBe(1);
+      expect(
+        await first.prisma.tradingPaperLedgerEvent.count({
+          where: { ledgerId, kind: "fill_sell" },
+        }),
+      ).toBe(1);
 
-    const stopAt = new Date().toISOString();
-    const stopEvidence = await recordPublicAdapterPaperQuoteEvidence(
-      first.prisma,
-      owner,
-      ledgerId,
-      market,
-      {
-        venue: "okx",
-        kind: "spot",
-        symbol: "SOL-USDT",
-        observedAt: stopAt,
-        fetchedAt: stopAt,
-        bid: "94.99",
-        ask: "95",
-        quoteVolume24h: "100000",
-      },
-    );
-    const closed = await closeTradingPaperPositionOnStop(
-      second.prisma,
-      owner,
-      ledgerId,
-      reserved.reservationId,
-      stopEvidence.id,
-    );
-    expect(closed.status).toBe("closed");
-    if (closed.status !== "closed") throw new Error("expected stop close");
-    expect(Number(closed.executedPriceQuote)).toBeLessThan(95);
-    const finalState = await readVerifiedTradingPaperLedger(first.prisma, owner, ledgerId);
-    expect(finalState.positions).toHaveLength(0);
-    expect(Number(finalState.realizedPnlQuote)).toBeLessThan(0);
-    expect(await first.prisma.tradingPaperStopGuard.count({ where: { ledgerId } })).toBe(0);
-    expect(await first.prisma.tradingPaperCloseDecision.count({ where: { ledgerId } })).toBe(1);
-    expect(
-      await first.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId, kind: "fill_sell" } }),
-    ).toBe(1);
-
-    // A retry of the ORIGINAL buy after a successful full-lot stop close is
-    // historical idempotency, not a request to reopen the virtual position.
-    const afterCloseVersion = finalState.version;
-    const restarted = createDb(databaseUrl!, {
-      poolMax: 1,
-      applicationName: "paper-c7-historical-fill-retry",
-    });
-    try {
-      await expect(
-        fillApprovedTradingPaperReservation(
-          restarted.prisma,
-          owner,
-          ledgerId,
-          reserved.reservationId,
-          fillEvidence.id,
-        ),
-      ).resolves.toMatchObject({
-        status: "duplicate",
-        fillEventId: filled.fillEventId,
-        fillEventSequence: filled.fillEventSequence,
-        signalId: signal.signalId,
+      // A retry of the ORIGINAL buy after a successful full-lot stop close is
+      // historical idempotency, not a request to reopen the virtual position.
+      const afterCloseVersion = finalState.version;
+      const restarted = createDb(databaseUrl!, {
+        poolMax: 1,
+        applicationName: "paper-c7-historical-fill-retry",
       });
+      try {
+        await expect(
+          fillApprovedTradingPaperReservation(
+            restarted.prisma,
+            owner,
+            ledgerId,
+            reserved.reservationId,
+            fillEvidence.id,
+          ),
+        ).resolves.toMatchObject({
+          status: "duplicate",
+          fillEventId: filled.fillEventId,
+          fillEventSequence: filled.fillEventSequence,
+          signalId: signal.signalId,
+        });
+        await expect(
+          fillApprovedTradingPaperReservation(
+            first.prisma,
+            owner,
+            ledgerId,
+            reserved.reservationId,
+            fillEvidence.id,
+          ),
+        ).resolves.toMatchObject({ status: "duplicate", fillEventId: filled.fillEventId });
+        await expect(
+          fillApprovedTradingPaperReservation(
+            restarted.prisma,
+            owner,
+            ledgerId,
+            reserved.reservationId,
+            stopEvidence.id,
+          ),
+        ).rejects.toBeInstanceOf(PaperFillConflictError);
+        expect(
+          (await readVerifiedTradingPaperLedger(restarted.prisma, owner, ledgerId)).version,
+        ).toBe(afterCloseVersion);
+        expect(await restarted.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(
+          3,
+        );
+        expect(await restarted.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
+          3,
+        );
+        expect(await restarted.prisma.tradingPaperStopGuard.count({ where: { ledgerId } })).toBe(0);
+        expect(await restarted.prisma.tradingPaperFillDecision.count({ where: { ledgerId } })).toBe(
+          1,
+        );
+        expect(
+          await restarted.prisma.tradingPaperCloseDecision.count({ where: { ledgerId } }),
+        ).toBe(1);
+      } finally {
+        await restarted.prisma.$disconnect();
+        await restarted.pool.end();
+      }
+
       await expect(
-        fillApprovedTradingPaperReservation(
+        closeTradingPaperPositionOnStop(
           first.prisma,
-          owner,
-          ledgerId,
-          reserved.reservationId,
-          fillEvidence.id,
-        ),
-      ).resolves.toMatchObject({ status: "duplicate", fillEventId: filled.fillEventId });
-      await expect(
-        fillApprovedTradingPaperReservation(
-          restarted.prisma,
           owner,
           ledgerId,
           reserved.reservationId,
           stopEvidence.id,
         ),
-      ).rejects.toBeInstanceOf(PaperFillConflictError);
-      expect(
-        (await readVerifiedTradingPaperLedger(restarted.prisma, owner, ledgerId)).version,
-      ).toBe(afterCloseVersion);
-      expect(await restarted.prisma.tradingPaperLedgerEvent.count({ where: { ledgerId } })).toBe(3);
-      expect(await restarted.prisma.tradingPaperLedgerOutbox.count({ where: { ledgerId } })).toBe(
-        3,
-      );
-      expect(await restarted.prisma.tradingPaperStopGuard.count({ where: { ledgerId } })).toBe(0);
-      expect(await restarted.prisma.tradingPaperFillDecision.count({ where: { ledgerId } })).toBe(
-        1,
-      );
-      expect(await restarted.prisma.tradingPaperCloseDecision.count({ where: { ledgerId } })).toBe(
-        1,
-      );
-    } finally {
-      await restarted.prisma.$disconnect();
-      await restarted.pool.end();
-    }
+      ).resolves.toMatchObject({ status: "duplicate", closeEventId: closed.closeEventId });
 
-    await expect(
-      closeTradingPaperPositionOnStop(
+      const changedAt = new Date().toISOString();
+      const changedEvidence = await recordPublicAdapterPaperQuoteEvidence(
         first.prisma,
         owner,
         ledgerId,
-        reserved.reservationId,
-        stopEvidence.id,
-      ),
-    ).resolves.toMatchObject({ status: "duplicate", closeEventId: closed.closeEventId });
-
-    const changedAt = new Date().toISOString();
-    const changedEvidence = await recordPublicAdapterPaperQuoteEvidence(
-      first.prisma,
-      owner,
-      ledgerId,
-      market,
-      {
-        venue: "okx",
-        kind: "spot",
-        symbol: "SOL-USDT",
-        observedAt: changedAt,
-        fetchedAt: changedAt,
-        bid: "94.98",
-        ask: "94.99",
-        quoteVolume24h: "100000",
-      },
-    );
-    await expect(
-      closeTradingPaperPositionOnStop(
-        second.prisma,
-        owner,
-        ledgerId,
-        reserved.reservationId,
-        changedEvidence.id,
-      ),
-    ).rejects.toBeInstanceOf(PaperCloseConflictError);
-  });
+        market,
+        {
+          venue: "okx",
+          kind: "spot",
+          symbol: "SOL-USDT",
+          observedAt: changedAt,
+          fetchedAt: changedAt,
+          bid: "94.98",
+          ask: "94.99",
+          quoteVolume24h: "100000",
+        },
+      );
+      await expect(
+        closeTradingPaperPositionOnStop(
+          second.prisma,
+          owner,
+          ledgerId,
+          reserved.reservationId,
+          changedEvidence.id,
+        ),
+      ).rejects.toBeInstanceOf(PaperCloseConflictError);
+    },
+  );
 
   it("P11C-2 serializes stop close against approved disable without double terminal mutation", async () => {
     const ledgerId = `paper-c2-race-${suffix}`;
@@ -3250,12 +3265,15 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
         quoteVolume24h: "100000",
       },
     );
+    // A future process clock must not invalidate still-live database authority.
+    const realNow = Date.now.bind(Date);
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => realNow() + 600_000);
     const closed = await closeTradingPaperPositionOnAuthorizedProtectiveStop(
       second.prisma,
       owner,
       authority.effectId,
       stopEvidence.id,
-    );
+    ).finally(() => clock.mockRestore());
     expect(closed.status).toBe("closed");
     if (closed.status !== "closed") throw new Error("expected protective paper close");
     expect(closed.positionId).toBe(authority.positionId);
@@ -3290,13 +3308,14 @@ describePostgres("paper journal concurrent PostgreSQL writers", () => {
       nextAction: "separate_owner_approval_to_enable",
     });
 
+    const retryClock = vi.spyOn(Date, "now").mockImplementation(() => realNow() - 600_000);
     await expect(
       closeTradingPaperPositionOnAuthorizedProtectiveStop(
         first.prisma,
         owner,
         authority.effectId,
         stopEvidence.id,
-      ),
+      ).finally(() => retryClock.mockRestore()),
     ).resolves.toMatchObject({
       status: "duplicate",
       closeEventId: closed.closeEventId,

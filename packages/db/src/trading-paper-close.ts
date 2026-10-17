@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
+import { tradingPaperDatabaseNow } from "./trading-paper-clock.js";
 import {
   PaperFillIntegrityError,
   verifyTradingPaperOpenFillInTransaction,
@@ -263,7 +264,8 @@ export async function closeTradingPaperPositionOnStop(
     prisma.$transaction(
       async (tx) => {
         await lockTradingPaperRiskPolicyInTransaction(tx, owner, ledgerId);
-        await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
+        const now = (await tradingPaperDatabaseNow(tx)).getTime();
+        await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date(now));
         const prior = await readExistingClose(tx, owner, ledgerId, positionId, evidenceId);
         if (prior) return prior;
 
@@ -353,7 +355,6 @@ export async function closeTradingPaperPositionOnStop(
         if (JSON.stringify(evidence.market) !== JSON.stringify(opened.market)) {
           return { status: "deny", mode: "paper_only", reason: "market_snapshot_mismatch" };
         }
-        const now = Date.now();
         const observed = Date.parse(evidence.ticker.observedAt);
         const fetched = Date.parse(evidence.ticker.fetchedAt);
         if (
@@ -453,7 +454,7 @@ export async function closeTradingPaperPositionOnStop(
             decisionSha256: decisionDigest(normalized),
           },
         });
-        await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date());
+        await auditTradingPaperLifecycleInTransaction(tx, owner, ledgerId, new Date(now));
         return {
           status: "closed",
           mode: "paper_only",
@@ -495,6 +496,7 @@ export async function closeTradingPaperPositionOnAuthorizedProtectiveStop(
           return { status: "deny", mode: "paper_only", reason: "authority_unavailable" };
         }
         await lockTradingPaperRiskPolicyInTransaction(tx, owner, authority.ledgerId);
+        const now = (await tradingPaperDatabaseNow(tx)).getTime();
 
         const prior = await readExistingClose(
           tx,
@@ -505,11 +507,15 @@ export async function closeTradingPaperPositionOnAuthorizedProtectiveStop(
           authorityEffectId,
         );
         if (prior) {
-          await auditTradingPaperLifecycleInTransaction(tx, owner, authority.ledgerId, new Date());
+          await auditTradingPaperLifecycleInTransaction(
+            tx,
+            owner,
+            authority.ledgerId,
+            new Date(now),
+          );
           return prior;
         }
 
-        const now = Date.now();
         const usable = await assessTradingPaperProtectiveExitAuthorityInTransaction(
           tx,
           owner,
@@ -675,7 +681,7 @@ export async function closeTradingPaperPositionOnAuthorizedProtectiveStop(
             decisionSha256: decisionDigest(normalized),
           },
         });
-        await auditTradingPaperLifecycleInTransaction(tx, owner, usable.ledgerId, new Date());
+        await auditTradingPaperLifecycleInTransaction(tx, owner, usable.ledgerId, new Date(now));
         return {
           status: "closed",
           mode: "paper_only",

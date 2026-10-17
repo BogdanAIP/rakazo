@@ -24,3 +24,9 @@ This source inventory describes Rakazo's native Windows extension surfaces. A ca
 ## Architecture
 
 Reuse the existing Market Resolver, Skills, connector catalog and computer contracts. Add app-specific adapters only for a measured capability gap. Contract availability, passing tests, pairing, heartbeat and an end-to-end authorized action are separate readiness gates.
+
+## Native command policy
+
+Native processes require both the explicit process capability and a local `native-process-policy.json` in the host state directory. Missing, empty or invalid policies disable advertisement and execution. The owner provisions version 1 with `commands`, each containing an exact `botId`, relative `cwd`, and complete `argv` beginning with an absolute executable path. There are no argument wildcards, prefix matches or remote policy mutation commands. Changes take effect on the next request.
+
+Each approved command is trusted native code running with the Windows user's permissions. The workspace check constrains its working directory; it is not filesystem isolation. Approve only reviewed fixed commands, including any scripts they load. Arbitrary shell or interpreter input requires a separate OS isolation boundary. Child processes receive only Windows startup paths and temporary-directory settings; host tokens, connection secrets and Node injection options are excluded.
