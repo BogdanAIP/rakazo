@@ -36,7 +36,25 @@ export class NautilusPaperEngine implements PaperPerpetualEngine {
   readonly id = "nautilus";
   readonly version = "1.231.0";
   private readonly accounts = new Map<string, Cached>();
+  private readonly operations = new Map<string, Promise<unknown>>();
+  private readonly starting = new Map<string, object>();
+  private disposed = false;
   constructor(private readonly options: { pythonCommand: string; scriptPath: string }) {}
+  private runAccount<T>(accountId: string, action: () => Promise<T>): Promise<T> {
+    const previous = this.operations.get(accountId) ?? Promise.resolve();
+    const operation = previous
+      .catch(() => undefined)
+      .then(() => {
+        if (this.disposed) throw new Error("Nautilus PAPER engine disposed");
+        return action();
+      });
+    this.operations.set(accountId, operation);
+    const clear = () => {
+      if (this.operations.get(accountId) === operation) this.operations.delete(accountId);
+    };
+    void operation.then(clear, clear);
+    return operation;
+  }
   private armIdleEviction(accountId: string, cached: Cached): void {
     if (cached.idleTimer) clearTimeout(cached.idleTimer);
     cached.idleTimer = setTimeout(
@@ -53,7 +71,7 @@ export class NautilusPaperEngine implements PaperPerpetualEngine {
   /** Replay committed native batches before entering a serializable transaction.
    * Cached state is accepted only when its last output matches the DB journal.
    */
-  async prepare(
+  private async prepareAccount(
     config: PaperPerpetualEngineConfig,
     committed: readonly Readonly<{
       input: PaperPerpetualEngineBatch;
@@ -80,10 +98,17 @@ export class NautilusPaperEngine implements PaperPerpetualEngine {
     }
     try {
       if (!cached) {
+        const token = {};
+        this.starting.set(config.accountId, token);
         const process = await NautilusPaperProcess.start(this.options, {
           ...config,
           engineVersion: "1.231.0",
         });
+        if (this.disposed || this.starting.get(config.accountId) !== token) {
+          process.dispose();
+          throw new Error("Nautilus PAPER startup invalidated");
+        }
+        this.starting.delete(config.accountId);
         cached = { process, configHash, sequence: 0, outputHash: null, idleTimer: null };
         this.accounts.set(config.accountId, cached);
         let cursor = 0;
@@ -117,6 +142,15 @@ export class NautilusPaperEngine implements PaperPerpetualEngine {
       throw error;
     }
   }
+  prepare(
+    config: PaperPerpetualEngineConfig,
+    committed: readonly Readonly<{
+      input: PaperPerpetualEngineBatch;
+      output: PaperPerpetualEngineSnapshot;
+    }>[],
+  ): Promise<void> {
+    return this.runAccount(config.accountId, () => this.prepareAccount(config, committed));
+  }
   async apply(
     config: PaperPerpetualEngineConfig,
     committed: readonly Readonly<{
@@ -125,29 +159,34 @@ export class NautilusPaperEngine implements PaperPerpetualEngine {
     }>[],
     batch: PaperPerpetualEngineBatch,
   ): Promise<PaperPerpetualEngineSnapshot> {
-    if (batch.sequence !== committed.length + 1)
-      throw new Error("Nautilus PAPER configuration or sequence mismatch");
-    await this.prepare(config, committed);
-    const cached = this.accounts.get(config.accountId);
-    if (!cached) throw new Error("Nautilus PAPER unavailable after recovery");
-    try {
-      const result = await cached.process.apply(batch);
-      cached.sequence = result.sequence;
-      cached.outputHash = digest(result);
-      this.armIdleEviction(config.accountId, cached);
-      return result;
-    } catch (error) {
-      this.invalidate(config.accountId);
-      throw error;
-    }
+    return this.runAccount(config.accountId, async () => {
+      if (batch.sequence !== committed.length + 1)
+        throw new Error("Nautilus PAPER configuration or sequence mismatch");
+      await this.prepareAccount(config, committed);
+      const cached = this.accounts.get(config.accountId);
+      if (!cached) throw new Error("Nautilus PAPER unavailable after recovery");
+      try {
+        const result = await cached.process.apply(batch);
+        cached.sequence = result.sequence;
+        cached.outputHash = digest(result);
+        this.armIdleEviction(config.accountId, cached);
+        return result;
+      } catch (error) {
+        this.invalidate(config.accountId);
+        throw error;
+      }
+    });
   }
   invalidate(accountId: string): void {
+    this.starting.delete(accountId);
     const cached = this.accounts.get(accountId);
     this.accounts.delete(accountId);
     if (cached?.idleTimer) clearTimeout(cached.idleTimer);
     cached?.process.dispose();
   }
   dispose(): void {
+    this.disposed = true;
+    this.starting.clear();
     for (const accountId of this.accounts.keys()) this.invalidate(accountId);
   }
 }

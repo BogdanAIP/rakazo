@@ -90,3 +90,49 @@ it("refuses a corrupted committed native replay before trading", async () => {
   expect(engine.requiresRecovery(config.accountId)).toBe(true);
   expect(dispose).toHaveBeenCalledTimes(1);
 });
+
+it("coalesces concurrent account preparation without abandoning a native child", async () => {
+  let ready!: (process: NautilusPaperProcess) => void;
+  const dispose = vi.fn();
+  const native = { dispose, apply: vi.fn() } as unknown as NautilusPaperProcess;
+  vi.mocked(NautilusPaperProcess.start).mockReturnValue(
+    new Promise((resolve) => {
+      ready = resolve;
+    }),
+  );
+  const engine = new NautilusPaperEngine({ pythonCommand: "stub", scriptPath: "stub" });
+  const first = engine.prepare(config, []);
+  const second = engine.prepare(config, []);
+  await vi.waitFor(() => expect(NautilusPaperProcess.start).toHaveBeenCalledTimes(1));
+  ready(native);
+  await Promise.all([first, second]);
+  expect(NautilusPaperProcess.start).toHaveBeenCalledTimes(1);
+  engine.dispose();
+  expect(dispose).toHaveBeenCalledTimes(1);
+});
+
+it.each(["invalidate", "dispose"] as const)(
+  "retires a native child when %s happens during startup",
+  async (action) => {
+    let ready!: (process: NautilusPaperProcess) => void;
+    const dispose = vi.fn();
+    const native = { dispose, apply: vi.fn() } as unknown as NautilusPaperProcess;
+    vi.mocked(NautilusPaperProcess.start).mockReturnValue(
+      new Promise((resolve) => {
+        ready = resolve;
+      }),
+    );
+    const engine = new NautilusPaperEngine({ pythonCommand: "stub", scriptPath: "stub" });
+    const pending = engine.prepare(config, []);
+    const rejected = expect(pending).rejects.toThrow("startup invalidated");
+    await vi.waitFor(() => expect(NautilusPaperProcess.start).toHaveBeenCalledTimes(1));
+    if (action === "dispose") engine.dispose();
+    else engine.invalidate(config.accountId);
+    ready(native);
+    await rejected;
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(engine.requiresRecovery(config.accountId)).toBe(true);
+    engine.dispose();
+    expect(dispose).toHaveBeenCalledTimes(1);
+  },
+);
