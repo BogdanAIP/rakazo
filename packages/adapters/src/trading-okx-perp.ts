@@ -36,7 +36,22 @@ export async function fetchOkxPaperPerpetualSnapshot(
 ): Promise<PaperPerpetualSnapshot> {
   if (!/^[A-Z0-9]{1,20}-USDT-SWAP$/.test(instrument))
     throw new Error("Unsupported linear USDT perpetual");
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const publicFetch = options.fetchImpl ?? fetch;
+  const fetchImpl: typeof fetch = async (input, init) => {
+    try {
+      return await publicFetch(input, init);
+    } catch (error) {
+      // Retry one failed keyless GET with a fresh timeout signal. Malformed
+      // responses and stale observations still fail the existing validators.
+      if (
+        !(error instanceof Error) ||
+        !["TimeoutError", "TypeError"].includes(error.name) ||
+        init?.method !== "GET"
+      )
+        throw error;
+      return publicFetch(input, { ...init, signal: AbortSignal.timeout(10_000) });
+    }
+  };
   const get = async (path: string) => {
     const response = await fetchImpl(ORIGIN + path, {
       method: "GET",
@@ -131,11 +146,33 @@ export async function fetchOkxPaperPerpetualSnapshot(
   const tiers = allTiers.filter((row) => row.tier === "1");
   if (tiers.length !== 1) throw new Error("First maintenance tier unavailable");
   const tier = tiers[0]!;
+  // OKX publishes inclusive ranges: the next tier can begin one lot after
+  // the preceding maximum. Normalize that untradeable gap to a shared boundary,
+  // where the core deliberately applies the stricter adjacent leverage limit.
+  const leverageTiers = allTiers.map((row, index) => {
+    const min = amount(toBase(row.minSz));
+    const max = amount(toBase(row.maxSz));
+    const previous = index === 0 ? 0n : amount(toBase(allTiers[index - 1]!.maxSz));
+    if (
+      max < min ||
+      max <= previous ||
+      (min !== previous && !(index > 0 && min === previous + amount(lotBase)))
+    ) {
+      throw new Error("Non-contiguous perpetual position tiers");
+    }
+    return {
+      id: row.tier,
+      minQuantityBase: format(previous),
+      maxQuantityBase: format(max),
+      maxLeverage: Number(row.maxLever),
+    };
+  });
+
   const mmr = (amount(tier.mmr) * 10000n + scale - 1n) / scale;
   if (mmr < 1n || mmr > 1000n) throw new Error("Unsupported maintenance tier");
   const [context, history] = await Promise.all([
-    fetchOkxPublicPerpContext(market, options),
-    fetchOkxClosedOneHourHistory(market, options),
+    fetchOkxPublicPerpContext(market, { ...options, fetchImpl }),
+    fetchOkxClosedOneHourHistory(market, { ...options, fetchImpl }),
   ]);
   const now = options.now ?? new Date();
   const bookAt = new Date(Number(book.ts)).toISOString();
@@ -181,12 +218,7 @@ export async function fetchOkxPaperPerpetualSnapshot(
           .update(JSON.stringify([instrument, allTiers]))
           .digest("hex"),
       observedAt: now.toISOString(),
-      tiers: allTiers.map((row) => ({
-        id: row.tier,
-        minQuantityBase: toBase(row.minSz),
-        maxQuantityBase: toBase(row.maxSz),
-        maxLeverage: Number(row.maxLever),
-      })),
+      tiers: leverageTiers,
     },
     book: {
       venue: "okx",

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchOkxPublicCatalog, fetchOkxPublicSpotTickers } from "./trading-okx-public.js";
+import {
+  fetchOkxPublicCatalog,
+  fetchOkxPublicPerpetualTickers,
+  fetchOkxPublicSpotTickers,
+} from "./trading-okx-public.js";
 
 const now = new Date("2026-10-03T10:00:00.000Z");
 const futureExpiry = "1798790400000";
@@ -243,5 +247,81 @@ describe("OKX public book availability", () => {
         }),
       ).rejects.toThrow();
     }
+  });
+});
+
+describe("OKX USDT perpetual liquidity prefilter", () => {
+  it("reuses public SWAP tickers and converts base turnover to estimated quote turnover", async () => {
+    const markets = (await run([wrap([]), wrap([swap()]), wrap([])])).markets;
+    const fake = transport([
+      wrap([
+        {
+          instType: "SWAP",
+          instId: "DOGE-USDT-SWAP",
+          bidPx: "0.10",
+          askPx: "0.101",
+          volCcy24h: "2000000",
+          ts: String(now.getTime()),
+        },
+        {
+          instType: "SWAP",
+          instId: "UNKNOWN-USDT-SWAP",
+          bidPx: "1",
+          askPx: "1.1",
+          volCcy24h: "10",
+          ts: String(now.getTime()),
+        },
+      ]),
+    ]);
+    const result = await fetchOkxPublicPerpetualTickers(markets, {
+      now,
+      fetchImpl: fake.fetchImpl,
+    });
+    expect(result).toMatchObject([
+      { venue: "okx", kind: "perpetual", symbol: "DOGE-USDT-SWAP", quoteVolume24h: "201000.00" },
+    ]);
+    expect(fake.mock.mock.calls.map((call) => String(call[0]))).toEqual([
+      "https://www.okx.com/api/v5/market/tickers?instType=SWAP",
+    ]);
+    await expect(
+      fetchOkxPublicPerpetualTickers(
+        [...markets, { ...markets[0]!, quote: "USD", symbol: "BTC-USD-SWAP" }],
+        { now, fetchImpl: fake.fetchImpl },
+      ),
+    ).rejects.toThrow("USDT perpetuals only");
+  });
+
+  it("skips unusable books and rejects duplicates or incompatible ticker types", async () => {
+    const markets = (await run([wrap([]), wrap([swap()]), wrap([])])).markets;
+    const base = {
+      instType: "SWAP",
+      instId: "DOGE-USDT-SWAP",
+      volCcy24h: "10000",
+      ts: String(now.getTime()),
+    };
+    await expect(
+      fetchOkxPublicPerpetualTickers(markets, {
+        now,
+        fetchImpl: transport([wrap([{ ...base, bidPx: "", askPx: "0.1" }])]).fetchImpl,
+      }),
+    ).resolves.toEqual([]);
+    await expect(
+      fetchOkxPublicPerpetualTickers(markets, {
+        now,
+        fetchImpl: transport([
+          wrap([
+            { ...base, bidPx: "0.1", askPx: "0.11" },
+            { ...base, bidPx: "0.1", askPx: "0.11" },
+          ]),
+        ]).fetchImpl,
+      }),
+    ).rejects.toThrow("Duplicate");
+    await expect(
+      fetchOkxPublicPerpetualTickers(markets, {
+        now,
+        fetchImpl: transport([wrap([{ ...base, instType: "SPOT", bidPx: "0.1", askPx: "0.11" }])])
+          .fetchImpl,
+      }),
+    ).rejects.toThrow("Mismatched OKX ticker type");
   });
 });

@@ -61,7 +61,25 @@ export function parsePerpetualControl(row: {
 }): PerpetualControl {
   if (perpetualPaperHash(row.control) !== row.controlSha256)
     throw new PerpetualPaperIntegrityError("Futures control integrity failed");
-  return PerpetualControlSchema.parse(row.control);
+  // Verify legacy JSON before translating its pre-release client branding.
+  // New commands and persisted controls use only the external capability.
+  let control = row.control;
+  if (control && typeof control === "object" && !Array.isArray(control)) {
+    const value = control as Record<string, unknown>;
+    if (value.researchMode === "chatgpt-r" || "pendingChatgptProposal" in value) {
+      if ("pendingExternalProposal" in value && "pendingChatgptProposal" in value)
+        throw new PerpetualPaperIntegrityError("Conflicting external proposal aliases");
+      const { pendingChatgptProposal, ...rest } = value;
+      control = {
+        ...rest,
+        researchMode: value.researchMode === "chatgpt-r" ? "external" : value.researchMode,
+        ...(Object.hasOwn(value, "pendingChatgptProposal")
+          ? { pendingExternalProposal: pendingChatgptProposal }
+          : {}),
+      };
+    }
+  }
+  return PerpetualControlSchema.parse(control);
 }
 export async function perpetualDatabaseClock(tx: Prisma.TransactionClient): Promise<Date> {
   const [row] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`;
@@ -135,6 +153,8 @@ const initialControl = (): PerpetualControl => ({
   protectionExpiresAt: null,
   instruments: [],
   source: null,
+  researchMode: "model",
+  pendingExternalProposal: null,
   orders: [],
   plans: [],
   closeAll: false,
@@ -252,13 +272,49 @@ export async function commandOwnedPerpetualWorkspace(
             perpetualPaperHash(duplicate.request) !== requestHash
           )
             throw new Error("Conflicting futures command retry");
-          return { revision: duplicate.revision };
+          return { revision: duplicate.revision, duplicate: true };
         }
         if (row.revision !== input.expectedRevision)
           throw new Error("Futures session changed; refresh the account");
         const now = await perpetualDatabaseClock(tx);
         const clock = now.getTime();
-        if (input.action === "set_leverage") {
+        if (input.action === "submit_external_proposal") {
+          if (
+            control.sessionStatus !== "active" ||
+            control.researchMode !== "external" ||
+            !control.source ||
+            !control.expiresAt ||
+            Date.parse(control.expiresAt) <= clock ||
+            control.closeAll ||
+            control.orders.length
+          ) {
+            throw new Error("External proposal requires an active, idle PAPER research session");
+          }
+          if (
+            control.pendingExternalProposal &&
+            Date.parse(control.pendingExternalProposal.expiresAt) > clock
+          )
+            throw new Error("Previous External proposal is still pending");
+          const decision = input.decision;
+          if (decision.kind === "proposal" && !control.instruments.includes(decision.instrument))
+            throw new Error("Proposal instrument outside owner-approved session markets");
+          if (
+            (decision.kind === "close" ||
+              decision.kind === "reduce" ||
+              decision.kind === "tighten_stop") &&
+            !state.openPositions.some((position) => position.positionId === decision.positionId)
+          )
+            throw new Error("External proposal references an unknown open position");
+          control.pendingExternalProposal = {
+            commandId: input.commandId,
+            submittedAt: now.toISOString(),
+            expiresAt: new Date(clock + 120_000).toISOString(),
+            decision,
+          };
+          // A one-time owner submission triggers the existing protected worker;
+          // it does not allocate capital or execute exchange/broker commands.
+          control.lastResearchAt = null;
+        } else if (input.action === "set_leverage") {
           for (const instrument of input.instruments) {
             const evidence = limits.find((l) => l.instrument === instrument);
             const gross = state.openPositions
@@ -278,6 +334,7 @@ export async function commandOwnedPerpetualWorkspace(
             if (result.status !== "allowed") throw new Error("Futures leverage setting refused");
           }
           control.maxLeverage = input.maxLeverage;
+          control.pendingExternalProposal = null;
           control.orders = [];
           control.lastResearchAt = null;
         } else if (input.action === "start") {
@@ -298,7 +355,41 @@ export async function commandOwnedPerpetualWorkspace(
           ).toISOString();
           control.instruments = input.instruments;
           control.source = input.source;
+          control.researchMode = input.researchMode ?? "model";
+          control.pendingExternalProposal = null;
           control.plans = [];
+          control.lastResearchAt = null;
+        } else if (input.action === "resume") {
+          if (
+            control.sessionStatus !== "paused" ||
+            !control.startedAt ||
+            !control.source ||
+            !control.instruments.length ||
+            control.closeAll ||
+            control.orders.length
+          )
+            throw new Error("Only a paused, settled-order PAPER session can resume");
+          const positionIds = new Set(state.openPositions.map((position) => position.positionId));
+          if (
+            positionIds.size === 0 ||
+            control.plans.length !== positionIds.size ||
+            new Set(control.plans.map((plan) => plan.positionId)).size !== positionIds.size ||
+            control.plans.some((plan) => !positionIds.has(plan.positionId)) ||
+            state.openPositions.some(
+              (position) => !control.instruments.includes(position.instrument),
+            )
+          )
+            throw new Error("Resume requires intact position protection plans");
+          await verifyPerpetualSource(tx, owner, control.source);
+          control.sessionStatus = "active";
+          control.expiresAt = new Date(clock + input.durationMinutes * 60000).toISOString();
+          control.protectionExpiresAt = new Date(
+            Math.max(
+              Date.parse(control.protectionExpiresAt ?? now.toISOString()),
+              Date.parse(control.expiresAt) + input.protectionMinutes * 60000,
+            ),
+          ).toISOString();
+          control.pendingExternalProposal = null;
           control.lastResearchAt = null;
         } else if (input.action === "protect") {
           if (!state.openPositions.length) throw new Error("No futures positions need protection");
@@ -309,6 +400,7 @@ export async function commandOwnedPerpetualWorkspace(
             ),
           ).toISOString();
         } else {
+          control.pendingExternalProposal = null;
           control.sessionStatus = input.action === "pause" ? "paused" : "ended";
           control.orders = [];
           if (input.action !== "close_all" && control.protectionExpiresAt) {
@@ -347,7 +439,7 @@ export async function commandOwnedPerpetualWorkspace(
             revision,
           },
         });
-        return { revision };
+        return { revision, duplicate: false };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
@@ -405,6 +497,19 @@ export async function readOwnedPerpetualWorkspace(
           protectionExpiresAt: control.protectionExpiresAt,
           runtimeError: control.runtimeError,
           instruments: control.instruments,
+          researchMode: control.researchMode,
+          pendingExternalProposal:
+            active &&
+            control.pendingExternalProposal &&
+            Date.parse(control.pendingExternalProposal.submittedAt) <= now.getTime() &&
+            Date.parse(control.pendingExternalProposal.expiresAt) > now.getTime()
+              ? {
+                  commandId: control.pendingExternalProposal.commandId,
+                  submittedAt: control.pendingExternalProposal.submittedAt,
+                  expiresAt: control.pendingExternalProposal.expiresAt,
+                  kind: control.pendingExternalProposal.decision.kind,
+                }
+              : null,
           lastDecision: control.lastDecision,
           openOrders: control.orders.map((o) => ({
             orderId: o.orderId,
@@ -451,6 +556,8 @@ export async function readOwnedPerpetualWorkspace(
           protectionExpiresAt: null,
           runtimeError: "integrity_blocked",
           instruments: [],
+          researchMode: "model" as const,
+          pendingExternalProposal: null,
           lastDecision: null,
           openOrders: [],
           pendingClose: false,
@@ -502,6 +609,110 @@ export async function readPerpetualWake(
     ),
   );
 }
+
+/** Waiting for external research grants no execution work. Advance only the
+ * owner-scoped scheduler; a flat idle account needs neither quotes nor an engine. */
+export async function completeIdleExternalPerpetualWake(
+  prisma: PrismaClient,
+  owner: PerpetualOwner,
+  key: { ledgerId: string; revision: number; scheduledFor: string },
+) {
+  return withTransactionRetry(() =>
+    prisma.$transaction(
+      async (tx) => {
+        const { row, control } = await lockOwnedPerpetualWorkspace(tx, owner, key.ledgerId);
+        const now = await perpetualDatabaseClock(tx);
+        if (
+          row.revision !== key.revision ||
+          row.nextScheduledFor?.toISOString() !== key.scheduledFor
+        )
+          return true;
+        if (Date.parse(key.scheduledFor) > now.getTime()) return true;
+        const pending = control.pendingExternalProposal;
+        if (
+          control.researchMode !== "external" ||
+          control.closeAll ||
+          control.orders.length ||
+          (pending &&
+            Date.parse(pending.submittedAt) <= now.getTime() &&
+            Date.parse(pending.expiresAt) > now.getTime())
+        )
+          return false;
+        const recordedResearch = await tx.tradingPaperPerpetualTick.findUnique({
+          where: {
+            ledgerId_revision_scheduledFor_stage: {
+              ledgerId: key.ledgerId,
+              revision: key.revision,
+              scheduledFor: new Date(key.scheduledFor),
+              stage: "research",
+            },
+          },
+          select: { committedAt: true },
+        });
+        if (recordedResearch && !recordedResearch.committedAt) return false;
+        const { state } = await recoverPerpetualPaperInTransaction(tx, owner, key.ledgerId);
+        if (state.openPositions.length) return false;
+        const entries =
+          control.sessionStatus === "active" &&
+          control.expiresAt !== null &&
+          Date.parse(control.expiresAt) > now.getTime();
+        await savePerpetualControl(
+          tx,
+          key.ledgerId,
+          key.revision,
+          { ...control, pendingExternalProposal: null, lastResearchAt: now.toISOString() },
+          entries ? new Date(now.getTime() + 60000) : null,
+        );
+        return true;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    ),
+  );
+}
+
+/** Expired entry authority must not strand an already protected position.
+ * Keep the control/ledger intact and advance only the owner-scoped scheduler.
+ * All time and identity decisions are made under the DB transaction lock. */
+export async function reschedulePerpetualProtectionAfterResearchExpiry(
+  prisma: PrismaClient,
+  owner: PerpetualOwner,
+  key: { ledgerId: string; revision: number; scheduledFor: string },
+) {
+  return withTransactionRetry(() =>
+    prisma.$transaction(
+      async (tx) => {
+        const { row, control } = await lockOwnedPerpetualWorkspace(tx, owner, key.ledgerId);
+        const now = await perpetualDatabaseClock(tx);
+        if (
+          row.revision !== key.revision ||
+          row.nextScheduledFor?.toISOString() !== key.scheduledFor ||
+          Date.parse(key.scheduledFor) > now.getTime()
+        )
+          return false;
+        const entries =
+          control.sessionStatus === "active" &&
+          control.expiresAt !== null &&
+          Date.parse(control.expiresAt) > now.getTime();
+        if (entries) return false;
+        const { state } = await recoverPerpetualPaperInTransaction(tx, owner, key.ledgerId);
+        const protects =
+          state.openPositions.length > 0 &&
+          control.protectionExpiresAt !== null &&
+          Date.parse(control.protectionExpiresAt) > now.getTime();
+        if (!protects) return false;
+        await savePerpetualControl(
+          tx,
+          key.ledgerId,
+          key.revision,
+          control,
+          new Date(now.getTime() + 60000),
+        );
+        return true;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    ),
+  );
+}
 export async function failPerpetualWake(
   prisma: PrismaClient,
   owner: PerpetualOwner,
@@ -544,6 +755,7 @@ export async function pausePerpetualAfterRestart(
         if (control.sessionStatus !== "active") return;
         control.sessionStatus = "paused";
         control.orders = [];
+        control.pendingExternalProposal = null;
         control.runtimeError = "restart_paused";
         const now = await perpetualDatabaseClock(tx);
         const { state } = await recoverPerpetualPaperInTransaction(tx, owner, ledgerId);
@@ -610,6 +822,21 @@ export async function recordPerpetualResearchTick(
             throw new Error("Futures research integrity failed");
           return existing;
         }
+        if (model?.provider === "external-proposal") {
+          const pending = control.pendingExternalProposal;
+          if (
+            control.researchMode !== "external" ||
+            !pending ||
+            perpetualPaperHash(pending.decision) !== perpetualPaperHash(decision)
+          ) {
+            throw new Error("Changed External proposal refused before risk gate");
+          }
+          if (
+            Date.parse(pending.expiresAt) <= clock.getTime() ||
+            Date.parse(pending.submittedAt) > clock.getTime()
+          )
+            decision = { kind: "no_trade", reason: "Срок внешнего предложения истёк" };
+        }
         if (decision.kind !== "no_trade") {
           const now = await perpetualDatabaseClock(tx);
           if (
@@ -620,6 +847,15 @@ export async function recordPerpetualResearchTick(
           )
             return null;
           await verifyPerpetualSource(tx, owner, control.source);
+        }
+        if (model?.provider === "external-proposal") {
+          await savePerpetualControl(
+            tx,
+            key.ledgerId,
+            row.revision,
+            { ...control, pendingExternalProposal: null },
+            row.nextScheduledFor,
+          );
         }
         return tx.tradingPaperPerpetualTick.create({
           data: {

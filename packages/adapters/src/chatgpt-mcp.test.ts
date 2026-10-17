@@ -55,6 +55,34 @@ describe("ChatGPT Rakazo procedure projection", () => {
     expect((await describeProcedure("trading/perpContext")).mode).toBe("read");
   });
 
+  it("lets ChatGPT read owner PAPER state and futures scans without granting execution", async () => {
+    const paths = discoverProcedurePaths();
+    for (const procedure of [
+      "trading/perpetualMarketPrepare",
+      "trading/perpetualLeverageRead",
+      "trading/perpetualWorkspaceRead",
+      "trading/perpetualJournalList",
+      "trading/perpetualJournalRead",
+      "trading/marketPrepare",
+      "trading/workspaceRead",
+      "trading/journalList",
+      "trading/journalRead",
+    ]) {
+      expect(paths).toContain(procedure);
+      expect(classifyProcedure(procedure)).toBe("read");
+      expect((await describeProcedure(procedure)).mode).toBe("read");
+    }
+    for (const procedure of [
+      "trading/perpetualWorkspaceCommand",
+      "trading/workspaceCommand",
+      "trading/perpetualExperimentsCreate",
+      "trading/accountCreate",
+    ]) {
+      expect(paths).toContain(procedure);
+      expect(classifyProcedure(procedure)).not.toBe("read");
+    }
+  });
+
   it("returns concrete JSON input schemas from the runtime contract", async () => {
     const description = await describeProcedure("threads/send");
     const input = description.inputSchema as {

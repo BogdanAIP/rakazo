@@ -1,9 +1,10 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { buildSkillMd } from "@rakazo/core";
 import {
   createDb,
   fillApprovedTradingPaperReservation,
+  parsePerpetualControl,
   readOwnedPerpetualWorkspace,
   readTradingPaperWorkerFillPreflight,
   readTradingPaperWorkerMarketTargetPreflight,
@@ -353,6 +354,61 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
         where: { spaceId: ledger.spaceId, ownerUserId: ledger.ownerUserId },
       }),
     ).toBe(3);
+    // The broad OKX market is publicly scanned; the fixture keeps E2E independent of exchange uptime.
+    const marketsCapturedAt = new Date().toISOString();
+    const marketCandidates = ["BTC", "ETH", "SOL"].map((base, index) => {
+      const symbol = base + "-USDT-SWAP";
+      return {
+        market: {
+          venue: "okx",
+          kind: "perpetual",
+          symbol,
+          base,
+          quote: "USDT",
+          status: "active",
+          priceIncrement: "0.01",
+          quantityIncrement: "0.001",
+          minNotional: null,
+          expiryAt: null,
+        },
+        ticker: {
+          venue: "okx",
+          kind: "perpetual",
+          symbol,
+          observedAt: marketsCapturedAt,
+          fetchedAt: marketsCapturedAt,
+          bid: "100",
+          ask: "100.01",
+          quoteVolume24h: String(100_000_000 - index * 20_000_000),
+        },
+        spreadBps: 1,
+      };
+    });
+    await page.route("**/rpc/trading/list", (route) =>
+      route.fulfill({
+        json: {
+          json: {
+            fetchedAt: new Date().toISOString(),
+            candidates: marketCandidates,
+            excluded: [],
+          },
+        },
+      }),
+    );
+    await expect(page.locator("#futures-pairs")).toHaveValue("");
+    await page.getByRole("button", { name: "Сканировать фьючерсы OKX" }).click();
+    await expect(
+      page.getByRole("button", { name: "Подобрать криптовалюты для моего профиля" }),
+    ).toBeEnabled();
+    await page.getByRole("button", { name: "Подобрать криптовалюты для моего профиля" }).click();
+    await expect(page.locator("#futures-pairs")).toHaveValue(
+      "BTC-USDT-SWAP, ETH-USDT-SWAP, SOL-USDT-SWAP",
+    );
+    await page.getByLabel("Поиск среди прошедших фильтр").fill("ETH");
+    await expect(
+      page.getByRole("region", { name: "Подходящие бессрочные фьючерсы" }),
+    ).toContainText("ETH-USDT-SWAP");
+    await page.unroute("**/rpc/trading/list");
     await page.getByRole("button", { name: "Проверить плечо", exact: true }).click();
     await expect(page.getByLabel("Плечо", { exact: true })).toBeVisible();
     await page.getByLabel("Плечо", { exact: true }).fill("21");
@@ -367,7 +423,22 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
         ledgerId,
       ),
     ).toMatchObject({ maxLeverage: 3 });
+    // The journal refresh triggered by saving leverage must not unmount the
+    // controls and silently discard the explicitly selected market universe.
+    await expect(page.locator("#futures-pairs")).toHaveValue(
+      "BTC-USDT-SWAP, ETH-USDT-SWAP, SOL-USDT-SWAP",
+    );
     await captureScreenshot(page, testInfo, "futures-leverage-setting");
+    await expect(page.getByLabel("Источник торговых решений")).toHaveValue("external");
+    await page.getByLabel("Источник торговых решений").selectOption("model");
+    await expect(
+      page.getByText(/Без нового предложения ChatGPT\/R бот не открывает позиции/),
+    ).not.toBeVisible();
+    await captureScreenshot(page, testInfo, "futures-autonomous-source");
+    await page.getByLabel("Источник торговых решений").selectOption("external");
+    await expect(
+      page.getByText(/Без нового предложения ChatGPT\/R бот не открывает позиции/),
+    ).toBeVisible();
     await page.getByLabel("Длительность новых входов").selectOption("15");
     await page.getByRole("button", { name: "Проверить запуск фьючерсов" }).click();
     await expect(page.getByLabel("Проверка запуска фьючерсов")).toBeVisible();
@@ -380,6 +451,71 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
     expect(await db.prisma.tradingPaperPerpetualEvent.count({ where: { ledgerId } })).toBe(0);
     await captureScreenshot(page, testInfo, "futures-reviewed-start");
     await page.getByRole("button", { name: "Запустить PAPER-фьючерсы", exact: true }).click();
+    // Clicking only dispatches an async Start handler; it does NOT await its RPC.
+    // Wait for the DB revision/session to be committed before reading the control.
+    // Do not mistake the prior, correctly idle "model" mode for a bad Start.
+    await expect
+      .poll(
+        async () => {
+          const row = await db.prisma.tradingPaperPerpetualWorkspace.findUnique({
+            where: { ledgerId },
+          });
+          if (!row || row.revision < 2) return "await_start_commit";
+          const control = parsePerpetualControl(row);
+          if (control.sessionStatus !== "active") return "await_active_session";
+          return control.researchMode;
+        },
+        { timeout: 20_000 },
+      )
+      .toBe("external");
+    // Exercise the authenticated ChatGPT/R submission path; no model or Codex OAuth is required.
+    await expect
+      .poll(
+        async () => {
+          const state = await readOwnedPerpetualWorkspace(
+            db.prisma,
+            { spaceId: ledger.spaceId, userId: ledger.ownerUserId },
+            ledgerId,
+          );
+          return state?.status === "verified" ? state.researchMode : "await_verified_ledger";
+        },
+        { timeout: 20_000 },
+      )
+      .toBe("external");
+    const chatgptPaperSession = await readOwnedPerpetualWorkspace(
+      db.prisma,
+      { spaceId: ledger.spaceId, userId: ledger.ownerUserId },
+      ledgerId,
+    );
+    expect(chatgptPaperSession?.status).toBe("verified");
+    const chatgptRResponse = await page.request.post("/rpc/trading/perpetualWorkspaceCommand", {
+      headers: { "x-rakazo-space-id": ledger.spaceId },
+      data: {
+        json: {
+          action: "submit_external_proposal",
+          ledgerId,
+          commandId: randomUUID(),
+          expectedRevision: chatgptPaperSession!.revision,
+          decision: {
+            kind: "proposal",
+            instrument: "BTC-USDT-SWAP",
+            side: "long",
+            leverage: 2,
+            quantityBase: "1",
+            orderType: "market",
+            limitPriceQuote: null,
+            stopPriceQuote: "97",
+            takeProfitPriceQuote: "110",
+            recoverySteps: [
+              { stepId: "first-retest", triggerPriceQuote: "97.8", allocationPercent: 50 },
+              { stepId: "second-retest", triggerPriceQuote: "97.4", allocationPercent: 50 },
+            ],
+            rationale: "ChatGPT/R approved research proposal for virtual PAPER only",
+          },
+        },
+      },
+    });
+    expect(chatgptRResponse.ok(), await chatgptRResponse.text()).toBe(true);
     await expect(
       page
         .getByRole("table", { name: "Открытые фьючерсные позиции" })
@@ -404,6 +540,28 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
       ledgerId,
     );
     expect(paused).toMatchObject({ sessionStatus: "paused", openOrders: [] });
+    const held = await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+      where: { ledgerId },
+    });
+    const heldPlans = parsePerpetualControl(held).plans;
+    await page.getByRole("button", { name: "Проверить возобновление", exact: true }).click();
+    await expect(page.getByLabel("Проверка возобновления фьючерсов")).toBeVisible();
+    await page.locator("#futures-resume-duration").selectOption("15");
+    await captureScreenshot(page, testInfo, "futures-reviewed-resume");
+    await page.getByRole("button", { name: "Возобновить PAPER-фьючерсы", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "ИИ-торговля · Торговая сессия", exact: true }),
+    ).toBeVisible();
+    const resumed = await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+      where: { ledgerId },
+    });
+    expect(parsePerpetualControl(resumed)).toMatchObject({
+      sessionStatus: "active",
+      researchMode: "external",
+      plans: heldPlans,
+    });
+    expect(resumed.revision).toBeGreaterThan(held.revision);
+    await captureScreenshot(page, testInfo, "futures-resumed-with-position");
     await page.getByRole("button", { name: "Закрыть все виртуальные позиции" }).click();
     await page.getByRole("button", { name: "Подтвердить виртуальное закрытие" }).click();
     if (!process.env.PAPER_NAUTILUS_PYTHON)

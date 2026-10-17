@@ -176,35 +176,66 @@ export async function fetchOkxPublicSpotTickers(
   markets: readonly TradingInstrument[],
   options: { fetchImpl?: typeof fetch; now?: Date } = {},
 ): Promise<TradingTicker[]> {
-  if (markets.some((market) => market.venue !== "okx" || market.kind !== "spot")) {
-    throw new Error("OKX spot tickers require OKX spot markets only");
+  return fetchOkxPublicTickers(markets, "SPOT", options);
+}
+
+/** USDT-margined perpetual tickers: volCcy24h is BASE volume on OKX derivatives,
+ * unlike spot, so quote turnover is estimated using the current bid/ask midpoint.
+ * This is a liquidity prefilter, not audited executed turnover or an order signal.
+ */
+export async function fetchOkxPublicPerpetualTickers(
+  markets: readonly TradingInstrument[],
+  options: { fetchImpl?: typeof fetch; now?: Date } = {},
+): Promise<TradingTicker[]> {
+  return fetchOkxPublicTickers(markets, "SWAP", options);
+}
+
+async function fetchOkxPublicTickers(
+  markets: readonly TradingInstrument[],
+  type: "SPOT" | "SWAP",
+  options: { fetchImpl?: typeof fetch; now?: Date } = {},
+): Promise<TradingTicker[]> {
+  const kind = type === "SPOT" ? "spot" : "perpetual";
+  if (
+    markets.some(
+      (market) =>
+        market.venue !== "okx" ||
+        market.kind !== kind ||
+        (type === "SWAP" && (market.quote !== "USDT" || !market.symbol.endsWith("-USDT-SWAP"))),
+    )
+  ) {
+    throw new Error(
+      type === "SPOT"
+        ? "OKX spot tickers require OKX spot markets only"
+        : "OKX perpetual tickers require matching USDT perpetuals only",
+    );
   }
   const known = new Set(
     markets.filter((market) => market.status === "active").map((m) => m.symbol),
   );
   if (new Set(markets.map((market) => market.symbol)).size !== markets.length) {
-    throw new Error("Duplicate OKX spot market");
+    throw new Error("Duplicate OKX market");
   }
   const fetchImpl = options.fetchImpl ?? fetch;
-  const response = await fetchImpl(ORIGIN + "/api/v5/market/tickers?instType=SPOT", {
+  const response = await fetchImpl(ORIGIN + "/api/v5/market/tickers?instType=" + type, {
     method: "GET",
     redirect: "error",
     headers: { Accept: "application/json" },
     signal: AbortSignal.timeout(10_000),
   });
-  if (!response.ok) throw new Error("OKX public spot ticker HTTP error: " + response.status);
+  if (!response.ok) throw new Error("OKX public ticker HTTP error: " + response.status);
   const body = await response.text();
-  if (body.length > MAX_BODY_CHARS) throw new Error("OKX public spot ticker response too large");
+  if (body.length > MAX_BODY_CHARS) throw new Error("OKX public ticker response too large");
   let raw: unknown;
   try {
     raw = JSON.parse(body);
   } catch {
-    throw new Error("OKX public spot ticker response is not JSON");
+    throw new Error("OKX public ticker response is not JSON");
   }
   const data = envelope.parse(raw);
-  if (data.code !== "0") throw new Error("OKX public spot ticker API error: " + data.code);
+  if (data.code !== "0") throw new Error("OKX public ticker API error: " + data.code);
   const rawTicker = z.object({
-    instType: z.literal("SPOT"),
+    instType: z.enum(["SPOT", "SWAP"]),
     instId: z.string().min(3),
     bidPx: z.string(),
     askPx: z.string(),
@@ -220,9 +251,10 @@ export async function fetchOkxPublicSpotTickers(
         ? (value as { instId?: unknown }).instId
         : null;
     if (typeof symbol !== "string" || !known.has(symbol)) continue;
-    if (seen.has(symbol)) throw new Error("Duplicate OKX public spot ticker");
+    if (seen.has(symbol)) throw new Error("Duplicate OKX public ticker");
     seen.add(symbol);
     const row = rawTicker.parse(value);
+    if (row.instType !== type) throw new Error("Mismatched OKX ticker type");
     const epoch = Number(row.ts);
     if (!Number.isSafeInteger(epoch)) throw new Error("Invalid OKX ticker timestamp");
     // An empty side is an unavailable book, not a usable execution price.
@@ -230,16 +262,25 @@ export async function fetchOkxPublicSpotTickers(
     if ([row.bidPx, row.askPx].some((price) => price === "" || /^0(?:\.0+)?$/.test(price)))
       continue;
     const observedAt = new Date(epoch).toISOString();
+    let quoteVolume24h = row.volCcy24h;
+    if (type === "SWAP") {
+      const mid = (Number(row.bidPx) + Number(row.askPx)) / 2;
+      const notional = Number(row.volCcy24h) * mid;
+      if (!Number.isFinite(notional) || notional < 0 || notional >= 1e18) {
+        throw new Error("Invalid OKX perpetual estimated quote volume");
+      }
+      quoteVolume24h = notional.toFixed(2);
+    }
     tickers.push(
       TradingTickerSchema.parse({
         venue: "okx",
-        kind: "spot",
+        kind,
         symbol,
         observedAt,
         fetchedAt,
         bid: row.bidPx,
         ask: row.askPx,
-        quoteVolume24h: row.volCcy24h,
+        quoteVolume24h,
       }),
     );
   }

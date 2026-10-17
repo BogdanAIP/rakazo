@@ -187,10 +187,26 @@ export function discoverProcedurePaths(): string[] {
     .sort();
 }
 
+/** Explicit owner-scoped PAPER data reads available to ChatGPT via R.
+ * This whitelist never grants model execution, order placement or control authority.
+ */
+const TRADING_READ_ONLY_PROCEDURES = new Set([
+  "trading/perpetualMarketPrepare",
+  "trading/perpetualLeverageRead",
+  "trading/perpetualWorkspaceRead",
+  "trading/marketPrepare",
+  "trading/workspaceRead",
+  "trading/journalList",
+  "trading/journalRead",
+  "trading/perpetualJournalList",
+  "trading/perpetualJournalRead",
+]);
+
 export function classifyProcedure(procedure: string): ProcedureMode {
   if (procedure === "threads/subscribe") return "stream";
   if (procedure === "trading/sweep") return "read";
   if (procedure === "trading/perpContext") return "read";
+  if (TRADING_READ_ONLY_PROCEDURES.has(procedure)) return "read";
 
   const action = procedure.split("/").at(-1) ?? "";
   if (DESTRUCTIVE_ACTIONS.has(action)) return "destructive";

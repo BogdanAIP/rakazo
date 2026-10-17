@@ -1,4 +1,5 @@
 import { TradingInstrumentSchema } from "@rakazo/contracts";
+import { evaluatePaperLeverage } from "@rakazo/core";
 import { describe, expect, it, vi } from "vitest";
 import { fetchOkxPaperPerpetualSnapshot, fetchOkxPublicPerpContext } from "./trading-okx-perp.js";
 
@@ -214,6 +215,78 @@ describe("PAPER OKX contract units and funding history", () => {
     });
     expect(result.history).toHaveLength(1);
     expect(fake.mock.mock.calls).toHaveLength(8);
+  });
+  it("normalizes inclusive OKX tiers separated by exactly one tradable lot", async () => {
+    const fake = publicFixture((path, rows) =>
+      path.endsWith("/position-tiers")
+        ? [rows[0], { tier: "2", minSz: "10000.01", maxSz: "50000", mmr: "0.01", maxLever: "50" }]
+        : rows,
+    );
+    const result = await fetchOkxPaperPerpetualSnapshot(market.symbol, {
+      now,
+      fetchImpl: fake.fetchImpl,
+    });
+    expect(result.leverageLimits!.tiers[1]!.minQuantityBase).toBe("1000");
+    const input = {
+      venue: "okx" as const,
+      instrument: market.symbol,
+      marginMode: "cross" as const,
+      requestedLeverage: 20,
+      ownerMaxLeverage: 100,
+      existingQuantityBase: "0",
+      proposedQuantityBase: "0.1",
+      limits: result.leverageLimits ?? null,
+      now: now.toISOString(),
+    };
+    expect(evaluatePaperLeverage(input)).toMatchObject({ status: "allowed" });
+    expect(
+      evaluatePaperLeverage({ ...input, requestedLeverage: 51, proposedQuantityBase: "1000" }),
+    ).toEqual({ status: "deny", reason: "leverage_exceeded" });
+  });
+  it("rejects tier gaps larger than one lot and overlapping tier ranges", async () => {
+    for (const minSz of ["10000.02", "9999.99"]) {
+      const fake = publicFixture((path, rows) =>
+        path.endsWith("/position-tiers")
+          ? [rows[0], { tier: "2", minSz, maxSz: "50000", mmr: "0.01", maxLever: "50" }]
+          : rows,
+      );
+      await expect(
+        fetchOkxPaperPerpetualSnapshot(market.symbol, { now, fetchImpl: fake.fetchImpl }),
+      ).rejects.toThrow("Non-contiguous perpetual position tiers");
+    }
+  });
+  it("retries one transient public transport failure with a fresh timeout signal", async () => {
+    for (const endpoint of ["/books", "/history-candles", "/mark-price"]) {
+      const fake = publicFixture();
+      const signals: Array<AbortSignal | null | undefined> = [];
+      const fetchImpl: typeof fetch = async (url, init) => {
+        if (new URL(String(url)).pathname.endsWith(endpoint)) {
+          signals.push(init?.signal);
+          if (signals.length === 1)
+            throw new DOMException("Transient public timeout", "TimeoutError");
+        }
+        return fake.fetchImpl(url, init);
+      };
+      const result = await fetchOkxPaperPerpetualSnapshot(market.symbol, { now, fetchImpl });
+      expect(result.market.symbol).toBe(market.symbol);
+      expect(signals).toHaveLength(2);
+      expect(signals[1]).not.toBe(signals[0]);
+    }
+  });
+  it("bounds persistent transport failures to two attempts", async () => {
+    const fake = publicFixture();
+    let attempts = 0;
+    const fetchImpl: typeof fetch = async (url, init) => {
+      if (new URL(String(url)).pathname.endsWith("/books")) {
+        attempts += 1;
+        throw new DOMException("Public timeout", "TimeoutError");
+      }
+      return fake.fetchImpl(url, init);
+    };
+    await expect(fetchOkxPaperPerpetualSnapshot(market.symbol, { now, fetchImpl })).rejects.toThrow(
+      "Public timeout",
+    );
+    expect(attempts).toBe(2);
   });
   it("accepts bounded public book/mark skew and rejects the exact out-of-range boundaries", async () => {
     for (const shift of [1500, 2000, -30000]) {
