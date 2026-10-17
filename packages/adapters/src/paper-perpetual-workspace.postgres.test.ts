@@ -23,6 +23,7 @@ import {
   perpetualPaperJson,
   readOwnedMarketPreparedResearch,
   readOwnedPerpetualPaperJournal,
+  readOwnedPerpetualResearchHistory,
   readOwnedPerpetualWorkspace,
   recordPerpetualResearchTick,
 } from "@rakazo/db";
@@ -176,6 +177,36 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     ],
     rationale: "Independent public fixture strategy",
   });
+
+  const compared = (value: PaperPerpetualDecision): PaperPerpetualDecision => {
+    if (value.kind !== "proposal" || value.addToPositionId) return value;
+    const other = value.instrument === "BTC-USDT-SWAP" ? "SOL-USDT-SWAP" : "BTC-USDT-SWAP";
+    return {
+      ...value,
+      comparison: {
+        asOf: new Date().toISOString(),
+        validUntil: new Date(Date.now() + 600000).toISOString(),
+        method: "Compare the same captured fixture candidates",
+        profileRationale:
+          "The selected profile keeps a bounded initial position and planned recovery risk.",
+        candidates: [
+          {
+            instrument: value.instrument,
+            verdict: "selected",
+            reason: "Confirmed fixture entry with a feasible stop",
+            facts: [{ name: "fixture mark", value: "100" }],
+          },
+          {
+            instrument: other,
+            verdict: "rejected",
+            reason: "No independent confirmation in this fixture",
+            facts: [],
+          },
+        ],
+      },
+    };
+  };
+
   beforeAll(() => {
     db = createDb(process.env.DATABASE_URL!, { poolMax: 4 });
   });
@@ -408,7 +439,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       ledgerId: id,
       commandId,
       expectedRevision,
-      decision,
+      decision: compared(decision),
     });
     await expect(
       controlPerpetualPaperWorkspace(deps(), owner, make(0, { kind: "no_trade", reason: "Idle" })),
@@ -463,6 +494,108 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     });
     expect(ticks[0]?.modelProvider).toBe("external-proposal");
     expect(ticks[0]?.decision).toMatchObject({ kind: "no_trade", reason: "ChatGPT: нет сигнала" });
+  });
+
+  it("requires a fresh, matching comparison for a new external entry and preserves it in the journal", async () => {
+    const id = await account();
+    await start(id, undefined, ["BTC-USDT-SWAP", "SOL-USDT-SWAP"], "external");
+    const first = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+    const submit = (decision: PaperPerpetualDecision) =>
+      controlPerpetualPaperWorkspace(deps(), owner, {
+        action: "submit_external_proposal",
+        ledgerId: id,
+        commandId: randomUUID(),
+        expectedRevision: first.revision,
+        decision,
+      });
+    await expect(submit(proposal("long"))).rejects.toThrow("requires a candidate comparison");
+    const valid = compared(proposal("long"));
+    const comparison = valid.comparison!;
+    for (const invalid of [
+      {
+        ...comparison,
+        asOf: new Date(Date.now() + 60000).toISOString(),
+        validUntil: new Date(Date.now() + 120000).toISOString(),
+      },
+      {
+        ...comparison,
+        asOf: new Date(Date.now() - 60000).toISOString(),
+        validUntil: new Date(Date.now() - 1).toISOString(),
+      },
+      {
+        ...comparison,
+        candidates: comparison.candidates.map((row) => ({ ...row, verdict: "rejected" as const })),
+      },
+      { ...comparison, candidates: comparison.candidates.slice(0, 1) },
+    ])
+      await expect(submit({ ...valid, comparison: invalid })).rejects.toThrow(
+        "comparison expired or disagrees",
+      );
+    expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))!.revision).toBe(
+      first.revision,
+    );
+    await submit(valid);
+    await handlePerpetualPaperWake(worker(), await payload(id, true));
+    const completed = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+    expect(completed.lastDecision).toMatchObject({ outcome: "filled", comparison });
+    expect((await state(id)).openPositions).toHaveLength(1);
+    const tick = await db.prisma.tradingPaperPerpetualTick.findFirstOrThrow({
+      where: { ledgerId: id, stage: "research" },
+      orderBy: { recordedAt: "desc" },
+    });
+    expect(tick.decision).toMatchObject({ comparison });
+    expect(tick.decisionSha256).toBe(perpetualPaperHash(tick.decision));
+
+    const next = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+    await controlPerpetualPaperWorkspace(deps(), owner, {
+      action: "submit_external_proposal",
+      ledgerId: id,
+      commandId: randomUUID(),
+      expectedRevision: next.revision,
+      decision: { kind: "no_trade", reason: "The next review has no new entry" },
+    });
+    await handlePerpetualPaperWake(worker(), await payload(id, true));
+    expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))!.lastDecision?.outcome).toBe(
+      "no_trade",
+    );
+    const history = await readOwnedPerpetualResearchHistory(db.prisma, owner, id, 20);
+    expect(history?.status).toBe("verified");
+    expect(
+      history?.decisions.some(
+        (item) =>
+          item.decision.kind === "proposal" &&
+          item.decision.comparison?.method === comparison.method,
+      ),
+    ).toBe(true);
+    expect(
+      await readOwnedPerpetualResearchHistory(db.prisma, { ...owner, userId: "another-owner" }, id),
+    ).toBeNull();
+    await db.prisma.tradingPaperPerpetualTick.update({
+      where: {
+        ledgerId_revision_scheduledFor_stage: {
+          ledgerId: id,
+          revision: tick.revision,
+          scheduledFor: tick.scheduledFor,
+          stage: tick.stage,
+        },
+      },
+      data: { decisionSha256: "0".repeat(64) },
+    });
+    expect(await readOwnedPerpetualResearchHistory(db.prisma, owner, id)).toMatchObject({
+      status: "integrity_blocked",
+      decisions: [],
+    });
+    await db.prisma.tradingPaperPerpetualTick.update({
+      where: {
+        ledgerId_revision_scheduledFor_stage: {
+          ledgerId: id,
+          revision: tick.revision,
+          scheduledFor: tick.scheduledFor,
+          stage: tick.stage,
+        },
+      },
+      data: { decisionSha256: tick.decisionSha256 },
+    });
   });
 
   it("suppresses expired external proposals using the database clock without mutating audit data", async () => {
@@ -530,7 +663,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           ledgerId: id,
           commandId: randomUUID(),
           expectedRevision: first.revision,
-          decision: proposal("long"),
+          decision: compared(proposal("long")),
         });
         modelFails = true;
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
@@ -685,7 +818,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           ledgerId: id,
           commandId: randomUUID(),
           expectedRevision: status.revision,
-          decision: proposal("long"),
+          decision: compared(proposal("long")),
         });
         modelFails = true;
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
@@ -720,7 +853,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           ledgerId: id,
           commandId: randomUUID(),
           expectedRevision: status.revision,
-          decision: proposal("long"),
+          decision: compared(proposal("long")),
         });
         type Callback = (tx: Prisma.TransactionClient) => Promise<unknown>;
         const transact = db.prisma.$transaction.bind(db.prisma) as (

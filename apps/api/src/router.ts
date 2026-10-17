@@ -206,6 +206,7 @@ import {
   pushSessionExpiresAt,
   readOwnedMarketPreparedResearch,
   readOwnedPerpetualPaperJournal,
+  readOwnedPerpetualResearchHistory,
   readOwnedPerpetualWorkspace,
   readOwnedTradingPaperJournal,
   readOwnedTradingPaperWorkspace,
@@ -981,6 +982,18 @@ export function createRouter(deps: RouterDeps) {
       ),
     },
     trading: {
+      perpetualResearchRead: authed.trading.perpetualResearchRead.handler(
+        async ({ context, input }) => {
+          const history = await readOwnedPerpetualResearchHistory(
+            deps.prisma,
+            context.actor,
+            input.ledgerId,
+            input.limit,
+          );
+          if (!history) throw new ORPCError("NOT_FOUND");
+          return history;
+        },
+      ),
       perpetualExperimentsCreate: authed.trading.perpetualExperimentsCreate.handler(
         ({ context, input }) =>
           createOwnedPerpetualExperimentAccounts(

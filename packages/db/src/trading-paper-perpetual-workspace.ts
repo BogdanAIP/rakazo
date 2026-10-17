@@ -145,6 +145,32 @@ export async function verifyPerpetualSource(
   }
   return prepared;
 }
+
+function verifyResearchComparison(
+  decision: PaperPerpetualDecision,
+  instruments: readonly string[],
+  now: Date,
+  requireEntryComparison: boolean,
+) {
+  const freshEntry = decision.kind === "proposal" && !decision.addToPositionId;
+  const comparison = decision.comparison;
+  if (requireEntryComparison && freshEntry && !comparison)
+    throw new Error("Entry research requires a candidate comparison");
+  if (!comparison) return;
+  const selected = comparison.candidates.filter((candidate) => candidate.verdict === "selected");
+  if (
+    Date.parse(comparison.asOf) > now.getTime() ||
+    Date.parse(comparison.validUntil) <= now.getTime() ||
+    (decision.kind === "proposal"
+      ? selected.length !== 1 || selected[0]!.instrument !== decision.instrument
+      : selected.length !== 0) ||
+    (requireEntryComparison &&
+      freshEntry &&
+      comparison.candidates.length < Math.min(2, instruments.length))
+  )
+    throw new Error("Research comparison expired or disagrees with the decision");
+}
+
 const initialControl = (): PerpetualControl => ({
   maxLeverage: null,
   sessionStatus: "idle",
@@ -296,6 +322,7 @@ export async function commandOwnedPerpetualWorkspace(
           )
             throw new Error("Previous External proposal is still pending");
           const decision = input.decision;
+          verifyResearchComparison(decision, control.instruments, now, true);
           if (decision.kind === "proposal" && !control.instruments.includes(decision.instrument))
             throw new Error("Proposal instrument outside owner-approved session markets");
           if (
@@ -308,7 +335,12 @@ export async function commandOwnedPerpetualWorkspace(
           control.pendingExternalProposal = {
             commandId: input.commandId,
             submittedAt: now.toISOString(),
-            expiresAt: new Date(clock + 120_000).toISOString(),
+            expiresAt: new Date(
+              Math.min(
+                clock + 120_000,
+                decision.comparison ? Date.parse(decision.comparison.validUntil) : Infinity,
+              ),
+            ).toISOString(),
             decision,
           };
           // A one-time owner submission triggers the existing protected worker;
@@ -717,6 +749,12 @@ export async function recordPerpetualResearchTick(
             throw new Error("Futures research integrity failed");
           return existing;
         }
+        verifyResearchComparison(
+          decision,
+          control.instruments,
+          clock,
+          model?.provider === "external-proposal",
+        );
         if (model?.provider === "external-proposal") {
           const pending = control.pendingExternalProposal;
           if (
@@ -765,5 +803,53 @@ export async function recordPerpetualResearchTick(
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
+  );
+}
+
+/** Reads the existing hash-checked research ticks; it never modifies history. */
+export async function readOwnedPerpetualResearchHistory(
+  prisma: PrismaClient,
+  owner: PerpetualOwner,
+  ledgerId: string,
+  limit = 20,
+) {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 50)
+    throw new Error("Invalid research history limit");
+  return prisma.$transaction(
+    async (tx) => {
+      const owned = await tx.tradingPaperPerpetualLedger.findFirst({
+        where: { id: ledgerId, spaceId: owner.spaceId, ownerUserId: owner.userId },
+        select: { id: true },
+      });
+      if (!owned) return null;
+      const base = { mode: "paper_only" as const, ledgerId };
+      const ticks = await tx.tradingPaperPerpetualTick.findMany({
+        where: { ledgerId, stage: "research", modelId: { not: null }, committedAt: { not: null } },
+        orderBy: { recordedAt: "desc" },
+        take: limit,
+      });
+      try {
+        const decisions = ticks.map((tick) => {
+          if (
+            tick.snapshotSha256 !== perpetualPaperHash(tick.snapshot) ||
+            tick.decisionSha256 !== perpetualPaperHash(tick.decision)
+          )
+            throw new Error("Research integrity");
+          return {
+            id: tick.revision + ":" + tick.scheduledFor.toISOString(),
+            at: tick.recordedAt.toISOString(),
+            revision: tick.revision,
+            outcome: tick.outcome,
+            decision: PaperPerpetualDecisionSchema.parse(tick.decision),
+            provider: tick.modelProvider,
+            model: tick.modelId,
+          };
+        });
+        return { ...base, status: "verified" as const, decisions };
+      } catch {
+        return { ...base, status: "integrity_blocked" as const, decisions: [] };
+      }
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
   );
 }

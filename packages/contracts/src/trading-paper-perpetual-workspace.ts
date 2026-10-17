@@ -2,6 +2,7 @@ import * as z from "zod";
 import { IsoDate } from "./ids.js";
 import { TradingCandleSchema, TradingInstrumentSchema } from "./trading.js";
 import { PaperVenueLeverageLimitsSchema } from "./trading-paper-leverage.js";
+import { PaperResearchComparisonSchema } from "./trading-paper-research-comparison.js";
 
 const Id = z
   .string()
@@ -21,9 +22,16 @@ export const PaperRecoveryStepSchema = z
   })
   .strict();
 export const PaperPerpetualDecisionSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("no_trade"), reason: z.string().trim().min(1).max(2000) }).strict(),
   z
     .object({
+      comparison: PaperResearchComparisonSchema.optional(),
+      kind: z.literal("no_trade"),
+      reason: z.string().trim().min(1).max(2000),
+    })
+    .strict(),
+  z
+    .object({
+      comparison: PaperResearchComparisonSchema.optional(),
       kind: z.literal("proposal"),
       instrument: Instrument,
       side: z.enum(["long", "short"]),
@@ -62,6 +70,7 @@ export const PaperPerpetualDecisionSchema = z.discriminatedUnion("kind", [
     }),
   z
     .object({
+      comparison: PaperResearchComparisonSchema.optional(),
       kind: z.literal("close"),
       positionId: Id,
       reason: z.string().trim().min(1).max(2000),
@@ -69,6 +78,7 @@ export const PaperPerpetualDecisionSchema = z.discriminatedUnion("kind", [
     .strict(),
   z
     .object({
+      comparison: PaperResearchComparisonSchema.optional(),
       kind: z.literal("reduce"),
       positionId: Id,
       quantityBase: Positive,
@@ -77,6 +87,7 @@ export const PaperPerpetualDecisionSchema = z.discriminatedUnion("kind", [
     .strict(),
   z
     .object({
+      comparison: PaperResearchComparisonSchema.optional(),
       kind: z.literal("tighten_stop"),
       positionId: Id,
       stopPriceQuote: Positive,
@@ -201,6 +212,7 @@ export const PaperPerpetualWorkspaceStatusSchema = z.object({
       rationale: z.string(),
       provider: z.string().nullable(),
       model: z.string().nullable(),
+      comparison: PaperResearchComparisonSchema.optional(),
     })
     .nullable(),
   openOrders: z.array(
@@ -352,8 +364,30 @@ export const PerpetualControlSchema = z
         rationale: z.string(),
         provider: z.string().nullable(),
         model: z.string().nullable(),
+        comparison: PaperResearchComparisonSchema.optional(),
       })
       .nullable(),
   })
   .strict();
 export type PerpetualControl = z.infer<typeof PerpetualControlSchema>;
+
+export const PaperResearchHistorySchema = z.object({
+  mode: z.literal("paper_only"),
+  status: z.enum(["verified", "integrity_blocked"]),
+  ledgerId: z.string(),
+  decisions: z
+    .array(
+      z.object({
+        id: z.string(),
+        at: IsoDate,
+        revision: z.number().int().nonnegative(),
+        outcome: z.string().nullable(),
+        decision: PaperPerpetualDecisionSchema,
+        provider: z.string().nullable(),
+        model: z.string().nullable(),
+      }),
+    )
+    .max(50),
+});
+
+export type PaperResearchHistory = z.infer<typeof PaperResearchHistorySchema>;

@@ -1082,6 +1082,7 @@ async function commitPerpetualEngineWakeOnce(
             rationale: decision.kind === "proposal" ? decision.rationale : decision.reason,
             provider: tick.modelProvider,
             model: tick.modelId,
+            comparison: decision.comparison,
           };
         }
         control.runtimeError = null;

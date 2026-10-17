@@ -6,6 +6,7 @@ export const PAPER_RPC_ACCESS_PROCEDURES = [
   "trading/perpetualMarketPrepare",
   "trading/perpetualLeverageRead",
   "trading/perpetualWorkspaceRead",
+  "trading/perpetualResearchRead",
   "trading/perpetualWorkspaceCommand",
   "trading/perpetualJournalRead",
   "trading/perpetualJournalList",

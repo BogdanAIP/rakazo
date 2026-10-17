@@ -13,6 +13,8 @@ import {
 import { Button } from "@rakazo/ui-web";
 import { useEffect, useState } from "react";
 import { rpc } from "../lib/rpc";
+import { PaperResearchComparison } from "./PaperResearchComparison";
+import { paperPerpetualOutcomeLabel } from "./paper-perpetual-outcomes";
 
 const phases: Record<PaperPerpetualWorkspaceStatus["phase"], string> = {
   idle: "Готов к запуску",
@@ -33,29 +35,6 @@ const errors: Record<string, string> = {
   research_commit_unavailable: "Не удалось сохранить анализ. Новые входы остановлены.",
   queue_unavailable: "Фоновая проверка недоступна. Новые входы остановлены.",
   integrity_blocked: "Целостность данных не подтверждена. Управление заблокировано.",
-};
-const outcomes: Record<string, string> = {
-  no_trade: "Без сделки",
-  reduce_submitted: "Частичное сокращение запрошено",
-  denied_reduce: "Частичное сокращение отклонено",
-  denied_add_unreserved: "Доливка превышает заранее выделенный резерв",
-  denied_recovery_plan_invalid: "План двух доливок несовместим с защитным стопом",
-  denied_recovery_step_missing: "Не указан допустимый этап восстановления",
-  denied_recovery_step_not_triggered: "Уровень доливки ещё не достигнут",
-  denied_recovery_step_no_reversal: "Нет подтверждения разворота — доливка отклонена",
-  denied_recovery_step_exceeds_step: "Доливка превышает резерв указанной ступени",
-  protective_stop_tightened: "Защитный стоп усилен",
-  denied_stop_unknown: "Позиция или план защиты не найдены",
-  denied_stop_not_tighter: "Отказ: изменение ослабляет защиту",
-  drawdown_circuit_breaker: "Новые входы остановлены из-за просадки",
-  filled: "Исполнено",
-  partially_filled: "Исполнено частично",
-  order_pending: "Ордер ожидает цены",
-  order_expired: "Срок ордера истёк",
-  closed: "Позиция закрыта",
-  close_partial_or_not_ready: "Выход исполнен частично или ожидает котировки",
-  denied_market: "Пара вне выбранного списка",
-  expired_research: "Анализ устарел",
 };
 const dateTime = (iso: string) => new Date(iso).toLocaleString("ru-RU");
 function feeSummary(status: PaperPerpetualWorkspaceStatus | null, instruments: string[]) {
@@ -380,15 +359,19 @@ export function PaperPerpetualControls({
           {verified.lastDecision && (
             <section className="rounded-xl bg-muted p-3 text-sm" aria-label="Последнее решение ИИ">
               <p className="font-medium">
-                {outcomes[verified.lastDecision.outcome] ??
-                  (verified.lastDecision.outcome.startsWith("denied_")
-                    ? "Предложение отклонено проверкой риска"
-                    : "Ордер отменён или не исполнен")}
+                {paperPerpetualOutcomeLabel(verified.lastDecision.outcome)}
               </p>
               <p className="mt-1 whitespace-pre-wrap">{verified.lastDecision.rationale}</p>
               <p className="mt-2 text-xs text-muted-foreground">
-                {dateTime(verified.lastDecision.at)} · {verified.lastDecision.model}
+                {dateTime(verified.lastDecision.at)}
+                {verified.lastDecision.model &&
+                verified.lastDecision.model !== "external-unattested"
+                  ? " · " + verified.lastDecision.model
+                  : null}
               </p>
+              {verified.lastDecision.comparison ? (
+                <PaperResearchComparison comparison={verified.lastDecision.comparison} />
+              ) : null}
             </section>
           )}
           {verified.openOrders.length > 0 && (
