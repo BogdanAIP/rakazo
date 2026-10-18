@@ -45,7 +45,7 @@ function SessionApp() {
   const [searchParams] = useSearchParams();
   const requestedNext = searchParams.get("next");
   const signInDestination =
-    requestedNext === "/integrations/setup"
+    requestedNext === "/integrations/setup" || requestedNext === "/app/paper-journal"
       ? requestedNext
       : (chatGptSessionHandoffNext(requestedNext) ?? "/app");
   const session = authClient.useSession();

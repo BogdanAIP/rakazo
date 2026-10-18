@@ -109,7 +109,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
       clearSpaceSelection();
       const requestedNext = searchParams.get("next");
       const signInDestination =
-        requestedNext === "/integrations/setup"
+        requestedNext === "/integrations/setup" || requestedNext === "/app/paper-journal"
           ? requestedNext
           : (chatGptSessionHandoffNext(requestedNext) ?? "/app");
       navigate(mode === "up" ? "/onboarding" : signInDestination);

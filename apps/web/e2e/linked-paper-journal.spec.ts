@@ -54,9 +54,38 @@ test("unavailable journal is hidden from account menu and fails closed on deep l
   await expect(page.locator("iframe")).toHaveCount(0);
 });
 
-test("journal deep link uses the primary sign-in page when signed out", async ({ page }) => {
+test("journal deep link returns through the primary sign-in page", async ({ page }) => {
+  await page.route("**/linked-paper/status", (route) =>
+    route.fulfill({ json: { available: true } }),
+  );
+  await page.route("**/linked-paper/view", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: "<!doctype html><html><body><h2>Проверочный журнал</h2></body></html>",
+    }),
+  );
+  const email = "linked-signin-" + Date.now() + "@example.test";
+  await signup(page, email, "password12", "Returning Owner");
+  await completeOnboarding(page);
+  await page.getByTestId("user-menu-trigger").click();
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/auth/sign-out") && response.request().method() === "POST",
+    ),
+    page.getByRole("button", { name: "Log out", exact: true }).click(),
+  ]);
   await page.goto("/app/paper-journal");
   await expect(page).toHaveURL(/\/sign-in\?next=\/app\/paper-journal$/);
   await expect(page.getByRole("heading", { name: "Sign in to Rakazo" })).toBeVisible();
   await expect(page.locator("iframe")).toHaveCount(0);
+  await page.getByPlaceholder("Your email address").fill(email);
+  await page.getByPlaceholder("Password").fill("password12");
+  await page.getByRole("button", { name: "Continue with email", exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/paper-journal$/);
+  await expect(
+    page
+      .frameLocator('iframe[title="Журнал виртуальной торговли"]')
+      .getByRole("heading", { name: "Проверочный журнал" }),
+  ).toBeVisible();
 });
