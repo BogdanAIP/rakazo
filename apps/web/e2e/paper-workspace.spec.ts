@@ -354,6 +354,8 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
         where: { spaceId: ledger.spaceId, ownerUserId: ledger.ownerUserId },
       }),
     ).toBe(3);
+    await expect(page.getByText(/Базовый риск от текущего капитала: идея до/)).toBeVisible();
+    await captureScreenshot(page, testInfo, "paper-equity-risk-budgets");
     // The broad OKX market is publicly scanned; the fixture keeps E2E independent of exchange uptime.
     const marketsCapturedAt = new Date().toISOString();
     const marketCandidates = ["BTC", "ETH", "SOL"].map((base, index) => {
@@ -506,6 +508,7 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
             limitPriceQuote: null,
             stopPriceQuote: "97",
             takeProfitPriceQuote: "110",
+            plannedRecoveryNotionalQuote: "50",
             recoverySteps: [
               { stepId: "first-retest", triggerPriceQuote: "97.8", allocationPercent: 50 },
               { stepId: "second-retest", triggerPriceQuote: "97.4", allocationPercent: 50 },

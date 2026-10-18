@@ -24,6 +24,7 @@ const instrument = z.object({
   baseCcy: z.string().optional().default(""),
   quoteCcy: z.string().optional().default(""),
   instFamily: z.string().optional().default(""),
+  instCategory: z.string().optional(),
   tickSz: z.string().optional().default(""),
   lotSz: z.string().optional().default(""),
   expTime: z.string().optional().default(""),
@@ -115,6 +116,18 @@ function parseMarket(
     base,
     quote,
     status: row.state === "live" ? "active" : "inactive",
+    underlyingClass:
+      row.instCategory === undefined
+        ? undefined
+        : ((
+            {
+              "1": "crypto",
+              "3": "equity",
+              "4": "commodity",
+              "5": "fx",
+              "6": "bond",
+            } as const
+          )[row.instCategory as "1" | "3" | "4" | "5" | "6"] ?? "unknown"),
     priceIncrement,
     quantityIncrement,
     minNotional: null,
@@ -240,6 +253,8 @@ async function fetchOkxPublicTickers(
     bidPx: z.string(),
     askPx: z.string(),
     volCcy24h: z.string(),
+    high24h: z.string().optional(),
+    low24h: z.string().optional(),
     ts: z.string().regex(/^\d{13}$/),
   });
   const tickers: TradingTicker[] = [];
@@ -271,6 +286,20 @@ async function fetchOkxPublicTickers(
       }
       quoteVolume24h = notional.toFixed(2);
     }
+    const high = Number(row.high24h);
+    const low = Number(row.low24h);
+    const mid = (Number(row.bidPx) + Number(row.askPx)) / 2;
+    const range = ((high - low) / mid) * 100;
+    const range24hPercent =
+      Number.isFinite(high) &&
+      Number.isFinite(low) &&
+      low > 0 &&
+      high >= low &&
+      Number.isFinite(range) &&
+      range >= 0 &&
+      range <= 1_000_000
+        ? range
+        : undefined;
     tickers.push(
       TradingTickerSchema.parse({
         venue: "okx",
@@ -281,6 +310,7 @@ async function fetchOkxPublicTickers(
         bid: row.bidPx,
         ask: row.askPx,
         quoteVolume24h,
+        range24hPercent,
       }),
     );
   }

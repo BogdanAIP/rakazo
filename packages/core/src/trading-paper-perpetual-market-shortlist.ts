@@ -2,10 +2,9 @@ import type { TradingScanOutput } from "@rakazo/contracts";
 import type { PaperExperimentStrategy } from "./trading-paper-experiments.js";
 
 /**
- * Locally maintained, deliberately conservative categorization for PAPER research.
- * The public OKX SWAP catalog can contain non-crypto underlyings (equities/ETFs).
- * Unknown symbols remain DISCOVERABLE in the scanner but are NEVER auto-selected.
- * This list does not assert listing, tradability, profitability or risk suitability.
+ * Legacy fallback only when the venue provides no underlying classification.
+ * Official crypto metadata admits new liquid assets without maintaining an allowlist.
+ * Explicit non-crypto/unknown metadata always overrides this fallback.
  */
 const CORE_CRYPTO = new Set([
   "BTC",
@@ -77,7 +76,9 @@ export function suggestPaperPerpetualCryptoUniverse(
   strategy: PaperExperimentStrategy,
   now: Date = new Date(),
 ): {
+  /** At most eight execution-session suggestions, never the research universe. */
   symbols: string[];
+  researchSymbols: string[];
   eligibleCount: number;
   unclassifiedCount: number;
   qualityExcludedCount: number;
@@ -85,6 +86,7 @@ export function suggestPaperPerpetualCryptoUniverse(
 } {
   const blank = (stale: boolean) => ({
     symbols: [] as string[],
+    researchSymbols: [] as string[],
     eligibleCount: 0,
     unclassifiedCount: 0,
     qualityExcludedCount: 0,
@@ -97,7 +99,7 @@ export function suggestPaperPerpetualCryptoUniverse(
 
   const policy = POLICIES[strategy];
   if (!policy) return blank(true);
-  const results = new Map<string, { turnover: number; spread: number }>();
+  const results = new Map<string, { turnover: number; spread: number; range: number }>();
   let unclassifiedCount = 0;
   let qualityExcludedCount = 0;
   for (const candidate of snapshot.candidates) {
@@ -108,13 +110,22 @@ export function suggestPaperPerpetualCryptoUniverse(
       market.quote !== "USDT" ||
       market.status !== "active" ||
       market.symbol !== ticker.symbol ||
+      ticker.venue !== market.venue ||
+      ticker.kind !== market.kind ||
+      [ticker.observedAt, ticker.fetchedAt].some((stamp) => {
+        const time = Date.parse(stamp);
+        return !Number.isFinite(time) || time > today + 2_000 || today - time > 90_000;
+      }) ||
       !/^[A-Z0-9]{1,20}-USDT-SWAP$/.test(market.symbol) ||
       market.symbol !== `${market.base}-USDT-SWAP`
     ) {
       qualityExcludedCount++;
       continue;
     }
-    if (!policy.assets.has(market.base)) {
+    if (
+      market.underlyingClass !== "crypto" &&
+      (market.underlyingClass !== undefined || !policy.assets.has(market.base))
+    ) {
       unclassifiedCount++;
       continue;
     }
@@ -129,17 +140,28 @@ export function suggestPaperPerpetualCryptoUniverse(
       qualityExcludedCount++;
       continue;
     }
-    if (!results.has(market.symbol)) results.set(market.symbol, { turnover, spread: spreadBps });
+    if (!results.has(market.symbol)) {
+      const range = ticker.range24hPercent;
+      results.set(market.symbol, {
+        turnover,
+        spread: spreadBps,
+        range: range !== undefined && Number.isFinite(range) && range >= 0 ? range : -1,
+      });
+    }
   }
-  const symbols = [...results]
+  const researchSymbols = [...results]
     .sort(
       (a, b) =>
-        b[1].turnover - a[1].turnover || a[1].spread - b[1].spread || a[0].localeCompare(b[0]),
+        (strategy === "aggressive" ? b[1].range - a[1].range : 0) ||
+        b[1].turnover - a[1].turnover ||
+        a[1].spread - b[1].spread ||
+        a[0].localeCompare(b[0]),
     )
-    .slice(0, 8)
     .map(([symbol]) => symbol);
+  const symbols = researchSymbols.slice(0, 8);
   return {
     symbols,
+    researchSymbols,
     eligibleCount: results.size,
     unclassifiedCount,
     qualityExcludedCount,

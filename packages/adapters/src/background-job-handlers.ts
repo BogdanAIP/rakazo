@@ -8,7 +8,7 @@ import type {
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import { messagingDeliverJob } from "@rakazo/adapter-kit";
-import type { PaperPerpetualSnapshot } from "@rakazo/contracts";
+import type { PaperPerpetualSnapshot, TradingScanOutput } from "@rakazo/contracts";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import type { CloudAgentConnection } from "./cloud-agent-factory.js";
@@ -38,6 +38,9 @@ export function createBackgroundJobHandlers(deps: {
   runtime: AgentRuntime;
   perpetualPaperEngine?: PaperPerpetualEngine;
   fetchPerpetualPaperSnapshot?: (instrument: string) => Promise<PaperPerpetualSnapshot>;
+  fetchPerpetualPaperResearchScan?: () => Promise<
+    Pick<TradingScanOutput, "fetchedAt" | "candidates">
+  >;
   secretStore: EncryptedSecretStore;
   memoryProviders: MemoryProviderResolver;
   deploymentModelKey?: string;
@@ -113,6 +116,7 @@ export function createBackgroundJobHandlers(deps: {
             runtime: deps.runtime,
             resolveModel: (scope) => deps.executor.resolveModel(scope),
             fetchSnapshot: deps.fetchPerpetualPaperSnapshot,
+            fetchResearchScan: deps.fetchPerpetualPaperResearchScan,
             engine: deps.perpetualPaperEngine,
           },
           payload,

@@ -1,6 +1,6 @@
 import type { AdapterContext, AgentRunRequest, AgentRuntimeEvent } from "@rakazo/adapter-kit";
 import { ScriptedAgentRuntime } from "@rakazo/adapters";
-import type { PaperPerpetualSnapshot } from "@rakazo/contracts";
+import type { PaperPerpetualSnapshot, TradingScanOutput } from "@rakazo/contracts";
 
 /** Offline E2E fixtures. Production composition roots never select this model
  * or market provider; the browser still uses the real owner/RPC/queue/ledger.
@@ -28,6 +28,7 @@ class PaperBrowserRuntime extends ScriptedAgentRuntime {
         limitPriceQuote: null,
         stopPriceQuote: "97",
         takeProfitPriceQuote: "110",
+        plannedRecoveryNotionalQuote: "50",
         recoverySteps: [
           { stepId: "first-retest", triggerPriceQuote: "99", allocationPercent: 50 },
           { stepId: "second-retest", triggerPriceQuote: "98", allocationPercent: 50 },
@@ -41,6 +42,12 @@ class PaperBrowserRuntime extends ScriptedAgentRuntime {
 export function paperBrowserFixtures() {
   return {
     runtime: new PaperBrowserRuntime(),
+    perpetualPaperResearchScan: async (): Promise<
+      Pick<TradingScanOutput, "fetchedAt" | "candidates">
+    > => ({
+      fetchedAt: new Date().toISOString(),
+      candidates: [],
+    }),
     perpetualPaperSnapshot: async (instrument: string): Promise<PaperPerpetualSnapshot> => {
       await new Promise((resolve) => setTimeout(resolve, 10));
       const now = new Date(),

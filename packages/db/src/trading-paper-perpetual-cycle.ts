@@ -528,7 +528,7 @@ export async function commitPerpetualPaperWake(
                 control.orders = [];
               } else if (
                 amount(order.ideaRiskSpentQuote) + amount(risk.worstCaseStopLossQuote) >
-                amount(getPaperExperimentPreset(state.strategy).maxPerIdeaRiskQuote)
+                amount(risk.maxPerIdeaRiskQuote)
               ) {
                 outcome = "denied_risk_budget_exceeded";
                 control.orders = [];

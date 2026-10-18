@@ -123,7 +123,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
           openLongNotionalQuote: "4000",
         },
       },
-      "catastrophic_survival_exceeded",
+      "portfolio_stress_exceeded",
     );
     expectDenial(
       { portfolio: { ...fixture.portfolio, openStopRiskQuote: "19.9" } },
@@ -165,7 +165,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
         stopPriceQuote: "99.95",
         takeProfitPriceQuote: "105",
       },
-      "catastrophic_survival_exceeded",
+      "portfolio_stress_exceeded",
     );
   });
 
@@ -185,11 +185,11 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
           openLongNotionalQuote: "3000",
         },
       },
-      "catastrophic_survival_exceeded",
+      "portfolio_stress_exceeded",
     );
   });
 
-  it("rejects a 50-percent crash exposure and a full collapse exposure independently of leverage", () => {
+  it("requires 50-percent adverse survival independently of leverage", () => {
     const bigLong = previewPaperPerpetualProposal({
       ...fixture,
       strategy: "aggressive",
@@ -200,7 +200,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
     });
     expect(bigLong).toMatchObject({
       status: "deny",
-      reason: "catastrophic_survival_exceeded",
+      reason: "portfolio_stress_exceeded",
     });
     const smallLong = previewPaperPerpetualProposal({
       ...fixture,
@@ -216,20 +216,58 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
     }
   });
 
-  it("refuses a short too large to withstand a 200-percent adverse price rally", () => {
+  it("reports catastrophic loss without blocking a short that passes the mandatory stress", () => {
     const result = previewPaperPerpetualProposal({
       ...fixture,
       side: "short",
       strategy: "aggressive",
       leverage: 20,
-      quantityBase: "4",
+      quantityBase: "8",
       stopPriceQuote: "100.01",
       takeProfitPriceQuote: "90",
     });
-    expect(result).toMatchObject({
+    expect(result.status).toBe("inert_preview");
+    if (result.status !== "inert_preview") return;
+    expect(result.riskPolicyVersion).toBe("paper-risk-v3");
+    expect(Number(result.equityRemainingAfterStressQuote)).toBeGreaterThan(250);
+    expect(Number(result.equityRemainingAfterCatastropheQuote)).toBeLessThan(0);
+    expect(Number(result.equityRemainingAfterExtremeQuote)).toBeLessThan(
+      Number(result.equityRemainingAfterStressQuote),
+    );
+  });
+
+  it("scales stop and daily budgets with verified current equity", () => {
+    const candidate = { ...fixture, quantityBase: "3" };
+    expect(previewPaperPerpetualProposal(candidate)).toMatchObject({
       status: "deny",
-      reason: "catastrophic_survival_exceeded",
+      reason: "risk_budget_exceeded",
     });
+    const grown = previewPaperPerpetualProposal({
+      ...candidate,
+      portfolio: { ...fixture.portfolio, markedEquityQuote: "2000", peakEquityQuote: "2000" },
+    });
+    expect(grown).toMatchObject({ status: "inert_preview", maxPerIdeaRiskQuote: "20" });
+    const reduced = {
+      ...fixture,
+      quantityBase: "1.82",
+      portfolio: { ...fixture.portfolio, markedEquityQuote: "975", peakEquityQuote: "975" },
+    };
+    expect(previewPaperPerpetualProposal(reduced)).toMatchObject({
+      status: "deny",
+      reason: "risk_budget_exceeded",
+    });
+    expect(
+      previewPaperPerpetualProposal({
+        ...fixture,
+        portfolio: { ...fixture.portfolio, realizedLossTodayQuote: "29.3" },
+      }).status,
+    ).toBe("inert_preview");
+    expect(
+      previewPaperPerpetualProposal({
+        ...fixture,
+        portfolio: { ...reduced.portfolio, realizedLossTodayQuote: "29.3" },
+      }),
+    ).toMatchObject({ status: "deny", reason: "risk_budget_exceeded" });
   });
 
   it("rejects conflicting long and short gross evidence", () => {
@@ -291,16 +329,16 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
         ...fixture.portfolio,
         openPositions: 1,
         openNotionalQuote: "100",
-        maintenanceLegs: [{ grossNotionalQuote: "500", maintenanceMarginBps: 50 }],
+        maintenanceLegs: [{ grossNotionalQuote: "1300", maintenanceMarginBps: 50 }],
         openLongNotionalQuote: "100",
-        recoveryLongNotionalQuote: "400",
+        recoveryLongNotionalQuote: "1200",
         recoveryReservedRiskQuote: "1",
         openStopRiskQuote: "1",
       },
     });
     expect(withReservation).toMatchObject({
       status: "deny",
-      reason: "catastrophic_survival_exceeded",
+      reason: "portfolio_stress_exceeded",
     });
   });
 
@@ -455,11 +493,11 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
     const portfolio = {
       ...fixture.portfolio,
       openPositions: 2,
-      openNotionalQuote: "720",
-      openLongNotionalQuote: "720",
+      openNotionalQuote: "1390",
+      openLongNotionalQuote: "1390",
       maintenanceLegs: [
         { grossNotionalQuote: "300", maintenanceMarginBps: 50 },
-        { grossNotionalQuote: "420", maintenanceMarginBps: 50 },
+        { grossNotionalQuote: "1090", maintenanceMarginBps: 50 },
       ],
     };
     const proposal = {
@@ -477,20 +515,20 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
           ...portfolio,
           maintenanceLegs: [
             { grossNotionalQuote: "300", maintenanceMarginBps: 1000 },
-            { grossNotionalQuote: "420", maintenanceMarginBps: 50 },
+            { grossNotionalQuote: "1090", maintenanceMarginBps: 50 },
           ],
         },
       }),
-    ).toMatchObject({ status: "deny", reason: "catastrophic_survival_exceeded" });
+    ).toMatchObject({ status: "deny", reason: "portfolio_stress_exceeded" });
   });
 
   it("accounts for held-market unspent recovery reserves and fails closed on absent or mismatched terms", () => {
     const portfolio = {
       ...fixture.portfolio,
       openPositions: 1,
-      openNotionalQuote: "600",
-      openLongNotionalQuote: "600",
-      recoveryLongNotionalQuote: "120",
+      openNotionalQuote: "1200",
+      openLongNotionalQuote: "1200",
+      recoveryLongNotionalQuote: "200",
     };
     const proposal = {
       ...fixture,
@@ -508,7 +546,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
         ...proposal,
         portfolio: {
           ...portfolio,
-          maintenanceLegs: [{ grossNotionalQuote: "600", maintenanceMarginBps: 50 }],
+          maintenanceLegs: [{ grossNotionalQuote: "1200", maintenanceMarginBps: 50 }],
         },
       }),
     ).toMatchObject({ status: "deny", reason: "invalid_input" });
@@ -517,7 +555,7 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
         ...proposal,
         portfolio: {
           ...portfolio,
-          maintenanceLegs: [{ grossNotionalQuote: "720", maintenanceMarginBps: 50 }],
+          maintenanceLegs: [{ grossNotionalQuote: "1400", maintenanceMarginBps: 50 }],
         },
       }).status,
     ).toBe("inert_preview");
@@ -526,9 +564,9 @@ describe("inert, risk-bounded PAPER perpetual proposals", () => {
         ...proposal,
         portfolio: {
           ...portfolio,
-          maintenanceLegs: [{ grossNotionalQuote: "720", maintenanceMarginBps: 1000 }],
+          maintenanceLegs: [{ grossNotionalQuote: "1400", maintenanceMarginBps: 1000 }],
         },
       }),
-    ).toMatchObject({ status: "deny", reason: "catastrophic_survival_exceeded" });
+    ).toMatchObject({ status: "deny", reason: "portfolio_stress_exceeded" });
   });
 });

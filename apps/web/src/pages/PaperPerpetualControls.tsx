@@ -296,9 +296,9 @@ export function PaperPerpetualControls({
     .filter(Boolean)
     .map((symbol) => symbol.toUpperCase());
   const scanFresh = marketScan !== null && Date.now() - Date.parse(marketScan.fetchedAt) <= 90_000;
-  const visibleCandidates = (marketScan?.candidates ?? [])
-    .filter(({ market }) => market.symbol.includes(marketQuery.trim().toUpperCase()))
-    .slice(0, 40);
+  const visibleCandidates = (marketScan?.candidates ?? []).filter(({ market }) =>
+    market.symbol.includes(marketQuery.trim().toUpperCase()),
+  );
   const verified = status?.status === "verified" && status.managed ? status : null;
   const preset = verified ? getPaperExperimentPreset(verified.strategy) : null;
   const suggestedCryptoMarkets =
@@ -328,9 +328,10 @@ export function PaperPerpetualControls({
       {verified && preset && (
         <>
           <p className="text-sm text-muted-foreground">
-            Риск на сделку до {preset.maxPerIdeaRiskQuote} USDT · дневной убыток до{" "}
-            {preset.maxDailyLossQuote} USDT · совокупный риск до {preset.maxOpenRiskQuote} USDT ·
-            плечо до {verified.maxLeverage}× · позиций до {preset.maxConcurrentPositions}.
+            Базовый риск от текущего капитала: идея до {Number(preset.maxPerIdeaRiskQuote) / 10}% ·
+            день до {Number(preset.maxDailyLossQuote) / 10}% · всего до{" "}
+            {Number(preset.maxOpenRiskQuote) / 10}% · плечо до {verified.maxLeverage}× · позиций до{" "}
+            {preset.maxConcurrentPositions}.
           </p>
           {verified.expiresAt && (
             <p className="text-sm">
@@ -559,11 +560,6 @@ export function PaperPerpetualControls({
                         </p>
                       )}
                     </section>
-                    {marketScan.candidates.length > visibleCandidates.length && (
-                      <p className="text-xs text-muted-foreground">
-                        Показаны первые 40 совпадений; поиск работает по всему списку.
-                      </p>
-                    )}
                   </>
                 )}
               </section>

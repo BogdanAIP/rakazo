@@ -43,6 +43,34 @@ function checkedBps(n: number, max: number): bigint {
   return BigInt(n);
 }
 
+export const PAPER_PERPETUAL_RISK_POLICY_VERSION = "paper-risk-v3" as const;
+
+/** Equity-relative PAPER budgets. Drawdown only restricts new exposure. */
+export function getPaperPerpetualRiskLimits(
+  strategy: PaperExperimentStrategy,
+  markedEquityQuote: string,
+  peakEquityQuote: string = markedEquityQuote,
+) {
+  const preset = getPaperExperimentPreset(strategy);
+  const equity = exact(markedEquityQuote);
+  const peak = exact(peakEquityQuote);
+  if (equity === 0n || peak < equity) throw new Error("Invalid PAPER equity");
+  const drawdownBps = ((peak - equity) * BPS) / peak;
+  const soft = strategy === "conservative" ? 250n : strategy === "moderate" ? 500n : 800n;
+  const hard = strategy === "conservative" ? 500n : strategy === "moderate" ? 1000n : 1500n;
+  const throttled = drawdownBps >= soft;
+  const scale = (base: string) => (exact(base) * equity) / exact(preset.initialBalanceQuote);
+  return {
+    policyVersion: PAPER_PERPETUAL_RISK_POLICY_VERSION,
+    maxPerIdeaRiskQuote: fmt(scale(preset.maxPerIdeaRiskQuote) / (throttled ? 2n : 1n)),
+    maxDailyLossQuote: fmt(scale(preset.maxDailyLossQuote)),
+    maxOpenRiskQuote: fmt(scale(preset.maxOpenRiskQuote) / (throttled ? 2n : 1n)),
+    peakDrawdownPercent: (Number(drawdownBps) / 100).toFixed(2),
+    throttled,
+    circuitBreaker: drawdownBps >= hard,
+  };
+}
+
 export type PaperPerpetualProposalInput = Readonly<{
   strategy: PaperExperimentStrategy;
   ledgerId: string;
@@ -133,7 +161,12 @@ export type PaperPerpetualProposal =
       plannedRecoveryRiskQuote: string;
       maintenanceMarginQuote: string;
       collateralRemainingAtStopQuote: string;
+      riskPolicyVersion: typeof PAPER_PERPETUAL_RISK_POLICY_VERSION;
+      maxPerIdeaRiskQuote: string;
+      /** Mandatory 50% adverse gross stress; excludes the separate 25% buffer. */
       equityRemainingAfterStressQuote: string;
+      /** Diagnostic 100% adverse move on every gross leg. May be negative. */
+      equityRemainingAfterExtremeQuote: string;
       equityRemainingAfterCatastropheQuote: string;
       peakDrawdownPercent: string;
       riskRewardRatio: string;
@@ -197,22 +230,11 @@ export function previewPaperPerpetualProposal(
     const openRisk = exact(input.portfolio.openStopRiskQuote);
     const sameIdeaRisk = exact(input.portfolio.sameIdeaStopRiskQuote);
     const dailyLoss = exact(input.portfolio.realizedLossTodayQuote);
-    const perIdeaCap = exact(preset.maxPerIdeaRiskQuote);
-    const dailyCap = exact(preset.maxDailyLossQuote);
-    const openCap = exact(preset.maxOpenRiskQuote);
-    if (markedEquity === 0n || peakEquity === 0n || peakEquity < markedEquity)
-      return deny("invalid_input");
-    // High-watermark drawdown attenuates only NEW exposure, never protective exits.
-    // Thresholds are experimental PAPER research settings (basis points).
-    const softBps =
-      input.strategy === "conservative" ? 250n : input.strategy === "moderate" ? 500n : 800n;
-    const hardBps =
-      input.strategy === "conservative" ? 500n : input.strategy === "moderate" ? 1000n : 1500n;
-    const drawdownBps = ((peakEquity - markedEquity) * BPS) / peakEquity;
-    if (drawdownBps >= hardBps) return deny("drawdown_circuit_breaker");
-    const throttled = drawdownBps >= softBps;
-    const effectiveIdeaCap = throttled ? perIdeaCap / 2n : perIdeaCap;
-    const effectiveOpenCap = throttled ? openCap / 2n : openCap;
+    const limits = getPaperPerpetualRiskLimits(input.strategy, fmt(markedEquity), fmt(peakEquity));
+    if (limits.circuitBreaker) return deny("drawdown_circuit_breaker");
+    const effectiveIdeaCap = exact(limits.maxPerIdeaRiskQuote);
+    const dailyCap = exact(limits.maxDailyLossQuote);
+    const effectiveOpenCap = exact(limits.maxOpenRiskQuote);
     if (
       [qty, entry, stop, target, available].some((v) => v === 0n) ||
       !Number.isSafeInteger(input.portfolio.openPositions) ||
@@ -277,23 +299,18 @@ export function previewPaperPerpetualProposal(
     // These are experimental buffers, not liquidation prices or authority
     // to widen/remove an existing stop.
     if (sameIdeaRisk > openRisk) return deny("invalid_input");
-    const shockBps =
-      input.strategy === "conservative" ? 3500n : input.strategy === "moderate" ? 2500n : 2000n;
+    const shockBps = 5000n;
     const survivalReserveBps = 2500n;
     const survivalReserve = ceil(markedEquity * survivalReserveBps, BPS);
-    // Liquidation-avoidance is a PRE-ENTRY sizing objective, never a promise.
-    // Even a full long collapse to zero and a 200% adverse short rally must
-    // leave a reserve. Shorts can exceed +200%; actual venues may liquidate
-    // earlier during gaps, funding, risk-tier changes or unavailable quotes.
+    // Larger shocks remain diagnostics, not an additional admission gate.
+    // A long collapse to zero / 200% short rally can still exhaust equity.
+    // This simplified PAPER stress is not a venue liquidation guarantee.
     const projectedLong =
       longNotional + reservedLong + (input.side === "long" ? notional + newRecovery : 0n);
     const projectedShort =
       shortNotional + reservedShort + (input.side === "short" ? notional + newRecovery : 0n);
     const catastropheLoss = projectedLong + 2n * projectedShort;
     const catastropheMaintenance = stopMaintenance;
-    const catastropheResidual =
-      markedEquity - catastropheLoss - catastropheMaintenance - survivalReserve;
-    if (catastropheResidual <= 0n) return deny("catastrophic_survival_exceeded");
     const shockLoss = ceil(projectedGross * shockBps, BPS);
     const maintenanceReserve = stopMaintenance;
     if (markedEquity <= shockLoss + maintenanceReserve + survivalReserve)
@@ -331,11 +348,14 @@ export function previewPaperPerpetualProposal(
       plannedRecoveryRiskQuote: fmt(plannedRecoveryRisk),
       maintenanceMarginQuote: fmt(maintenance),
       collateralRemainingAtStopQuote: fmt(stopEquityRemaining),
+      riskPolicyVersion: limits.policyVersion,
+      maxPerIdeaRiskQuote: limits.maxPerIdeaRiskQuote,
       equityRemainingAfterStressQuote: fmt(markedEquity - shockLoss - maintenanceReserve),
+      equityRemainingAfterExtremeQuote: fmt(markedEquity - projectedGross - stopMaintenance),
       equityRemainingAfterCatastropheQuote: fmt(
         markedEquity - catastropheLoss - catastropheMaintenance,
       ),
-      peakDrawdownPercent: (Number(drawdownBps) / 100).toFixed(2),
+      peakDrawdownPercent: limits.peakDrawdownPercent,
       riskRewardRatio: (Number(rrHundredths) / 100).toFixed(2),
     };
   } catch {
