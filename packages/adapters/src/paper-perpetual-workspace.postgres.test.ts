@@ -14,6 +14,7 @@ import type {
 import { buildSkillMd } from "@rakazo/core";
 import type { Prisma } from "@rakazo/db";
 import {
+  commitPerpetualEngineWake,
   commitPerpetualPaperWake,
   createDb,
   createOwnedPerpetualExperimentAccounts,
@@ -149,6 +150,30 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     runtime,
     resolveModel: async () => ({ provider: "fixture", id: "fixture-model" }),
     fetchSnapshot: snapshot,
+    fetchResearchScan: async () => {
+      const fetchedAt = new Date().toISOString();
+      const candidates = await Promise.all(
+        ["BTC", "SOL", ...Array.from({ length: 10 }, (_, i) => "ALT" + i)].map(async (base) => {
+          const snap = await snapshot(base + "-USDT-SWAP");
+          return {
+            market: { ...snap.market, underlyingClass: "crypto" as const },
+            ticker: {
+              venue: "okx",
+              kind: "perpetual" as const,
+              symbol: snap.market.symbol,
+              observedAt: fetchedAt,
+              fetchedAt,
+              bid: snap.book.bidQuote,
+              ask: snap.book.askQuote,
+              quoteVolume24h: "100000000",
+              range24hPercent: 5,
+            },
+            spreadBps: 0,
+          };
+        }),
+      );
+      return { fetchedAt, candidates };
+    },
   });
   const proposal = (
     side: "long" | "short",
@@ -416,6 +441,69 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       scheduledFor: now.toISOString(),
     };
   }
+
+  it("feeds every eligible bulk candidate to model research while preserving the owner execution universe", async () => {
+    const id = await account();
+    await start(id);
+    decision = { kind: "no_trade", reason: "Review the broad research universe first" };
+    await handlePerpetualPaperWake(worker(), await payload(id, true));
+    const input = JSON.parse((calls[0] as { prompt: string }).prompt).publicMarketData;
+    expect(input.researchUniverse.rankedCandidates).toHaveLength(12);
+    expect(
+      input.researchUniverse.rankedCandidates.some(
+        (row: { market: { symbol: string } }) => row.market.symbol === "ALT9-USDT-SWAP",
+      ),
+    ).toBe(true);
+    expect(
+      input.researchUniverse.rankedCandidates.filter(
+        (row: { executionAuthorized: boolean }) => row.executionAuthorized,
+      ),
+    ).toHaveLength(2);
+    expect(input.allowedInstruments).toEqual(["BTC-USDT-SWAP", "SOL-USDT-SWAP"]);
+    expect((await state(id)).openPositions).toHaveLength(0);
+  });
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "reports an unknown close without bootstrapping an empty native account",
+    async () => {
+      const engine = new NautilusPaperEngine({
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      });
+      try {
+        const id = await account();
+        await start(id, engine);
+        const wake = await payload(id, true);
+        const key = {
+          ledgerId: id,
+          revision: wake.sessionRevision!,
+          scheduledFor: wake.scheduledFor,
+          stage: "research" as const,
+        };
+        await recordPerpetualResearchTick(
+          db.prisma,
+          owner,
+          key,
+          [],
+          {
+            kind: "close",
+            positionId: "unknown-position",
+            reason: "Close nonexistent fixture lot",
+          },
+          { provider: "fixture", modelId: "fixture-model" },
+        );
+        const apply = vi.spyOn(engine, "apply");
+        await commitPerpetualEngineWake(db.prisma, owner, key, [], engine);
+        expect(apply).not.toHaveBeenCalled();
+        expect(
+          (await readOwnedPerpetualWorkspace(db.prisma, owner, id))?.lastDecision?.outcome,
+        ).toBe("denied_close_unknown");
+        expect((await state(id)).openPositions).toHaveLength(0);
+      } finally {
+        engine.dispose();
+      }
+    },
+  );
 
   it("never calls a model or creates a trade without a fresh ChatGPT/R submission", async () => {
     const id = await account();

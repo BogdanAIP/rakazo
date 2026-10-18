@@ -83,7 +83,9 @@ while preserving its original time and provenance.
 Discovery uses official underlying categories where available, excludes
 non-crypto/unknown categories, and retains a curated fallback for legacy
 providers that omit categorization. All eligible liquid crypto symbols remain
-in research; only the execution-session suggestion is capped at eight.
+in the scanner and the model research input as ranked bulk quote/range data.
+Detailed execution snapshots and executable proposals stay within the owner-approved
+eight-instrument session; outside-session candidates require another reviewed choice.
 Aggressive suggestions rank rolling relative 24-hour range before liquidity,
 after spread/turnover filters. This is a candidate prefilter, not a signal.
 

@@ -508,6 +508,7 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
             limitPriceQuote: null,
             stopPriceQuote: "97",
             takeProfitPriceQuote: "110",
+            plannedRecoveryNotionalQuote: "50",
             recoverySteps: [
               { stepId: "first-retest", triggerPriceQuote: "97.8", allocationPercent: 50 },
               { stepId: "second-retest", triggerPriceQuote: "97.4", allocationPercent: 50 },

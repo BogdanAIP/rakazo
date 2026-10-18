@@ -69,7 +69,7 @@ import {
   toTeamChatInbound,
 } from "@rakazo/adapters";
 import { createAuth, isBlockedAuthPath, loopbackTwinOrigins } from "@rakazo/auth";
-import type { Actor, PaperPerpetualSnapshot } from "@rakazo/contracts";
+import type { Actor, PaperPerpetualSnapshot, TradingScanOutput } from "@rakazo/contracts";
 import { signupAllowlistBootUpdate, signupPolicyFromEnv } from "@rakazo/core";
 import type { Pool, PrismaClient } from "@rakazo/db";
 import {
@@ -156,6 +156,7 @@ export async function createApp(
     runtime?: AgentRuntime;
     perpetualPaperEngine?: PaperPerpetualEngine;
     perpetualPaperSnapshot?: (instrument: string) => Promise<PaperPerpetualSnapshot>;
+    perpetualPaperResearchScan?: () => Promise<Pick<TradingScanOutput, "fetchedAt" | "candidates">>;
     realtime?: RealtimeFanout;
     sandbox?: SandboxProvider;
     composio?: ComposioProvider;
@@ -171,6 +172,7 @@ export async function createApp(
     runtime: runtimeOverride,
     perpetualPaperEngine: perpetualPaperEngineOverride,
     perpetualPaperSnapshot: perpetualPaperSnapshotOverride,
+    perpetualPaperResearchScan: perpetualPaperResearchScanOverride,
     realtime: realtimeOverride,
     sandbox: sandboxOverride,
     composio: composioOverride,
@@ -496,6 +498,7 @@ export async function createApp(
     workerId: "api",
     runtime,
     fetchPerpetualPaperSnapshot: perpetualPaperSnapshotOverride,
+    fetchPerpetualPaperResearchScan: perpetualPaperResearchScanOverride,
     perpetualPaperEngine,
     secretStore: secrets,
     memoryProviders,

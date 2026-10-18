@@ -172,6 +172,7 @@ async function commitPerpetualEngineWakeOnce(
         // First protection with no positions need not create a wallet before research.
         if (!prior && !execution.length) {
           if (key.stage === "research") {
+            if (decision.kind === "close") outcome = "denied_close_unknown";
             if (tick.modelId) {
               control.lastResearchAt = now.toISOString();
               control.lastDecision = {

@@ -296,9 +296,9 @@ export function PaperPerpetualControls({
     .filter(Boolean)
     .map((symbol) => symbol.toUpperCase());
   const scanFresh = marketScan !== null && Date.now() - Date.parse(marketScan.fetchedAt) <= 90_000;
-  const visibleCandidates = (marketScan?.candidates ?? [])
-    .filter(({ market }) => market.symbol.includes(marketQuery.trim().toUpperCase()))
-    .slice(0, 40);
+  const visibleCandidates = (marketScan?.candidates ?? []).filter(({ market }) =>
+    market.symbol.includes(marketQuery.trim().toUpperCase()),
+  );
   const verified = status?.status === "verified" && status.managed ? status : null;
   const preset = verified ? getPaperExperimentPreset(verified.strategy) : null;
   const suggestedCryptoMarkets =
@@ -560,11 +560,6 @@ export function PaperPerpetualControls({
                         </p>
                       )}
                     </section>
-                    {marketScan.candidates.length > visibleCandidates.length && (
-                      <p className="text-xs text-muted-foreground">
-                        Показаны первые 40 совпадений; поиск работает по всему списку.
-                      </p>
-                    )}
                   </>
                 )}
               </section>

@@ -10,6 +10,7 @@ import type {
   PaperPerpetualCommand,
   PaperPerpetualDecision,
   PaperPerpetualSnapshot,
+  TradingScanOutput,
 } from "@rakazo/contracts";
 import { PaperPerpetualDecisionSchema } from "@rakazo/contracts";
 import {
@@ -17,6 +18,7 @@ import {
   isFreshPaperObservation,
   PAPER_OKX_LV1_FEES,
   PAPER_PERPETUAL_RISK_POLICY_VERSION,
+  suggestPaperPerpetualCryptoUniverse,
   summarizePaperVolatilityContext,
 } from "@rakazo/core";
 import type { PerpetualOwner, PrismaClient } from "@rakazo/db";
@@ -39,6 +41,7 @@ import { getLogger } from "@rakazo/logging";
 import { z } from "zod";
 import { invokePaperSkillDecision } from "./paper-skill-decision.js";
 import { fetchOkxPaperPerpetualSnapshot } from "./trading-okx-perp.js";
+import { fetchOkxPaperPerpetualResearchScan } from "./trading-paper-perpetual-discovery.js";
 
 type Deps = {
   engine?: PaperPerpetualEngine;
@@ -49,6 +52,7 @@ type Deps = {
 type WorkerDeps = Deps & {
   runtime: AgentRuntime;
   resolveModel: (scope: PerpetualOwner & { botId?: string }) => Promise<AgentRunModel>;
+  fetchResearchScan?: () => Promise<Pick<TradingScanOutput, "fetchedAt" | "candidates">>;
   fetchSnapshot?: (instrument: string) => Promise<PaperPerpetualSnapshot>;
 };
 async function enqueueNext(
@@ -290,6 +294,18 @@ export async function handlePerpetualPaperWake(
         // selection instead of silently falling back to the space-wide default.
         model = await deps.resolveModel({ ...owner, botId: current.row.botId });
         const preset = getPaperExperimentPreset(current.state.strategy);
+        failure = "market_data_unavailable";
+        const discovery = await (deps.fetchResearchScan ?? fetchOkxPaperPerpetualResearchScan)();
+        const universe = suggestPaperPerpetualCryptoUniverse(discovery, preset.id);
+        if (universe.stale) throw new Error("Stale PAPER research discovery");
+        const candidatesBySymbol = new Map(
+          discovery.candidates.map((row) => [row.market.symbol, row]),
+        );
+        const rankedCandidates = universe.researchSymbols.map((symbol) => ({
+          ...candidatesBySymbol.get(symbol)!,
+          executionAuthorized: current.control.instruments.includes(symbol),
+        }));
+        failure = "model_unavailable";
         const executionFees = current.control.instruments.map((instrument) => {
           const fees =
             current.engineConfig?.instruments.find((terms) => terms.instrument === instrument) ??
@@ -306,7 +322,7 @@ export async function handlePerpetualPaperWake(
           instructions: [
             "You research a virtual PAPER futures account. Return exactly one JSON decision matching the supplied schema.",
             "Use the selected Market Skill and supplied public OKX data. Never request exchange keys, real orders, account tools or delegation.",
-            "Select an independent strategy suitable for this profile. Compare all allowed instruments and decide no_trade, a new proposal, a partial reduce-only exit, or close an existing position.",
+            "Select an independent strategy suitable for this profile. Review every ranked candidate in researchUniverse before comparing the detailed snapshots of the owner-approved allowedInstruments. The research universe has no eight-symbol cap. Markets with executionAuthorized=false are research/watch candidates only: mention a better outside-session candidate in reason/rationale, but never propose an entry outside allowedInstruments or include it in the executable comparison. Decide no_trade, a new allowed proposal, a partial reduce-only exit, or close an existing position.",
             "Include comparison with asOf, validUntil (at most 30 minutes after asOf), method, profileRationale, and candidates: {instrument, verdict: selected|rejected|watch, reason, facts:[{name,value}]}. For a proposal select exactly its instrument; for no_trade or management select none. Use the supplied capture times and real public facts. Include futuresStressPolicy.policyVersion in comparison.method. Explain suitability for this risk profile beyond its leverage ceiling.",
             "Long and short positions are independent hedge lots. Opposite positions never cancel automatically. quantityBase is BASE currency, not contract count. You may hedge via a new opposite-side proposal if gross risk and remaining position slots allow it; a full close can free a slot for a later hedge.",
             "For reduce, specify an existing positionId and a positive quantityBase no greater than the held quantity, aligned to the contract lot increment; protect remaining lots. This never opens a new position. Opposite-side same-instrument hedges are independent ideas, but same-instrument same-side scale-ins share ONE per-idea loss budget across all lots.",
@@ -327,6 +343,7 @@ export async function handlePerpetualPaperWake(
           ].join("\n"),
           skill: { provenance: prepared.provenance, content: prepared.skillContent },
           data: {
+            researchUniverse: { fetchedAt: discovery.fetchedAt, rankedCandidates },
             snapshots,
             volatilityContext: snapshots.map((row) => ({
               instrument: row.market.symbol,
