@@ -1216,8 +1216,14 @@ async function cancelPerpetualEngineOrdersOnce(
         const recovered = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId, {
           transactionScopedReuse: true,
         });
-        if (preparedHead !== null && recovered?.headSha256 !== preparedHead)
-          throw new Error("PAPER journal advanced during native cancellation recovery");
+        if (preparedHead !== null && recovered?.headSha256 !== preparedHead) {
+          // Another protective process may advance an order-free wallet during
+          // cold recovery. No cancellation is needed; discard the stale cache.
+          // Pending orders still require an exactly matching recovered head.
+          engine.invalidate(ledgerId);
+          if (!recovered?.snapshot || recovered.snapshot.openOrders.length)
+            throw new Error("PAPER journal advanced during native cancellation recovery");
+        }
         if (!recovered?.snapshot?.openOrders.length) return;
         await cancelNativeEntriesInTransaction(
           tx,

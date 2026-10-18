@@ -14,6 +14,7 @@ import type {
 import { buildSkillMd } from "@rakazo/core";
 import type { Prisma } from "@rakazo/db";
 import {
+  cancelPerpetualEngineOrders,
   commitPerpetualEngineWake,
   commitPerpetualPaperWake,
   createDb,
@@ -3173,6 +3174,118 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         );
       } finally {
         engine.dispose();
+      }
+    },
+    120000,
+  );
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "resumes a held wallet when another process advances an order-free recovery",
+    async () => {
+      const options = {
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      };
+      const warm = new NautilusPaperEngine(options);
+      const cold = new NautilusPaperEngine(options);
+      try {
+        const id = await account();
+        await start(id, warm);
+        decision = proposal("long");
+        await handlePerpetualPaperWake({ ...worker(), engine: warm }, await payload(id, true));
+        const initial = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+        await controlPerpetualPaperWorkspace({ ...deps(), engine: warm }, owner, {
+          action: "pause",
+          ledgerId: id,
+          expectedRevision: initial.revision,
+          commandId: randomUUID(),
+        });
+        const before = await state(id);
+        const paused = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+        decision = {
+          kind: "no_trade",
+          reason: "Independent protective process advances the journal",
+        };
+        const prepare = cold.prepare.bind(cold);
+        const interleave = vi.spyOn(cold, "prepare").mockImplementationOnce(async (...args) => {
+          await prepare(...args);
+          await handlePerpetualPaperWake({ ...worker(), engine: warm }, await payload(id, true));
+        });
+        const invalidate = vi.spyOn(cold, "invalidate");
+        const apply = vi.spyOn(cold, "apply");
+        await controlPerpetualPaperWorkspace({ ...deps(), engine: cold }, owner, {
+          action: "resume",
+          ledgerId: id,
+          expectedRevision: paused.revision,
+          commandId: randomUUID(),
+          durationMinutes: 60,
+          protectionMinutes: 60,
+        });
+        expect(interleave).toHaveBeenCalledOnce();
+        expect(invalidate).toHaveBeenCalledWith(id);
+        expect(apply).not.toHaveBeenCalled();
+        const after = await state(id);
+        expect(after.openPositions).toEqual(before.openPositions);
+        expect(after.bookBalanceQuote).toBe(before.bookBalanceQuote);
+        expect(after.totalFeesQuote).toBe(before.totalFeesQuote);
+        expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
+          sessionStatus: "active",
+          runtimeError: null,
+          openOrders: [],
+          recoveryReservations: paused.recoveryReservations,
+        });
+        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
+          "verified",
+        );
+      } finally {
+        warm.dispose();
+        cold.dispose();
+      }
+    },
+    120000,
+  );
+
+  it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
+    "refuses stale cancellation recovery when native entry orders still exist",
+    async () => {
+      const options = {
+        pythonCommand: process.env.PAPER_NAUTILUS_PYTHON!,
+        scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
+      };
+      const warm = new NautilusPaperEngine(options),
+        cold = new NautilusPaperEngine(options);
+      try {
+        const id = await account();
+        await start(id, warm);
+        decision = { ...proposal("long"), orderType: "limit", limitPriceQuote: "99" };
+        await handlePerpetualPaperWake({ ...worker(), engine: warm }, await payload(id, true));
+        const before = await state(id);
+        const workspace = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+        expect(workspace.openOrders).toHaveLength(1);
+        decision = {
+          kind: "no_trade",
+          reason: "Keep the existing native limit while protection advances",
+        };
+        const prepare = cold.prepare.bind(cold);
+        vi.spyOn(cold, "prepare").mockImplementationOnce(async (...args) => {
+          await prepare(...args);
+          await handlePerpetualPaperWake({ ...worker(), engine: warm }, await payload(id, true));
+        });
+        const apply = vi.spyOn(cold, "apply");
+        await expect(
+          cancelPerpetualEngineOrders(db.prisma, owner, id, cold, workspace.revision),
+        ).rejects.toThrow("PAPER journal advanced during native cancellation recovery");
+        expect(apply).not.toHaveBeenCalled();
+        expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))?.openOrders).toEqual(
+          workspace.openOrders,
+        );
+        expect((await state(id)).bookBalanceQuote).toBe(before.bookBalanceQuote);
+        expect((await state(id)).openPositions).toHaveLength(0);
+        expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
+          "verified",
+        );
+      } finally {
+        warm.dispose();
+        cold.dispose();
       }
     },
     120000,
