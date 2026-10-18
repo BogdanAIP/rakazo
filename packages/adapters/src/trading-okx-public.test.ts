@@ -95,6 +95,41 @@ describe("read-only OKX public catalog", () => {
     expect("tickers" in result).toBe(false);
   });
 
+  it("preserves official underlying categories and rolling relative range", async () => {
+    const rows = ["1", "3", "4", "5", "6", "7", "2"].map((instCategory, i) =>
+      swap({ instCategory, instId: "ASSET" + i + "-USDT-SWAP", instFamily: "ASSET" + i + "-USDT" }),
+    );
+    const catalog = await run([wrap([]), wrap(rows), wrap([])]);
+    expect(catalog.markets.map((market) => market.underlyingClass)).toEqual([
+      "crypto",
+      "equity",
+      "commodity",
+      "fx",
+      "bond",
+      "unknown",
+      "unknown",
+    ]);
+    const ticks = await fetchOkxPublicPerpetualTickers(catalog.markets, {
+      now,
+      fetchImpl: transport([
+        wrap([
+          {
+            instType: "SWAP",
+            instId: "ASSET0-USDT-SWAP",
+            bidPx: "99",
+            askPx: "101",
+            high24h: "110",
+            low24h: "90",
+            volCcy24h: "100000",
+            ts: String(now.getTime()),
+          },
+        ]),
+      ]).fetchImpl,
+    });
+    expect(ticks[0]?.range24hPercent).toBe(20);
+    expect(ticks[0]?.quoteVolume24h).toBe("10000000.00");
+  });
+
   it("separately rejects premarket X-perps, stale contracts and incomplete metadata", async () => {
     const result = await run([
       wrap([spot({ tickSz: "", state: "live" })]),

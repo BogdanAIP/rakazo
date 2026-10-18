@@ -18,6 +18,8 @@ import {
   paperPerpetualNotional as notional,
   observePaperRecoverySteps,
   PAPER_OKX_LV1_FEES,
+  PAPER_PERPETUAL_RISK_POLICY_VERSION,
+  paperPerpetualOrderExpiresAt,
   planPaperRecoverySteps,
   previewPaperPerpetualProposal,
   projectPerpetualEngineSnapshot,
@@ -135,6 +137,17 @@ async function commitPerpetualEngineWakeOnce(
         });
         if (preparedHead !== null && prior?.headSha256 !== preparedHead)
           throw new Error("PAPER journal advanced during native recovery; retry wake");
+        if (prior?.snapshot?.openOrders.length) {
+          // Drain cancellation with zero liquidity in its own native batch.
+          // Queuing a cancel alongside a crossing quote can match the GTC first.
+          prior = await cancelNativeEntriesInTransaction(
+            tx,
+            owner,
+            prior,
+            engine,
+            "native-revalidate:" + hash([key.ledgerId, key.revision, key.scheduledFor, key.stage]),
+          );
+        }
         const old = await recoverPerpetualPaperInTransaction(tx, owner, key.ledgerId, {
           transactionScopedNativeReuse: true,
         });
@@ -164,6 +177,7 @@ async function commitPerpetualEngineWakeOnce(
               control.lastDecision = {
                 at: now.toISOString(),
                 outcome,
+                riskPolicyVersion: PAPER_PERPETUAL_RISK_POLICY_VERSION,
                 rationale: decision.kind === "proposal" ? decision.rationale : decision.reason,
                 provider: tick.modelProvider,
                 model: tick.modelId,
@@ -241,10 +255,6 @@ async function commitPerpetualEngineWakeOnce(
           effectiveConfig = { ...effectiveConfig, instruments: [...next.values()] };
         }
         const contractUpdateDeferred = contractUpdatePending && !canUpdateContracts;
-        // Cancel resting entries before feeding any new executable quote. Every
-        // remaining intent must pass independent risk again on this wake.
-        for (const o of priorSnapshot?.openOrders ?? [])
-          batch.commands.push({ kind: "cancel", instrument: o.instrument, orderId: o.orderId });
         const nativeClock = BigInt(priorSnapshot?.clockNs ?? "0");
         for (const p of state.openPositions)
           if (!snapshots.has(p.instrument))
@@ -411,6 +421,14 @@ async function commitPerpetualEngineWakeOnce(
           }
         };
         await applySettlement(":observe");
+        if (active && key.stage === "research" && decision.kind === "close") {
+          const held = old.state.openPositions.some((p) => p.positionId === decision.positionId);
+          outcome = !held
+            ? "denied_close_unknown"
+            : state.openPositions.some((p) => p.positionId === decision.positionId)
+              ? "close_partial_or_not_ready"
+              : "closed";
+        }
         now = await perpetualDatabaseClock(tx);
         clock = now.getTime();
         active =
@@ -441,9 +459,14 @@ async function commitPerpetualEngineWakeOnce(
         let beforeEntry = state;
         let accepted: ReturnType<typeof previewPaperPerpetualProposal> | null = null;
         let enteringPosition: string | null = null;
+        let processedOrderId: string | null = null;
         if (key.stage === "research") {
           if (active && control.source) await verifyPerpetualSource(tx, owner, control.source);
-          if (!active || contractUpdateDeferred) control.orders = [];
+          if ((!active || contractUpdateDeferred) && control.orders.length) {
+            processedOrderId = control.orders[0]!.orderId;
+            outcome = !active ? "order_expired" : "denied_contract_terms_pending";
+            control.orders = [];
+          }
           if (active && decision.kind === "proposal" && !control.orders.length) {
             if (contractUpdateDeferred) outcome = "denied_contract_terms_pending";
             else if (!control.instruments.includes(decision.instrument)) outcome = "denied_market";
@@ -466,13 +489,12 @@ async function commitPerpetualEngineWakeOnce(
                   proposal: decision,
                   ideaRiskSpentQuote: "0",
                   submittedAt: tick.recordedAt.toISOString(),
-                  expiresAt: new Date(
-                    Math.min(
-                      tick.recordedAt.getTime() + 300000,
-                      Date.parse(control.expiresAt!),
-                      decision.comparison ? Date.parse(decision.comparison.validUntil) : Infinity,
-                    ),
-                  ).toISOString(),
+                  expiresAt: paperPerpetualOrderExpiresAt({
+                    orderType: decision.orderType,
+                    submittedAt: tick.recordedAt.toISOString(),
+                    sessionExpiresAt: control.expiresAt!,
+                    comparisonValidUntil: decision.comparison?.validUntil,
+                  }),
                 },
               ];
           }
@@ -481,6 +503,7 @@ async function commitPerpetualEngineWakeOnce(
               const order = control.orders[0]!,
                 p = order.proposal,
                 s = snapshots.get(p.instrument);
+              processedOrderId = order.orderId;
               if (!s) throw new Error("Futures execution market missing");
               enteringPosition = p.addToPositionId ?? "paper-position:" + hash(order.orderId);
               const existingAddition = p.addToPositionId
@@ -626,17 +649,11 @@ async function commitPerpetualEngineWakeOnce(
                 now: now.toISOString(),
               });
               const intendedNotional = entry ? notional(amount(p.quantityBase), amount(entry)) : 0n;
-              // Every fresh idea receives at least 50% of its initial notional
-              // in separately budgeted future scale-in capacity. No staged order
-              // is submitted automatically; a later AI decision and fresh risk
-              // gate are still mandatory.
-              const automaticRecovery = p.addToPositionId ? 0n : ceil(intendedNotional, 2n);
-              const suggestedRecovery =
-                !p.addToPositionId && p.plannedRecoveryNotionalQuote
-                  ? amount(p.plannedRecoveryNotionalQuote)
-                  : 0n;
-              const newRecovery =
-                suggestedRecovery > automaticRecovery ? suggestedRecovery : automaticRecovery;
+              // Reserve only explicitly planned adds. Zero is a complete single-entry idea.
+              // Positive reserves still require fixed stages and a fresh later decision.
+              const newRecovery = p.addToPositionId
+                ? 0n
+                : amount(p.plannedRecoveryNotionalQuote ?? "0");
               const consumedRecovery = p.addToPositionId ? intendedNotional : 0n;
               const remainingReserve = (plan: (typeof riskPlans)[number]) => {
                 const reserved = amount(plan.recoveryReserveQuote);
@@ -787,7 +804,11 @@ async function commitPerpetualEngineWakeOnce(
                 maintenanceMarginBps: s.rules.maintenanceMarginBps,
               });
               let denied: string | null = null;
-              if (!p.addToPositionId && proposedRecoverySteps === null)
+              if (
+                !p.addToPositionId &&
+                ((newRecovery > 0n && proposedRecoverySteps === null) ||
+                  (newRecovery === 0n && p.recoverySteps !== undefined))
+              )
                 denied = "denied_recovery_plan_invalid";
               else if (p.addToPositionId && !existingAddition) denied = "denied_add_unknown";
               else if (
@@ -820,6 +841,14 @@ async function commitPerpetualEngineWakeOnce(
               )
                 denied = "denied_add_falling_knife";
               else if (Date.parse(order.expiresAt) <= clock) denied = "order_expired";
+              else if (
+                p.side === "long"
+                  ? amount(s.markPriceQuote) <= amount(p.stopPriceQuote) ||
+                    amount(s.markPriceQuote) >= amount(p.takeProfitPriceQuote)
+                  : amount(s.markPriceQuote) >= amount(p.stopPriceQuote) ||
+                    amount(s.markPriceQuote) <= amount(p.takeProfitPriceQuote)
+              )
+                denied = "entry_invalidated";
               else if (Date.parse(s.book.observedAt) < Date.parse(order.submittedAt))
                 denied = "quote_before_submission";
               else if (!s.fundingNextAt || Date.parse(s.fundingNextAt) <= clock)
@@ -830,7 +859,7 @@ async function commitPerpetualEngineWakeOnce(
               else if (risk.status !== "inert_preview") denied = "denied_" + risk.reason;
               else if (
                 amount(order.ideaRiskSpentQuote) + amount(risk.worstCaseStopLossQuote) >
-                amount(preset.maxPerIdeaRiskQuote)
+                amount(risk.maxPerIdeaRiskQuote)
               )
                 denied = "denied_risk_budget_exceeded";
               else if (
@@ -1110,11 +1139,19 @@ async function commitPerpetualEngineWakeOnce(
           control.lastDecision = {
             at: now.toISOString(),
             outcome,
+            riskPolicyVersion: PAPER_PERPETUAL_RISK_POLICY_VERSION,
             rationale: decision.kind === "proposal" ? decision.rationale : decision.reason,
             provider: tick.modelProvider,
             model: tick.modelId,
             comparison: decision.comparison,
+            ...(decision.kind === "proposal" && processedOrderId
+              ? { orderId: processedOrderId }
+              : {}),
           };
+        } else if (processedOrderId && control.lastDecision?.orderId === processedOrderId) {
+          // Settlement updates this order's result without inventing a new AI decision
+          // or overwriting its original research time, rationale and provenance.
+          control.lastDecision.outcome = outcome;
         }
         control.runtimeError = null;
         const needsNext = active || (state.openPositions.length > 0 && protects);
@@ -1177,25 +1214,13 @@ async function cancelPerpetualEngineOrdersOnce(
         if (preparedHead !== null && recovered?.headSha256 !== preparedHead)
           throw new Error("PAPER journal advanced during native cancellation recovery");
         if (!recovered?.snapshot?.openOrders.length) return;
-        const batch: PaperPerpetualEngineBatch = {
-          sequence: recovered.snapshot.sequence + 1,
-          quotes: [],
-          funding: [],
-          commands: recovered.snapshot.openOrders.map((o) => ({
-            kind: "cancel",
-            instrument: o.instrument,
-            orderId: o.orderId,
-          })),
-        };
-        const output = await engine.apply(recovered.config, recovered.transitions, batch);
-        if (output.openOrders.length) throw new Error("Native pending cancellation incomplete");
-        await appendPerpetualEngineBatchInTransaction(tx, owner, {
-          config: recovered.config,
-          batchId: "native-cancel:" + hash([ledgerId, row.revision, batch.sequence]),
-          input: batch,
-          output,
-          expectedHead: recovered.headSha256,
-        });
+        await cancelNativeEntriesInTransaction(
+          tx,
+          owner,
+          recovered,
+          engine,
+          "native-cancel:" + hash([ledgerId, row.revision, recovered.snapshot.sequence + 1]),
+        );
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 60000 },
     );
@@ -1203,4 +1228,45 @@ async function cancelPerpetualEngineOrdersOnce(
     engine.invalidate(ledgerId);
     throw error;
   }
+}
+
+/** Shared by wake revalidation and owner pause/restart; never carries executable liquidity. */
+async function cancelNativeEntriesInTransaction(
+  tx: Prisma.TransactionClient,
+  owner: PerpetualOwner,
+  recovered: NonNullable<Awaited<ReturnType<typeof recoverPerpetualEngineInTransaction>>>,
+  engine: PaperPerpetualEngine,
+  batchId: string,
+) {
+  const snapshot = recovered.snapshot!;
+  const batch: PaperPerpetualEngineBatch = {
+    sequence: snapshot.sequence + 1,
+    quotes: [],
+    funding: [],
+    commands: snapshot.openOrders.map((o) => ({
+      kind: "cancel",
+      instrument: o.instrument,
+      orderId: o.orderId,
+    })),
+  };
+  const output = await engine.apply(recovered.config, recovered.transitions, batch);
+  if (
+    output.openOrders.length ||
+    output.events.some((event) => event.kind === "fill") ||
+    output.balanceQuote !== snapshot.balanceQuote ||
+    output.totalFeesQuote !== snapshot.totalFeesQuote
+  )
+    throw new Error("Native cancellation changed exposure or money");
+  await appendPerpetualEngineBatchInTransaction(tx, owner, {
+    config: recovered.config,
+    batchId,
+    input: batch,
+    output,
+    expectedHead: recovered.headSha256,
+  });
+  const next = await recoverPerpetualEngineInTransaction(tx, owner, recovered.config.accountId, {
+    transactionScopedReuse: true,
+  });
+  if (!next) throw new Error("Native cancellation journal missing");
+  return next;
 }

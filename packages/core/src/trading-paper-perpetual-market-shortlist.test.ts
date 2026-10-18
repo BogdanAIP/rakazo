@@ -75,6 +75,48 @@ describe("safe PAPER futures pre-session crypto shortlist", () => {
     ]);
   });
 
+  it("researches every officially classified liquid crypto and ranks aggressive ideas by relative range", () => {
+    const liquid = Array.from({ length: 12 }, (_, i) => {
+      const value = candidate("ALT" + i, String(50_000_000 + i));
+      value.market.underlyingClass = "crypto";
+      value.ticker.range24hPercent = i;
+      return value;
+    });
+    const disguised = candidate("BTC", "900000000");
+    disguised.market.underlyingClass = "equity";
+    const unknown = candidate("ETH", "800000000");
+    unknown.market.underlyingClass = "unknown";
+    const out = suggestPaperPerpetualCryptoUniverse(
+      scan([...liquid, disguised, unknown]),
+      "aggressive",
+      NOW,
+    );
+    expect(out.eligibleCount).toBe(12);
+    expect(out.researchSymbols).toHaveLength(12);
+    expect(out.symbols).toHaveLength(8);
+    expect(out.researchSymbols[0]).toBe("ALT11-USDT-SWAP");
+    expect(out.researchSymbols.at(-1)).toBe("ALT0-USDT-SWAP");
+    expect(out.unclassifiedCount).toBe(2);
+    expect(
+      suggestPaperPerpetualCryptoUniverse(scan(liquid), "conservative", NOW).eligibleCount,
+    ).toBe(12);
+    liquid[0]!.ticker.quoteVolume24h = "4999999";
+    liquid[1]!.spreadBps = 21;
+    expect(
+      suggestPaperPerpetualCryptoUniverse(scan(liquid), "aggressive", NOW).qualityExcludedCount,
+    ).toBe(2);
+  });
+
+  it("rejects stale or mismatched ticker evidence even inside a fresh scan", () => {
+    const stale = candidate("BTC", "90000000");
+    stale.ticker.observedAt = new Date(NOW.getTime() - 91_000).toISOString();
+    const foreign = candidate("ETH", "90000000");
+    foreign.ticker.venue = "other";
+    expect(
+      suggestPaperPerpetualCryptoUniverse(scan([stale, foreign]), "aggressive", NOW),
+    ).toMatchObject({ symbols: [], qualityExcludedCount: 2 });
+  });
+
   it("rejects stale or future discovery and never falls back to all symbols", () => {
     const markets = [candidate("BTC", "200000000")];
     expect(

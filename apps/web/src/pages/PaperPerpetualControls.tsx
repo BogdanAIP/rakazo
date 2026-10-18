@@ -328,9 +328,10 @@ export function PaperPerpetualControls({
       {verified && preset && (
         <>
           <p className="text-sm text-muted-foreground">
-            Риск на сделку до {preset.maxPerIdeaRiskQuote} USDT · дневной убыток до{" "}
-            {preset.maxDailyLossQuote} USDT · совокупный риск до {preset.maxOpenRiskQuote} USDT ·
-            плечо до {verified.maxLeverage}× · позиций до {preset.maxConcurrentPositions}.
+            Базовый риск от текущего капитала: идея до {Number(preset.maxPerIdeaRiskQuote) / 10}% ·
+            день до {Number(preset.maxDailyLossQuote) / 10}% · всего до{" "}
+            {Number(preset.maxOpenRiskQuote) / 10}% · плечо до {verified.maxLeverage}× · позиций до{" "}
+            {preset.maxConcurrentPositions}.
           </p>
           {verified.expiresAt && (
             <p className="text-sm">

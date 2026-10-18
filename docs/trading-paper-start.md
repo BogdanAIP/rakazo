@@ -31,7 +31,7 @@ a new reviewed Start.
 Only virtual funds and public, keyless market observations are used. There is
 no exchange-order dispatcher. Fill prices, fees and stop closes are synthetic;
 the displayed balance uses accounting cost rather than live position
-valuation. The current execution scope is spot-buy USDT on OKX or BingX.
+valuation. The spot execution scope is spot-buy USDT on OKX or BingX.
 
 Web and Electron share this workspace. The responsive authenticated web route
 is available on mobile browsers; the native Expo application has no automatic
@@ -40,3 +40,55 @@ PAPER start control.
 For a new installation, apply the repository's database migrations and run
 the normal API/worker/web services. Worker reconciliation recovers only
 explicitly authorized protective work and never restarts entry sessions.
+
+## Perpetual PAPER policy: paper-risk-v3
+
+The futures tab uses a separate append-only native simulator journal, three
+independent virtual accounts and finite entry/protection authority. It never
+dispatches real exchange orders. Existing positions retain their booked stops,
+targets and recovery reserves across a policy upgrade.
+
+| Profile | Per idea | All open ideas | Daily realized loss |
+| --- | --- | --- | --- |
+| Conservative | 0.5% | 1% | 1.5% |
+| Moderate | 1% | 2% | 3% |
+| Aggressive | 2% | 4% | 5% |
+
+Budgets use verified current marked equity, with exact fixed-point rounding
+down. High-watermark drawdowns of 2.5% / 5% / 8% halve new idea and open-risk
+budgets; 5% / 10% / 15% block new exposure respectively. Protective exits remain
+available within their explicit authority.
+
+Size follows the structural stop, entry/exit fees and adverse slippage.
+A mandatory 50% adverse move against every gross leg, including unspent add
+reserves, must leave more than maintenance plus 25% of equity. Held markets use
+their own verified maintenance rates with a 2% stress floor. Opposite hedge
+legs never net away. A 100% adverse gross move and a long collapse / 200% short
+rally remain diagnostics and may exhaust equity; they do not reject admission.
+These simplified PAPER scenarios do not reproduce venue liquidation guarantees.
+
+A single-entry idea can reserve zero future adds. A positive add reserve needs
+two preplanned stages totaling 100%; it consumes gross, margin and whole-idea
+stop-risk capacity before the first fill. A triggered stage still requires a
+new decision and fresh structure/risk checks. No automatic averaging or widening
+an existing stop is permitted.
+
+A compared limit lasts until its signal validity, at most 30 minutes after
+submission, bounded by the session deadline. Market and legacy proposals retain
+a five-minute bound. Every wake cancels native resting entries before the next
+quote and rechecks admission. A mark reaching the stop or target invalidates an
+unfilled idea. Later fill/expiry outcomes update the same decision's result
+while preserving its original time and provenance.
+
+Discovery uses official underlying categories where available, excludes
+non-crypto/unknown categories, and retains a curated fallback for legacy
+providers that omit categorization. All eligible liquid crypto symbols remain
+in research; only the execution-session suggestion is capped at eight.
+Aggressive suggestions rank rolling relative 24-hour range before liquidity,
+after spread/turnover filters. This is a candidate prefilter, not a signal.
+
+Evaluate policy versions on the same captured inputs before comparing forward
+results. Record the version, candidate coverage, rejection reasons, net fills,
+fees, funding, drawdown and completed trades. Keep old records intact. There is
+no validated profit expectation, universal reward/risk threshold, daily return
+quota or automatic strategy scheduling in external ChatGPT mode.

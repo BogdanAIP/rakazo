@@ -16,6 +16,8 @@ const outcomes: Record<string, string> = {
   partially_filled: "Исполнено частично",
   order_pending: "Ордер ожидает цены",
   order_expired: "Срок ордера истёк",
+  entry_invalidated: "Идея отменена: цена достигла стопа или цели",
+  denied_close_unknown: "Позиция для закрытия не найдена",
   closed: "Позиция закрыта",
   close_partial_or_not_ready: "Выход исполнен частично или ожидает котировки",
   denied_market: "Пара вне выбранного списка",

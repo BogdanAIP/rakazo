@@ -209,6 +209,8 @@ export const PaperPerpetualWorkspaceStatusSchema = z.object({
     .object({
       at: IsoDate,
       outcome: z.string(),
+      orderId: Id.optional(),
+      riskPolicyVersion: z.string().min(1).max(64).optional(),
       rationale: z.string(),
       provider: z.string().nullable(),
       model: z.string().nullable(),
@@ -361,6 +363,8 @@ export const PerpetualControlSchema = z
       .object({
         at: IsoDate,
         outcome: z.string(),
+        orderId: Id.optional(),
+        riskPolicyVersion: z.string().min(1).max(64).optional(),
         rationale: z.string(),
         provider: z.string().nullable(),
         model: z.string().nullable(),

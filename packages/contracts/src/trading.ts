@@ -33,6 +33,8 @@ export const TradingInstrumentSchema = z
     base: z.string().trim().min(1).max(40),
     quote: z.string().trim().min(1).max(40),
     status: z.enum(["active", "inactive"]),
+    /** Venue metadata, not a symbol-name guess. Absence supports legacy providers. */
+    underlyingClass: z.enum(["crypto", "equity", "commodity", "fx", "bond", "unknown"]).optional(),
     priceIncrement: TradingPositiveDecimalSchema.nullable(),
     quantityIncrement: TradingPositiveDecimalSchema.nullable(),
     minNotional: TradingPositiveDecimalSchema.nullable(),
@@ -58,6 +60,8 @@ export const TradingTickerSchema = z.object({
   bid: TradingPositiveDecimalSchema,
   ask: TradingPositiveDecimalSchema,
   quoteVolume24h: TradingDecimalSchema,
+  /** Rolling high-low range divided by the current midpoint, in percent. Discovery only. */
+  range24hPercent: z.number().finite().min(0).max(1_000_000).optional(),
 });
 export type TradingTicker = z.infer<typeof TradingTickerSchema>;
 
