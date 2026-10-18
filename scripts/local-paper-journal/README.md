@@ -56,12 +56,16 @@ RAKAZO_LINKED_PAPER_URL to the gateway's loopback origin for the main web proces
 The main API and PAPER services retain their existing launchers and finite
 authority. The gateway binds only to 127.0.0.1. It does not start trading.
 
-The main web/Electron account menu shows “Журнал PAPER” only when the gateway
+When Electron uses the configured external local web server, its bundled renderer
+passes journal requests through to that server. The main web/Electron account menu shows “Журнал PAPER” only when the gateway
 confirms access. Its page embeds the already reviewed futures journal with a
 return link to the main application. Unsupported/unconfigured deployments
 show no menu item; a direct link fails closed. This optional loopback view
 requires a browser on the local host; it does not provision a remote mobile
-connection.
+connection. Electron’s managed Docker stack is also unsupported by this host-only
+gateway: the container does not share the host loopback address or protected
+credential launcher. Leave it unconfigured there; its menu remains hidden and
+a direct link fails closed. This setup does not expose the gateway beyond loopback.
 
 ## Validation
 
