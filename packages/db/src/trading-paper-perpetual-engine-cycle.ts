@@ -236,7 +236,11 @@ async function commitPerpetualEngineWakeOnce(
         const priorSnapshot = prior?.snapshot;
         let effectiveConfig = prior?.effectiveConfig ?? config;
         const known = new Set(effectiveConfig.instruments.map((i) => i.instrument));
-        const additions = control.instruments.filter((symbol) => !known.has(symbol)).map(termsFor);
+        // Flat external protection/no-trade wakes intentionally omit unused markets.
+        // Defer scope additions until a fresh execution capture provides their terms.
+        const additions = control.instruments
+          .filter((symbol) => !known.has(symbol) && snapshots.has(symbol))
+          .map(termsFor);
         const existing = new Map(
           effectiveConfig.instruments.map((term) => [term.instrument, term]),
         );
