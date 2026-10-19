@@ -1,0 +1,308 @@
+import { readFile, realpath, stat } from "node:fs/promises";
+import { createServer } from "node:http";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+
+const PREFIX = "/linked-paper";
+const MAX_BODY = 1024 * 1024;
+const MAX_RESPONSE = 16 * 1024 * 1024;
+const MIME = {
+  ".js": "text/javascript",
+  ".css": "text/css",
+  ".woff2": "font/woff2",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+};
+
+function localOrigin(value) {
+  const u = new URL(value);
+  if (
+    u.protocol !== "http:" ||
+    !["127.0.0.1", "localhost", "[::1]"].includes(u.hostname) ||
+    u.username ||
+    u.password ||
+    u.search ||
+    u.hash ||
+    u.pathname !== "/"
+  )
+    throw new Error("Journal gateway configuration invalid");
+  return u.origin;
+}
+
+export function validateConfig(raw, env = process.env) {
+  const keys = [
+    "publicOrigin",
+    "authOrigin",
+    "authApi",
+    "allowedUserId",
+    "paperApi",
+    "paperOrigin",
+    "paperSpaceId",
+    "procedures",
+    "expiresAt",
+    "credentialEnv",
+    "assetsDir",
+    "port",
+  ];
+  if (!raw || typeof raw !== "object" || Object.keys(raw).some((k) => !keys.includes(k)))
+    throw new Error("Journal gateway configuration invalid");
+  for (const key of ["allowedUserId", "paperSpaceId", "assetsDir"])
+    if (typeof raw[key] !== "string" || !raw[key].trim())
+      throw new Error("Journal gateway configuration invalid");
+  if (
+    !Array.isArray(raw.procedures) ||
+    !raw.procedures.length ||
+    raw.procedures.length > 64 ||
+    raw.procedures.some(
+      (p) => typeof p !== "string" || !/^trading\/[A-Za-z][A-Za-z0-9]*$/.test(p),
+    ) ||
+    new Set(raw.procedures).size !== raw.procedures.length
+  )
+    throw new Error("Journal gateway configuration invalid");
+  if (
+    !/^[A-Z][A-Z0-9_]{0,127}$/.test(raw.credentialEnv ?? "") ||
+    !/^rkg_[A-Za-z0-9_-]{43}$/.test(env[raw.credentialEnv] ?? "") ||
+    !Number.isFinite(Date.parse(raw.expiresAt)) ||
+    !path.isAbsolute(raw.assetsDir) ||
+    !Number.isInteger(raw.port) ||
+    raw.port < 1024 ||
+    raw.port > 65535
+  )
+    throw new Error("Journal gateway configuration invalid");
+  return {
+    ...raw,
+    publicOrigin: localOrigin(raw.publicOrigin),
+    authOrigin: localOrigin(raw.authOrigin ?? raw.publicOrigin),
+    authApi: localOrigin(raw.authApi),
+    paperApi: localOrigin(raw.paperApi),
+    paperOrigin: localOrigin(raw.paperOrigin),
+    accessToken: env[raw.credentialEnv],
+    assetsDir: path.resolve(raw.assetsDir),
+  };
+}
+
+function reply(status, message) {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: {
+      "content-type": "application/json",
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+    },
+  });
+}
+
+async function boundedBytes(response, limit) {
+  const declared = Number(response.headers.get("content-length") ?? 0);
+  if (declared > limit) {
+    await response.body?.cancel();
+    throw new Error("Response too large");
+  }
+  const reader = response.body?.getReader();
+  const chunks = [];
+  let size = 0;
+  if (!reader) return new Uint8Array();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > limit) {
+        await reader.cancel();
+        throw new Error("Response too large");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, size);
+}
+
+export function createJournalGateway(config, fetchImpl = fetch, now = Date.now) {
+  async function authenticate(request) {
+    const headers = new Headers({ origin: config.authOrigin ?? config.publicOrigin });
+    for (const name of ["cookie", "authorization"]) {
+      const value = request.headers.get(name);
+      if (value) headers.set(name, value);
+    }
+    if (!headers.has("cookie") && !headers.has("authorization"))
+      return reply(401, "Sign in to Rakazo");
+    let response, data;
+    try {
+      response = await fetchImpl(`${config.authApi}/api/auth/get-session?disableCookieCache=true`, {
+        headers,
+        redirect: "error",
+        signal: AbortSignal.timeout(5000),
+        cache: "no-store",
+      });
+      if (response.status >= 500) return reply(503, "Rakazo authentication unavailable");
+      if (!response.ok) return reply(401, "Sign in to Rakazo");
+      data = JSON.parse(Buffer.from(await boundedBytes(response, 65536)).toString("utf8"));
+    } catch {
+      return reply(503, "Rakazo authentication unavailable");
+    }
+    if (
+      !data?.user?.id ||
+      !data?.session?.expiresAt ||
+      !Number.isFinite(Date.parse(data.session.expiresAt)) ||
+      Date.parse(data.session.expiresAt) <= now()
+    )
+      return reply(401, "Sign in to Rakazo");
+    if (
+      data.user.id !== config.allowedUserId ||
+      (data.session.userId && data.session.userId !== data.user.id)
+    )
+      return reply(403, "Journal access denied");
+    return null;
+  }
+
+  return async function handle(request) {
+    try {
+      const url = new URL(request.url);
+      const pathname = url.pathname;
+      if (pathname.startsWith(`${PREFIX}/assets/`)) {
+        if (request.method !== "GET" && request.method !== "HEAD")
+          return reply(405, "Method not allowed");
+        const relative = decodeURIComponent(pathname.slice(`${PREFIX}/`.length));
+        if (
+          !/^assets\/[A-Za-z0-9._/-]+$/.test(relative) ||
+          relative.split("/").some((s) => s === ".." || s === ".")
+        )
+          return reply(404, "Not found");
+        const base = await realpath(config.assetsDir);
+        let file;
+        try {
+          file = await realpath(path.join(base, relative));
+        } catch {
+          return reply(404, "Not found");
+        }
+        const fromBase = path.relative(base, file);
+        if (fromBase.startsWith("..") || path.isAbsolute(fromBase)) return reply(404, "Not found");
+        const type = MIME[path.extname(file)];
+        const info = await stat(file);
+        if (!type || !info.isFile() || info.size > MAX_RESPONSE) return reply(404, "Not found");
+        return new Response(request.method === "HEAD" ? null : await readFile(file), {
+          headers: {
+            "content-type": type,
+            "cache-control": "no-cache",
+            "x-content-type-options": "nosniff",
+          },
+        });
+      }
+      const isStatus = pathname === `${PREFIX}/status`;
+      const isView = pathname === `${PREFIX}/view`;
+      const isRpc = pathname.startsWith(`${PREFIX}/rpc/`);
+      if (!isStatus && !isView && !isRpc) return reply(404, "Not found");
+      if (isRpc) {
+        if (request.method !== "POST") return reply(405, "Method not allowed");
+        if (request.headers.get("origin") !== config.publicOrigin)
+          return reply(403, "Origin denied");
+        if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json"))
+          return reply(415, "JSON required");
+        if (url.search) return reply(404, "Not found");
+        const procedure = pathname.slice(`${PREFIX}/rpc/`.length);
+        if (!config.procedures.includes(procedure)) return reply(403, "Procedure not linked");
+      } else if (request.method !== "GET") return reply(405, "Method not allowed");
+      const denied = await authenticate(request);
+      if (denied) return denied;
+      if (now() >= Date.parse(config.expiresAt)) return reply(410, "Linked access expired");
+      if (isStatus)
+        return new Response(JSON.stringify({ available: true }), {
+          headers: { "content-type": "application/json", "cache-control": "no-store" },
+        });
+      if (isView) {
+        const html = await readFile(path.join(config.assetsDir, "index.html"));
+        return new Response(html, {
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            "cache-control": "no-store",
+            "x-content-type-options": "nosniff",
+            "content-security-policy":
+              "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'self'; frame-ancestors " +
+              config.publicOrigin,
+          },
+        });
+      }
+      const body = Buffer.from(await boundedBytes(new Response(request.body), MAX_BODY));
+      const procedure = pathname.slice(`${PREFIX}/rpc/`.length);
+      let upstream;
+      try {
+        upstream = await fetchImpl(`${config.paperApi}/rpc/${procedure}`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${config.accessToken}`,
+            origin: config.paperOrigin,
+            "x-rakazo-space-id": config.paperSpaceId,
+            "content-type": "application/json",
+          },
+          body,
+          redirect: "error",
+          signal: AbortSignal.timeout(60000),
+        });
+        if (upstream.status >= 300 && upstream.status < 400)
+          return reply(502, "Journal unavailable");
+        if (!upstream.headers.get("content-type")?.toLowerCase().includes("application/json"))
+          return reply(502, "Journal unavailable");
+        const result = await boundedBytes(upstream, MAX_RESPONSE);
+        if (Buffer.from(result).includes(Buffer.from(config.accessToken)))
+          return reply(502, "Journal unavailable");
+        return new Response(result, {
+          status: upstream.status,
+          headers: {
+            "content-type": "application/json",
+            "cache-control": "no-store",
+            "x-content-type-options": "nosniff",
+          },
+        });
+      } catch {
+        return reply(502, "Journal unavailable");
+      }
+    } catch {
+      return reply(503, "Journal unavailable");
+    }
+  };
+}
+
+export async function startJournalGateway(config, fetchImpl = fetch) {
+  const handle = createJournalGateway(config, fetchImpl);
+  const server = createServer(async (req, res) => {
+    const chunks = [];
+    let size = 0;
+    try {
+      for await (const chunk of req) {
+        size += chunk.length;
+        if (size > MAX_BODY) {
+          res.writeHead(413, { connection: "close" });
+          res.end();
+          return;
+        }
+        chunks.push(chunk);
+      }
+      const init = { method: req.method, headers: req.headers };
+      if (req.method !== "GET" && req.method !== "HEAD") init.body = Buffer.concat(chunks);
+      const response = await handle(new Request(new URL(req.url, config.publicOrigin), init));
+      res.writeHead(response.status, Object.fromEntries(response.headers));
+      res.end(Buffer.from(await response.arrayBuffer()));
+    } catch {
+      res.writeHead(503);
+      res.end();
+    }
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(config.port, "127.0.0.1", resolve);
+  });
+  return server;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  try {
+    const config = validateConfig(JSON.parse(await readFile(process.argv[2], "utf8")));
+    await startJournalGateway(config);
+    console.log("journal gateway ready");
+  } catch {
+    console.error("Journal gateway could not start");
+    process.exitCode = 1;
+  }
+}
