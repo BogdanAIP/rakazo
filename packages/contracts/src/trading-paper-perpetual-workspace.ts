@@ -237,6 +237,20 @@ export const PaperPerpetualWorkspaceStatusSchema = z.object({
       }),
     )
     .optional(),
+  /** Live verified protective plan, joined only to still-open positions. */
+  positionPlans: z
+    .array(
+      z
+        .object({
+          positionId: Id,
+          stopPriceQuote: Positive,
+          takeProfitPriceQuote: Positive,
+          stopRiskQuote: Decimal,
+        })
+        .strict(),
+    )
+    .max(4)
+    .optional(),
   /** Capacity reserved inside the admission model, not wallet-locked cash. */
   recoveryReservations: z
     .array(

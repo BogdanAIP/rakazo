@@ -1,5 +1,6 @@
 import type { PaperPerpetualEngineConfig, PaperPerpetualEngineSnapshot } from "@rakazo/contracts";
 import type { PaperExperimentStrategy } from "./trading-paper-experiments.js";
+import { estimatePaperLiquidationPrices } from "./trading-paper-liquidation-estimate.js";
 import type { PerpetualPaperLedgerState } from "./trading-paper-perpetual-ledger.js";
 import {
   paperPerpetualAmount as amount,
@@ -16,6 +17,7 @@ export function projectPerpetualEngineSnapshot(
   snapshot: PaperPerpetualEngineSnapshot,
   strategy: PaperExperimentStrategy,
 ): PerpetualPaperLedgerState {
+  const liquidationPrices = estimatePaperLiquidationPrices(config, snapshot);
   const unrealized = snapshot.positions.reduce((sum, p) => sum + signed(p.unrealizedPnlQuote), 0n);
   const equity = signed(snapshot.balanceQuote) + unrealized;
   return {
@@ -57,6 +59,7 @@ export function projectPerpetualEngineSnapshot(
           (value * amount(terms.maintenanceRate) + 99999999n) / 100000000n,
         ),
         liquidationRequired: equity <= signed(snapshot.lockedQuote),
+        estimatedLiquidationPriceQuote: liquidationPrices.get(p.instrument) ?? null,
       };
     }),
     closedPositions: snapshot.closedPositions,
