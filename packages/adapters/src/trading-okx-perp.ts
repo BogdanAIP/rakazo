@@ -32,7 +32,7 @@ import { fetchOkxClosedOneHourHistory } from "./trading-okx-history.js";
  */
 export async function fetchOkxPaperPerpetualSnapshot(
   instrument: string,
-  options: { fetchImpl?: typeof fetch; now?: Date } = {},
+  options: { fetchImpl?: typeof fetch; now?: Date; history?: "omit" } = {},
 ): Promise<PaperPerpetualSnapshot> {
   if (!/^[A-Z0-9]{1,20}-USDT-SWAP$/.test(instrument))
     throw new Error("Unsupported linear USDT perpetual");
@@ -172,7 +172,10 @@ export async function fetchOkxPaperPerpetualSnapshot(
   if (mmr < 1n || mmr > 1000n) throw new Error("Unsupported maintenance tier");
   const [context, history] = await Promise.all([
     fetchOkxPublicPerpContext(market, { ...options, fetchImpl }),
-    fetchOkxClosedOneHourHistory(market, { ...options, fetchImpl }),
+    // Protective exits need fresh executable prices and funding, not research candles.
+    options.history === "omit"
+      ? Promise.resolve({ candles: [] })
+      : fetchOkxClosedOneHourHistory(market, { ...options, fetchImpl }),
   ]);
   const now = options.now ?? new Date();
   const bookAt = new Date(Number(book.ts)).toISOString();
