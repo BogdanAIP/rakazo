@@ -1,7 +1,34 @@
 import { writeFileSync } from "node:fs";
 import { WindowsHostBrowserRequestSchema } from "@rakazo/contracts";
 import { describe, expect, it, vi } from "vitest";
-import { type OpenCliRunner, WindowsOpenCliBackend } from "./opencli.js";
+import { openCliChildEnvironment, type OpenCliRunner, WindowsOpenCliBackend } from "./opencli.js";
+
+describe("OpenCLI environment profile isolation", () => {
+  it("overrides a stale global profile with the explicitly selected Rakazo profile", () => {
+    const env = openCliChildEnvironment(
+      ["--profile", "quxmf8xh", "browser", "session-a", "state"],
+      { OPENCLI_PROFILE: "bb8m5txs", RAKAZO_OPENCLI_WINDOW: "background" },
+    );
+    expect(env.OPENCLI_PROFILE).toBe("quxmf8xh");
+    expect(env.OPENCLI_WINDOW).toBe("background");
+    expect(env.OPENCLI_BROWSER_COMMAND_TIMEOUT).toBe("10");
+  });
+
+  it("does not inherit an outdated global profile when Rakazo has no explicit selection", () => {
+    const env = openCliChildEnvironment(
+      ["browser", "session-a", "state"],
+      { OPENCLI_PROFILE: "bb8m5txs" },
+    );
+    expect(env.OPENCLI_PROFILE).toBeUndefined();
+    expect(env.OPENCLI_WINDOW).toBe("foreground");
+  });
+
+  it("rejects an empty explicitly selected profile", () => {
+    expect(() =>
+      openCliChildEnvironment(["--profile", "", "browser", "session-a", "state"], {}),
+    ).toThrow("Missing explicitly configured OpenCLI profile");
+  });
+});
 
 function fixture(profile = "quxmf8xh") {
   let tree = '[1] button "Save"\n[2] textbox "Name"';
