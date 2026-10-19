@@ -191,10 +191,8 @@ export async function handlePerpetualPaperWake(
           ? []
           : first.control.instruments,
       // Research outages must not block an existing hard stop or funding update.
-      // Pending entries and every later research/execution capture still need history.
-      first.state.openPositions.length > 0 && first.control.orders.length === 0
-        ? "omit"
-        : undefined,
+      // Native entries are canceled before protective quotes; later entry captures still need history.
+      first.state.openPositions.length > 0 ? "omit" : undefined,
     );
     const commit = (
       stage: {
