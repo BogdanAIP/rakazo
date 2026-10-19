@@ -2,7 +2,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $script = Join-Path $PSScriptRoot 'Rakazo.ps1'
-foreach ($name in @('Rakazo.ps1', 'Launch-Rakazo-Gui.ps1', 'Tunnel.Diagnostics.ps1', 'Tunnel.Control.ps1', 'Check-ExistingR.ps1', 'Install-Shortcut.ps1', 'Native.Update.ps1', 'Native.TrayUpdates.ps1', 'Native.PostgresEvidence.ps1', 'Refresh-PluginR.ps1')) {
+foreach ($name in @('Rakazo.ps1', 'Launch-Rakazo-Gui.ps1', 'Tunnel.Diagnostics.ps1', 'Tunnel.Control.ps1', 'Check-ExistingR.ps1', 'Install-Shortcut.ps1', 'Native.Update.ps1', 'Native.TrayUpdates.ps1', 'Native.PostgresEvidence.ps1', 'Native.PostgresRecovery.ps1', 'Refresh-PluginR.ps1')) {
     $file = Join-Path $PSScriptRoot $name
     $tokens = $null
     $parseErrors = $null
@@ -166,6 +166,35 @@ foreach ($needed in @(
 if ($text.Contains("The native PostgreSQL PID file exists but ownership cannot be verified. Manual recovery required.")) {
     throw 'Old unconditional stale postmaster.pid failure path is still present.'
 }
+# Reused Windows PIDs must be recovered only with independent, fail-closed checks.
+$postgresRecoveryPath = Join-Path $PSScriptRoot 'Native.PostgresRecovery.ps1'
+$postgresRecoveryText = [IO.File]::ReadAllText($postgresRecoveryPath)
+foreach ($needed in @(
+    'Move-VerifiedReusedPostgresPidAside',
+    'pid-reused-by-other-process',
+    'Get-NativePostgresPidFileEvidence -Spec $Spec',
+    "Name = 'postgres.exe'",
+    'GetActiveTcpListeners()',
+    'StartedUtcTicks',
+    'LastWriteTimeUtc.Ticks',
+    '[IO.File]::Move($pidFile, $archive)'
+)) {
+    if (-not $postgresRecoveryText.Contains($needed)) {
+        throw "Native PostgreSQL reused-PID recovery guard absent: $needed"
+    }
+}
+foreach ($needed in @(
+    "Native.PostgresRecovery.ps1",
+    'Move-VerifiedReusedPostgresPidAside -Spec $spec',
+    'verified reused postgres pidfile safely archived'
+)) {
+    if (-not $text.Contains($needed)) { throw "Stale-PID startup integration absent: $needed" }
+}
+if ($postgresRecoveryText.Contains('Remove-Item -LiteralPath $pidFile') -or
+    $postgresRecoveryText.Contains('Stop-Process')) {
+    throw 'Recovery must archive only a proven stale PID file, never delete locks or kill processes.'
+}
+
 $postgresEvidencePath = Join-Path $PSScriptRoot 'Native.PostgresEvidence.ps1'
 $postgresEvidenceText = [IO.File]::ReadAllText($postgresEvidencePath)
 foreach ($needed in @(
@@ -223,6 +252,41 @@ try {
     if ($wrongData.MetadataVerified -or $wrongData.SafeToDelegateRecovery -or
         $wrongData.Reason -cne 'unexpected-data-directory') {
         throw 'A PID file for another data directory did not fail closed.'
+    }
+
+    # Isolated archive/reject behavior: uses the current PowerShell PID and
+    # temporary files only. Skip the positive path if another PostgreSQL
+    # installation is active on the test host (the runtime must fail closed).
+    . $postgresRecoveryPath
+    $archivePort = 65432
+    $anyPostgres = @(Get-CimInstance Win32_Process -Filter "Name = 'postgres.exe'" -ErrorAction Stop)
+    $archiveListener = @([Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners() |
+        Where-Object { $_.Port -eq $archivePort })
+    if ($anyPostgres.Count -eq 0 -and $archiveListener.Count -eq 0) {
+        Set-Content -LiteralPath (Join-Path $testData 'PG_VERSION') -Encoding ASCII -Value '17'
+        $archiveSpec = [pscustomobject]@{ Data = $testData; Bin = $testBin; Port = $archivePort }
+        $oldEpoch = $currentEpoch - 3600
+        Set-Content -LiteralPath $pidFile -Encoding ASCII -Value @(
+            [string]$PID, $testData, [string]$oldEpoch, [string]$archivePort, '', ''
+        )
+        (Get-Item -LiteralPath $pidFile).LastWriteTimeUtc = [DateTime]::UtcNow.AddMinutes(-2)
+        $archive = Move-VerifiedReusedPostgresPidAside -Spec $archiveSpec
+        if ((Test-Path -LiteralPath $pidFile) -or
+            -not (Test-Path -LiteralPath $archive -PathType Leaf)) {
+            throw 'Verified reused-PID lock was not archived in the temporary test cluster.'
+        }
+
+        # Ambiguous timestamps must never cause a lock to be moved.
+        Set-Content -LiteralPath $pidFile -Encoding ASCII -Value @(
+            [string]$PID, $testData, [string]$currentEpoch, [string]$archivePort, '', ''
+        )
+        (Get-Item -LiteralPath $pidFile).LastWriteTimeUtc = [DateTime]::UtcNow.AddMinutes(-2)
+        $rejected = $false
+        try { [void](Move-VerifiedReusedPostgresPidAside -Spec $archiveSpec) }
+        catch { $rejected = $true }
+        if (-not $rejected -or -not (Test-Path -LiteralPath $pidFile)) {
+            throw 'Reused-PID lock with ambiguous startup timestamps was not preserved.'
+        }
     }
 } finally {
     Remove-Item -LiteralPath $evidenceRoot -Recurse -Force -ErrorAction SilentlyContinue
