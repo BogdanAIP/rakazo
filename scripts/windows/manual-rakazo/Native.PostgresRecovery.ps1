@@ -47,18 +47,26 @@ function Move-VerifiedReusedPostgresPidAside {
             throw 'Refusing PID recovery: target PostgreSQL port is occupied.'
         }
 
-        $owner = Get-Process -Id $initial.RecordedPid -ErrorAction Stop
-        if ($owner.ProcessName -ieq 'postgres') {
+        # CIM creation time is accessible for SYSTEM-owned svchost.exe even
+        # when Get-Process.StartTime/Path is restricted to elevated users.
+        $owner = @(Get-CimInstance Win32_Process -Filter (
+            'ProcessId = ' + [string]$initial.RecordedPid
+        ) -ErrorAction Stop)
+        if ($owner.Count -ne 1 -or -not $owner[0].CreationDate) {
+            throw 'Refusing PID recovery: recorded process identity is unavailable.'
+        }
+        if ([string]$owner[0].Name -ieq 'postgres.exe') {
             throw 'Refusing PID recovery: recorded PID belongs to PostgreSQL.'
         }
+        $ownerStartUtc = ([DateTime]$owner[0].CreationDate).ToUniversalTime()
         # Reused PID must have started well AFTER the timestamp in the old lock.
         # If timestamps are missing/ambiguous, fail closed.
-        if (($owner.StartTime.ToUniversalTime() - $recordedStart).TotalSeconds -le 30) {
+        if (($ownerStartUtc - $recordedStart).TotalSeconds -le 30) {
             throw 'Refusing PID recovery: reused PID start time is not safely newer.'
         }
         return [pscustomobject]@{
-            Id = [int]$owner.Id
-            StartedUtcTicks = $owner.StartTime.ToUniversalTime().Ticks
+            Id = [int]$owner[0].ProcessId
+            StartedUtcTicks = $ownerStartUtc.Ticks
         }
     }
 
