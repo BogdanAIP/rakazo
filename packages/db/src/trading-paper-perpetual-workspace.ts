@@ -561,6 +561,18 @@ export async function readOwnedPerpetualWorkspace(
                 takerFeeRate,
               }),
             ) ?? [],
+          positionPlans: control.plans
+            .filter((p) =>
+              recovered.state.openPositions.some(
+                (position) => position.positionId === p.positionId,
+              ),
+            )
+            .map((p) => ({
+              positionId: p.positionId,
+              stopPriceQuote: p.stopPriceQuote,
+              takeProfitPriceQuote: p.takeProfitPriceQuote,
+              stopRiskQuote: p.stopRiskQuote,
+            })),
           recoveryReservations: control.plans.map((p) => ({
             positionId: p.positionId,
             reservedNotionalQuote: p.recoveryReserveQuote,

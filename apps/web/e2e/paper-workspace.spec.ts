@@ -243,26 +243,26 @@ test("PAPER spot and futures share one journal page with separate verified owner
     "aria-selected",
     "true",
   );
-  await expect(page.getByRole("heading", { name: "Фьючерсы · PAPER" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Обзор счёта" })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Профиль и виртуальный счёт" })).toHaveValue(
     futuresId,
   );
-  await expect(page.getByRole("heading", { name: "Открытые фьючерсные позиции" })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "OKX · ETH-USDT-SWAP" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Позиции и план" })).toBeVisible();
+  await expect(page.getByRole("article", { name: "ETH-USDT-SWAP · план позиции" })).toBeVisible();
   await expect(
     page
-      .getByRole("table", { name: "Открытые фьючерсные позиции" })
-      .getByRole("cell", { name: "Long", exact: true }),
+      .getByRole("article", { name: "ETH-USDT-SWAP · план позиции" })
+      .getByText("Long", { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("cell", { name: "Открытие" })).toBeVisible();
   await expect(
-    page.getByLabel("Фьючерсные показатели").getByText("1000 USDT", { exact: true }),
+    page.getByLabel("Фьючерсные показатели").getByText("Капитал по рынку", { exact: true }),
   ).toBeVisible();
   await expect(page.getByLabel("Выберите журнал")).toBeHidden();
 
   await page.getByRole("tab", { name: "Спот" }).click();
   await expect(page.getByLabel("Выберите журнал")).toHaveValue(spotId);
-  await expect(page.getByRole("cell", { name: "OKX · ETH-USDT-SWAP" })).toHaveCount(0);
+  await expect(page.getByRole("article", { name: "ETH-USDT-SWAP · план позиции" })).toHaveCount(0);
 });
 
 test("owner reviews futures Start, sees a worker fill, pauses and closes virtual positions on the shared page", async ({
@@ -347,7 +347,12 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
       }),
     ).toBe(3);
     expect(await db.prisma.tradingPaperPerpetualEvent.count({ where: { ledgerId } })).toBe(0);
+    await page
+      .locator("summary")
+      .filter({ hasText: /^Создать счёт$/ })
+      .click();
     await page.getByRole("button", { name: "Создать три фьючерсных счёта", exact: true }).click();
+    await page.getByRole("button", { name: "Плечо и управление" }).click();
     await expect(page.getByRole("button", { name: "Проверить запуск фьючерсов" })).toBeVisible();
     expect(
       await db.prisma.tradingPaperPerpetualLedger.count({
@@ -540,19 +545,61 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
     });
     expect(chatgptRResponse.ok(), await chatgptRResponse.text()).toBe(true);
     await expect(
-      page
-        .getByRole("table", { name: "Открытые фьючерсные позиции" })
-        .getByRole("cell", { name: "Long", exact: true }),
+      page.getByLabel("Открытые фьючерсные позиции").getByText("Long", { exact: true }),
     ).toBeVisible();
     if (process.env.PAPER_NAUTILUS_PYTHON) {
       await expect(page.getByRole("cell", { name: "Открытие", exact: true })).toBeVisible();
+      await expect(page.getByText("Ликвидация · оценка", { exact: true })).toBeVisible();
       await expect(
-        page.getByText("Симуляция общей маржи Nautilus; ликвидация может отличаться от OKX."),
+        page.getByRole("img", { name: "Кривая капитала по проверенному журналу" }),
       ).toBeVisible();
+      const card = page.getByRole("article", { name: "BTC-USDT-SWAP · план позиции" });
+      await expect(card.getByText("Стоп", { exact: true }).locator("..")).toContainText("97,00");
+      await expect(card.getByText("Тейк-профит", { exact: true }).locator("..")).toContainText(
+        "110,00",
+      );
+      await expect(card).toContainText("97,80");
+      await expect(card).toContainText("97,40");
+      const controlsSummary = page.locator("#paper-session-controls > summary");
+      if (
+        await page
+          .locator("#paper-session-controls")
+          .evaluate((node) => (node as HTMLDetailsElement).open)
+      )
+        await controlsSummary.click();
+      const createSummary = page.locator("summary").filter({ hasText: /^Создать счёт$/ });
+      if (await createSummary.locator("..").evaluate((node) => (node as HTMLDetailsElement).open))
+        await createSummary.click();
+      await page
+        .getByRole("heading", { name: "Обзор счёта", exact: true })
+        .scrollIntoViewIfNeeded();
+      await captureScreenshot(page, testInfo, "futures-risk-dashboard");
+      await page.emulateMedia({ colorScheme: "dark" });
+      await captureScreenshot(page, testInfo, "futures-risk-dashboard-dark");
+      await page.setViewportSize({ width: 390, height: 844 });
+      await card.scrollIntoViewIfNeeded();
+      await captureScreenshot(page, testInfo, "futures-risk-position-mobile");
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+        .toBe(true);
+      await page.getByRole("button", { name: "Просадка", exact: true }).click();
+      await expect(
+        page.getByRole("img", { name: "Просадка от предыдущего максимума капитала" }),
+      ).toBeVisible();
+      await page.getByRole("slider", { name: "Точка графика" }).focus();
+      await page.keyboard.press("ArrowLeft");
+      await captureScreenshot(page, testInfo, "futures-risk-dashboard-mobile");
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.getByRole("button", { name: "Капитал", exact: true }).click();
+      await page.getByRole("button", { name: "Плечо и управление" }).click();
       expect(await db.prisma.tradingPaperPerpetualEngine.count({ where: { ledgerId } })).toBe(1);
       expect(await db.prisma.tradingPaperPerpetualEvent.count({ where: { ledgerId } })).toBe(0);
     } else await expect(page.getByRole("cell", { name: "Открытие", exact: true })).toBeVisible();
     await expect(page.getByLabel("Последнее решение ИИ")).toContainText("Исполнено");
+    await page
+      .locator("summary")
+      .filter({ hasText: /^Сравнить профили$/ })
+      .click();
     await expect(page.getByLabel("Сравнение фьючерсных профилей").getByRole("row")).toHaveCount(4);
     await page.getByText("Сравнение кандидатов", { exact: true }).click();
     await expect(page.getByRole("table", { name: "Сравнение кандидатов" })).toContainText(
@@ -560,6 +607,10 @@ test("owner reviews futures Start, sees a worker fill, pauses and closes virtual
     );
     await captureScreenshot(page, testInfo, "futures-research-comparison");
 
+    await page
+      .locator("summary")
+      .filter({ hasText: /^Решения и анализ ИИ$/ })
+      .click();
     const researchHistory = page.getByLabel("Последние решения", { exact: true });
     await researchHistory.locator("summary").first().focus();
     await page.keyboard.press("Enter");
@@ -689,6 +740,10 @@ test("recovery comparison keeps unresolved losses visible with and without compl
   await page.goto("/app/paper-journal");
   await page.getByRole("tab", { name: "Фьючерсы" }).click();
   await page.getByRole("button", { name: "Создать три фьючерсных счёта", exact: true }).click();
+  await page
+    .locator("summary")
+    .filter({ hasText: /^Сравнить профили$/ })
+    .click();
   const comparison = page.getByLabel("Сравнение фьючерсных профилей");
   const row = comparison.getByRole("row").filter({
     has: page.getByRole("button", { name: "Консервативная", exact: true }),
@@ -700,6 +755,10 @@ test("recovery comparison keeps unresolved losses visible with and without compl
   completed = false;
   await page.reload();
   await page.getByRole("tab", { name: "Фьючерсы" }).click();
+  await page
+    .locator("summary")
+    .filter({ hasText: /^Сравнить профили$/ })
+    .click();
   await expect(row).not.toContainText("100.00%");
   await expect(row.getByText("Открыто в убытке: 1", { exact: true })).toBeVisible();
 });

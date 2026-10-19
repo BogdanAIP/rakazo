@@ -2163,6 +2163,14 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         expect(updated.plans[0]!.stopPriceQuote).toBe("98.00");
         expect(updated.plans[0]!.stopRiskQuote).toBe(initialRisk);
         expect(updated.lastDecision?.outcome).toBe("protective_stop_tightened");
+        expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))?.positionPlans).toEqual([
+          {
+            positionId,
+            stopPriceQuote: "98.00",
+            takeProfitPriceQuote: "110",
+            stopRiskQuote: initialRisk,
+          },
+        ]);
 
         engine.invalidate(id);
         price = "97.50";

@@ -1,12 +1,14 @@
 import type {
+  PaperPerpetualWorkspaceStatus,
   TradingPaperPerpetualJournalListOutput,
   TradingPaperPerpetualJournalReadOutput,
 } from "@rakazo/contracts";
 import { Button } from "@rakazo/ui-web";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { rpc } from "../lib/rpc";
 import { PaperPerpetualComparison } from "./PaperPerpetualComparison";
 import { PaperPerpetualControls } from "./PaperPerpetualControls";
+import { PaperPerpetualDashboard } from "./PaperPerpetualDashboard";
 import { PaperPerpetualResearchHistory } from "./PaperPerpetualResearchHistory";
 
 type VerifiedJournal = Extract<TradingPaperPerpetualJournalReadOutput, { status: "verified" }>;
@@ -71,6 +73,9 @@ function nativeJournalLabels(event: NativeJournalEvent) {
  * Separate margin accounts, same dashboard/URL/desktop shortcut.
  */
 export function PaperPerpetualJournalPanel() {
+  const [workspace, setWorkspace] = useState<PaperPerpetualWorkspaceStatus | null>(null);
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const [showAudit, setShowAudit] = useState(false);
   const [refreshId, setRefreshId] = useState(0);
   const [creating, setCreating] = useState(false);
   const [strategy, setStrategy] = useState<"conservative" | "moderate" | "aggressive">(
@@ -88,6 +93,9 @@ export function PaperPerpetualJournalPanel() {
   const journalScopeLedger = useRef<string | null>(null);
   const journalEpoch = useRef(0);
   selectedLedger.current = ledgerId;
+  const receiveStatus = useCallback((value: PaperPerpetualWorkspaceStatus | null) => {
+    if (!value || value.ledgerId === selectedLedger.current) setWorkspace(value);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -227,6 +235,11 @@ export function PaperPerpetualJournalPanel() {
   // Never render stale financial data or controls from the previously
   // selected ledger during the first frame of a ledger switch.
   const verified = journal?.status === "verified" && journal.ledgerId === ledgerId ? journal : null;
+  const visibleEvents = events.filter(
+    (event) =>
+      showAudit ||
+      (event.kind === "engine" ? event.output.events.length > 0 : event.kind !== "mark"),
+  );
   return (
     <div
       className="space-y-5"
@@ -235,36 +248,44 @@ export function PaperPerpetualJournalPanel() {
       aria-labelledby="paper-journal-futures-tab"
     >
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="text-lg font-semibold">Фьючерсы · PAPER</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Виртуальный счёт — 1000 USDT. Для сравнения можно создать три независимых профиля.
-        </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <label htmlFor="futures-account-strategy" className="text-sm">
-            Профиль риска
-          </label>
-          <select
-            id="futures-account-strategy"
-            value={strategy}
-            disabled={creating}
-            className="rounded-lg border border-border bg-background p-2 text-sm"
-            onChange={(event) => setStrategy(event.target.value as typeof strategy)}
-          >
-            <option value="conservative">Консервативная · 5×</option>
-            <option value="moderate">Умеренная · 10×</option>
-            <option value="aggressive">Агрессивная · 20×</option>
-          </select>
-          <Button disabled={creating || !accounts} onClick={() => void createAccounts(strategy)}>
-            Создать виртуальный счёт
-          </Button>
-          <Button
-            variant="outline"
-            disabled={creating || !accounts}
-            onClick={() => void createAccounts()}
-          >
-            {creating ? "Создание…" : "Создать три фьючерсных счёта"}
-          </Button>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">Обзор счёта</h2>
+          <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+            PAPER · виртуальная торговля
+          </span>
         </div>
+        <details className="mt-3 text-sm" open={accounts?.ledgers.length === 0}>
+          <summary className="cursor-pointer text-muted-foreground">Создать счёт</summary>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Виртуальный счёт — 1000 USDT. Для сравнения можно создать три независимых профиля.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <label htmlFor="futures-account-strategy" className="text-sm">
+              Профиль риска
+            </label>
+            <select
+              id="futures-account-strategy"
+              value={strategy}
+              disabled={creating}
+              className="rounded-lg border border-border bg-background p-2 text-sm"
+              onChange={(event) => setStrategy(event.target.value as typeof strategy)}
+            >
+              <option value="conservative">Консервативная · 5×</option>
+              <option value="moderate">Умеренная · 10×</option>
+              <option value="aggressive">Агрессивная · 20×</option>
+            </select>
+            <Button disabled={creating || !accounts} onClick={() => void createAccounts(strategy)}>
+              Создать виртуальный счёт
+            </Button>
+            <Button
+              variant="outline"
+              disabled={creating || !accounts}
+              onClick={() => void createAccounts()}
+            >
+              {creating ? "Создание…" : "Создать три фьючерсных счёта"}
+            </Button>
+          </div>
+        </details>
         <label htmlFor="paper-perpetual-ledger" className="mb-2 mt-4 block text-sm font-medium">
           Профиль и виртуальный счёт
         </label>
@@ -281,27 +302,64 @@ export function PaperPerpetualJournalPanel() {
           )}
           {accounts?.ledgers.map((entry) => (
             <option key={entry.ledgerId} value={entry.ledgerId}>
-              {strategyName[entry.strategy]} · {entry.eventsCount} событий
+              {strategyName[entry.strategy]}
             </option>
           ))}
         </select>
       </section>
       {accounts && (
-        <PaperPerpetualComparison
-          ledgerIds={accounts.ledgers.map((a) => a.ledgerId)}
-          onSelect={setLedgerId}
+        <details className="rounded-2xl border border-border bg-card p-4">
+          <summary className="cursor-pointer text-sm font-medium">Сравнить профили</summary>
+          <div className="mt-3">
+            <PaperPerpetualComparison
+              ledgerIds={accounts.ledgers.map((a) => a.ledgerId)}
+              onSelect={setLedgerId}
+            />
+          </div>
+        </details>
+      )}
+      {verified && ledgerId && (
+        <PaperPerpetualDashboard
+          journal={verified}
+          workspace={workspace}
+          onOpenControls={() => {
+            setControlsOpen(true);
+            window.requestAnimationFrame(() =>
+              document
+                .getElementById("paper-session-controls")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+            );
+          }}
         />
       )}
       {verified && ledgerId && (
-        <PaperPerpetualControls
-          key={ledgerId}
-          ledgerId={ledgerId}
-          openPositions={verified.state.openPositions.length}
-          onChanged={() => setRefreshId((n) => n + 1)}
-        />
+        <details
+          id="paper-session-controls"
+          open={controlsOpen}
+          onToggle={(event) => setControlsOpen(event.currentTarget.open)}
+          className="rounded-2xl border border-border bg-card p-4"
+        >
+          <summary className="cursor-pointer text-sm font-medium">
+            Управление сессией и плечом
+          </summary>
+          <div className="mt-3">
+            <PaperPerpetualControls
+              key={ledgerId}
+              ledgerId={ledgerId}
+              openPositions={verified.state.openPositions.length}
+              onChanged={() => setRefreshId((n) => n + 1)}
+              onStatus={receiveStatus}
+            />
+          </div>
+        </details>
       )}
       {verified && ledgerId ? (
-        <PaperPerpetualResearchHistory key={ledgerId} ledgerId={ledgerId} />
+        <details className="rounded-2xl border border-border bg-card p-4">
+          <summary className="cursor-pointer text-sm font-medium">Решения и анализ ИИ</summary>
+          <div className="mt-3">
+            <PaperPerpetualResearchHistory key={ledgerId} ledgerId={ledgerId} />
+          </div>
+        </details>
       ) : null}
       {error && (
         <p role="alert" className="rounded-xl border border-destructive/50 p-4 text-sm">
@@ -316,103 +374,20 @@ export function PaperPerpetualJournalPanel() {
       )}
       {verified && (
         <>
-          <section
-            className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-            aria-label="Фьючерсные показатели"
-          >
-            {[
-              ["Начальный капитал", verified.state.initialBalanceQuote],
-              [
-                verified.state.engine ? "Свободно в симуляторе" : "Доступно",
-                verified.state.availableQuote,
-              ],
-              [
-                verified.state.engine ? "Резерв движка" : "Изолированная маржа",
-                verified.state.lockedMarginQuote,
-              ],
-              ["Стоимость счёта по рынку", verified.state.markedEquityQuote],
-              ["Реализованный PnL", verified.state.realizedPnlQuote],
-              ["Нереализованный PnL", verified.state.unrealizedPnlQuote],
-              ["Funding (нетто)", verified.state.fundingNetQuote],
-              ["Комиссии", verified.state.totalFeesQuote],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-xl border border-border bg-card p-4">
-                <p className="text-xs text-muted-foreground">{label}</p>
-                <p className="mt-2 break-all text-xl font-semibold tabular-nums">{value} USDT</p>
-              </div>
-            ))}
-          </section>
-          <p className="text-xs text-muted-foreground">
-            {strategyName[verified.state.strategy]} · Позиции: {verified.state.openPositions.length}
-            {" · "}
-            Закрыто: {verified.state.closedPositions} · Ликвидации: {verified.state.liquidations}
-            {" · "}
-            Обновлено: {dateTime(verified.updatedAt)}. Переоценка зависит от последних записанных
-            котировок, не является непрерывным биржевым балансом.
-          </p>
-          {verified.state.engine && (
-            <p className="text-sm text-muted-foreground">
-              Симуляция общей маржи Nautilus; ликвидация может отличаться от OKX.
-            </p>
-          )}
-          <section className="rounded-2xl border border-border bg-card p-5">
-            <h2 className="mb-4 text-lg font-semibold">Открытые фьючерсные позиции</h2>
-            {verified.state.openPositions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Открытых позиций нет.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table
-                  aria-label="Открытые фьючерсные позиции"
-                  className="w-full text-left text-sm"
-                >
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="p-2">Пара</th>
-                      <th className="p-2">Сторона</th>
-                      <th className="p-2">Плечо</th>
-                      <th className="p-2">Объём</th>
-                      <th className="p-2">Вход / Mark</th>
-                      <th className="p-2">
-                        {verified.state.engine ? "Расчётный резерв" : "Маржа"}
-                      </th>
-                      <th className="p-2">PnL</th>
-                      <th className="p-2">Риск ликвидации</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {verified.state.openPositions.map((position) => (
-                      <tr key={position.positionId} className="border-b border-border/60">
-                        <td className="p-2">
-                          {position.venue.toUpperCase()} · {position.instrument}
-                        </td>
-                        <td className="p-2">{position.side === "long" ? "Long" : "Short"}</td>
-                        <td className="p-2">{position.leverage}×</td>
-                        <td className="p-2 tabular-nums">{position.quantityBase}</td>
-                        <td className="p-2 tabular-nums">
-                          {position.entryPriceQuote} / {position.markPriceQuote}
-                        </td>
-                        <td className="p-2 tabular-nums">
-                          {verified.state.engine
-                            ? position.initialMarginQuote
-                            : position.isolatedMarginQuote}
-                        </td>
-                        <td className="p-2 tabular-nums">{position.unrealizedPnlQuote}</td>
-                        <td className="p-2">
-                          {position.liquidationRequired
-                            ? "Требуется защитное действие"
-                            : "Нет сигнала по текущей записи"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
           <section className="rounded-2xl border border-border bg-card p-5">
             <h2 className="mb-4 text-lg font-semibold">История фьючерсных операций</h2>
-            {events.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Операций пока нет.</p>
+            <label className="mb-4 flex items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={showAudit}
+                onChange={(e) => setShowAudit(e.target.checked)}
+              />
+              Показать переоценки и технические записи
+            </label>
+            {visibleEvents.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                На загруженных страницах нет исполнений. Более ранние записи доступны ниже.
+              </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
@@ -427,7 +402,7 @@ export function PaperPerpetualJournalPanel() {
                     </tr>
                   </thead>
                   <tbody>
-                    {events.map((event) => {
+                    {visibleEvents.map((event) => {
                       const native = event.kind === "engine" ? nativeJournalLabels(event) : null;
                       return (
                         <tr key={event.eventId} className="border-b border-border/60">

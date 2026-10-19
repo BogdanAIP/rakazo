@@ -148,6 +148,7 @@ const PerpetualJournalStateSchema = z.object({
         unrealizedPnlQuote: PerpetualDecimalSchema,
         maintenanceMarginQuote: PerpetualDecimalSchema,
         liquidationRequired: z.boolean(),
+        estimatedLiquidationPriceQuote: PerpetualDecimalSchema.nullable().optional(),
       }),
     )
     .max(100),
@@ -185,6 +186,23 @@ export const TradingPaperPerpetualJournalReadOutputSchema = z.discriminatedUnion
     openedAt: IsoDate,
     updatedAt: IsoDate,
     state: PerpetualJournalStateSchema,
+    analytics: z
+      .object({
+        scope: z.literal("full_verified_history"),
+        observations: z.number().int().nonnegative(),
+        maximumDrawdownPercent: z.string(),
+        points: z
+          .array(
+            z.object({
+              at: IsoDate,
+              equityQuote: PerpetualDecimalSchema,
+              drawdownPercent: z.string(),
+              gapBefore: z.boolean(),
+            }),
+          )
+          .max(500),
+      })
+      .optional(),
     recovery: z
       .discriminatedUnion("status", [
         z

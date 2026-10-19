@@ -114,6 +114,7 @@ export type PerpetualPaperPositionState = Readonly<{
   unrealizedPnlQuote: string;
   maintenanceMarginQuote: string;
   liquidationRequired: boolean;
+  estimatedLiquidationPriceQuote?: string | null;
 }>;
 export type PerpetualPaperLedgerState = Readonly<{
   marginMode?: "account_wide";

@@ -67,12 +67,17 @@ export function PaperPerpetualControls({
   ledgerId,
   openPositions,
   onChanged,
+  onStatus,
 }: {
   ledgerId: string;
   openPositions: number;
   onChanged: () => void;
+  onStatus?: (status: PaperPerpetualWorkspaceStatus | null) => void;
 }) {
   const [status, setStatus] = useState<PaperPerpetualWorkspaceStatus | null>(null);
+  useEffect(() => {
+    onStatus?.(status);
+  }, [status, onStatus]);
   const [symbols, setSymbols] = useState("");
   const [marketScan, setMarketScan] = useState<TradingScanOutput | null>(null);
   const [scanning, setScanning] = useState(false);
