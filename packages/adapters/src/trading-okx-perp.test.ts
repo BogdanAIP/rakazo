@@ -194,6 +194,50 @@ describe("PAPER OKX contract units and funding history", () => {
     });
     return { mock, fetchImpl: mock as unknown as typeof fetch };
   }
+  it("keeps protective prices, terms and funding available without requesting research history", async () => {
+    const fake = publicFixture();
+    let historyRequests = 0;
+    const fetchImpl: typeof fetch = async (url, init) => {
+      if (new URL(String(url)).pathname.endsWith("/history-candles")) {
+        historyRequests++;
+        return new Response("rate limited", { status: 429 });
+      }
+      return fake.fetchImpl(url, init);
+    };
+    const result = await fetchOkxPaperPerpetualSnapshot(market.symbol, {
+      now,
+      fetchImpl,
+      history: "omit",
+    });
+    expect(result.history).toEqual([]);
+    expect(result.book).toMatchObject({ bidQuote: "108", askQuote: "109" });
+    expect(result.markPriceQuote).toBe(marked.markPx);
+    expect(result.funding).toHaveLength(1);
+    expect(historyRequests).toBe(0);
+    await expect(
+      fetchOkxPaperPerpetualSnapshot(market.symbol, {
+        now,
+        fetchImpl,
+      }),
+    ).rejects.toThrow("history HTTP error: 429");
+    expect(historyRequests).toBe(1);
+  });
+
+  it("still rejects stale executable observations when research history is omitted", async () => {
+    const fake = publicFixture((path, rows) =>
+      path.endsWith("/books")
+        ? [{ ...(rows[0] as object), ts: String(now.getTime() - 300_000) }]
+        : rows,
+    );
+    await expect(
+      fetchOkxPaperPerpetualSnapshot(market.symbol, {
+        now,
+        fetchImpl: fake.fetchImpl,
+        history: "omit",
+      }),
+    ).rejects.toThrow("Stale");
+  });
+
   it("converts lot, minimum and visible depth from contracts to base; uses final realized funding", async () => {
     const fake = publicFixture();
     const result = await fetchOkxPaperPerpetualSnapshot(market.symbol, {

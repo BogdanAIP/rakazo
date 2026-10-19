@@ -47,13 +47,13 @@ type Deps = {
   engine?: PaperPerpetualEngine;
   prisma: PrismaClient;
   jobs: Pick<JobPublisher, "enqueue">;
-  fetchSnapshot?: (instrument: string) => Promise<PaperPerpetualSnapshot>;
+  fetchSnapshot?: typeof fetchOkxPaperPerpetualSnapshot;
 };
 type WorkerDeps = Deps & {
   runtime: AgentRuntime;
   resolveModel: (scope: PerpetualOwner & { botId?: string }) => Promise<AgentRunModel>;
   fetchResearchScan?: () => Promise<Pick<TradingScanOutput, "fetchedAt" | "candidates">>;
-  fetchSnapshot?: (instrument: string) => Promise<PaperPerpetualSnapshot>;
+  fetchSnapshot?: typeof fetchOkxPaperPerpetualSnapshot;
 };
 async function enqueueNext(
   deps: Deps,
@@ -167,8 +167,12 @@ export async function handlePerpetualPaperWake(
     if (deps.engine)
       await preparePerpetualEngineBeforeMarketFetch(deps.prisma, owner, key.ledgerId, deps.engine);
     const fetchSnapshot = deps.fetchSnapshot ?? fetchOkxPaperPerpetualSnapshot;
-    const read = async (symbols: string[]) =>
-      Promise.all([...new Set(symbols)].map((symbol) => fetchSnapshot(symbol)));
+    const read = async (symbols: string[], history?: "omit") =>
+      Promise.all(
+        [...new Set(symbols)].map((symbol) =>
+          history ? fetchSnapshot(symbol, { history }) : fetchSnapshot(symbol),
+        ),
+      );
     // An unavailable selected-but-unused market must not prevent protection
     // of live positions or pending orders in other instruments.
     const activeProtectionSymbols = [
@@ -186,6 +190,9 @@ export async function handlePerpetualPaperWake(
         : flatExternalNoTrade
           ? []
           : first.control.instruments,
+      // Research outages must not block an existing hard stop or funding update.
+      // Native entries are canceled before protective quotes; later entry captures still need history.
+      first.state.openPositions.length > 0 ? "omit" : undefined,
     );
     const commit = (
       stage: {
