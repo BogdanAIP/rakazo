@@ -1,6 +1,7 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { inspectOfflinePositions } from "./offline-position-check.mjs";
+import { createPaperStopControl } from "./paper-graceful-stop-runtime.mjs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -398,10 +399,28 @@ export async function startJournalGateway(config, fetchImpl = fetch) {
   return server;
 }
 
+export async function drainJournalGateway(server) {
+  // Stop accepting sockets, allow authenticated reads to finish, and then exit.
+  // Never destroy active requests or claim success on timeout.
+  await new Promise((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
+    server.closeIdleConnections();
+  });
+}
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   try {
     const config = validateConfig(JSON.parse(await readFile(process.argv[2], "utf8")));
-    await startJournalGateway(config);
+    const server = await startJournalGateway(config);
+    const stopDir = process.env.RAKAZO_PAPER_STOP_DIR?.trim();
+    if (stopDir) {
+      await createPaperStopControl({
+        directory: stopDir,
+        service: "gateway",
+        drain: () => drainJournalGateway(server),
+        exit: (code) => process.exit(code),
+        onError: () => console.error("Journal gateway graceful shutdown failed"),
+      });
+    }
     console.log("journal gateway ready");
   } catch {
     console.error("Journal gateway could not start");
