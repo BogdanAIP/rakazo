@@ -62,11 +62,7 @@ function byteLength(value: string): number {
   return Buffer.byteLength(value, "utf8");
 }
 
-function truncateUtf8(
-  value: string,
-  maxBytes: number,
-  keep: "start" | "end" = "start",
-): string {
+function truncateUtf8(value: string, maxBytes: number, keep: "start" | "end" = "start"): string {
   if (maxBytes <= 0) return "";
   if (keep === "end") {
     let start = value.length;
