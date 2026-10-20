@@ -26,6 +26,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import {
   historyCompactJob,
+  MEMORY_REVISION_CONFLICT_ERROR,
   routineJobKey,
   routineWakeupJob,
   runContinueJob,
@@ -235,7 +236,7 @@ import {
 } from "./mcp-server-tool.js";
 import { loadAgentMemoryContext } from "./memory-context.js";
 import type { MemoryProviderResolver } from "./memory-provider-factory.js";
-import { selectMemoryTools } from "./memory-tools.js";
+import { appendMemoryFact, selectMemoryTools } from "./memory-tools.js";
 import {
   isCatalogModelChoice,
   selectConfiguredModel,
@@ -560,6 +561,11 @@ export function isProtectedComputerLifecycleCommand(command: string): boolean {
     if (program && isProtectedComputerLifecycleCommand(program)) return true;
   }
   return false;
+}
+
+/** Explain how to continue ordinary file work without weakening the desktop guard. */
+export function desktopProtectionGuardMessage(): string {
+  return "This command was not run: the desktop-protection guard detected a protected command or shell syntax it cannot inspect. This refusal is not evidence of a filesystem permission error. Shell access is still available. For ordinary file edits, use the dedicated file tools; for normal repository work, use direct commands with explicit paths rather than interpreter heredocs, sourcing or command substitution. Do not retry commands that stop or restart browser/desktop processes.";
 }
 
 /** Cap the roster so a large Space cannot flood the prompt. */
@@ -2680,8 +2686,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const command = String(args.command ?? args.cmd ?? "");
             if (graphical && isProtectedComputerLifecycleCommand(command)) {
               return finish({
-                error:
-                  "This command was not run: the desktop-protection guard detected a protected command or shell syntax it cannot inspect. Shell access is still available. For ordinary repository work, use direct commands with explicit paths, without sourcing or command substitution. Do not stop or restart browser/desktop processes.",
+                error: desktopProtectionGuardMessage(),
               });
             }
             const cwd = resolveBotWorkspaceCwd(
@@ -2817,18 +2822,35 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }, finish);
           }
           if (name === "remember") {
-            await deps.memory.commit(
-              {
-                scope: "bot",
-                botId: bot.id,
-                path: String(args.path ?? "MEMORY.md"),
-                content: String(args.content ?? ""),
-                sourceRunId: runId,
-                sourceThreadId: thread.id,
-              },
-              context,
-            );
-            return finish({ ok: true });
+            const path = String(args.path ?? "").trim() || "MEMORY.md";
+            // Read the latest document before appending; retry only revision conflicts.
+            for (let attempt = 1; ; attempt += 1) {
+              const snapshot = await deps.memory.read(
+                { scope: "bot", botId: bot.id, path },
+                context,
+              );
+              const existing = snapshot.documents[0];
+              const content = appendMemoryFact(existing?.content ?? "", String(args.content ?? ""));
+              if (content === (existing?.content ?? "")) return finish({ ok: true });
+              try {
+                await deps.memory.commit(
+                  {
+                    scope: "bot",
+                    botId: bot.id,
+                    path,
+                    content,
+                    expectedRevision: existing?.revision ?? 0,
+                    sourceRunId: runId,
+                    sourceThreadId: thread.id,
+                  },
+                  context,
+                );
+                return finish({ ok: true });
+              } catch (error) {
+                const message = error instanceof Error ? error.message : "";
+                if (message !== MEMORY_REVISION_CONFLICT_ERROR || attempt >= 3) throw error;
+              }
+            }
           }
           if (name === "web_search") {
             return finish(await webSearchFromTool(web, context, args));

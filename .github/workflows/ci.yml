@@ -80,6 +80,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @rakazo/windows-host check
+      - name: Trusted cwd validation on native Windows
+        run: pnpm --filter @rakazo/windows-host exec vitest run --root ../.. apps/windows-host/src/trusted-exec-directory.test.ts
       - run: pnpm --filter @rakazo/windows-host exec tsx src/windows-smoke.ts
       - name: Native manual-launcher static gate
         shell: pwsh

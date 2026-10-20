@@ -264,6 +264,7 @@ import {
   updateVoiceSpeechModel,
   voiceContext,
 } from "./voice.js";
+import { publicWindowsWorkspaceError } from "./windows-host-errors.js";
 
 const MAX_COMPUTER_TEXT_FILE_BYTES = 2 * 1024 * 1024;
 /** Each command writes a running and a done event, so this keeps about 100 commands. */
@@ -2775,7 +2776,13 @@ export function createRouter(deps: RouterDeps) {
             data: { updatedAt: new Date() },
           });
           scheduleComputerSleep(deps.jobs, computer.id);
-          entries = await deps.sandbox.listFiles(toComputerRef(computer), storedPath, ctx);
+          try {
+            entries = await deps.sandbox.listFiles(toComputerRef(computer), storedPath, ctx);
+          } catch (error) {
+            const message = publicWindowsWorkspaceError(error);
+            if (message) throw new ORPCError("BAD_REQUEST", { message });
+            throw error;
+          }
         } else {
           entries = await deps.home.list(computer.homeKey, storedPath, ctx);
         }
@@ -2797,10 +2804,21 @@ export function createRouter(deps: RouterDeps) {
             data: { updatedAt: new Date() },
           });
           scheduleComputerSleep(deps.jobs, bot.computer.id);
-          const bytes = await deps.sandbox.readFile(toComputerRef(bot.computer), storedPath, ctx, {
-            maxBytes: MAX_COMPUTER_TEXT_FILE_BYTES,
-          });
-          content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+          try {
+            const bytes = await deps.sandbox.readFile(
+              toComputerRef(bot.computer),
+              storedPath,
+              ctx,
+              {
+                maxBytes: MAX_COMPUTER_TEXT_FILE_BYTES,
+              },
+            );
+            content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+          } catch (error) {
+            const message = publicWindowsWorkspaceError(error);
+            if (message) throw new ORPCError("BAD_REQUEST", { message });
+            throw error;
+          }
         } else {
           try {
             content = await deps.home.readFile(bot.computer.homeKey, storedPath, ctx, {
@@ -2836,21 +2854,27 @@ export function createRouter(deps: RouterDeps) {
         let stdout = "";
         let stderr = "";
         let code = -1;
-        for await (const event of deps.sandbox.execute(
-          toComputerRef(computer),
-          {
-            argv: input.argv,
-            cwd: input.cwd,
-            timeoutMs: input.timeoutMs,
-          },
-          computerContext(context.actor, bot.id, "exec"),
-        )) {
-          if (event.type === "stdout") stdout += event.data;
-          else if (event.type === "stderr") stderr += event.data;
-          else code = event.code;
-          if (Buffer.byteLength(stdout, "utf8") + Buffer.byteLength(stderr, "utf8") > 65_536) {
-            throw new ORPCError("BAD_REQUEST", { message: "Process output exceeded 64 KiB" });
+        try {
+          for await (const event of deps.sandbox.execute(
+            toComputerRef(computer),
+            {
+              argv: input.argv,
+              cwd: input.cwd,
+              timeoutMs: input.timeoutMs,
+            },
+            computerContext(context.actor, bot.id, "exec"),
+          )) {
+            if (event.type === "stdout") stdout += event.data;
+            else if (event.type === "stderr") stderr += event.data;
+            else code = event.code;
+            if (Buffer.byteLength(stdout, "utf8") + Buffer.byteLength(stderr, "utf8") > 65_536) {
+              throw new ORPCError("BAD_REQUEST", { message: "Process output exceeded 64 KiB" });
+            }
           }
+        } catch (error) {
+          const message = publicWindowsWorkspaceError(error);
+          if (message) throw new ORPCError("BAD_REQUEST", { message });
+          throw error;
         }
         await keepComputerAwake(deps, computer.id);
         return { stdout, stderr, code };
