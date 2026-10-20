@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { isProtectedComputerLifecycleCommand } from "./executor.js";
+import { desktopProtectionGuardMessage, isProtectedComputerLifecycleCommand } from "./executor.js";
 
 describe("computer lifecycle command guard", () => {
+  it("explains file-edit recovery without weakening the command guard", () => {
+    const message = desktopProtectionGuardMessage();
+    expect(message).toContain("not evidence of a filesystem permission error");
+    expect(message).toContain("dedicated file tools");
+    expect(message).toContain("interpreter heredocs");
+    expect(message).toContain("Do not retry commands that stop or restart");
+    expect(isProtectedComputerLifecycleCommand("pkill chromium")).toBe(true);
+  });
   it("rejects commands that can destroy a graphical bot's desktop", () => {
     for (const command of [
       "pkill chromium",
