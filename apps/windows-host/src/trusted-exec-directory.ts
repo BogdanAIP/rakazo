@@ -56,11 +56,8 @@ export function parseTrustedExecRoots(raw?: string): TrustedExecRoots {
 
 function within(root: string, target: string): string | null {
   const relative = path.relative(root, target);
-  if (
-    relative === ".." ||
-    relative.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relative)
-  ) return null;
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
+    return null;
   return relative;
 }
 
