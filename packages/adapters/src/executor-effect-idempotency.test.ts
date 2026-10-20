@@ -1,4 +1,4 @@
-import type { AgentRunRequest } from "@rakazo/adapter-kit";
+import type { AgentRunRequest, MemoryReadRequest, MemorySnapshot } from "@rakazo/adapter-kit";
 import {
   legacyScopedToolEffectIdempotencyKey,
   toolEffectIdempotencyKey,
@@ -64,6 +64,7 @@ function fixture(runId = "run-1") {
     leaseFence: 0,
   };
   const memoryCommit = vi.fn(async () => ({ revision: "rev-1" }));
+  const memoryDocuments: MemorySnapshot["documents"] = [];
   const externalEffect = {
     findMany: vi.fn(
       async ({
@@ -201,7 +202,9 @@ function fixture(runId = "run-1") {
     sandbox: { describe: () => ({ capabilities: { graphical: false } }) },
     memory: {
       describe: () => ({ capabilities: {} }),
-      read: async () => ({ documents: [] }),
+      read: async (request: MemoryReadRequest) => ({
+        documents: memoryDocuments.filter((doc) => !request.path || doc.path === request.path),
+      }),
       search: async () => [],
       commit: memoryCommit,
       exportMarkdown: async function* () {},
@@ -217,6 +220,7 @@ function fixture(runId = "run-1") {
     results,
     scratchpadRows,
     memoryCommit,
+    memoryDocuments,
     setCalls(next: ToolCall[]) {
       calls = next;
     },
@@ -229,6 +233,33 @@ function fixture(runId = "run-1") {
     },
   };
 }
+
+describe("remember memory preservation", () => {
+  it("appends to the existing MEMORY.md rather than replacing it", async () => {
+    const f = fixture("run-preserve-memory");
+    f.memoryDocuments.push({
+      id: "existing",
+      path: "MEMORY.md",
+      content: "Prior safety rule.\n",
+      revision: 5,
+    });
+    f.setCalls([
+      {
+        name: "remember",
+        args: { path: "MEMORY.md", content: "New fact." },
+        executionId: "call_preserve",
+      },
+    ]);
+    await f.run();
+    expect(f.memoryCommit).toHaveBeenCalledOnce();
+    expect(f.memoryCommit.mock.calls[0]?.[0]).toMatchObject({
+      path: "MEMORY.md",
+      content: "Prior safety rule.\nNew fact.\n",
+      expectedRevision: 5,
+    });
+    expect(f.results[0]).toEqual({ ok: true });
+  });
+});
 
 describe("mutating tool effect idempotency keys", () => {
   it("executes different tools that share a reused provider tool-call id", async () => {
