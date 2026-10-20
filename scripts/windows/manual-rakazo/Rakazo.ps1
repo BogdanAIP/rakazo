@@ -671,7 +671,8 @@ try {
     if ($worker.HasExited) { throw 'Worker exited early; inspect manual-launcher logs.' }
     # Optional linked journal reuses its finite owner access in hidden processes.
     $journalLauncher = Join-Path $HOME 'RakazoRuntime\trading-live-data-20261011\start-linked-paper-journal.cjs'
-    if (Test-Path -LiteralPath $journalLauncher) {
+    # Independent PAPER gateway autostart requires explicit operator opt-in.
+    if ($env:RAKAZO_PAPER_JOURNAL_AUTOSTART -eq 'true' -and (Test-Path -LiteralPath $journalLauncher)) {
         & (Get-Command node -ErrorAction Stop).Source $journalLauncher | Out-Null
         if ($LASTEXITCODE -ne 0) { Write-Warning 'Journal startup needs attention; main Rakazo continues.' }
     }
@@ -820,7 +821,7 @@ try {
     $timer = [System.Windows.Forms.Timer]::new()
     $timer.Interval = 10000
     $timer.add_Tick({
-        $healthy = (Test-Http "$origin/health") -and (Test-Http $webUrl) -and (Test-TunnelReady) -and (Test-Http 'http://127.0.0.1:3008/health')
+        $healthy = (Test-Http "$origin/health") -and (Test-Http $webUrl) -and (Test-TunnelReady)
         $tray.Icon = if ($healthy) { [System.Drawing.SystemIcons]::Information } else { [System.Drawing.SystemIcons]::Warning }
         # This local indicator does not claim end-to-end Host verification.
         $tray.Text = if ($healthy) {

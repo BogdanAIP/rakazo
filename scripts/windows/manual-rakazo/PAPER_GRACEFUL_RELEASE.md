@@ -7,6 +7,17 @@ jobs.close(), realtime/connector cleanup, and database disconnect. On Windows,
 taskkill /F bypasses this sequence. The staged controller uses an authenticated
 local file request/ack protocol instead. No virtual fills or exchange orders.
 
+## Independent linked journal
+
+The normal native Rakazo launcher does not autostart the separate PAPER
+journal gateway unless the host operator sets
+RAKAZO_PAPER_JOURNAL_AUTOSTART=true in its launch environment.
+A present start-linked-paper-journal.cjs file alone is not authorization.
+The tray's main Rakazo health is independent of the PAPER API at port 3008;
+the Status menu reports PAPER health separately. Neither signal proves that
+virtual stop orders or recovery have been executed.
+Do not enable autostart before verifying the gateway process is not already
+owned by another controller.
 ## Controlled activation
 
 At a FUTURE approved deployment, set RAKAZO_PAPER_STOP_DIR in the local
