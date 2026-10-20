@@ -270,9 +270,9 @@ export function createJournalGateway(config, fetchImpl = fetch, now = Date.now) 
               return payload.json ?? payload;
             };
             const list = await readRpc("trading/perpetualJournalList", {});
-            if (list?.mode !== "paper_only" || !Array.isArray(list.ledgers) || list.ledgers.length > 10)
+            if (list?.mode !== "paper_only" || !Array.isArray(list.ledgers) || list.ledgers.length > 3)
               throw new Error("Invalid PAPER account list");
-            const rows = await Promise.all(list.ledgers.slice(0, 3).map(async (entry) => {
+            const rows = await Promise.all(list.ledgers.map(async (entry) => {
               if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(entry?.ledgerId ?? ""))
                 throw new Error("Invalid ledger ID");
               const w = await readRpc("trading/perpetualWorkspaceRead", { ledgerId: entry.ledgerId });

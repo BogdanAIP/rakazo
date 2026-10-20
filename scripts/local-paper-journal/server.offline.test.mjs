@@ -183,3 +183,23 @@ test("offline H1 stop wick is evidence only and cannot create a retrospective fi
     throw Error("Unexpected PAPER procedure");
   }, ["trading/catalog"]);
 });
+test("more than three PAPER accounts fail closed instead of hiding a fourth", async () => {
+  await fixture(async ({ root, gateway, req }) => {
+    await writeFile(path.join(root, "paper-offline-lifecycle.json"), JSON.stringify({
+      mode: "PAPER_ONLY", state: "resumed_review_pending",
+      stoppedAtUtc: "2026-10-19T15:00:00.000Z",
+      resumedAtUtc: "2026-10-19T16:00:00.000Z",
+    }));
+    const response = await gateway(req());
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.accountsStatus, "unavailable");
+    assert.equal(body.accounts, undefined);
+    assert.equal(body.mayAuthorizeEntries, false);
+  }, async () => ({
+    json: { mode: "paper_only", ledgers: [
+      { ledgerId: "paper-futures:a" }, { ledgerId: "paper-futures:b" },
+      { ledgerId: "paper-futures:c" }, { ledgerId: "paper-futures:d" },
+    ] },
+  }));
+});
