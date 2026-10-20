@@ -70,13 +70,19 @@ describe("trusted Windows process working directories", () => {
 
   it("rejects links, traversal and escaping paths even under a registered root", async () => {
     const { stateDir, allowed, other } = await fixture();
-    await symlink(other, path.join(allowed, "linked"), process.platform === "win32" ? "junction" : "dir");
+    await symlink(
+      other,
+      path.join(allowed, "linked"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
     const runner = vi.fn(async () => ({ stdout: "", stderr: "", code: 0 }));
     const backend = new WindowsProcessBackend(stateDir, runner, true, { "bot-a": [allowed] });
     await expect(backend.execute("bot-a", ["git"], path.join(allowed, "linked"))).rejects.toThrow(
       "link",
     );
-    await expect(backend.execute("bot-a", ["git"], `${allowed}${path.sep}..${path.sep}another-repository`)).rejects.toThrow();
+    await expect(
+      backend.execute("bot-a", ["git"], `${allowed}${path.sep}..${path.sep}another-repository`),
+    ).rejects.toThrow();
     await expect(backend.execute("bot-a", ["git"], path.parse(allowed).root)).rejects.toThrow();
     expect(runner).not.toHaveBeenCalled();
   });
@@ -87,9 +93,15 @@ describe("trusted Windows process working directories", () => {
     expect(parseTrustedExecRoots(JSON.stringify({ "bot-a": [root] }))).toEqual({ "bot-a": [root] });
     expect(() => parseTrustedExecRoots("{oops")).toThrow("Invalid RAKAZO_WINDOWS");
     expect(() => parseTrustedExecRoots(JSON.stringify([root]))).toThrow("per-bot");
-    expect(() => parseTrustedExecRoots(JSON.stringify({ "bot-a": ["../repo"] }))).toThrow("absolute");
-    expect(() => parseTrustedExecRoots(JSON.stringify({ "bot-a": [path.parse(root).root] }))).toThrow("root");
-    expect(() => parseTrustedExecRoots(JSON.stringify({ "bot-a": Array(9).fill(root) }))).toThrow("mapping");
+    expect(() => parseTrustedExecRoots(JSON.stringify({ "bot-a": ["../repo"] }))).toThrow(
+      "absolute",
+    );
+    expect(() =>
+      parseTrustedExecRoots(JSON.stringify({ "bot-a": [path.parse(root).root] })),
+    ).toThrow("root");
+    expect(() => parseTrustedExecRoots(JSON.stringify({ "bot-a": Array(9).fill(root) }))).toThrow(
+      "mapping",
+    );
     expect(() => parseTrustedExecRoots(JSON.stringify({ "../bad": [root] }))).toThrow("mapping");
   });
 });
