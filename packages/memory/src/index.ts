@@ -1,4 +1,3 @@
-import { MEMORY_REVISION_CONFLICT_ERROR } from "@rakazo/adapter-kit";
 import type {
   AdapterContext,
   MemoryCommitRequest,
@@ -11,6 +10,7 @@ import type {
   MemoryStore,
   PortableFile,
 } from "@rakazo/adapter-kit";
+import { MEMORY_REVISION_CONFLICT_ERROR } from "@rakazo/adapter-kit";
 import { Prisma, type PrismaClient, withTransactionRetry } from "@rakazo/db";
 
 export class MarkdownMemoryStore implements MemoryStore {
