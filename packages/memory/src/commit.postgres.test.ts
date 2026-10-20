@@ -257,5 +257,4 @@ describePostgres("memory commits (PostgreSQL)", () => {
     );
     expect(next.revision).toBe(3);
   });
-
 });
