@@ -35,7 +35,7 @@ $patterns=@(
 $replacements=@(
  'function Test-RegisteredProcess($item,[string]$entry,[string]$role){$name=if($role -eq ''journal''){''gateway''}else{$role};return ((Get-Content (Join-Path $runtime ($name+''.state'')) -Raw).Trim() -eq ''running'')}',
  'function Assert-ListeningIdentity([int]$port,[int]$expectedPid,[string]$role){return}',
- '$pgRunning=((Get-Content (Join-Path $runtime ''database.state'') -Raw).Trim() -eq ''running'');$workerDrainReady=$true;if($Action -eq ''Probe'' -or $Action -eq ''Plan''){',
+ '$pgRunning=((Get-Content (Join-Path $runtime ''database.state'') -Raw).Trim() -eq ''running'');$workerDrainReady=$true;$apiDrainReady=$true;$gatewayDrainReady=$true;if($Action -eq ''Probe'' -or $Action -eq ''Plan''){',
  'function Stop-Registered($item,[string]$entry,[string]$role){$name=if($role -eq ''journal''){''gateway''}else{$role};Set-Content (Join-Path $runtime ($name+''.state'')) ''stopped''}',
  'if($pgRunning){Set-Content (Join-Path $runtime ''database.state'') ''stopped''}'
 )
@@ -48,6 +48,10 @@ for($i=0;$i -lt $patterns.Count;$i++){
 $mockWorkerBlock='(?ms)^if\(\$worker\)\{\s*\$drainScript=Join-Path[\s\S]*?^\}'
 if(([regex]::Matches($sim,$mockWorkerBlock)).Count -ne 1){throw 'Fixture worker boundary ambiguous'}
 $sim=[regex]::Replace($sim,$mockWorkerBlock,'if($worker){Set-Content (Join-Path $runtime ''worker.state'') ''stopped''}',1)
+# Only in the disposable fixture: mark API and gateway stopped in state files.
+$serviceBlock='(?ms)^if\(\$gatewayOk\)\{\s*\$receipt=& \$drainPath -Action Request -Service gateway[\s\S]*?^if\(\$api\)\{[\s\S]*?^\}'
+if(([regex]::Matches($sim,$serviceBlock)).Count -ne 1){throw 'Disposable service block not uniquely located'}
+$sim=[regex]::Replace($sim,$serviceBlock,'if($gatewayOk){Set-Content (Join-Path $runtime ''gateway.state'') ''stopped''};if($api){Set-Content (Join-Path $runtime ''api.state'') ''stopped''}',1)
 $qaScript=Join-Path $runtime 'QA-lifecycle.ps1'
 [IO.File]::WriteAllText($qaScript,$sim,[Text.UTF8Encoding]::new($false))
 $err=$null;$tok=$null

@@ -46,3 +46,25 @@ offline intervals remain subject to historical market and funding review.
 4. A controlled full startup/quit/restart with real auth and offline gap review.
 5. Explicit approval before temporarily interrupting the current local SOL
    protective worker. The tray release switch remains FALSE.
+
+## Second staged phase: API and journal gateway
+
+The canonical handshake now supports worker, gateway, api. Each service uses
+its own fresh instance ID and per-role files, so a shutdown request cannot
+be routed to a different service. The Windows controller verifies registered
+PID, creation time, command path, token and acknowledgment for all three.
+
+Shutdown order after explicit owner consent:
+1. Worker waits for job handlers and Graphile database confirmations.
+2. Gateway stops listening and waits for in-flight authenticated requests.
+3. API waits for in-flight HTTP requests and closes owned resources.
+4. Only after all acknowledgments, PostgreSQL may stop using pg_ctl.
+
+Plan is fail-closed until all three handshake capabilities are registered.
+Current production runtime is not opted in; coordinated Quit release flag
+remains FALSE. Long-running SSE/API requests may cause a timeout, not a
+falsely successful shutdown. Legacy normal API SIGTERM keeps its SSE grace.
+
+QA: 13 worker and API unit cases, 25 journal gateway Node cases, 14 simulated
+lifecycle checks, disposable Windows worker stop checks. Full three-service
+E2E, cloud CI, funding reconciliation and authorized live rollout pending.

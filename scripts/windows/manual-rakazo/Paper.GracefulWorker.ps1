@@ -2,6 +2,7 @@
 [CmdletBinding()]
 param(
  [ValidateSet('Probe','Request')][string]$Action='Probe',
+ [ValidateSet('worker','api','gateway')][string]$Service='worker',
  [switch]$ConfirmedOwnerQuit,
  [string]$RuntimeRoot = (Join-Path $HOME 'RakazoRuntime\trading-live-data-20261011'),
  [ValidateRange(2,180)][int]$TimeoutSeconds=90
@@ -11,29 +12,36 @@ Set-StrictMode -Version Latest
 $root=[IO.Path]::GetFullPath($RuntimeRoot)
 $config=Get-Content -LiteralPath (Join-Path $root 'paper-runtime-config.json') -Raw|ConvertFrom-Json
 $registered=Get-Content -LiteralPath (Join-Path $root 'paper-runtime-pids.json') -Raw|ConvertFrom-Json
-$worker=$registered.worker
-if($null -eq $worker -or !$worker.pid -or !$worker.startedAt){throw 'No verified PAPER worker registration'}
-$pidNum=[int]$worker.pid
-$proc=Get-CimInstance Win32_Process -Filter ('ProcessId = '+$pidNum)
-if(!$proc){throw 'Registered PAPER worker no longer runs'}
-$command=[string]$proc.CommandLine
-$entry=[IO.Path]::Combine([string]$config.repo,'apps','worker','src','index.ts').Replace('\','/')
-if(!$command.Replace('\','/').Contains($entry)){throw 'PAPER worker process identity mismatch'}
-$recorded=if($worker.startedAt -is [DateTime]){
- $worker.startedAt.ToUniversalTime()
+$component=if($Service -eq 'gateway'){
+ Get-Content -LiteralPath (Join-Path $root 'linked-journal-gateway-pid.json') -Raw|ConvertFrom-Json
 }else{
- [DateTimeOffset]::Parse([string]$worker.startedAt).UtcDateTime
+ $registered.$Service
+}
+if($null -eq $component -or !$component.pid -or !$component.startedAt){throw ('No verified PAPER '+$Service+' registration')}
+$pidNum=[int]$component.pid
+$proc=Get-CimInstance Win32_Process -Filter ('ProcessId = '+$pidNum)
+if(!$proc){throw ('Registered PAPER '+$Service+' no longer runs')}
+$command=[string]$proc.CommandLine
+$entry=if($Service -eq 'gateway'){$component.server}else{
+ [IO.Path]::Combine([string]$config.repo,'apps',$Service,'src','index.ts')
+}
+$entry=[string]$entry
+if(!$command.Replace('\','/').Contains($entry.Replace('\','/'))){throw ('PAPER '+$Service+' process identity mismatch')}
+$recorded=if($component.startedAt -is [DateTime]){
+ $component.startedAt.ToUniversalTime()
+}else{
+ [DateTimeOffset]::Parse([string]$component.startedAt).UtcDateTime
 }
 if([Math]::Abs(($proc.CreationDate.ToUniversalTime()-$recorded).TotalSeconds) -gt 25){
- throw 'PAPER worker PID was reused'
+ throw ('PAPER '+$Service+' PID was reused')
 }
-$readyFile=Join-Path $root 'paper-worker-stop.ready.json'
+$readyFile=Join-Path $root ('paper-'+$Service+'-stop.ready.json')
 if(!(Test-Path -LiteralPath $readyFile -PathType Leaf)){
  if($Action -eq 'Probe'){
   [pscustomobject]@{mode='PAPER_ONLY';ready=$false;wouldChange=$false}|ConvertTo-Json -Compress
   return
  }
- throw 'PAPER worker did not register graceful shutdown; no processes stopped'
+ throw ('PAPER '+$Service+' did not register graceful shutdown; no processes stopped')
 }
 $ready=Get-Content -LiteralPath $readyFile -Raw|ConvertFrom-Json
 if($ready.mode -ne 'PAPER_ONLY' -or $ready.version -ne 1 -or $ready.pid -ne $pidNum -or
@@ -54,8 +62,8 @@ if($Action -eq 'Probe'){
  return
 }
 if(!$ConfirmedOwnerQuit){throw 'Worker drain requires an explicitly confirmed owner Quit'}
-$requestFile=Join-Path $root 'paper-worker-stop.request.json'
-$ackFile=Join-Path $root 'paper-worker-stop.ack.json'
+$requestFile=Join-Path $root ('paper-'+$Service+'-stop.request.json')
+$ackFile=Join-Path $root ('paper-'+$Service+'-stop.ack.json')
 if(Test-Path $requestFile){
  $previous=Get-Content -LiteralPath $requestFile -Raw|ConvertFrom-Json
  if($previous.pid -eq $pidNum -and $previous.instanceId -eq $ready.instanceId -and
@@ -96,7 +104,7 @@ while([DateTime]::UtcNow -lt $until){
 if(!$ackReceived){throw 'PAPER worker drain acknowledgement timed out; no forced termination'}
 while([DateTime]::UtcNow -lt $until){
  if(!(Get-Process -Id $pidNum -ErrorAction SilentlyContinue)){
-  [pscustomobject]@{mode='PAPER_ONLY';state='drained';pid=$pidNum;
+  [pscustomobject]@{mode='PAPER_ONLY';state='drained';service=$Service;pid=$pidNum;
     requestId=$requestId;exited=$true}|ConvertTo-Json -Compress
   return
  }
