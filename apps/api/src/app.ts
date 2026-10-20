@@ -894,7 +894,14 @@ export async function createApp(
       jobs: jobKind,
       realtime: realtime.describe().id,
       revision: env.gitSha ?? null,
-    })),
+    }),
+    // Keep the readiness check bounded on both HTTP and PostgreSQL sides.
+    () =>
+      prisma.$transaction([
+        prisma.$executeRaw`SET LOCAL statement_timeout = 1500`,
+        prisma.$queryRaw`SELECT 1`,
+      ]),
+    ),
   );
 
   return {
