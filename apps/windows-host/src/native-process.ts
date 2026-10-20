@@ -1,6 +1,12 @@
 import { spawn } from "node:child_process";
+import path from "node:path";
 import type { WindowsHostProcessResult } from "@rakazo/contracts";
 import { WindowsHostReadOnlyBackend } from "./readonly.js";
+import {
+  parseTrustedExecRoots,
+  resolveTrustedExecDirectory,
+  type TrustedExecRoots,
+} from "./trusted-exec-directory.js";
 
 const MAX_OUTPUT_BYTES = 64 * 1024;
 const MAX_RUN_MS = 18_000;
@@ -84,6 +90,9 @@ export class WindowsProcessBackend {
     stateDir: string,
     private readonly runner: WindowsProcessRunner = runBoundedWindowsProcess,
     private readonly enabled = process.env.RAKAZO_WINDOWS_PROCESS_ENABLED === "true",
+    private readonly trustedExecRoots: TrustedExecRoots = parseTrustedExecRoots(
+      process.env.RAKAZO_WINDOWS_TRUSTED_EXEC_ROOTS_JSON,
+    ),
   ) {
     this.reader = new WindowsHostReadOnlyBackend(stateDir);
   }
@@ -94,7 +103,9 @@ export class WindowsProcessBackend {
 
   async execute(botId: string, argv: string[], cwd = ".", timeoutMs = 10_000) {
     if (!this.enabled) throw new Error("Native Windows process execution is not enabled");
-    const directory = await this.reader.workspaceDirectory(botId, cwd);
+    const directory = path.isAbsolute(cwd)
+      ? await resolveTrustedExecDirectory(botId, cwd, this.trustedExecRoots)
+      : await this.reader.workspaceDirectory(botId, cwd);
     return this.runner(argv, directory, timeoutMs);
   }
 }
