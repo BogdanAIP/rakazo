@@ -37,7 +37,7 @@ describe("agent memory context", () => {
     const read = vi.fn(async ({ scope }: { scope: "bot" | "user" }) =>
       snapshot(
         scope === "bot"
-          ? [document("new", "new.md", "🙂".repeat(200), 1, "2026-08-15T12:00:00.000Z")]
+          ? [document("new", "new.md", `older fact\n${"🙂".repeat(200)}\nrecent fact`, 1, "2026-08-15T12:00:00.000Z")]
           : [document("old", "old.md", "must not fit", 1, "2026-08-14T12:00:00.000Z")],
       ),
     );
@@ -46,9 +46,26 @@ describe("agent memory context", () => {
 
     expect(Buffer.byteLength(result ?? "", "utf8")).toBeLessThanOrEqual(300);
     expect(result).toContain("## bot: new.md");
+    expect(result).toContain("recent fact");
+    expect(result).not.toContain("older fact");
     expect(result).not.toContain("old.md");
     expect(result).not.toContain("�");
     expect(result?.endsWith("</durable_memory>")).toBe(true);
+  });
+
+  it("preserves most recent bot memory even with long Unicode text", async () => {
+    const read = vi.fn(async ({ scope }: { scope: "bot" | "user" }) =>
+      snapshot(
+        scope === "bot"
+          ? [document("b", "MEMORY.md", `old\n${"🙂".repeat(10000)}\nnewest decision`, 3, "2026-08-15T12:00:00.000Z")]
+          : [document("u", "shared.md", "shared fact", 1, "2026-08-14T12:00:00.000Z")],
+      ),
+    );
+    const result = await loadAgentMemoryContext(storeWith(read), "bot-1", context);
+    expect(Buffer.byteLength(result ?? "", "utf8")).toBeLessThanOrEqual(32 * 1024);
+    expect(result).toContain("newest decision");
+    expect(result).not.toContain("old\\n");
+    expect(result).not.toContain("�");
   });
 
   it("omits the memory block when neither scope has documents", async () => {
