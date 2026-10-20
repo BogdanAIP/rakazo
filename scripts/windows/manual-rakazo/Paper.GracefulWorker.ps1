@@ -45,6 +45,7 @@ if(!(Test-Path -LiteralPath $readyFile -PathType Leaf)){
 }
 $ready=Get-Content -LiteralPath $readyFile -Raw|ConvertFrom-Json
 if($ready.mode -ne 'PAPER_ONLY' -or $ready.version -ne 1 -or $ready.pid -ne $pidNum -or
+ $ready.service -ne $Service -or
  [string]$ready.instanceId -notmatch '^[0-9a-f-]{36}$' -or
  [string]$ready.token -notmatch '^[0-9a-f]{64}$'){
  throw 'Invalid PAPER worker control identity'
@@ -87,7 +88,7 @@ while([DateTime]::UtcNow -lt $until){
  if(Test-Path $ackFile){
   try {
    $ack=Get-Content -LiteralPath $ackFile -Raw|ConvertFrom-Json
-   if($ack.pid -eq $pidNum -and $ack.instanceId -eq $ready.instanceId -and
+   if($ack.pid -eq $pidNum -and $ack.service -eq $Service -and $ack.instanceId -eq $ready.instanceId -and
       $ack.requestId -eq $requestId){
     if($ack.state -eq 'failed'){throw 'PAPER worker reported failed drain; retaining services'}
     if($ack.state -ne 'drained'){throw 'Unknown PAPER drain acknowledgement'}
