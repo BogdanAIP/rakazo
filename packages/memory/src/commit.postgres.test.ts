@@ -1,4 +1,5 @@
 import type { AdapterContext, MemoryCommitRequest } from "@rakazo/adapter-kit";
+import { MEMORY_REVISION_CONFLICT_ERROR } from "@rakazo/adapter-kit";
 import { createDb, type PrismaClient } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MarkdownMemoryStore } from "./index.js";
@@ -234,5 +235,26 @@ describePostgres("memory commits (PostgreSQL)", () => {
     expect(afterRetry).toMatchObject({ revision: 5, content: "rejected" });
     expect(afterRetry.revisions).toHaveLength(5);
     expect(afterRetry.revisions.at(-1)).toMatchObject({ revision: 5, content: "rejected" });
+  });
+  it("rejects stale expectedRevision without overwriting newer memory", async () => {
+    const path = "revision-guard-append.md";
+    const first = await store.commit(request(path, "first fact"), context);
+    expect(first.revision).toBe(1);
+    const second = await store.commit(
+      { ...request(path, "first fact\nsecond fact"), expectedRevision: 1 },
+      context,
+    );
+    expect(second.revision).toBe(2);
+    await expect(
+      store.commit({ ...request(path, "stale overwrite"), expectedRevision: 1 }, context),
+    ).rejects.toThrow(MEMORY_REVISION_CONFLICT_ERROR);
+    const current = await document(path);
+    expect(current.content).toBe("first fact\nsecond fact");
+    expect(current.revisions).toHaveLength(2);
+    const next = await store.commit(
+      { ...request(path, "first fact\nsecond fact\nthird fact"), expectedRevision: 2 },
+      context,
+    );
+    expect(next.revision).toBe(3);
   });
 });
