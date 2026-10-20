@@ -2681,7 +2681,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if (graphical && isProtectedComputerLifecycleCommand(command)) {
               return finish({
                 error:
-                  "This command was not run: the desktop-protection guard detected a protected command or shell syntax it cannot inspect. Shell access is still available. For ordinary repository work, use direct commands with explicit paths, without sourcing or command substitution. Do not stop or restart browser/desktop processes.",
+                  "This command was not run: the desktop-protection guard detected a protected command or shell syntax it cannot inspect. This refusal is not evidence of a filesystem permission error. Shell access is still available. For ordinary file edits, use the dedicated file tools; for normal repository work, use direct commands with explicit paths rather than interpreter heredocs, sourcing or command substitution. Do not retry commands that stop or restart browser/desktop processes.",
               });
             }
             const cwd = resolveBotWorkspaceCwd(
