@@ -72,14 +72,28 @@ if($pgRunning){
    Where-Object {$_.OwningProcess -eq $pgPid})
  if(!$listeners.Count){throw 'Unverified PAPER database listener'}
 }
+# A healthy worker is NOT proof that it supports the graceful stop protocol.
+$workerDrainReady=$false
+if($worker){
+ $drainPath=Join-Path $PSScriptRoot 'Paper.GracefulWorker.ps1'
+ if(Test-Path -LiteralPath $drainPath){
+  try {
+   $control=& $drainPath -Action Probe -RuntimeRoot $root |Select-Object -Last 1|ConvertFrom-Json
+   $workerDrainReady=($control.mode -eq 'PAPER_ONLY' -and $control.ready -eq $true)
+  } catch { $workerDrainReady=$false }
+ }
+}
 if($Action -eq 'Probe' -or $Action -eq 'Plan'){
  [pscustomobject]@{mode='PAPER_ONLY';api=$api;worker=$worker;gateway=$gatewayOk;
-  database=$pgRunning;wouldChange=$false;stopEligible=$true;stopWouldRequireGapReview=$true}|ConvertTo-Json -Compress
+  database=$pgRunning;wouldChange=$false;stopEligible=($workerDrainReady -and $api -and $gatewayOk -and $pgRunning);workerDrainReady=$workerDrainReady;stopWouldRequireGapReview=$true}|ConvertTo-Json -Compress
  return
 }
 # Defense in depth: Plan/Probe can NEVER reach a destructive branch.
 if($Action -ne 'Stop' -or -not $ConfirmedOwnerQuit) {
  throw 'PAPER stop requires explicit Stop action and confirmed owner Quit'
+}
+if($worker -and -not $workerDrainReady){
+ throw 'PAPER graceful worker drain is not ready; no shutdown marker or services changed'
 }
 if(-not $api -and -not $worker -and -not $gatewayOk -and -not $pgRunning) {
  'PAPER already offline; previously recorded interval preserved.'
@@ -98,8 +112,20 @@ function Stop-Registered($item,[string]$entry,[string]$role){
  & $taskkill '/PID' ([string]$item.pid) '/T' '/F' | Out-Null
  if($LASTEXITCODE -ne 0){throw ('Cannot stop PAPER '+$role)}
 }
+# Drained worker MUST confirm completion and exit before stopping journal, API or PostgreSQL.
+# Windows taskkill /F would bypass worker job cleanup, so it is forbidden for PAPER worker.
+if($worker){
+ $drainScript=Join-Path $PSScriptRoot 'Paper.GracefulWorker.ps1'
+ if(!(Test-Path -LiteralPath $drainScript -PathType Leaf)){
+  throw 'PAPER graceful worker controller missing; retaining API and database'
+ }
+ $receipt=& $drainScript -Action Request -ConfirmedOwnerQuit -RuntimeRoot $root |
+  Select-Object -Last 1 | ConvertFrom-Json
+ if($receipt.state -ne 'drained' -or !$receipt.exited){
+  throw 'PAPER worker shutdown is not proven; retaining API and database'
+ }
+}
 if($null -ne $gateway){Stop-Registered $gateway ([string]$gateway.server) 'gateway'}
-Stop-Registered $pids.worker $entries.worker 'worker'
 Stop-Registered $pids.api $entries.api 'api'
 if($pgRunning){
  & $pgCtl '-D' $pgData '-m' 'fast' '-w' '-t' '45' 'stop' | Out-Null

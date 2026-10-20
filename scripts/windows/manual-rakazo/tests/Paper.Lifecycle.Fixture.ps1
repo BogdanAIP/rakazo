@@ -35,7 +35,7 @@ $patterns=@(
 $replacements=@(
  'function Test-RegisteredProcess($item,[string]$entry,[string]$role){$name=if($role -eq ''journal''){''gateway''}else{$role};return ((Get-Content (Join-Path $runtime ($name+''.state'')) -Raw).Trim() -eq ''running'')}',
  'function Assert-ListeningIdentity([int]$port,[int]$expectedPid,[string]$role){return}',
- '$pgRunning=((Get-Content (Join-Path $runtime ''database.state'') -Raw).Trim() -eq ''running'');if($Action -eq ''Probe'' -or $Action -eq ''Plan''){',
+ '$pgRunning=((Get-Content (Join-Path $runtime ''database.state'') -Raw).Trim() -eq ''running'');$workerDrainReady=$true;if($Action -eq ''Probe'' -or $Action -eq ''Plan''){',
  'function Stop-Registered($item,[string]$entry,[string]$role){$name=if($role -eq ''journal''){''gateway''}else{$role};Set-Content (Join-Path $runtime ($name+''.state'')) ''stopped''}',
  'if($pgRunning){Set-Content (Join-Path $runtime ''database.state'') ''stopped''}'
 )
@@ -44,6 +44,10 @@ for($i=0;$i -lt $patterns.Count;$i++){
  if($rg.Matches($sim).Count -ne 1){throw ('QA boundary mismatch #'+$i+' count='+$rg.Matches($sim).Count)}
  $sim=$rg.Replace($sim,[string]$replacements[$i],1)
 }
+# Production worker drain is validated separately with a genuine Node child.
+$mockWorkerBlock='(?ms)^if\(\$worker\)\{\s*\$drainScript=Join-Path[\s\S]*?^\}'
+if(([regex]::Matches($sim,$mockWorkerBlock)).Count -ne 1){throw 'Fixture worker boundary ambiguous'}
+$sim=[regex]::Replace($sim,$mockWorkerBlock,'if($worker){Set-Content (Join-Path $runtime ''worker.state'') ''stopped''}',1)
 $qaScript=Join-Path $runtime 'QA-lifecycle.ps1'
 [IO.File]::WriteAllText($qaScript,$sim,[Text.UTF8Encoding]::new($false))
 $err=$null;$tok=$null

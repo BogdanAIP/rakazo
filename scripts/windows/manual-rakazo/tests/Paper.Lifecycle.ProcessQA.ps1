@@ -48,7 +48,7 @@ $replaceDb=@(
  '(?ms)^if\(\$pgRunning\)\{\s*& \$pgCtl[\s\S]*?^\}'
 )
 $replaceWith=@(
- '$pgRunning=((Get-Content (Join-Path $root ''database.state'') -Raw).Trim() -eq ''running'');if($Action -eq ''Probe'' -or $Action -eq ''Plan''){',
+ '$pgRunning=((Get-Content (Join-Path $root ''database.state'') -Raw).Trim() -eq ''running'');$workerDrainReady=$true;if($Action -eq ''Probe'' -or $Action -eq ''Plan''){',
  'if($pgRunning){Set-Content (Join-Path $root ''database.state'') ''stopped''}'
 )
 for($i=0;$i -lt 2;$i++){
@@ -59,6 +59,17 @@ for($i=0;$i -lt 2;$i++){
 if($raw.Contains('pg_ctl.exe') -or $raw.Contains('pg_ctl.ps1')){
  throw 'QA copy must not call any PostgreSQL control binary'
 }
+# This legacy suite only tests disposable PID ordering; use the dedicated
+# graceful-process QA for the real request/ack handshake and job drain.
+$workerBoundary='(?ms)^if\(\$worker\)\{\s*\$drainScript=Join-Path[\s\S]*?^\}'
+if(([regex]::Matches($raw,$workerBoundary)).Count -ne 1){throw 'QA worker block ambiguous'}
+$raw=[regex]::Replace($raw,$workerBoundary,
+ 'if($worker){Stop-Registered $pids.worker $entries.worker ''worker''}',1)
+# QA-only Stop-Process for verified disposable Node PIDs. No taskkill process trees.
+$stopBoundary='(?ms)^function Stop-Registered\([\s\S]*?^\}'
+if(([regex]::Matches($raw,$stopBoundary)).Count -ne 1){throw 'QA process-stop boundary ambiguous'}
+$raw=[regex]::Replace($raw,$stopBoundary,
+ 'function Stop-Registered($item,[string]$entry,[string]$role){if(!(Test-RegisteredProcess $item $entry $role)){return};Stop-Process -Id ([int]$item.pid) -Force -ErrorAction Stop}',1)
 $qaScript=Join-Path $root 'QA-process-lifecycle.ps1'
 [IO.File]::WriteAllText($qaScript,$raw,[Text.UTF8Encoding]::new($false))
 $e=$null;$t=$null
@@ -114,7 +125,7 @@ try{
  $reg.worker.pid=$correctWorkerPid
  $reg|ConvertTo-Json -Depth 5|Set-Content $registry
  [pscustomobject]@{result='PASS';type='ISOLATED_REAL_PROCESS_QA';
-  processShutdown='real identity-scoped taskkill on temporary Node dummies only';
+  processShutdown='QA-only process cleanup; real graceful protocol verified in dedicated test';
   database='simulated, no real PostgreSQL touched';positions=1;pendingOrders=1;
   originalTradingUntouched=$true;fixture=$root}|ConvertTo-Json -Compress
 }finally{
