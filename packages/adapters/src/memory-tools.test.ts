@@ -34,15 +34,11 @@ describe("selectMemoryTools", () => {
 
 describe("appendMemoryFact", () => {
   it("preserves the existing document and adds the fact", () => {
-    expect(appendMemoryFact("Existing rule.\n", "New rule.")).toBe(
-      "Existing rule.\nNew rule.\n",
-    );
+    expect(appendMemoryFact("Existing rule.\n", "New rule.")).toBe("Existing rule.\nNew rule.\n");
   });
 
   it("normalizes a fresh fact without changing existing whitespace", () => {
-    expect(appendMemoryFact("  Existing.  \n", "  New.  ")).toBe(
-      "  Existing.  \nNew.\n",
-    );
+    expect(appendMemoryFact("  Existing.  \n", "  New.  ")).toBe("  Existing.  \nNew.\n");
   });
 
   it("does not append duplicate lines or multiline blocks", () => {
@@ -53,9 +49,7 @@ describe("appendMemoryFact", () => {
   });
 
   it("matches multiline facts across Windows line endings", () => {
-    expect(appendMemoryFact("Area:\r\nBerlin\r\n", "Area:\nBerlin")).toBe(
-      "Area:\r\nBerlin\r\n",
-    );
+    expect(appendMemoryFact("Area:\r\nBerlin\r\n", "Area:\nBerlin")).toBe("Area:\r\nBerlin\r\n");
   });
 
   it("ignores blank facts but initializes new memory", () => {
