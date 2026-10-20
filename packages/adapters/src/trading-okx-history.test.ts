@@ -78,6 +78,70 @@ describe("read-only OKX closed 1H history", () => {
     );
   });
 
+  it("retries one short HTTP 429 and accepts only confirmed H1 bars", async () => {
+    const mock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response("rate limited", {
+          status: 429,
+          headers: { "Retry-After": "0" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            code: "0",
+            data: [bar(10, "0"), bar(9)],
+          }),
+          { status: 200 },
+        ),
+      );
+    const result = await fetchOkxClosedOneHourHistory(market, {
+      now,
+      fetchImpl: mock as unknown as typeof fetch,
+    });
+    expect(mock).toHaveBeenCalledTimes(2);
+    expect(result.candles).toHaveLength(1);
+    expect(result.candles[0]?.openedAt).toBe(new Date(Number(ts(9))).toISOString());
+  });
+
+  it("does not hammer OKX if Retry-After exceeds the bounded delay", async () => {
+    const mock = vi.fn().mockResolvedValue(
+      new Response("rate limited", {
+        status: 429,
+        headers: { "Retry-After": "60" },
+      }),
+    );
+    await expect(
+      fetchOkxClosedOneHourHistory(market, {
+        now,
+        fetchImpl: mock as unknown as typeof fetch,
+      }),
+    ).rejects.toThrow("HTTP error: 429");
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries one transient network disconnect without inventing data", async () => {
+    const mock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            code: "0",
+            data: [bar(9)],
+          }),
+          { status: 200 },
+        ),
+      );
+    const result = await fetchOkxClosedOneHourHistory(market, {
+      now,
+      fetchImpl: mock as unknown as typeof fetch,
+    });
+    expect(result.candles).toHaveLength(1);
+    expect(mock).toHaveBeenCalledTimes(2);
+  });
+
   it("rejects API errors, non-JSON and wrong provider before network access", async () => {
     await expect(history({ code: "50001", data: [] })).rejects.toThrow("API error");
     await expect(history(new Response("bad-json"))).rejects.toThrow("not JSON");

@@ -59,13 +59,32 @@ export async function fetchOkxClosedOneHourHistory(
     "/api/v5/market/history-candles?instId=" +
     encodeURIComponent(market.symbol) +
     "&bar=1H&limit=100";
-  const response = await fetchImpl(url, {
-    method: "GET",
-    redirect: "error",
-    headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!response.ok) throw new Error("OKX public history HTTP error: " + response.status);
+  // Public GET only: one bounded retry for a brief disconnect or short rate limit.
+  // Never retry malformed/unauthorized responses and never return stale history.
+  let response: Response | undefined;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      response = await fetchImpl(url, {
+        method: "GET",
+        redirect: "error",
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch (error) {
+      if (attempt > 0) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      continue;
+    }
+    if (attempt > 0 || ![408, 429, 502, 503, 504].includes(response.status)) break;
+    const retryAfter = response.headers.get("retry-after");
+    const delayMs =
+      retryAfter !== null && /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : 750;
+    if (!Number.isFinite(delayMs) || delayMs > 2000) break;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  if (!response?.ok) {
+    throw new Error(`OKX public history HTTP error: ${response?.status ?? "unavailable"}`);
+  }
   const body = await response.text();
   if (body.length > MAX_RESPONSE_CHARS) throw new Error("OKX public history response too large");
   let payload: unknown;
@@ -75,7 +94,7 @@ export async function fetchOkxClosedOneHourHistory(
     throw new Error("OKX public history response is not JSON");
   }
   const parsed = responseSchema.parse(payload);
-  if (parsed.code !== "0") throw new Error("OKX public history API error: " + parsed.code);
+  if (parsed.code !== "0") throw new Error(`OKX public history API error: ${parsed.code}`);
   const candles: TradingCandle[] = [];
   const seen = new Set<string>();
   for (const row of parsed.data) {
