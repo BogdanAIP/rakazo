@@ -133,6 +133,7 @@ jobs:
         env:
           DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
       - run: pnpm test
+      - run: node --test scripts/local-paper-journal/server.test.mjs
 
   test-integration:
     name: Postgres journeys
