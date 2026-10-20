@@ -68,3 +68,27 @@ falsely successful shutdown. Legacy normal API SIGTERM keeps its SSE grace.
 QA: 13 worker and API unit cases, 25 journal gateway Node cases, 14 simulated
 lifecycle checks, disposable Windows worker stop checks. Full three-service
 E2E, cloud CI, funding reconciliation and authorized live rollout pending.
+## Real services and cold restart verification (2026-10-20)
+
+The tests/Paper.ActualServices.ProcessQA.ps1 fixture runs the actual isolated
+Rakazo API, worker and linked journal gateway against a separate PostgreSQL
+17 on port 15549. API and gateway use isolated ports 15651 and 15652.
+It creates independent random test secrets, generates Prisma Client,
+applies real Prisma migrations, checks the API health endpoint and verifies
+unauthenticated gateway requests do not expose trading data.
+
+The local run completed 27 successful assertions and the marker
+ACTUAL_RAKAZO_BACKEND_QUIT_RESTART_PASS. It verified role-specific
+acknowledgments, PostgreSQL shutdown only after all services, disappearance
+of original PIDs, restart of all real processes, fresh identities and
+Paper.ResumeReview.ps1 recording resumed_review_pending once. Funding and
+historical stop review remain mandatory; the QA snapshot was unchanged.
+
+Five disposable database directories from QA runs were removed after process
+identity and stop verification. Ports 15549/15651/15652 were closed;
+the live PAPER PostgreSQL on 5548 remained available.
+
+This is infrastructure lifecycle proof, NOT real PAPER position or trading
+execution QA, verified funding reconciliation, authenticated production
+browser flow, cloud CI, or permission to deploy. The live coordinated Quit
+release switch remains FALSE, and no active PAPER process was restarted.
