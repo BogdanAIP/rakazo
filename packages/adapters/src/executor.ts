@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { MEMORY_REVISION_CONFLICT_ERROR } from "@rakazo/adapter-kit";
 import type {
   AdapterContext,
   AgentHomeStore,
@@ -27,6 +26,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import {
   historyCompactJob,
+  MEMORY_REVISION_CONFLICT_ERROR,
   routineJobKey,
   routineWakeupJob,
   runContinueJob,
