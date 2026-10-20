@@ -1,4 +1,9 @@
-import type { AgentRunRequest, MemoryReadRequest, MemorySnapshot } from "@rakazo/adapter-kit";
+import type {
+  AgentRunRequest,
+  MemoryCommitRequest,
+  MemoryReadRequest,
+  MemorySnapshot,
+} from "@rakazo/adapter-kit";
 import {
   legacyScopedToolEffectIdempotencyKey,
   toolEffectIdempotencyKey,
@@ -63,7 +68,7 @@ function fixture(runId = "run-1") {
     trigger: "user",
     leaseFence: 0,
   };
-  const memoryCommit = vi.fn(async () => ({ revision: "rev-1" }));
+  const memoryCommit = vi.fn(async (_request: MemoryCommitRequest) => ({ revision: "rev-1" }));
   const memoryDocuments: MemorySnapshot["documents"] = [];
   const externalEffect = {
     findMany: vi.fn(
