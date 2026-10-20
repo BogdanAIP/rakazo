@@ -92,6 +92,7 @@ export * from "./none-sandbox.js";
 export * from "./openai-compatible-url.js";
 export * from "./openai-voice.js";
 export * from "./page-browser-session.js";
+export * from "./paper-graceful-stop.js";
 export { createConfiguredPaperPerpetualEngine } from "./paper-perpetual-engine-config.js";
 export {
   controlPerpetualPaperWorkspace,
