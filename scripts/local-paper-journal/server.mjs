@@ -1,5 +1,6 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import { createServer } from "node:http";
+import { inspectOfflinePositions } from "./offline-position-check.mjs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -190,10 +191,11 @@ export function createJournalGateway(config, fetchImpl = fetch, now = Date.now) 
           },
         });
       }
+      const isOffline = pathname === `${PREFIX}/offline-review`;
       const isStatus = pathname === `${PREFIX}/status`;
       const isView = pathname === `${PREFIX}/view`;
       const isRpc = pathname.startsWith(`${PREFIX}/rpc/`);
-      if (!isStatus && !isView && !isRpc) return reply(404, "Not found");
+      if (!isStatus && !isOffline && !isView && !isRpc) return reply(404, "Not found");
       if (isRpc) {
         if (request.method !== "POST") return reply(405, "Method not allowed");
         if (request.headers.get("origin") !== config.publicOrigin)
@@ -211,6 +213,106 @@ export function createJournalGateway(config, fetchImpl = fetch, now = Date.now) 
         return new Response(JSON.stringify({ available: true }), {
           headers: { "content-type": "application/json", "cache-control": "no-store" },
         });
+      if (isOffline) {
+        if (url.search) return reply(404, "Not found");
+        const marker = path.join(path.dirname(config.assetsDir), "paper-offline-lifecycle.json");
+        let bytes;
+        try {
+          const info = await stat(marker);
+          if (!info.isFile() || info.size > 4096) return reply(503, "Offline status unavailable");
+          bytes = await readFile(marker, "utf8");
+        } catch (error) {
+          if (error?.code === "ENOENT")
+            return new Response(JSON.stringify({ state: "no_record", reviewPending: false }), {
+              headers: { "content-type": "application/json", "cache-control": "no-store" },
+            });
+          return reply(503, "Offline status unavailable");
+        }
+        let data;
+        try { data = JSON.parse(bytes); } catch { return reply(503, "Offline status unavailable"); }
+        const start = Date.parse(data?.stoppedAtUtc);
+        const resumed = typeof data?.resumedAtUtc === "string" ? Date.parse(data.resumedAtUtc) : null;
+        if (data?.mode !== "PAPER_ONLY" || !Number.isFinite(start) ||
+            (resumed !== null && (!Number.isFinite(resumed) || resumed < start)) ||
+            !["stopping", "offline", "resumed_review_pending"].includes(data.state))
+          return reply(503, "Offline status unavailable");
+        const result = {
+          state: data.state,
+          stoppedAtUtc: new Date(start).toISOString(),
+          resumedAtUtc: resumed === null ? null : new Date(resumed).toISOString(),
+          durationSeconds: Math.floor(((resumed ?? now()) - start) / 1000),
+          reviewPending: true,
+          stopTargetReview: "not_verified",
+          fundingReview: "required",
+          syntheticFills: false,
+          mayAuthorizeEntries: false,
+        };
+        if (config.procedures.includes("trading/perpetualJournalList") &&
+            config.procedures.includes("trading/perpetualWorkspaceRead")) {
+          try {
+            const readRpc = async (procedure, input, limit = 65536) => {
+              const upstream = await fetchImpl(config.paperApi + "/rpc/" + procedure, {
+                method: "POST",
+                headers: {
+                  authorization: "Bearer " + config.accessToken,
+                  origin: config.paperOrigin,
+                  "x-rakazo-space-id": config.paperSpaceId,
+                  "content-type": "application/json",
+                },
+                body: JSON.stringify({ json: input }),
+                redirect: "error",
+                signal: AbortSignal.timeout(5000),
+              });
+              if (!upstream.ok ||
+                  !upstream.headers.get("content-type")?.includes("application/json"))
+                throw new Error("PAPER account status unavailable");
+              const payload = JSON.parse(Buffer.from(await boundedBytes(upstream, limit)).toString("utf8"));
+              return payload.json ?? payload;
+            };
+            const list = await readRpc("trading/perpetualJournalList", {});
+            if (list?.mode !== "paper_only" || !Array.isArray(list.ledgers) || list.ledgers.length > 10)
+              throw new Error("Invalid PAPER account list");
+            const rows = await Promise.all(list.ledgers.slice(0, 3).map(async (entry) => {
+              if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(entry?.ledgerId ?? ""))
+                throw new Error("Invalid ledger ID");
+              const w = await readRpc("trading/perpetualWorkspaceRead", { ledgerId: entry.ledgerId });
+              if (w?.status !== "verified" || w.ledgerId !== entry.ledgerId ||
+                  !["paused", "active"].includes(w.sessionStatus))
+                throw new Error("Invalid PAPER workspace");
+              return { ledgerId: entry.ledgerId, rawPlans: w.positionPlans,
+                summary: {
+                strategy: ["conservative", "moderate", "aggressive"].includes(w.strategy) ?
+                  w.strategy : "unknown",
+                sessionStatus: w.sessionStatus,
+                phase: ["protection_only", "attention_required", "running"].includes(w.phase) ?
+                  w.phase : "other",
+                pendingOrders: Array.isArray(w.openOrders) ? w.openOrders.length : null,
+                protectivePlans: Array.isArray(w.positionPlans) ? w.positionPlans.length : null,
+                },
+              };
+            }));
+            result.accounts = rows.map((row) => row.summary);
+            if (resumed !== null && config.procedures.includes("trading/catalog") &&
+                config.procedures.includes("trading/perpetualJournalRead")) {
+              try {
+                result.marketReviews = await inspectOfflinePositions({
+                  rows, readRpc, fetchImpl, now, start, resumed,
+                });
+              } catch {
+                result.marketReviewStatus = "unavailable";
+              }
+            } else {
+              result.marketReviewStatus = resumed === null ? "awaiting_restart" : "unavailable";
+            }
+          } catch {
+            result.accountsStatus = "unavailable";
+          }
+        }
+        return new Response(JSON.stringify(result), {
+          headers: { "content-type": "application/json", "cache-control": "no-store",
+            "x-content-type-options": "nosniff" },
+        });
+      }
       if (isView) {
         const html = await readFile(path.join(config.assetsDir, "index.html"));
         return new Response(html, {
