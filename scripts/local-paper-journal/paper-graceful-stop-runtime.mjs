@@ -2,6 +2,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+
 async function atomicJson(file, data) {
   const temp = file.concat(".", randomUUID(), ".tmp");
   try {
@@ -31,7 +32,7 @@ async function createPaperStopControl(options) {
     pid,
     instanceId,
     token,
-    readyAtUtc: (/* @__PURE__ */ new Date()).toISOString()
+    readyAtUtc: /* @__PURE__ */ new Date().toISOString(),
   });
   let occupied = false;
   let closing = false;
@@ -54,7 +55,12 @@ async function createPaperStopControl(options) {
       } catch {
         return;
       }
-      if (data.pid !== pid || data.instanceId !== instanceId || data.token !== token || !/^[0-9a-f-]{36}$/i.test(data.requestId ?? ""))
+      if (
+        data.pid !== pid ||
+        data.instanceId !== instanceId ||
+        data.token !== token ||
+        !/^[0-9a-f-]{36}$/i.test(data.requestId ?? "")
+      )
         return;
       accepted = true;
       closing = true;
@@ -69,7 +75,7 @@ async function createPaperStopControl(options) {
           instanceId,
           requestId: data.requestId,
           state: "drained",
-          finishedAtUtc: (/* @__PURE__ */ new Date()).toISOString()
+          finishedAtUtc: /* @__PURE__ */ new Date().toISOString(),
         });
         options.exit(0);
       } catch (error) {
@@ -80,7 +86,7 @@ async function createPaperStopControl(options) {
           pid,
           instanceId,
           requestId: data.requestId,
-          state: "failed"
+          state: "failed",
         }).catch(options.onError);
         options.onError?.(error);
       }
@@ -100,9 +106,8 @@ async function createPaperStopControl(options) {
     close: () => {
       closing = true;
       clearInterval(timer);
-    }
+    },
   };
 }
-export {
-  createPaperStopControl
-};
+
+export { createPaperStopControl };

@@ -1,9 +1,9 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import { createServer } from "node:http";
-import { inspectOfflinePositions } from "./offline-position-check.mjs";
-import { createPaperStopControl } from "./paper-graceful-stop-runtime.mjs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { inspectOfflinePositions } from "./offline-position-check.mjs";
+import { createPaperStopControl } from "./paper-graceful-stop-runtime.mjs";
 
 const PREFIX = "/linked-paper";
 const MAX_BODY = 1024 * 1024;
@@ -230,12 +230,20 @@ export function createJournalGateway(config, fetchImpl = fetch, now = Date.now) 
           return reply(503, "Offline status unavailable");
         }
         let data;
-        try { data = JSON.parse(bytes); } catch { return reply(503, "Offline status unavailable"); }
+        try {
+          data = JSON.parse(bytes);
+        } catch {
+          return reply(503, "Offline status unavailable");
+        }
         const start = Date.parse(data?.stoppedAtUtc);
-        const resumed = typeof data?.resumedAtUtc === "string" ? Date.parse(data.resumedAtUtc) : null;
-        if (data?.mode !== "PAPER_ONLY" || !Number.isFinite(start) ||
-            (resumed !== null && (!Number.isFinite(resumed) || resumed < start)) ||
-            !["stopping", "offline", "resumed_review_pending"].includes(data.state))
+        const resumed =
+          typeof data?.resumedAtUtc === "string" ? Date.parse(data.resumedAtUtc) : null;
+        if (
+          data?.mode !== "PAPER_ONLY" ||
+          !Number.isFinite(start) ||
+          (resumed !== null && (!Number.isFinite(resumed) || resumed < start)) ||
+          !["stopping", "offline", "resumed_review_pending"].includes(data.state)
+        )
           return reply(503, "Offline status unavailable");
         const result = {
           state: data.state,
@@ -248,8 +256,10 @@ export function createJournalGateway(config, fetchImpl = fetch, now = Date.now) 
           syntheticFills: false,
           mayAuthorizeEntries: false,
         };
-        if (config.procedures.includes("trading/perpetualJournalList") &&
-            config.procedures.includes("trading/perpetualWorkspaceRead")) {
+        if (
+          config.procedures.includes("trading/perpetualJournalList") &&
+          config.procedures.includes("trading/perpetualWorkspaceRead")
+        ) {
           try {
             const readRpc = async (procedure, input, limit = 65536) => {
               const upstream = await fetchImpl(config.paperApi + "/rpc/" + procedure, {
@@ -264,40 +274,67 @@ export function createJournalGateway(config, fetchImpl = fetch, now = Date.now) 
                 redirect: "error",
                 signal: AbortSignal.timeout(5000),
               });
-              if (!upstream.ok ||
-                  !upstream.headers.get("content-type")?.includes("application/json"))
+              if (
+                !upstream.ok ||
+                !upstream.headers.get("content-type")?.includes("application/json")
+              )
                 throw new Error("PAPER account status unavailable");
-              const payload = JSON.parse(Buffer.from(await boundedBytes(upstream, limit)).toString("utf8"));
+              const payload = JSON.parse(
+                Buffer.from(await boundedBytes(upstream, limit)).toString("utf8"),
+              );
               return payload.json ?? payload;
             };
             const list = await readRpc("trading/perpetualJournalList", {});
-            if (list?.mode !== "paper_only" || !Array.isArray(list.ledgers) || list.ledgers.length > 3)
+            if (
+              list?.mode !== "paper_only" ||
+              !Array.isArray(list.ledgers) ||
+              list.ledgers.length > 3
+            )
               throw new Error("Invalid PAPER account list");
-            const rows = await Promise.all(list.ledgers.map(async (entry) => {
-              if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(entry?.ledgerId ?? ""))
-                throw new Error("Invalid ledger ID");
-              const w = await readRpc("trading/perpetualWorkspaceRead", { ledgerId: entry.ledgerId });
-              if (w?.status !== "verified" || w.ledgerId !== entry.ledgerId ||
-                  !["paused", "active"].includes(w.sessionStatus))
-                throw new Error("Invalid PAPER workspace");
-              return { ledgerId: entry.ledgerId, rawPlans: w.positionPlans,
-                summary: {
-                strategy: ["conservative", "moderate", "aggressive"].includes(w.strategy) ?
-                  w.strategy : "unknown",
-                sessionStatus: w.sessionStatus,
-                phase: ["protection_only", "attention_required", "running"].includes(w.phase) ?
-                  w.phase : "other",
-                pendingOrders: Array.isArray(w.openOrders) ? w.openOrders.length : null,
-                protectivePlans: Array.isArray(w.positionPlans) ? w.positionPlans.length : null,
-                },
-              };
-            }));
+            const rows = await Promise.all(
+              list.ledgers.map(async (entry) => {
+                if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(entry?.ledgerId ?? ""))
+                  throw new Error("Invalid ledger ID");
+                const w = await readRpc("trading/perpetualWorkspaceRead", {
+                  ledgerId: entry.ledgerId,
+                });
+                if (
+                  w?.status !== "verified" ||
+                  w.ledgerId !== entry.ledgerId ||
+                  !["paused", "active"].includes(w.sessionStatus)
+                )
+                  throw new Error("Invalid PAPER workspace");
+                return {
+                  ledgerId: entry.ledgerId,
+                  rawPlans: w.positionPlans,
+                  summary: {
+                    strategy: ["conservative", "moderate", "aggressive"].includes(w.strategy)
+                      ? w.strategy
+                      : "unknown",
+                    sessionStatus: w.sessionStatus,
+                    phase: ["protection_only", "attention_required", "running"].includes(w.phase)
+                      ? w.phase
+                      : "other",
+                    pendingOrders: Array.isArray(w.openOrders) ? w.openOrders.length : null,
+                    protectivePlans: Array.isArray(w.positionPlans) ? w.positionPlans.length : null,
+                  },
+                };
+              }),
+            );
             result.accounts = rows.map((row) => row.summary);
-            if (resumed !== null && config.procedures.includes("trading/catalog") &&
-                config.procedures.includes("trading/perpetualJournalRead")) {
+            if (
+              resumed !== null &&
+              config.procedures.includes("trading/catalog") &&
+              config.procedures.includes("trading/perpetualJournalRead")
+            ) {
               try {
                 result.marketReviews = await inspectOfflinePositions({
-                  rows, readRpc, fetchImpl, now, start, resumed,
+                  rows,
+                  readRpc,
+                  fetchImpl,
+                  now,
+                  start,
+                  resumed,
                 });
               } catch {
                 result.marketReviewStatus = "unavailable";
@@ -310,8 +347,11 @@ export function createJournalGateway(config, fetchImpl = fetch, now = Date.now) 
           }
         }
         return new Response(JSON.stringify(result), {
-          headers: { "content-type": "application/json", "cache-control": "no-store",
-            "x-content-type-options": "nosniff" },
+          headers: {
+            "content-type": "application/json",
+            "cache-control": "no-store",
+            "x-content-type-options": "nosniff",
+          },
         });
       }
       if (isView) {
@@ -403,7 +443,7 @@ export async function drainJournalGateway(server) {
   // Stop accepting sockets, allow authenticated reads to finish, and then exit.
   // Never destroy active requests or claim success on timeout.
   await new Promise((resolve, reject) => {
-    server.close((error) => error ? reject(error) : resolve());
+    server.close((error) => (error ? reject(error) : resolve()));
     server.closeIdleConnections();
   });
 }

@@ -5,12 +5,17 @@ export async function inspectOfflinePositions({ rows, readRpc, fetchImpl, now, s
   const guarded = rows.filter((row) => Array.isArray(row.rawPlans) && row.rawPlans.length);
   if (guarded.length > 3 || guarded.some((row) => row.rawPlans.length > 4))
     throw new Error("Offline audit scope exceeds limit");
-  const catalog = guarded.length ? await readRpc("trading/catalog", {}, 1024 * 1024) : { markets: [] };
+  const catalog = guarded.length
+    ? await readRpc("trading/catalog", {}, 1024 * 1024)
+    : { markets: [] };
   if (!Array.isArray(catalog?.markets)) throw new Error("PAPER catalog unavailable");
   const results = [];
   for (const row of guarded) {
-    const journal = await readRpc("trading/perpetualJournalRead",
-      { ledgerId: row.ledgerId, limit: 1 }, 1024 * 1024);
+    const journal = await readRpc(
+      "trading/perpetualJournalRead",
+      { ledgerId: row.ledgerId, limit: 1 },
+      1024 * 1024,
+    );
     if (journal?.status !== "verified" || !Array.isArray(journal.state?.openPositions))
       throw new Error("Unverified PAPER ledger");
     if (journal.state.openPositions.length > 4) throw new Error("Too many offline positions");
@@ -23,17 +28,27 @@ export async function inspectOfflinePositions({ rows, readRpc, fetchImpl, now, s
         newEntriesAuthorized: false,
       };
       const plan = row.rawPlans.find((p) => p.positionId === position.positionId);
-      const instrument = catalog.markets.find((m) =>
-        m.venue === "okx" && m.kind === "perpetual" && m.status === "active" &&
-        m.symbol === position.instrument);
-      if (!plan || !instrument || position.venue !== "okx" ||
-          !["long", "short"].includes(position.side)) {
+      const instrument = catalog.markets.find(
+        (m) =>
+          m.venue === "okx" &&
+          m.kind === "perpetual" &&
+          m.status === "active" &&
+          m.symbol === position.instrument,
+      );
+      if (
+        !plan ||
+        !instrument ||
+        position.venue !== "okx" ||
+        !["long", "short"].includes(position.side)
+      ) {
         results.push({ ...item, status: "history_incomplete", barsReviewed: 0 });
         continue;
       }
       try {
-        const history = await fetchOkxClosedOneHourHistory(instrument,
-          { fetchImpl, now: new Date(now()) });
+        const history = await fetchOkxClosedOneHourHistory(instrument, {
+          fetchImpl,
+          now: new Date(now()),
+        });
         const review = reviewPaperOfflineH1({
           offlineAt: new Date(start).toISOString(),
           onlineAt: new Date(resumed).toISOString(),
