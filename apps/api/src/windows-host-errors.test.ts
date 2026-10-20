@@ -15,7 +15,9 @@ describe("publicWindowsWorkspaceError", () => {
 
   it("never leaks arbitrary internal errors or host secrets", () => {
     expect(publicWindowsWorkspaceError(new Error("ECONNREFUSED token=SECRET"))).toBeNull();
-    expect(publicWindowsWorkspaceError(new Error("Workspace path must be relative: C:\\secret"))).toBeNull();
+    expect(
+      publicWindowsWorkspaceError(new Error("Workspace path must be relative: C:\\secret")),
+    ).toBeNull();
     expect(publicWindowsWorkspaceError("Workspace path must be relative")).toBeNull();
   });
 });
