@@ -226,7 +226,6 @@ import {
   startOnboarding,
 } from "./onboarding.js";
 import { listSpaceRuns } from "./runs.js";
-import { publicWindowsWorkspaceError } from "./windows-host-errors.js";
 import { addScreenProxyCapability } from "./screen-proxy.js";
 import { querySpaceSearch } from "./search.js";
 import { withSerializableRetry } from "./serializable-retry.js";
@@ -265,6 +264,7 @@ import {
   updateVoiceSpeechModel,
   voiceContext,
 } from "./voice.js";
+import { publicWindowsWorkspaceError } from "./windows-host-errors.js";
 
 const MAX_COMPUTER_TEXT_FILE_BYTES = 2 * 1024 * 1024;
 /** Each command writes a running and a done event, so this keeps about 100 commands. */
@@ -2805,9 +2805,14 @@ export function createRouter(deps: RouterDeps) {
           });
           scheduleComputerSleep(deps.jobs, bot.computer.id);
           try {
-            const bytes = await deps.sandbox.readFile(toComputerRef(bot.computer), storedPath, ctx, {
-              maxBytes: MAX_COMPUTER_TEXT_FILE_BYTES,
-            });
+            const bytes = await deps.sandbox.readFile(
+              toComputerRef(bot.computer),
+              storedPath,
+              ctx,
+              {
+                maxBytes: MAX_COMPUTER_TEXT_FILE_BYTES,
+              },
+            );
             content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
           } catch (error) {
             const message = publicWindowsWorkspaceError(error);
