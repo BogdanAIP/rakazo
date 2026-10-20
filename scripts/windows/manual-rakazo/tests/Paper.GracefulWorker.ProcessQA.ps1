@@ -6,7 +6,7 @@ $root=Join-Path $env:TEMP ('paper-drain-process-qa-'+[guid]::NewGuid().ToString(
 $repo=Join-Path $root 'repo'
 $entryDir=Join-Path $repo 'apps\worker\src'
 New-Item -ItemType Directory -Path $entryDir -Force|Out-Null
-$src=(Join-Path $WorkerSourceRepo 'apps\worker\src\paper-graceful-stop.ts')
+$src=(Join-Path $WorkerSourceRepo 'packages\adapters\src\paper-graceful-stop.ts')
 Copy-Item $src (Join-Path $entryDir 'paper-graceful-stop.ts') -ErrorAction Stop
 $entry=Join-Path $entryDir 'index.ts'
 $nodeScript=@"
