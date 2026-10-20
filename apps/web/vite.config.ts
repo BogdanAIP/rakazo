@@ -291,6 +291,23 @@ Object.defineProperty(window, "localStorage", {
 export default defineConfig(({ mode }) => {
   const rootEnv = loadEnv(mode, path.resolve(import.meta.dirname, "../.."), "");
   const api = process.env.API_PROXY_TARGET ?? rootEnv.API_PROXY_TARGET ?? "http://127.0.0.1:3100";
+  const linkedPaperUrl = process.env.RAKAZO_LINKED_PAPER_URL ?? rootEnv.RAKAZO_LINKED_PAPER_URL;
+  const linkedPaperProxy: Record<string, { target: string; changeOrigin: boolean }> = {};
+  if (linkedPaperUrl) {
+    const url = new URL(linkedPaperUrl);
+    if (
+      url.protocol !== "http:" ||
+      !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      url.pathname !== "/"
+    ) {
+      throw new Error("Linked PAPER target must be a loopback origin");
+    }
+    linkedPaperProxy["/linked-paper/"] = { target: url.origin, changeOrigin: true };
+  }
   const previewHost = process.env.RAKAZO_HOST ?? rootEnv.RAKAZO_HOST ?? "localhost";
   const screenProxySecret = () =>
     resolveScreenProxySecret({
@@ -341,6 +358,7 @@ export default defineConfig(({ mode }) => {
       port: webPort,
       strictPort: true,
       proxy: {
+        ...linkedPaperProxy,
         "/api": { target: api, changeOrigin: true },
         "/rpc": { target: api, changeOrigin: true },
       },
@@ -350,6 +368,7 @@ export default defineConfig(({ mode }) => {
       port: Number(process.env.WEB_PORT ?? 5173),
       allowedHosts: [previewHost],
       proxy: {
+        ...linkedPaperProxy,
         "/api": { target: api, changeOrigin: true },
         "/rpc": { target: api, changeOrigin: true },
       },
