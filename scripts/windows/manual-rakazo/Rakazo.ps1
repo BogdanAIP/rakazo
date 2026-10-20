@@ -35,6 +35,7 @@ function Write-RakazoLaunchStage([string]$stage) {
 . (Join-Path $PSScriptRoot 'Tunnel.Control.ps1')
 . (Join-Path $PSScriptRoot 'Native.TrayUpdates.ps1')
 . (Join-Path $PSScriptRoot 'Native.PostgresEvidence.ps1')
+. (Join-Path $PSScriptRoot 'Native.PostgresRecovery.ps1')
 
 function Test-Http([string]$url) {
     try {
@@ -373,10 +374,18 @@ function Ensure-NativePostgres {
     $pidEvidence = Get-NativePostgresPidFileEvidence -Spec $spec
     if ($pidEvidence.Present) {
         if (-not $pidEvidence.SafeToDelegateRecovery) {
-            throw ('The native PostgreSQL PID file exists but safe recovery is not proven: ' +
-                $pidEvidence.Reason + '. Manual recovery required.')
+            if ($pidEvidence.Reason -cne 'pid-reused-by-other-process') {
+                throw ('The native PostgreSQL PID file exists but safe recovery is not proven: ' +
+                    $pidEvidence.Reason + '. Manual recovery required.')
+            }
+            # A reused PID is not itself sufficient proof. The recovery helper
+            # re-verifies the exact cluster, timestamps, process inventory, TCP
+            # listener and unchanged lock before archiving it atomically.
+            [void](Move-VerifiedReusedPostgresPidAside -Spec $spec)
+            Write-RakazoLaunchStage 'verified reused postgres pidfile safely archived'
+        } else {
+            Write-RakazoLaunchStage 'stale postgres pidfile verified; delegating recovery to pg_ctl'
         }
-        Write-RakazoLaunchStage 'stale postgres pidfile verified; delegating recovery to pg_ctl'
     }
     if (Test-Port $spec.Port) {
         throw 'The target PostgreSQL port is occupied by an unverified process.'
