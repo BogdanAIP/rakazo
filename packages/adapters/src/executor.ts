@@ -563,6 +563,11 @@ export function isProtectedComputerLifecycleCommand(command: string): boolean {
   return false;
 }
 
+/** Explain how to continue ordinary file work without weakening the desktop guard. */
+export function desktopProtectionGuardMessage(): string {
+  return "This command was not run: the desktop-protection guard detected a protected command or shell syntax it cannot inspect. This refusal is not evidence of a filesystem permission error. Shell access is still available. For ordinary file edits, use the dedicated file tools; for normal repository work, use direct commands with explicit paths rather than interpreter heredocs, sourcing or command substitution. Do not retry commands that stop or restart browser/desktop processes.";
+}
+
 /** Cap the roster so a large Space cannot flood the prompt. */
 const BOT_DIRECTORY_LIMIT = 40;
 const MISSING_MODEL_MESSAGE = "Connect a model in Settings before running bots.";
@@ -2681,8 +2686,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const command = String(args.command ?? args.cmd ?? "");
             if (graphical && isProtectedComputerLifecycleCommand(command)) {
               return finish({
-                error:
-                  "This command was not run: the desktop-protection guard detected a protected command or shell syntax it cannot inspect. Shell access is still available. For ordinary repository work, use direct commands with explicit paths, without sourcing or command substitution. Do not stop or restart browser/desktop processes.",
+                error: desktopProtectionGuardMessage(),
               });
             }
             const cwd = resolveBotWorkspaceCwd(
