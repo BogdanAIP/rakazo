@@ -261,7 +261,7 @@ function Get-Preflight {
         }).Count)
         ExternalWorkerDetected = [bool](@(Get-CimInstance Win32_Process | Where-Object {
             $cmd = ([string]$_.CommandLine).Replace('\', '/')
-            $_.Name -eq 'node.exe' -and ($cmd.Contains('/apps/worker/') -or $cmd.Contains('@rakazo/worker'))
+            $_.Name -eq 'node.exe' -and ($cmd.Contains('/apps/worker/') -or $cmd.Contains('@rakazo/worker')) -and -not (Test-RakazoIndependentPaperWorker -Process $_ -PrimaryRepo $repo)
         }).Count)
         ExternalHostDetected = [bool](@(Get-CimInstance Win32_Process | Where-Object {
             $cmd = ([string]$_.CommandLine).Replace('\', '/')
@@ -269,6 +269,74 @@ function Get-Preflight {
         }).Count)
     }
 }
+# RAKAZO_INDEPENDENT_PAPER_WORKER_V1
+function Test-RakazoIndependentPaperWorker {
+    param($Process, [string]$PrimaryRepo)
+
+    try {
+        $runtime = Join-Path $env:USERPROFILE 'RakazoRuntime\trading-live-data-20261011'
+        $configPath = Join-Path $runtime 'paper-runtime-config.json'
+        $pidsPath = Join-Path $runtime 'paper-runtime-pids.json'
+
+        $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+        $pids = Get-Content -LiteralPath $pidsPath -Raw | ConvertFrom-Json
+
+        if ([int]$Process.ProcessId -ne [int]$pids.worker.pid) {
+            return $false
+        }
+
+        $paperRepo = [IO.Path]::GetFullPath([string]$config.repo).TrimEnd('\', '/')
+        $mainRepo = [IO.Path]::GetFullPath($PrimaryRepo).TrimEnd('\', '/')
+        if ($paperRepo -ieq $mainRepo) { return $false }
+
+        $entry = Join-Path $paperRepo 'apps\worker\src\index.ts'
+        if (-not (Test-Path -LiteralPath $entry -PathType Leaf)) {
+            return $false
+        }
+
+        $entry = [IO.Path]::GetFullPath($entry).Replace('\', '/')
+        $command = ([string]$Process.CommandLine).Replace('\', '/')
+        $entryPattern = '(?:^|[\s"])' + [regex]::Escape($entry) + '(?=$|[\s"])'
+        if ($command -notmatch $entryPattern) { return $false }
+
+        if ($null -eq $Process.CreationDate) { return $false }
+        $stateWritten = (Get-Item -LiteralPath $pidsPath).LastWriteTimeUtc
+        if ($Process.CreationDate.ToUniversalTime() -gt $stateWritten.AddSeconds(5)) {
+            return $false
+        }
+
+        $mainEnvPath = Join-Path $mainRepo '.env'
+        $databaseLines = @(
+            Get-Content -LiteralPath $mainEnvPath |
+                Where-Object { $_ -match '^\s*DATABASE_URL\s*=' }
+        )
+        if ($databaseLines.Count -ne 1) { return $false }
+
+        $mainValue = ($databaseLines[0] -replace '^\s*DATABASE_URL\s*=\s*', '').Trim()
+        $mainValue = $mainValue.Trim('"').Trim("'")
+        $mainDb = [uri]$mainValue
+        $paperDb = [uri]([string]$config.env.DATABASE_URL)
+
+        if ($mainDb.Scheme -notin @('postgres', 'postgresql') -or
+            $paperDb.Scheme -notin @('postgres', 'postgresql') -or
+            -not $mainDb.IsLoopback -or -not $paperDb.IsLoopback -or
+            $mainDb.AbsolutePath -eq '/' -or $paperDb.AbsolutePath -eq '/') {
+            return $false
+        }
+
+        # Разные локальные базы: отдельные очереди и торговые данные.
+        if ($mainDb.Port -eq $paperDb.Port -and
+            $mainDb.AbsolutePath -ceq $paperDb.AbsolutePath) {
+            return $false
+        }
+
+        return $true
+    } catch {
+        # Не удалось подтвердить независимость — защита от дубля остаётся.
+        return $false
+    }
+}
+
 function Get-ExistingTunnelSpec {
     $configPath = Join-Path $launcherRoot 'config.json'
     $cfg = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json -ErrorAction Stop
@@ -601,10 +669,41 @@ try {
     Start-Sleep -Seconds 3
     $worker.Refresh()
     if ($worker.HasExited) { throw 'Worker exited early; inspect manual-launcher logs.' }
+    # Optional linked journal reuses its finite owner access in hidden processes.
+    $journalLauncher = Join-Path $HOME 'RakazoRuntime\trading-live-data-20261011\start-linked-paper-journal.cjs'
+    if (Test-Path -LiteralPath $journalLauncher) {
+        & (Get-Command node -ErrorAction Stop).Source $journalLauncher | Out-Null
+        if ($LASTEXITCODE -ne 0) { Write-Warning 'Journal startup needs attention; main Rakazo continues.' }
+    }
+    # A saved PAPER offline interval never authorizes simulated fills or new entries.
+    # The PAPER worker restores native journal data; ORIGINAL entry sessions remain fail-closed.
+    $paperOfflineMarker = Join-Path $HOME 'RakazoRuntime\trading-live-data-20261011\paper-offline-lifecycle.json'
+    if (Test-Path -LiteralPath $paperOfflineMarker) {
+        try {
+            $offline = Get-Content -LiteralPath $paperOfflineMarker -Raw | ConvertFrom-Json
+            if ($offline.reviewRequired -eq $true) {
+                Write-RakazoLaunchStage 'PAPER offline interval pending research and stop/funding gap review'
+            }
+        } catch {
+            Write-RakazoLaunchStage 'PAPER offline marker unreadable; manual reconciliation required'
+        }
+    }
     $web = Start-OwnedRole 'web'
     Write-RakazoLaunchStage 'web child started; waiting for health'
     if (-not (Wait-Http $webUrl 60 $web)) { throw 'Native Web startup failed or timed out; inspect manual-launcher logs.' }
     Write-RakazoLaunchStage 'web ready'
+    # Only a verified PAPER runtime may mark a previous offline interval as resumed.
+    $resumePaperReview = Join-Path $PSScriptRoot 'Paper.ResumeReview.ps1'
+    if (Test-Path -LiteralPath $resumePaperReview) {
+        try {
+            $resumeReceipt = & $resumePaperReview | Select-Object -Last 1 | ConvertFrom-Json
+            if ($resumeReceipt.changed) {
+                Write-RakazoLaunchStage 'PAPER reopened; offline stop/funding review pending; entry sessions unchanged'
+            }
+        } catch {
+            Write-RakazoLaunchStage 'PAPER lifecycle resume check failed; offline review remains pending'
+        }
+    }
     $windowsHostProcess = Start-OwnedRole 'host'
     Write-RakazoLaunchStage 'host child started'
     Start-Sleep -Seconds 3
@@ -631,19 +730,97 @@ try {
     $open.add_Click({ Start-Process $webUrl })
     $status.add_Click({
         $s = Get-Preflight
+        $paperApi = Test-Http 'http://127.0.0.1:3008/health'
+        $paperDatabase = Test-Port 5548
+        $paperJournal = Test-Port 5190
         $message = 'API: {0}; Web: {1}; R: {2}; host credential: {3}. Verify host heartbeat through R.' -f
             $s.ApiHealthy, $s.WebHealthy, $s.ExistingTunnelReady, $s.ProtectedHostCredentialExists
+        $message += [Environment]::NewLine + ('PAPER API healthy: {0}; database port: {1}; journal gateway port: {2}.' -f $paperApi, $paperDatabase, $paperJournal)
+        $message += [Environment]::NewLine + 'PAPER connectivity does not verify trade sessions or stop-loss execution.'
+        $paperOfflineMarker = Join-Path $HOME 'RakazoRuntime\trading-live-data-20261011\paper-offline-lifecycle.json'
+        if (Test-Path -LiteralPath $paperOfflineMarker) {
+            $message += [Environment]::NewLine + 'PAPER: offline period recorded; stop/target/funding gap review is still required.'
+        }
         [System.Windows.Forms.MessageBox]::Show($message, 'Rakazo status') | Out-Null
     })
     $ctx = [System.Windows.Forms.ApplicationContext]::new()
     Add-RakazoNativeUpdateMenu -Menu $menu -Context $ctx -Repo $repo -Updater (Join-Path $PSScriptRoot 'Native.Update.ps1')
-    $quit.add_Click({ Write-RakazoLaunchStage 'tray quit requested'; $ctx.ExitThread() })
+    $quit.add_Click({
+        # Not enabled until graceful worker draining and cold-start E2E are proven.
+        # Current Quit closes only native Rakazo and leaves independent PAPER running.
+        $coordinatedPaperShutdownReleased = $false
+        if (-not $coordinatedPaperShutdownReleased) {
+            $answer = [System.Windows.Forms.MessageBox]::Show(
+                'Coordinated PAPER shutdown is not yet released. Quit main Rakazo only?' +
+                [Environment]::NewLine + [Environment]::NewLine +
+                'The PAPER backend and its protection worker will stay running while Windows is on.' +
+                [Environment]::NewLine +
+                'If you shut down Windows, local virtual stops cannot execute until restart.',
+                'Quit Rakazo (PAPER remains active)',
+                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Warning,
+                [System.Windows.Forms.MessageBoxDefaultButton]::Button2)
+            if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) {
+                Write-RakazoLaunchStage 'tray quit requested; PAPER independent services preserved'
+                $ctx.ExitThread()
+            }
+            return
+        }
+        $paperLifecycle = Join-Path $PSScriptRoot 'Paper.Lifecycle.ps1'
+        if (-not (Test-Path -LiteralPath $paperLifecycle -PathType Leaf)) {
+            [System.Windows.Forms.MessageBox]::Show(
+                'PAPER lifecycle module is unavailable. Nothing was stopped.',
+                'Quit Rakazo - blocked', [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+            return
+        }
+        try {
+            $plan = (& $paperLifecycle -Action Plan | Select-Object -Last 1 | ConvertFrom-Json)
+            if ($plan.mode -ne 'PAPER_ONLY' -or $plan.wouldChange -ne $false -or
+                $plan.stopEligible -ne $true) { throw 'Invalid PAPER shutdown plan' }
+        } catch {
+            Write-RakazoLaunchStage 'paper shutdown preflight failed; quit canceled'
+            [System.Windows.Forms.MessageBox]::Show(
+                'Could not safely verify the PAPER services. Quit was canceled.',
+                'Quit Rakazo - blocked', [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+            return
+        }
+        $message = 'Quit Rakazo and stop its local PAPER worker, API, journal gateway and PAPER database?' +
+            [Environment]::NewLine + [Environment]::NewLine +
+            'Any virtual positions and orders remain saved, including SOL Short.' +
+            [Environment]::NewLine +
+            'While the laptop is off, local PAPER stops/targets and funding cannot execute.' +
+            [Environment]::NewLine +
+            'On the next start, offline gaps require review and new trade sessions stay paused until separately authorized.' +
+            [Environment]::NewLine + [Environment]::NewLine +
+            'This does NOT close positions or send any real exchange orders.'
+        $answer = [System.Windows.Forms.MessageBox]::Show(
+            $message, 'Quit Rakazo and PAPER',
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Warning,
+            [System.Windows.Forms.MessageBoxDefaultButton]::Button2)
+        if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+        try {
+            Write-RakazoLaunchStage 'coordinated PAPER stop requested'
+            & $paperLifecycle -Action Stop -ConfirmedOwnerQuit | Out-Null
+            Write-RakazoLaunchStage 'coordinated PAPER stop completed'
+            Write-RakazoLaunchStage 'tray quit requested; coordinated PAPER shutdown completed'
+            $ctx.ExitThread()
+        } catch {
+            Write-RakazoLaunchStage 'PAPER stop failed; main Rakazo kept running'
+            [System.Windows.Forms.MessageBox]::Show(
+                'PAPER did not stop cleanly. Rakazo remains open. Review the local lifecycle marker before retrying.',
+                'Quit Rakazo - incomplete', [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+        }
+    })
     $tray.ContextMenuStrip = $menu
     $tray.Visible = $true
     $timer = [System.Windows.Forms.Timer]::new()
     $timer.Interval = 10000
     $timer.add_Tick({
-        $healthy = (Test-Http "$origin/health") -and (Test-Http $webUrl) -and (Test-TunnelReady)
+        $healthy = (Test-Http "$origin/health") -and (Test-Http $webUrl) -and (Test-TunnelReady) -and (Test-Http 'http://127.0.0.1:3008/health')
         $tray.Icon = if ($healthy) { [System.Drawing.SystemIcons]::Information } else { [System.Drawing.SystemIcons]::Warning }
         # This local indicator does not claim end-to-end Host verification.
         $tray.Text = if ($healthy) {
