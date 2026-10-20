@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createPaperStopControl } from "../../../apps/worker/src/paper-graceful-stop.js";
+import { createPaperStopControl } from "./paper-graceful-stop.js";
 
 const folders: string[] = [];
 const controls: Array<{ close: () => void }> = [];

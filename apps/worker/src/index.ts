@@ -13,6 +13,7 @@ import {
   createConnectorStack,
   createJobReconciler,
   createMessagingContextLoader,
+  createPaperStopControl,
   createPostgresReconciliationLeadership,
   createRunExecutor,
   createRunSandbox,
@@ -61,7 +62,6 @@ import {
 import { SERVICE_NAMES } from "@rakazo/logging";
 import { createRootLogger } from "@rakazo/logging/axiom";
 import { MarkdownMemoryStore } from "@rakazo/memory";
-import { createPaperStopControl } from "./paper-graceful-stop.js";
 
 const logger = createRootLogger(SERVICE_NAMES.worker);
 
