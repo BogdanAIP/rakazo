@@ -134,4 +134,31 @@ describe("PAPER-only graceful worker stop handshake", () => {
     await control.check();
     expect(drain).not.toHaveBeenCalled();
   });
+  it("isolates API, gateway and worker control files in the same runtime", async () => {
+    const dir = await tempDir();
+    const exit = vi.fn();
+    const close = vi.fn().mockResolvedValue(undefined);
+    const api = await createPaperStopControl({
+      directory: dir, service: "api", pid: 46002,
+      drain: close, exit, pollMs: 10_000,
+    });
+    controls.push(api);
+    const control = JSON.parse(await readFile(path.join(dir, "paper-api-stop.ready.json"), "utf8"));
+    expect(control.service).toBe("api");
+    await writeFile(path.join(dir, "paper-worker-stop.request.json"), JSON.stringify({
+      pid: control.pid, instanceId: control.instanceId, token: control.token,
+      requestId: "7e3b0d4c-1bf4-4c09-af0e-89b578daf283",
+    }));
+    await api.check();
+    expect(close).not.toHaveBeenCalled();
+    await writeFile(path.join(dir, "paper-api-stop.request.json"), JSON.stringify({
+      pid: control.pid, instanceId: control.instanceId, token: control.token,
+      requestId: "7e3b0d4c-1bf4-4c09-af0e-89b578daf283",
+    }));
+    await api.check();
+    expect(close).toHaveBeenCalledTimes(1);
+    const ack = JSON.parse(await readFile(path.join(dir, "paper-api-stop.ack.json"), "utf8"));
+    expect(ack).toMatchObject({ state: "drained", service: "api", pid: 46002 });
+    expect(exit).toHaveBeenCalledWith(0);
+  });
 });
