@@ -109,6 +109,11 @@ describe("GraphileJobPublisher.enqueue", () => {
   });
 });
 
+function mockGraphilePool(): Pool {
+  return {
+    query: vi.fn(async () => ({ rows: [] })),
+  } as unknown as Pool;
+}
 describe("GraphileJobWorkerHost runner lifecycle", () => {
   afterEach(() => {
     run.mockReset();
@@ -119,7 +124,7 @@ describe("GraphileJobWorkerHost runner lifecycle", () => {
     const second = mockRunner();
     run.mockResolvedValueOnce(first.runner).mockResolvedValueOnce(second.runner);
     const sleeps: number[] = [];
-    const host = new GraphileJobWorkerHost({} as Pool, {
+    const host = new GraphileJobWorkerHost(mockGraphilePool(), {
       sleep: async (ms) => {
         sleeps.push(ms);
       },
@@ -144,7 +149,7 @@ describe("GraphileJobWorkerHost runner lifecycle", () => {
       .mockRejectedValueOnce(tooMany)
       .mockResolvedValueOnce(recovered.runner);
     const sleeps: number[] = [];
-    const host = new GraphileJobWorkerHost({} as Pool, {
+    const host = new GraphileJobWorkerHost(mockGraphilePool(), {
       sleep: async (ms) => {
         sleeps.push(ms);
       },
@@ -162,7 +167,7 @@ describe("GraphileJobWorkerHost runner lifecycle", () => {
   it("does not restart when runner.promise rejects for a non-53300 error", async () => {
     const first = mockRunner();
     run.mockResolvedValueOnce(first.runner);
-    const host = new GraphileJobWorkerHost({} as Pool, {
+    const host = new GraphileJobWorkerHost(mockGraphilePool(), {
       sleep: async () => undefined,
     });
     await host.start(handlers());
@@ -180,7 +185,7 @@ describe("GraphileJobWorkerHost runner lifecycle", () => {
     run.mockResolvedValueOnce(first.runner);
     const sink = createTestSink();
     installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
-    const host = new GraphileJobWorkerHost({} as Pool, {
+    const host = new GraphileJobWorkerHost(mockGraphilePool(), {
       sleep: async () => undefined,
     });
 
@@ -240,7 +245,7 @@ describe("GraphileJobWorkerHost runner lifecycle", () => {
     const first = mockRunner();
     run.mockResolvedValueOnce(first.runner);
     const sleepStarted = deferred();
-    const host = new GraphileJobWorkerHost({} as Pool, {
+    const host = new GraphileJobWorkerHost(mockGraphilePool(), {
       sleep: () => {
         sleepStarted.resolve();
         return new Promise(() => undefined);

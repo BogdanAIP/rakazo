@@ -9,6 +9,7 @@ import { isTooManyDatabaseConnections } from "@rakazo/db";
 import { runCorrelatedJob, unwrapJobPayload, wrapJobPayload } from "@rakazo/logging";
 import { makeWorkerUtils, type Runner, run, type WorkerUtils } from "graphile-worker";
 import type { Pool } from "pg";
+import { awaitGraphileJobSettlements } from "./graphile-settlement.js";
 import { recordHistoryCompactAttemptsExhausted } from "./history-compaction.js";
 
 // Share the caller's pg.Pool instead of opening a separate connectionString-based
@@ -88,7 +89,12 @@ export class GraphileJobWorkerHost implements JobWorkerHost {
     this.stopping = true;
     this.wakeSleep?.();
     try {
-      await this.runner?.stop();
+      if (this.runner) {
+        await this.runner.stop();
+        // Graphile may still be persisting successful/failed job acknowledgments.
+        // The pool must stay available until no job is DB-locked.
+        await awaitGraphileJobSettlements(this.pgPool);
+      }
     } finally {
       await this.superviseTask?.catch(() => undefined);
       this.runner = undefined;

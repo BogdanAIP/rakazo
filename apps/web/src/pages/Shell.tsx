@@ -214,6 +214,7 @@ import {
   transcriptMovedDown,
 } from "../lib/transcript-scroll";
 import { speaker } from "../lib/tts";
+import { useLinkedPaperJournal } from "../lib/use-linked-paper-journal";
 import { ActivityList } from "./ActivityList";
 import type { ContextMenuPosition } from "./BotContextMenu";
 import { CreateGroupForm, GroupSettings, memberName } from "./GroupPanel";
@@ -508,6 +509,7 @@ export function ShellPage() {
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [dismissedRunErrorIds, setDismissedRunErrorIds] =
     useState<ReadonlySet<string>>(readSeenRunErrorIds);
+  const linkedPaperJournal = useLinkedPaperJournal();
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const mobileSidebarSwipeRef = useRef<{ startX: number; startY: number } | null>(null);
@@ -3270,6 +3272,20 @@ export function ShellPage() {
                 <FolderOpen className="text-muted-foreground" strokeWidth={1.75} />
                 <Trans>Artifacts</Trans>
               </Button>
+              {linkedPaperJournal === "ready" ? (
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start font-normal"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setMobileSidebarOpen(false);
+                    navigate("/app/linked-paper-journal");
+                  }}
+                >
+                  <FolderOpen className="text-muted-foreground" strokeWidth={1.75} />
+                  Журнал PAPER
+                </Button>
+              ) : null}
               <Button
                 variant="ghost"
                 className="w-full justify-start font-normal"
