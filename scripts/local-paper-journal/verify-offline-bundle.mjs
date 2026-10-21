@@ -48,7 +48,10 @@ assertProvenance(sourceArg && targetArg, "two explicit repository paths required
 const source = path.resolve(sourceArg);
 const target = path.resolve(targetArg);
 assertProvenance(path.basename(source) === SOURCE_DIR_NAME, "unexpected source directory");
-assertProvenance(path.dirname(source) === path.dirname(target), "source and target must be siblings");
+assertProvenance(
+  path.dirname(source) === path.dirname(target),
+  "source and target must be siblings",
+);
 assertProvenance(source !== target, "source and target must differ");
 
 const revision = spawnSync("git", ["-C", source, "rev-parse", "HEAD"], {
@@ -57,7 +60,10 @@ const revision = spawnSync("git", ["-C", source, "rev-parse", "HEAD"], {
   shell: false,
   windowsHide: true,
 });
-assertProvenance(revision.status === 0 && revision.stdout.trim() === SOURCE_SHA, "unpinned source SHA");
+assertProvenance(
+  revision.status === 0 && revision.stdout.trim() === SOURCE_SHA,
+  "unpinned source SHA",
+);
 
 const esbuild = path.join(
   target,
@@ -72,9 +78,17 @@ const esbuild = path.join(
 const entry = path.join(source, "scripts", "paper-offline-review.entry.ts");
 const alias = path.join(source, "packages", "contracts", "src", "index.ts");
 const committed = path.join(target, "scripts", "local-paper-journal", "offline-gap-runtime.mjs");
-const rebuilt = path.join(target, "scripts", "local-paper-journal", "offline-gap-runtime.verify.mjs");
+const rebuilt = path.join(
+  target,
+  "scripts",
+  "local-paper-journal",
+  "offline-gap-runtime.verify.mjs",
+);
 for (const filename of [esbuild, entry, alias, committed]) {
-  assertProvenance(existsSync(filename) && statSync(filename).isFile(), "required file missing: " + filename);
+  assertProvenance(
+    existsSync(filename) && statSync(filename).isFile(),
+    "required file missing: " + filename,
+  );
 }
 assertProvenance(!existsSync(rebuilt), "temporary output already exists");
 
