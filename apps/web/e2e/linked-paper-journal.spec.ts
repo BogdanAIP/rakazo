@@ -20,7 +20,7 @@ test("main login opens linked journal and returns to existing chats", async ({
   await expect(page.getByPlaceholder("Message Chief")).toBeVisible();
   await page.getByTestId("user-menu-trigger").click();
   await page.getByRole("button", { name: "Журнал PAPER", exact: true }).click();
-  await expect(page).toHaveURL(/\/app\/paper-journal$/);
+  await expect(page).toHaveURL(/\/app\/linked-paper-journal$/);
   await expect(page.getByRole("heading", { name: "Журнал PAPER", exact: true })).toBeVisible();
   await expect(
     page
@@ -49,7 +49,7 @@ test("unavailable journal is hidden from account menu and fails closed on deep l
   await completeOnboarding(page);
   await page.getByTestId("user-menu-trigger").click();
   await expect(page.getByRole("button", { name: "Журнал PAPER", exact: true })).toHaveCount(0);
-  await page.goto("/app/paper-journal");
+  await page.goto("/app/linked-paper-journal");
   await expect(page.getByRole("status")).toHaveText("Журнал сейчас недоступен.");
   await expect(page.locator("iframe")).toHaveCount(0);
 });
@@ -75,14 +75,14 @@ test("journal deep link returns through the primary sign-in page", async ({ page
     ),
     page.getByRole("button", { name: "Log out", exact: true }).click(),
   ]);
-  await page.goto("/app/paper-journal");
-  await expect(page).toHaveURL(/\/sign-in\?next=\/app\/paper-journal$/);
+  await page.goto("/app/linked-paper-journal");
+  await expect(page).toHaveURL(/\/sign-in\?next=\/app\/linked-paper-journal$/);
   await expect(page.getByRole("heading", { name: "Sign in to Rakazo" })).toBeVisible();
   await expect(page.locator("iframe")).toHaveCount(0);
   await page.getByPlaceholder("Your email address").fill(email);
   await page.getByPlaceholder("Password").fill("password12");
   await page.getByRole("button", { name: "Continue with email", exact: true }).click();
-  await expect(page).toHaveURL(/\/app\/paper-journal$/);
+  await expect(page).toHaveURL(/\/app\/linked-paper-journal$/);
   await expect(
     page
       .frameLocator('iframe[title="Журнал виртуальной торговли"]')
