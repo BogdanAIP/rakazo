@@ -49,13 +49,22 @@ check(
   "source Git commit is not the pinned SHA",
 );
 const riskGit = spawnSync("git", ["-C", risk, "rev-parse", "HEAD"], {
-  encoding: "utf8", timeout: 10000, shell: false, windowsHide: true,
+  encoding: "utf8",
+  timeout: 10000,
+  shell: false,
+  windowsHide: true,
 });
-check(riskGit.status === 0 && riskGit.stdout.trim() === RISK_SHA, "dependency Git commit is not the pinned SHA");
+check(
+  riskGit.status === 0 && riskGit.stdout.trim() === RISK_SHA,
+  "dependency Git commit is not the pinned SHA",
+);
 const zod = path.join(risk, "node_modules", ".pnpm", "zod@4.6.2", "node_modules", "zod");
 const zodLink = path.join(source, "packages", "adapters", "node_modules", "zod");
 check(existsSync(zod) && existsSync(zodLink), "historical zod dependencies missing");
-check(realpathSync(zodLink) === realpathSync(zod), "zod must resolve to pinned dependency checkout");
+check(
+  realpathSync(zodLink) === realpathSync(zod),
+  "zod must resolve to pinned dependency checkout",
+);
 
 const esbuild = path.join(
   target,
