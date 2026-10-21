@@ -16,6 +16,7 @@ $restoreDb = 'paper_restored_disposable'
 $started = $false
 $originalDatabase = [Environment]::GetEnvironmentVariable('DATABASE_URL', 'Process')
 $originalRealtime = [Environment]::GetEnvironmentVariable('REALTIME_DATABASE_URL', 'Process')
+$originalPgPort = [Environment]::GetEnvironmentVariable('PGPORT', 'Process')
 
 function Require([bool]$ok, [string]$message) {
   if (-not $ok) { throw ('Backup rehearsal refused: ' + $message) }
@@ -47,6 +48,9 @@ Require (@(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction Sile
 Require (-not (Test-Path $record)) 'temporary folder already exists'
 New-Item -ItemType Directory -Path $record | Out-Null
 
+# initdb's backend inherits PGPORT. Never leave it unset/empty on this Windows build.
+# Pin it to the disposable port before any subprocess can parse postgres settings.
+[Environment]::SetEnvironmentVariable('PGPORT', [string]$port, 'Process')
 try {
   & (Join-Path $bin 'initdb.exe') -D $pgData -U $owner -E UTF8 '--auth=trust' '--no-instructions' *> (Join-Path $record 'initdb.log')
   Require ($LASTEXITCODE -eq 0) 'disposable PostgreSQL initialization failed'
@@ -111,6 +115,7 @@ INSERT INTO public.paper_backup_rehearsal_probe VALUES
 } finally {
   [Environment]::SetEnvironmentVariable('DATABASE_URL', $originalDatabase, 'Process')
   [Environment]::SetEnvironmentVariable('REALTIME_DATABASE_URL', $originalRealtime, 'Process')
+  [Environment]::SetEnvironmentVariable('PGPORT', $originalPgPort, 'Process')
   if ($started -and (Test-Path (Join-Path $pgData 'postmaster.pid'))) {
     & (Join-Path $bin 'pg_ctl.exe') -D $pgData -m fast -w -t 30 stop
     if ($LASTEXITCODE -eq 0) {
