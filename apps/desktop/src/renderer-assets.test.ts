@@ -35,6 +35,19 @@ describe("bundled desktop renderer", () => {
     ).toBeNull();
   });
 
+  it("forwards the linked journal HTML and assets instead of the bundled SPA", () => {
+    for (const pathname of [
+      "/linked-paper/view",
+      "/linked-paper/status",
+      "/linked-paper/assets/app.js",
+    ]) {
+      expect(bundledRendererCandidates(root, origin + pathname, origin, true)).toBeNull();
+    }
+    expect(
+      bundledRendererCandidates(root, origin + "/linked-paper-example", origin, true),
+    ).not.toBeNull();
+  });
+
   it("does not resolve traversal outside the renderer root", () => {
     expect(
       bundledRendererCandidates(root, `${origin}/%2e%2e%2fsecret.txt`, origin, false),

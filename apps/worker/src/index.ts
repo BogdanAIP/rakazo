@@ -13,6 +13,7 @@ import {
   createConnectorStack,
   createJobReconciler,
   createMessagingContextLoader,
+  createPaperStopControl,
   createPostgresReconciliationLeadership,
   createRunExecutor,
   createRunSandbox,
@@ -281,24 +282,36 @@ async function main() {
   });
   reconciler.start();
 
-  let stopping = false;
-  const stop = async () => {
-    if (stopping) return;
-    stopping = true;
-    try {
-      await reconciler.stop();
-      await jobHost.stop();
-      await jobs.close();
-      perpetualPaperEngine?.dispose();
-      await realtime.close();
-      await connector.stop();
-      await mcp.close();
-      await prisma.$disconnect().catch(() => undefined);
-      await pool.end().catch(() => undefined);
-    } finally {
-      await logger.flush({ timeoutMs: 2_000 });
-    }
+  // All shutdown initiators share a single Promise, so a second request cannot
+  // report "drained" before the first one has finished closing the job host.
+  let stopTask: Promise<void> | undefined;
+  const stop = (): Promise<void> => {
+    stopTask ??= (async () => {
+      try {
+        await reconciler.stop();
+        await jobHost.stop();
+        await jobs.close();
+        perpetualPaperEngine?.dispose();
+        await realtime.close();
+        await connector.stop();
+        await mcp.close();
+        await prisma.$disconnect().catch(() => undefined);
+        await pool.end().catch(() => undefined);
+      } finally {
+        await logger.flush({ timeoutMs: 2_000 });
+      }
+    })();
+    return stopTask;
   };
+  const paperStopDir = process.env.RAKAZO_PAPER_STOP_DIR?.trim();
+  if (paperStopDir) {
+    await createPaperStopControl({
+      directory: paperStopDir,
+      drain: stop,
+      exit: (code) => process.exit(code),
+      onError: (error) => logger.error("PAPER graceful shutdown failed", error),
+    });
+  }
   process.once("SIGTERM", () => void stop());
   process.once("SIGINT", () => void stop());
   // graphile-worker fires completeJob() without awaiting it. When pool.connect()
