@@ -1,9 +1,24 @@
-# Actual Rakazo API/worker and gateway against a disposable PostgreSQL cluster.
+# Actual Better Auth -> linked PAPER gateway with disposable primary accounts.
+# Includes original real API/worker/gateway/PG cold-shutdown/restart tests.
 # NEVER use production DATABASE_URL, running worker PID or live ledger files.
+# Operator-only: requires native PostgreSQL in $HOME/RakazoRuntime/postgresql/bin,
+# Node 22, pnpm deps in this checkout and PowerShell 7.6+.
+# Isolated ports 15549/15651/15652 must be free; never uses live PAPER port 3008.
 $ErrorActionPreference="Stop"
 Set-StrictMode -Version Latest
-$repo=Join-Path $HOME "rakazo-paper-combined-20261020"
-$gatewayRepo=Join-Path $HOME "rakazo-paper-combined-20261020"
+# Refuse to start the disposable API/worker if the parent process carries
+# credentials or path hints that could redirect QA into a live PAPER runtime.
+foreach($name in @(
+  "OKX_API_KEY","OKX_SECRET_KEY","OKX_PASSPHRASE","OPENAI_API_KEY",
+  "RAKAZO_PAPER_RUNTIME_CONFIG","RAKAZO_LINKED_PAPER_URL",
+  "RAKAZO_PAPER_JOURNAL_AUTOSTART","LOCAL_PAPER_GRANT"
+)){
+ if([Environment]::GetEnvironmentVariable($name,"Process")){
+  throw ("Refuse disposable PAPER QA while real or linked runtime variable is set: "+$name)
+ }
+}
+$repo=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "../../../..")).Path
+$gatewayRepo=$repo
 $dir=Join-Path $env:TEMP ("paper-actual-services-"+[guid]::NewGuid().ToString("N"))
 $data=Join-Path $dir "postgres"
 $bin=Join-Path $HOME "RakazoRuntime\postgresql\bin"
