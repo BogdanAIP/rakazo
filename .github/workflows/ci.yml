@@ -174,11 +174,14 @@ jobs:
         run: |
           $source = Join-Path $env:GITHUB_WORKSPACE 'rakazo-paper-offline-core-20261019'
           $risk = Join-Path $env:GITHUB_WORKSPACE 'rakazo-paper-journal-risk-20261019'
-          $link = Join-Path $source 'packages/adapters/node_modules/zod'
           $zod = Join-Path $risk 'node_modules/.pnpm/zod@4.6.2/node_modules/zod'
-          if ((Test-Path $link) -or !(Test-Path $zod)) { throw 'Unexpected or missing pinned dependency' }
-          New-Item -ItemType Directory -Force -Path (Split-Path $link) | Out-Null
-          New-Item -ItemType Junction -Path $link -Target $zod | Out-Null
+          if (!(Test-Path $zod)) { throw 'Pinned dependency absent' }
+          foreach ($part in @('adapters', 'contracts')) {
+            $link = Join-Path $source ("packages/$part/node_modules/zod")
+            if (Test-Path $link) { throw "Unexpected preexisting $part dependency" }
+            New-Item -ItemType Directory -Force -Path (Split-Path $link) | Out-Null
+            New-Item -ItemType Junction -Path $link -Target $zod | Out-Null
+          }
       - name: Rebuild and byte-compare PAPER reviewer to committed artifact
         shell: pwsh
         run: >-
