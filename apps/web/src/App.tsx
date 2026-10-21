@@ -25,6 +25,7 @@ import {
 } from "./lib/session-gate";
 import { ChatGptSessionBridgePage } from "./pages/ChatGptSessionBridge";
 import { IntegrationSetupPage } from "./pages/IntegrationSetup";
+import { LinkedPaperJournalPage } from "./pages/LinkedPaperJournal";
 import { LocalSettingsPage } from "./pages/LocalSettings";
 import { McpOAuthCallbackPage } from "./pages/McpOAuthCallback";
 import { ShellPage } from "./pages/Shell";
@@ -65,7 +66,9 @@ function SessionApp() {
   const [searchParams] = useSearchParams();
   const requestedNext = searchParams.get("next");
   const signInDestination =
-    requestedNext === "/integrations/setup"
+    requestedNext === "/integrations/setup" ||
+    requestedNext === "/app/paper-journal" ||
+    requestedNext === "/app/linked-paper-journal"
       ? requestedNext
       : (chatGptSessionHandoffNext(requestedNext) ?? "/app");
   const session = authClient.useSession();
@@ -150,6 +153,16 @@ function SessionApp() {
                   )}`}
                   replace
                 />
+              )
+            }
+          />
+          <Route
+            path="/app/linked-paper-journal"
+            element={
+              user ? (
+                <LinkedPaperJournalPage />
+              ) : (
+                <Navigate to="/sign-in?next=/app/linked-paper-journal" replace />
               )
             }
           />
