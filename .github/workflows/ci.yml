@@ -151,44 +151,24 @@ jobs:
           ref: 368e88e86ba2f2edc5110ad0046b0b48417be239
           path: rakazo-paper-offline-core-20261019
           persist-credentials: false
-      - name: Check out immutable historical dependency tree
-        uses: actions/checkout@v5
-        with:
-          ref: cee3cadef6bad35446738d2723239cf17025a27c
-          path: rakazo-paper-journal-risk-20261019
-          persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
           version: 9.15.0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install candidate's exact dependency lockfile
+      - name: Install candidate's frozen dependency lockfile
         working-directory: rakazo-paper-gateway-integration-20261020
         run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Install historical dependency lockfile
-        working-directory: rakazo-paper-journal-risk-20261019
+      - name: Install pinned source's frozen dependency lockfile
+        working-directory: rakazo-paper-offline-core-20261019
         run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Bind canonical zod from verified dependency checkout
-        shell: pwsh
-        run: |
-          $source = Join-Path $env:GITHUB_WORKSPACE 'rakazo-paper-offline-core-20261019'
-          $risk = Join-Path $env:GITHUB_WORKSPACE 'rakazo-paper-journal-risk-20261019'
-          $zod = Join-Path $risk 'node_modules/.pnpm/zod@4.6.2/node_modules/zod'
-          if (!(Test-Path $zod)) { throw 'Pinned dependency absent' }
-          foreach ($part in @('adapters', 'contracts')) {
-            $link = Join-Path $source ("packages/$part/node_modules/zod")
-            if (Test-Path $link) { throw "Unexpected preexisting $part dependency" }
-            New-Item -ItemType Directory -Force -Path (Split-Path $link) | Out-Null
-            New-Item -ItemType Junction -Path $link -Target $zod | Out-Null
-          }
-      - name: Rebuild and byte-compare PAPER reviewer to committed artifact
+      - name: Strictly compare PAPER executable content and original artifact hash
         shell: pwsh
         run: >-
           node rakazo-paper-gateway-integration-20261020/scripts/local-paper-journal/verify-offline-bundle.mjs
           "$env:GITHUB_WORKSPACE/rakazo-paper-offline-core-20261019"
           "$env:GITHUB_WORKSPACE/rakazo-paper-gateway-integration-20261020"
-          "$env:GITHUB_WORKSPACE/rakazo-paper-journal-risk-20261019"
 
   test-integration:
     name: Postgres journeys
