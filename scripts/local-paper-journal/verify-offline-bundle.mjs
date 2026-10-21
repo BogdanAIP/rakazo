@@ -89,9 +89,9 @@ try {
   const expected = readFileSync(committed);
   const actual = readFileSync(rebuilt);
   if (!expected.equals(actual)) {
-    const firstMismatch = Array.from({ length: Math.min(expected.length, actual.length) }).findIndex(
-      (_, index) => expected[index] !== actual[index],
-    );
+    const firstMismatch = Array.from({
+      length: Math.min(expected.length, actual.length),
+    }).findIndex((_, index) => expected[index] !== actual[index]);
     const offset = firstMismatch === -1 ? Math.min(expected.length, actual.length) : firstMismatch;
     const clip = (bytes) => bytes.subarray(Math.max(0, offset - 50), offset + 130).toString("utf8");
     console.error(
