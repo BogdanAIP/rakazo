@@ -8,11 +8,11 @@ export * from "./background-job-handlers.js";
 export * from "./bot-avatar.js";
 export * from "./bot-messages.js";
 export {
-  forgetBotSecret,
-  getBotSecretMetadata,
-  listBotSecretMetadata,
-  normalizeSecretDestination,
-  storeBotSecret,
+	forgetBotSecret,
+	getBotSecretMetadata,
+	listBotSecretMetadata,
+	normalizeSecretDestination,
+	storeBotSecret,
 } from "./bot-secrets.js";
 export * from "./box-emulator.js";
 export * from "./box-sandbox.js";
@@ -95,16 +95,15 @@ export * from "./page-browser-session.js";
 export * from "./paper-graceful-stop.js";
 export { createConfiguredPaperPerpetualEngine } from "./paper-perpetual-engine-config.js";
 export {
-  controlPerpetualPaperWorkspace,
-  handlePerpetualPaperWake,
-  reconcilePerpetualPaperWorkspaces,
+	controlPerpetualPaperWorkspace,
+	handlePerpetualPaperWake,
+	reconcilePerpetualPaperWorkspaces,
 } from "./paper-perpetual-workspace.js";
 export * from "./paper-workspace.js";
 export {
-  handleManagedPaperWorkerWake,
-  invokePaperMarketSkillResearch,
+	handleManagedPaperWorkerWake,
+	invokePaperMarketSkillResearch,
 } from "./paper-workspace-market.js";
-export * from "./paper-graceful-stop.js";
 export * from "./pi-catalog-availability.js";
 export * from "./pi-codex-catalog.js";
 export * from "./pi-credentials.js";
