@@ -129,11 +129,9 @@ INSERT INTO public.paper_backup_rehearsal_probe VALUES
   }
   if ($started -and (Test-Path (Join-Path $pgData 'postmaster.pid'))) {
     & (Join-Path $bin 'pg_ctl.exe') -D $pgData -m fast -w -t 30 stop
-    if ($LASTEXITCODE -eq 0) {
-      Pass 'disposable PostgreSQL stopped; synthetic archive retained'
-    } else {
-      Write-Warning 'Disposable PostgreSQL not confirmed stopped; manual identity check required'
-    }
+    Require ($LASTEXITCODE -eq 0) 'disposable PostgreSQL stop not confirmed; manual identity check required'
+    Require (@(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue).Count -eq 0) 'disposable listener remained after stop'
+    Pass 'disposable PostgreSQL stopped; synthetic archive retained'
   }
   if (Test-Path $record) { Write-Output ('EVIDENCE_FOLDER ' + $record) }
 }
