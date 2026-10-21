@@ -3,19 +3,21 @@
  * Rebuilds the committed artifact from an exact, independent source commit.
  * Never reads the live PAPER config, credentials, ledger, or service ports.
  *
- * Usage: node scripts/local-paper-journal/verify-offline-bundle.mjs SOURCE_REPO TARGET_REPO
+ * Usage: node scripts/local-paper-journal/verify-offline-bundle.mjs SOURCE_REPO TARGET_REPO RISK_REPO
  * Both repos must be sibling directories; SOURCE_REPO basename must match the
  * original esbuild source path to make source comments reproducible.
  */
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 
 const SOURCE_SHA = "368e88e86ba2f2edc5110ad0046b0b48417be239";
+const RISK_SHA = "cee3cadef6bad35446738d2723239cf17025a27c";
 const BUNDLE_SHA256 = "886b8e020c15cbd9596c883558cbb63781d4168f09fa82f70e0413450840f12e";
 const BUNDLE_BYTES = 950470;
 const SOURCE_DIR_NAME = "rakazo-paper-offline-core-20261019";
+const RISK_DIR_NAME = "rakazo-paper-journal-risk-20261019";
 const ESBUILD_VERSION = "0.28.2";
 
 function check(condition, message) {
@@ -25,13 +27,16 @@ function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-const [sourceArg, targetArg] = process.argv.slice(2);
-check(sourceArg && targetArg, "two explicitly checked-out repository paths required");
+const [sourceArg, targetArg, riskArg] = process.argv.slice(2);
+check(sourceArg && targetArg && riskArg, "three explicitly checked-out repository paths required");
 const source = path.resolve(sourceArg);
 const target = path.resolve(targetArg);
+const risk = path.resolve(riskArg);
 check(path.basename(source) === SOURCE_DIR_NAME, "canonical source directory name changed");
+check(path.basename(risk) === RISK_DIR_NAME, "canonical dependency directory name changed");
 check(path.dirname(source) === path.dirname(target), "source and target must be sibling worktrees");
-check(source !== target, "source and target cannot coincide");
+check(path.dirname(risk) === path.dirname(target), "dependency and target must be siblings");
+check(new Set([source, target, risk]).size === 3, "source, dependencies and target must differ");
 
 const git = spawnSync("git", ["-C", source, "rev-parse", "HEAD"], {
   encoding: "utf8",
@@ -43,6 +48,14 @@ check(
   git.status === 0 && git.stdout.trim() === SOURCE_SHA,
   "source Git commit is not the pinned SHA",
 );
+const riskGit = spawnSync("git", ["-C", risk, "rev-parse", "HEAD"], {
+  encoding: "utf8", timeout: 10000, shell: false, windowsHide: true,
+});
+check(riskGit.status === 0 && riskGit.stdout.trim() === RISK_SHA, "dependency Git commit is not the pinned SHA");
+const zod = path.join(risk, "node_modules", ".pnpm", "zod@4.6.2", "node_modules", "zod");
+const zodLink = path.join(source, "packages", "adapters", "node_modules", "zod");
+check(existsSync(zod) && existsSync(zodLink), "historical zod dependencies missing");
+check(realpathSync(zodLink) === realpathSync(zod), "zod must resolve to pinned dependency checkout");
 
 const esbuild = path.join(
   target,
@@ -66,8 +79,14 @@ const rebuilt = path.join(
 for (const p of [esbuild, entry, alias, committed])
   check(existsSync(p) && statSync(p).isFile(), "missing required file: " + p);
 check(!existsSync(rebuilt), "verification output already exists (refusing overwrite)");
+// The original esbuild banner was relative to a host workspace six levels below
+// the worktrees' parent. Recreate that path depth exactly and remove it after.
+const buildRoot = path.join(path.dirname(target), ".paper-bundle-verify-cwd");
+const buildCwd = path.join(buildRoot, "one", "two", "three", "four", "five");
+check(!existsSync(buildRoot), "verification working directory already exists");
 
 try {
+  mkdirSync(buildCwd, { recursive: true });
   const result = spawnSync(
     process.execPath,
     [
@@ -80,7 +99,7 @@ try {
       "--outfile=" + rebuilt,
       "--alias:@rakazo/contracts=" + alias,
     ],
-    { encoding: "utf8", timeout: 60000, shell: false, windowsHide: true },
+    { cwd: buildCwd, encoding: "utf8", timeout: 60000, shell: false, windowsHide: true },
   );
   check(
     result.status === 0 && !result.error,
@@ -116,4 +135,5 @@ try {
   console.log("PASS PAPER_OFFLINE_BUNDLE_SHA256=" + sha256(actual));
 } finally {
   if (existsSync(rebuilt)) rmSync(rebuilt, { force: true });
+  if (existsSync(buildRoot)) rmSync(buildRoot, { recursive: true, force: true });
 }
