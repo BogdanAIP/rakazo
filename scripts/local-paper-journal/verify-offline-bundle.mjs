@@ -59,12 +59,15 @@ check(
   "dependency Git commit is not the pinned SHA",
 );
 const zod = path.join(risk, "node_modules", ".pnpm", "zod@4.6.2", "node_modules", "zod");
-const zodLink = path.join(source, "packages", "adapters", "node_modules", "zod");
-check(existsSync(zod) && existsSync(zodLink), "historical zod dependencies missing");
-check(
-  realpathSync(zodLink) === realpathSync(zod),
-  "zod must resolve to pinned dependency checkout",
-);
+check(existsSync(zod), "historical zod package missing");
+for (const packageName of ["adapters", "contracts"]) {
+  const zodLink = path.join(source, "packages", packageName, "node_modules", "zod");
+  check(existsSync(zodLink), "historical zod link missing from " + packageName);
+  check(
+    realpathSync(zodLink) === realpathSync(zod),
+    "zod must resolve to pinned dependency checkout in " + packageName,
+  );
+}
 
 const esbuild = path.join(
   target,
