@@ -100,7 +100,7 @@ jobs:
           try {
             $env:OKX_API_KEY = "CI_ONLY_FAKE_DENIAL_SENTINEL"
             $denied = $false
-            try { & $script } catch {
+            try { & ((Resolve-Path $script).Path) } catch {
               if ($_.Exception.Message -like "*Refuse disposable PAPER QA*") {
                 $denied = $true
               } else { throw }
