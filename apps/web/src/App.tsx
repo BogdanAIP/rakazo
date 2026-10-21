@@ -66,7 +66,9 @@ function SessionApp() {
   const [searchParams] = useSearchParams();
   const requestedNext = searchParams.get("next");
   const signInDestination =
-    requestedNext === "/integrations/setup" || requestedNext === "/app/paper-journal"
+    requestedNext === "/integrations/setup" ||
+    requestedNext === "/app/paper-journal" ||
+    requestedNext === "/app/linked-paper-journal"
       ? requestedNext
       : (chatGptSessionHandoffNext(requestedNext) ?? "/app");
   const session = authClient.useSession();
@@ -155,12 +157,12 @@ function SessionApp() {
             }
           />
           <Route
-            path="/app/paper-journal"
+            path="/app/linked-paper-journal"
             element={
               user ? (
                 <LinkedPaperJournalPage />
               ) : (
-                <Navigate to="/sign-in?next=/app/paper-journal" replace />
+                <Navigate to="/sign-in?next=/app/linked-paper-journal" replace />
               )
             }
           />

@@ -3434,7 +3434,7 @@ export function ShellPage() {
                   onClick={() => {
                     setMenuOpen(false);
                     setMobileSidebarOpen(false);
-                    navigate("/app/paper-journal");
+                    navigate("/app/linked-paper-journal");
                   }}
                 >
                   <FolderOpen className="text-muted-foreground" strokeWidth={1.75} />
