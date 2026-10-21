@@ -136,8 +136,8 @@ jobs:
       - run: node --test scripts/local-paper-journal/server.test.mjs scripts/local-paper-journal/server.offline.test.mjs scripts/local-paper-journal/server.graceful.test.mjs
 
   verify-paper-bundle:
-    name: PAPER offline bundle provenance
-    runs-on: ubuntu-latest
+    name: PAPER offline bundle provenance Windows
+    runs-on: windows-latest
     timeout-minutes: 15
     steps:
       - name: Check out the exact candidate
@@ -164,10 +164,11 @@ jobs:
         working-directory: rakazo-paper-offline-core-20261019
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Rebuild and byte-compare PAPER reviewer to committed artifact
-        run: |
-          node rakazo-paper-gateway-integration-20261020/scripts/local-paper-journal/verify-offline-bundle.mjs \
-            "$GITHUB_WORKSPACE/rakazo-paper-offline-core-20261019" \
-            "$GITHUB_WORKSPACE/rakazo-paper-gateway-integration-20261020"
+        shell: pwsh
+        run: >-
+          node rakazo-paper-gateway-integration-20261020/scripts/local-paper-journal/verify-offline-bundle.mjs
+          "$env:GITHUB_WORKSPACE/rakazo-paper-offline-core-20261019"
+          "$env:GITHUB_WORKSPACE/rakazo-paper-gateway-integration-20261020"
 
   test-integration:
     name: Postgres journeys

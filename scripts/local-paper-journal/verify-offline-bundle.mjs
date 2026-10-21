@@ -34,33 +34,58 @@ check(path.dirname(source) === path.dirname(target), "source and target must be 
 check(source !== target, "source and target cannot coincide");
 
 const git = spawnSync("git", ["-C", source, "rev-parse", "HEAD"], {
-  encoding: "utf8", timeout: 10000, shell: false, windowsHide: true,
+  encoding: "utf8",
+  timeout: 10000,
+  shell: false,
+  windowsHide: true,
 });
-check(git.status === 0 && git.stdout.trim() === SOURCE_SHA, "source Git commit is not the pinned SHA");
+check(
+  git.status === 0 && git.stdout.trim() === SOURCE_SHA,
+  "source Git commit is not the pinned SHA",
+);
 
 const esbuild = path.join(
-  target, "node_modules", ".pnpm", "esbuild@" + ESBUILD_VERSION,
-  "node_modules", "esbuild", "bin", "esbuild",
+  target,
+  "node_modules",
+  ".pnpm",
+  "esbuild@" + ESBUILD_VERSION,
+  "node_modules",
+  "esbuild",
+  "bin",
+  "esbuild",
 );
 const entry = path.join(source, "scripts", "paper-offline-review.entry.ts");
 const alias = path.join(source, "packages", "contracts", "src", "index.ts");
 const committed = path.join(target, "scripts", "local-paper-journal", "offline-gap-runtime.mjs");
-const rebuilt = path.join(target, "scripts", "local-paper-journal", "offline-gap-runtime.verify.mjs");
-for (const p of [esbuild, entry, alias, committed]) check(existsSync(p) && statSync(p).isFile(), "missing required file: " + p);
+const rebuilt = path.join(
+  target,
+  "scripts",
+  "local-paper-journal",
+  "offline-gap-runtime.verify.mjs",
+);
+for (const p of [esbuild, entry, alias, committed])
+  check(existsSync(p) && statSync(p).isFile(), "missing required file: " + p);
 check(!existsSync(rebuilt), "verification output already exists (refusing overwrite)");
 
 try {
   const result = spawnSync(
     process.execPath,
     [
-      esbuild, entry,
-      "--bundle", "--platform=node", "--format=esm", "--target=node22",
+      esbuild,
+      entry,
+      "--bundle",
+      "--platform=node",
+      "--format=esm",
+      "--target=node22",
       "--outfile=" + rebuilt,
       "--alias:@rakazo/contracts=" + alias,
     ],
     { encoding: "utf8", timeout: 60000, shell: false, windowsHide: true },
   );
-  check(result.status === 0 && !result.error, "esbuild failed: " + (result.stderr || result.error || "unknown"));
+  check(
+    result.status === 0 && !result.error,
+    "esbuild failed: " + (result.stderr || result.error || "unknown"),
+  );
   const expected = readFileSync(committed);
   const actual = readFileSync(rebuilt);
   check(expected.length === BUNDLE_BYTES, "committed bundle size changed");
