@@ -6,7 +6,7 @@ param()
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $port = 15549
-$repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
+$repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../../..'))
 $bin = Join-Path $HOME 'RakazoRuntime/postgresql/bin'
 $record = Join-Path $env:TEMP ('rakazo-paper-backup-rehearsal-' + [guid]::NewGuid().ToString('N'))
 $pgData = Join-Path $record 'postgres'
