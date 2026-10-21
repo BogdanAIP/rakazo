@@ -38,6 +38,13 @@ foreach ($name in @(
 )) {
   Require (-not [Environment]::GetEnvironmentVariable($name, 'Process')) ('external connection or trading credential set: ' + $name)
 }
+# PowerShell/.NET on Windows can leave an empty PG* variable present after a
+# null assignment; libpq then tries to use an empty service name or port.
+# Reject real PG settings and remove ALL empty PG* values from this child only.
+foreach ($item in @(Get-ChildItem Env: | Where-Object { $_.Name -like 'PG*' })) {
+  Require ([string]::IsNullOrEmpty([string]$item.Value)) ('external PostgreSQL variable set: ' + $item.Name)
+  Remove-Item -LiteralPath ('Env:' + $item.Name) -ErrorAction SilentlyContinue
+}
 Require (Test-Path (Join-Path $repo 'pnpm-lock.yaml')) 'candidate source checkout missing'
 foreach ($exe in @('initdb.exe', 'pg_ctl.exe', 'psql.exe', 'pg_dump.exe', 'pg_restore.exe', 'createdb.exe')) {
   Require (Test-Path (Join-Path $bin $exe) -PathType Leaf) ('PostgreSQL native binary missing: ' + $exe)
@@ -115,7 +122,11 @@ INSERT INTO public.paper_backup_rehearsal_probe VALUES
 } finally {
   [Environment]::SetEnvironmentVariable('DATABASE_URL', $originalDatabase, 'Process')
   [Environment]::SetEnvironmentVariable('REALTIME_DATABASE_URL', $originalRealtime, 'Process')
-  [Environment]::SetEnvironmentVariable('PGPORT', $originalPgPort, 'Process')
+  if ([string]::IsNullOrEmpty($originalPgPort)) {
+    Remove-Item -LiteralPath 'Env:PGPORT' -ErrorAction SilentlyContinue
+  } else {
+    [Environment]::SetEnvironmentVariable('PGPORT', $originalPgPort, 'Process')
+  }
   if ($started -and (Test-Path (Join-Path $pgData 'postmaster.pid'))) {
     & (Join-Path $bin 'pg_ctl.exe') -D $pgData -m fast -w -t 30 stop
     if ($LASTEXITCODE -eq 0) {
