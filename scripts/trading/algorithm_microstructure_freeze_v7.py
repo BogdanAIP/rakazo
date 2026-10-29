@@ -13,7 +13,7 @@ from pathlib import Path
 import time
 
 from algorithm_microstructure_audit_v7 import assemble
-from algorithm_pit_capture_v5 import strict_json
+
 
 SCHEMA="algorithm_microstructure_forward_lock_v7"
 BAR=900_000
@@ -25,7 +25,19 @@ def freeze(root,universe,audit_file,now):
     if type(now) is not int or now<=0:
         raise ValueError("Explicit UTC millisecond freeze time")
     audit_bytes=Path(audit_file).read_bytes()
-    saved=strict_json(audit_bytes)
+    if not 0 < len(audit_bytes) <= 2_000_000:
+        raise ValueError("Unbounded research audit file")
+    def unique_fields(pairs):
+        result={}
+        for key,value in pairs:
+            if key in result:
+                raise ValueError("Duplicate audit JSON key")
+            result[key]=value
+        return result
+    def reject_nonfinite(value):
+        raise ValueError("Nonfinite audit JSON token")
+    saved=json.loads(audit_bytes,object_pairs_hook=unique_fields,
+                     parse_constant=reject_nonfinite)
     rebuilt=assemble(root,universe)
     if saved!=rebuilt:
         raise ValueError("Audit differs from raw source reconstruction")
