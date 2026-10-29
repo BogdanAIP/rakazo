@@ -75,3 +75,68 @@ Output path must be new. No market data is fetched automatically.
 
 The search method and rolling selector combine existing known techniques.
 No novelty or positive trading edge is claimed.
+
+## v1 - validated OKX 15m snapshots and one-use holdout (2026-10-29)
+
+Files: `scripts/trading/okx_dataset.py`,
+`scripts/trading/run_alpha_audited.py`,
+`scripts/trading/test_okx_dataset.py`.
+
+Only public, read-only `GET https://www.okx.com/api/v5/market/history-candles`
+with `instId=...-USDT-SWAP&bar=15m&limit=100` and bounded backwards
+`after=<oldest timestamp>` paging. Official docs:
+https://www.okx.com/docs-v5/en/#order-book-trading-market-data-get-candlesticks-history
+
+No private keys, account connection, order submission, process scheduling or
+interaction with the active Rakazo Trader. This research importer is separate
+from the existing production 1H read-only adapter, not a replacement.
+
+### Download CLOSED 15m history (only when the public network is available)
+
+```powershell
+python scripts/trading/okx_dataset.py --symbol BTC-USDT-SWAP --pages 8 --limit 100 --out C:/data/btc_15m_01.csv
+python scripts/trading/run_alpha_audited.py --csv C:/data/btc_15m_01.csv --manifest C:/data/btc_15m_01.manifest.json --registry C:/data/alpha-holdout-registry --out C:/data/btc_15m_result_01.json
+```
+
+The first command requires at least 480 contiguous, confirmed bars and
+refuses gaps, overlaps, backwards paging violations, non-UTC/candle-alignment
+violations, malformed OHLCV and future-confirmed data. It creates an immutable
+CSV and adjacent `*.manifest.json` with source, page SHA-256, data SHA-256,
+capture time and temporal bounds. Byte identity is not proof of exchange
+authenticity. These snapshots use opening time for each completed candle.
+
+The second command independently checks SHA-256, full coverage, UTC close,
+symbol identity, and claims the data hash in a *persistent* registry using
+exclusive file creation **before** any holdout evaluation. A repeated run of
+the same dataset is rejected, even with a new output filename. Never
+reset/relocate the registry as a way to rerun unsuccessful test datasets.
+Only a genuinely new chronological out-of-sample window may be used later.
+The default search remains bounded, one-shot, and offline.
+
+### Offline format checks (not real trading results)
+
+```powershell
+python -m unittest discover -s scripts/trading -p "test_*.py" -v
+```
+
+The importer can also accept `--offline-fixture path.json` to test pagination
+without Internet. A research run over such data requires `--allow-fixture`,
+and its report remains explicitly marked as synthetic. Never present such
+results as OKX historical performance.
+
+### Current limitations / review gates
+
+- Read-only public OKX network access was unavailable from the Windows Host
+  during the v1 implementation. Do not claim a real BTC/SOL dataset was fetched
+  or any positive historical edge found.
+- No funding rate, liquidation/maintenance margin, real futures contract-size,
+  spread/order-book depth, queue/fill probabilities, exchange outages, or
+  mark/index simulation. The 7 bps each side is a hypothetical cost assumption.
+- A one-use registry prevents simple repeat tests of identical CSV contents,
+  not scientific overfitting over many overlapping datasets. Next: purged
+  walk-forward, embargo, model-selection correction, independent forward PAPER.
+- Implemented candidate search and trailing-window switching are adaptive
+  heuristics, **not** online neural-network retraining or a newly discovered
+  algorithm. No returns or scientific novelty are claimed.
+- Do not merge or deploy to PAPER or start any trading session without separate
+  explicit operator instruction.
