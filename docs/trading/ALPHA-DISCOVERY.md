@@ -357,3 +357,5 @@ survivorship bias; future work must reconstruct point-in-time membership.
 Funding calendar completeness, contract rules, liquidation and fill models
 still need testing. All data outside Git; never merge to Trader without
 separate review. 42 local regression tests passed through v5.
+
+Post-commit data checkpoint: XRP-USDT-SWAP also passed the official 2026-07..09 archive audit; now 3/50 full 92-day histories ready (BTC, ETH, XRP). DOGE-USDT-SWAP and SOL-USDT-SWAP were rejected due to missing 1m bars. Funding archives verified separately for BTC/ETH only. No multi-market holdout accessed.
