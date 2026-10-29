@@ -109,7 +109,8 @@ def validate_candles(raw, received):
 def capture_batch(frozen, batch, now, read):
     if type(batch) is not int or not 1 <= batch <= 10:
         raise ValueError("Only one of ten five-market batches")
-    if type(now) is not int or now < frozen["earliest_primary_outcome_collection_ms"]:
+    start_ms = now() if callable(now) else now
+    if type(start_ms) is not int or start_ms < frozen["earliest_primary_outcome_collection_ms"]:
         raise ValueError("Outcomes cannot be accessed before locked time")
     symbols = [r["symbol"] for r in frozen["candidates"][(batch-1)*5:batch*5]]
     rows = []
