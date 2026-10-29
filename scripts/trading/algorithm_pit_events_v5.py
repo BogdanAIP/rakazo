@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 
 from algorithm_pit_pair_v5 import build_panel, MAX_ASOF_AGE_MS
+from algorithm_pit_capture_v5 import strict_json
 
 SCHEMA = "algorithm_pit_observation_events_v5"
 
@@ -79,22 +80,36 @@ def event_report(panel, decision_ms):
     }
 
 
+def load_verified_panel(path, root, universe):
+    """Bind events to the SHA-256 of EXACT on-disk panel bytes.
+
+    Rebuild source records from both captured rounds and compare semantic
+    content. Platform newline translation must not modify this receipt.
+    """
+    raw = Path(path).read_bytes()
+    stored = strict_json(raw)
+    rebuilt = build_panel(root, universe)
+    if stored != rebuilt:
+        raise ValueError("Panel mismatches the two verified raw capture rounds")
+    return stored, hashlib.sha256(raw).hexdigest()
+
+
 def main():
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument("--root", required=True, type=Path)
     cli.add_argument("--universe", required=True, type=Path)
+    cli.add_argument("--panel", required=True, type=Path)
     cli.add_argument("--out", required=True, type=Path)
     args = cli.parse_args()
     if args.out.exists():
         raise FileExistsError("Output must be new")
-    paired = build_panel(args.root, args.universe)
+    paired, panel_sha = load_verified_panel(args.panel, args.root, args.universe)
     # At the latest response in this single manual round all rows have
     # already been observed. This is NOT a user-local current market quote.
     asof = paired["second_round_last_receipt_ms"]
     report = event_report(paired, asof)
-    report["source_panel_sha256"] = hashlib.sha256(
-        (json.dumps(paired, indent=2, sort_keys=True, allow_nan=False)+"\n").encode("utf8")
-    ).hexdigest()
+    report["source_panel_sha256"] = panel_sha
+    report["source_panel_verified_against_raw_captures"] = True
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("x", encoding="utf8") as fh:
         json.dump(report, fh, indent=2, sort_keys=True, allow_nan=False)
