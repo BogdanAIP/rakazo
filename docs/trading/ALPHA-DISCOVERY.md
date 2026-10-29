@@ -95,7 +95,7 @@ from the existing production 1H read-only adapter, not a replacement.
 
 ```powershell
 python scripts/trading/okx_dataset.py --symbol BTC-USDT-SWAP --pages 8 --limit 100 --out C:/data/btc_15m_01.csv
-python scripts/trading/run_alpha_audited.py --csv C:/data/btc_15m_01.csv --manifest C:/data/btc_15m_01.manifest.json --registry C:/data/alpha-holdout-registry --out C:/data/btc_15m_result_01.json
+python scripts/trading/run_alpha_audited.py --csv C:/data/btc_15m_01.csv --manifest C:/data/btc_15m_01.manifest.json --registry C:/data/alpha-holdout-registry --out C:/data/btc_15m_result_01.json --protocol v1
 ```
 
 The first command requires at least 480 contiguous, confirmed bars and
@@ -140,3 +140,70 @@ results as OKX historical performance.
   algorithm. No returns or scientific novelty are claimed.
 - Do not merge or deploy to PAPER or start any trading session without separate
   explicit operator instruction.
+
+## v2 - rolling discovery with purged temporal splits (2026-10-29)
+
+The research-only v2 code is in `scripts/trading/alpha_walkforward.py`.
+The sole supported executable entrypoint is the snapshot auditor
+`run_alpha_audited.py`. The walk-forward library rejects direct CLI execution
+to prevent accidental bypass of the one-use holdout ledger.
+
+### Workflow
+
+1. Load at least **2880 consecutive closed 15-minute bars** for one instrument
+   (30 days). Larger time spans and more market regimes are strongly preferable.
+2. Reserve the final 20% as a single-use holdout. All searches in the preceding
+   80% use rolling 960-bar training windows (10 days), a 4-bar embargo
+   (1 hour), and nonoverlapping 192-bar scored intervals (2 days).
+3. Within each training window, evaluate a deterministic initial population
+   of bounded trend/reversal rules, mutate leading rules, and rank by the
+   predeclared return-minus-drawdown score.
+4. If no rule has enough previous trades and positive net return, take
+   `NO_TRADE` for the next interval. At the following interval, start a fresh
+   search using the newly closed training window; do not assume an edge.
+5. Compare results across development folds with a fixed rule baseline.
+   A minimum of four folds, 25 development trades, positive return,
+   max 3% modelled drawdown, at least half of the folds profitable and
+   better return than the fixed comparator are REQUIRED.
+6. **Only if the development gate passes** evaluate the reserved holdout
+   once, on the same precommitted rolling-search policy. Holdout results do
+   not authorize PAPER or live orders.
+
+This design does not secretly tune a strategy on future holdout data.
+It permits chronological retraining as new candles close. It does NOT
+prove a discovery is stable outside the examined history. Fold windows are
+correlated and these thresholds are heuristic, not statistical significance.
+
+### Run with a verified snapshot
+
+```powershell
+python scripts/trading/okx_dataset.py --symbol BTC-USDT-SWAP --pages 30 --limit 100 --out C:/data/btc_15m_v2.csv
+python scripts/trading/run_alpha_audited.py --protocol v2 --csv C:/data/btc_15m_v2.csv --manifest C:/data/btc_15m_v2.manifest.json --registry C:/data/alpha-holdout-registry --out C:/data/btc_v2_01.json --seed 42 --rounds 2
+python -m unittest discover -s scripts/trading -p "test_*.py" -v
+```
+
+Use a **new CSV snapshot and a new report filename** for a genuinely new
+future testing interval. Keep the same registry, never reset it to recycle
+already observed holdout data. The defaults are bounded at four rounds;
+the collector at 30 pages x 100 rows, read-only. It does not start a schedule.
+
+### What remains to establish a tradable edge
+
+- Real source data: the Windows Host attempt at the OKX public API failed
+  (network error). No authentic historical BTC/SOL report was obtained here.
+- Model historical funding, contract lot sizes, leverage, liquidations,
+  trade size-dependent spread/slippage and interruptions before PAPER.
+- Test the research policy across many assets and regimes without treating
+  50+ correlated assets as independent evidence. Adjust for multiple testing,
+  transaction fees and survivorship/delisting bias.
+- Use independent time-forward PAPER with identical risk and a measured
+  baseline of the installed Rakazo Trader. The fixed v2 baseline is NOT
+  the actual installed Trader.
+- Do not configure real exchange keys, real-money trading, background
+  sessions, or automatic Start/Resume. Risk controls remain external to
+  this research project.
+
+V2 adaptation means **periodic reselection and mutation of rules using
+past observations**, not autonomous invention of an arbitrary new mathematical
+model or an online neural network. It is not yet an AI model, a commercial
+product, or evidence of positive investment returns.

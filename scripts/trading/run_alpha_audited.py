@@ -52,10 +52,14 @@ def verify_snapshot(csv_path: Path, manifest_path: Path, allow_fixture=False):
 
 
 def audited_run(csv_path, manifest_path, registry_dir, out, seed=42,
-                rounds=3, allow_fixture=False):
+                rounds=3, allow_fixture=False, protocol="v1"):
     bars, manifest, digest = verify_snapshot(
         Path(csv_path), Path(manifest_path), allow_fixture=allow_fixture
     )
+    if protocol not in ("v1", "v2"):
+        raise ValueError("Unsupported research protocol")
+    if protocol == "v2" and len(bars) < 2880:
+        raise ValueError("V2 requires >=2880 verified closed bars")
     registry_dir, out = Path(registry_dir), Path(out)
     if out.exists() or out.resolve() == Path(csv_path).resolve():
         raise FileExistsError("Output already exists")
@@ -63,7 +67,7 @@ def audited_run(csv_path, manifest_path, registry_dir, out, seed=42,
     claim_path = registry_dir / (digest + ".claim.json")
     claim = {
         "data_sha256": digest,
-        "protocol": "alpha-discovery-v1",
+        "protocol": "alpha-discovery-" + protocol,
         "note": "Single-use holdout claim. If failed, investigate; do not unlock and retest.",
         "strategy_seed": seed,
         "search_rounds": rounds,
@@ -73,7 +77,11 @@ def audited_run(csv_path, manifest_path, registry_dir, out, seed=42,
     with claim_path.open("x", encoding="utf-8") as f:
         json.dump(claim, f, indent=2, sort_keys=True)
         f.write("\n")
-    result = discover(bars, seed=seed, rounds=rounds)
+    if protocol == "v2":
+        from alpha_walkforward import walk_forward
+        result = walk_forward(bars, seed=seed, rounds=rounds)
+    else:
+        result = discover(bars, seed=seed, rounds=rounds)
     result["audited_snapshot"] = {
         "source": manifest["source"], "sha256": digest,
         "claim_path": str(claim_path),
@@ -96,13 +104,19 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--rounds", type=int, default=3)
     parser.add_argument("--allow-fixture", action="store_true")
+    parser.add_argument("--protocol", choices=("v1", "v2"), default="v2")
     args = parser.parse_args()
     result = audited_run(args.csv, args.manifest, args.registry, args.out,
-                         args.seed, args.rounds, args.allow_fixture)
-    print(json.dumps({"status": result["status"],
-                      "candidates": result["search"]["tried"],
-                      "accepted": result["search"]["accepted"],
-                      "holdout_used": result["holdout"] is not None}))
+                         args.seed, args.rounds, args.allow_fixture, args.protocol)
+    if args.protocol == "v2":
+        print(json.dumps({"status": result["research_gate"]["status"],
+                          "folds": len(result["development_folds"]),
+                          "holdout_used": result["holdout"] is not None}))
+    else:
+        print(json.dumps({"status": result["status"],
+                          "candidates": result["search"]["tried"],
+                          "accepted": result["search"]["accepted"],
+                          "holdout_used": result["holdout"] is not None}))
 
 
 if __name__ == "__main__":
