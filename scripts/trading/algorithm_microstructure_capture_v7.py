@@ -228,6 +228,46 @@ def capture(universe, universe_sha, batch, *, read=read_public, clock=None):
             "records":[e for e,_ in evidence]},evidence
 
 
+
+def joint_asof(manifest, symbol, decision_ms):
+    """Descriptive non-atomic joint evidence; refuse future/stale fields.
+
+    Never an execution direction. A last-100-trades sample is NOT a complete
+    time-bucket flow and is not cross-market time-normalized.
+    """
+    if type(decision_ms) is not int or decision_ms<=0:
+        raise ValueError("UTC decision ms required")
+    if symbol not in manifest.get("symbols",[]):
+        raise ValueError("Unlisted instrument")
+    books=[r for r in manifest["records"] if r["kind"]=="book" and r["symbol"]==symbol]
+    trades=[r for r in manifest["records"] if r["kind"]=="trades" and r["symbol"]==symbol]
+    if len(books)!=1 or len(trades)!=1:
+        raise ValueError("Incomplete evidence")
+    b,t=books[0],trades[0]
+    last=max(b["received_ms"],t["received_ms"])
+    first=min(b["received_ms"],t["received_ms"])
+    if decision_ms<last:
+        return {"status":"ABSTAIN_UNRECEIVED","observation":None}
+    if decision_ms-first>60_000:
+        return {"status":"ABSTAIN_STALE","observation":None}
+    if (b["observed"]["stale"] or t["observed"]["newest_trade_stale"]
+            or not t["observed"]["sample_at_least_ten"]
+            or last-first>10_000):
+        return {"status":"ABSTAIN_SOURCE_QUALITY","observation":None}
+    return {
+        "status":"DESCRIPTIVE_ONLY",
+        "observation":{
+            "book_imbalance":b["observed"]["top5_depth_imbalance"],
+            "taker_last100_imbalance":t["observed"]["last100_taker_imbalance"],
+            "spread_bps":b["observed"]["spread_bps"],
+            "sample_span_ms":t["observed"]["sample_span_ms"],
+            "asof_not_before_ms":last,
+            "taker_sample_window_is_not_fixed":True,
+            "live_trade_or_paper_action":None,
+        },
+    }
+
+
 def save(path,manifest,evidence):
     p=Path(path)
     if p.exists():
