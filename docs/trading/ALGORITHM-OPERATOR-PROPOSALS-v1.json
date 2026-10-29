@@ -1,0 +1,106 @@
+{
+  "schema": "operator_discovery_proposals_v1",
+  "operators": [
+    {
+      "id": "resettable-shock-memory",
+      "hypothesis": "After unusually large reported trading-volume changes, conditional clearing of the previous location imbalance state may describe short-lived price-pressure recovery better than an unreset exponential memory.",
+      "parent_id": "liquidity-recovery-shock",
+      "failure_addressed": "The previous model-authored liquidity recovery expression failed to achieve positive training results after modeled costs; replace arithmetic-only shocks with explicitly resettable causal state.",
+      "kind": "resettable_state",
+      "innovation": [
+        "sub",
+        [
+          "feature",
+          "location"
+        ],
+        [
+          "ema",
+          5,
+          [
+            "feature",
+            "location"
+          ]
+        ]
+      ],
+      "reset_when": [
+        "abs",
+        [
+          "feature",
+          "volume_change"
+        ]
+      ],
+      "decay": 0.75,
+      "gain": 1.2,
+      "reset_threshold": 0.7,
+      "state_limit": 2
+    },
+    {
+      "id": "wick-resilience-state",
+      "hypothesis": "Abrupt expansion of candle range may invalidate accumulated asymmetric-wick pressure; resetting the memory at a range-change shock could reduce spurious persistent reversal signals.",
+      "parent_id": "wick-imbalance-memory",
+      "failure_addressed": "The wick-memory program rejected on the prior BTC training experiment did not exhibit net edge after costs; add an independent reset event and change the underlying state transition.",
+      "kind": "resettable_state",
+      "innovation": [
+        "mul",
+        [
+          "feature",
+          "wick"
+        ],
+        [
+          "tanh",
+          [
+            "feature",
+            "body"
+          ]
+        ]
+      ],
+      "reset_when": [
+        "abs",
+        [
+          "delta",
+          [
+            "feature",
+            "range"
+          ]
+        ]
+      ],
+      "decay": 0.9,
+      "gain": 2,
+      "reset_threshold": 0.5,
+      "state_limit": 3
+    },
+    {
+      "id": "regime-change-accumulator",
+      "hypothesis": "When the absolute return signals a regime break, clearing accumulated deviation of current candle body from its trailing average may distinguish continuous drift from discontinuous shocks.",
+      "parent_id": "conditional-candle-memory",
+      "failure_addressed": "The previous conditional candle-memory idea had no demonstrated positive post-cost training result; change representation from static conditionals to an event-reset dynamic memory.",
+      "kind": "resettable_state",
+      "innovation": [
+        "sub",
+        [
+          "feature",
+          "body"
+        ],
+        [
+          "mean",
+          8,
+          [
+            "feature",
+            "body"
+          ]
+        ]
+      ],
+      "reset_when": [
+        "abs",
+        [
+          "feature",
+          "return"
+        ]
+      ],
+      "decay": 0.65,
+      "gain": 1.6,
+      "reset_threshold": 0.8,
+      "state_limit": 2.5
+    }
+  ]
+}
