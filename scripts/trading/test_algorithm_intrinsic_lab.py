@@ -74,7 +74,7 @@ class IntrinsicEventTests(unittest.TestCase):
         new=list(old)
         i=700
         c=new[i]
-        new[i]=Candle(c.time,c.op,c.hi*2,c.lo/2,c.cl*1.2,c.vol*100)
+        new[i]=Candle(c.time,c.op,c.hi*2,c.lo/2,c.cl*1.2,10000.0)
         for name in GRAMMAR:
             a,_,_=decisions(old,name)
             b,_,_=decisions(new,name)
