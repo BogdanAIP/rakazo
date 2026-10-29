@@ -103,8 +103,7 @@ class PublicCaptureTests(unittest.TestCase):
         self.assertIsNone(point_in_time_oi_delta([original,future],BTC,before))
         after=oi["received_complete_ms"]+MIN_OI_SEPARATION_MS
         value=point_in_time_oi_delta([original,future],BTC,after)
-        self.assertEqual(value["oiCcy_delta_fraction"],str(4/3-1) if False else
-                         "0.3333333333333333333333333333")
+        self.assertEqual(value["oiCcy_delta_fraction"], "0.333333333333333333333333333")
         self.assertFalse(value["trading_approved"])
         self.assertIsNone(point_in_time_oi_delta([original,future],BTC,after+MAX_FEATURE_AGE_MS+1))
 
