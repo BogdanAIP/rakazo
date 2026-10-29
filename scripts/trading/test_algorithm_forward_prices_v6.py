@@ -69,7 +69,7 @@ class FuturePriceTests(unittest.TestCase):
 
     def test_real_bytes_hash_and_reject_overwrite(self):
         freeze=frozen()
-        now=[T+6*BAR]
+        now=[T+8*BAR]
         def clock():
             now[0]+=150
             return now[0]
