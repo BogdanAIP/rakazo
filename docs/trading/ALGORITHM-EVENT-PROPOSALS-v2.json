@@ -1,0 +1,500 @@
+{
+  "schema": "event_controller_proposals_v2",
+  "operators": [
+    {
+      "id": "escrow-confirmation",
+      "parent_id": "resettable-shock-memory",
+      "role": "candidate",
+      "hypothesis": "A surprise first stores a directional hypothesis without exposure. A later confirming observation releases a finite position lease. Contradiction destroys the stored hypothesis; waiting, expiration and rearming are explicit states.",
+      "failure_addressed": "Prior resettable-memory rules repeatedly acted on the same evidence and lost after costs. Ordered event confirmation and nonrenewable position leases may avoid acting on transient shocks; this is a falsifiable hypothesis, not a novelty claim.",
+      "features": {
+        "impulse": [
+          "sub",
+          [
+            "feature",
+            "return"
+          ],
+          [
+            "mean",
+            8,
+            [
+              "feature",
+              "return"
+            ]
+          ]
+        ],
+        "confirmation": [
+          "feature",
+          "return"
+        ],
+        "regime": [
+          "feature",
+          "range"
+        ]
+      },
+      "detector": {
+        "enter": 0.25,
+        "release": 0.05,
+        "confirm": 0.03,
+        "hot": 1.0
+      },
+      "initial": "idle",
+      "states": {
+        "idle": {
+          "exposure": "flat",
+          "ttl": null,
+          "expire_to": null,
+          "rules": [
+            {
+              "when": {
+                "trigger": "nonzero"
+              },
+              "to": "watch",
+              "reference": "trigger"
+            }
+          ]
+        },
+        "watch": {
+          "exposure": "flat",
+          "ttl": [
+            8,
+            2
+          ],
+          "expire_to": "cooldown",
+          "rules": [
+            {
+              "when": {
+                "trigger": "opposite"
+              },
+              "to": "cooldown",
+              "reference": "clear"
+            },
+            {
+              "when": {
+                "confirm": "opposite"
+              },
+              "to": "cooldown",
+              "reference": "clear"
+            },
+            {
+              "when": {
+                "confirm": "same",
+                "min_age": 1
+              },
+              "to": "active",
+              "reference": "keep"
+            }
+          ]
+        },
+        "active": {
+          "exposure": "reference",
+          "ttl": [
+            12,
+            3
+          ],
+          "expire_to": "cooldown",
+          "rules": [
+            {
+              "when": {
+                "trigger": "opposite"
+              },
+              "to": "cooldown",
+              "reference": "clear"
+            }
+          ]
+        },
+        "cooldown": {
+          "exposure": "flat",
+          "ttl": [
+            6,
+            3
+          ],
+          "expire_to": "idle",
+          "rules": [
+            {
+              "when": {
+                "calm": true,
+                "trigger": "zero",
+                "min_age": 3
+              },
+              "to": "idle",
+              "reference": "clear"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "countershock-release",
+      "parent_id": "wick-resilience-state",
+      "role": "candidate",
+      "hypothesis": "A surprise is stored without entry. One contrary observation records rejection, and a second later contrary observation releases exposure opposite to the initial surprise. Reaffirmation cancels the rejection. Event order, not just amplitude, determines the action.",
+      "failure_addressed": "The v1 wick memory did not distinguish a transient rejection from a sustained reversal. A separate rejection state requires ordered contradictory observations while keeping a finite deadline and abstention after ambiguous shocks.",
+      "features": {
+        "impulse": [
+          "sub",
+          [
+            "feature",
+            "return"
+          ],
+          [
+            "mean",
+            8,
+            [
+              "feature",
+              "return"
+            ]
+          ]
+        ],
+        "confirmation": [
+          "feature",
+          "return"
+        ],
+        "regime": [
+          "feature",
+          "range"
+        ]
+      },
+      "detector": {
+        "enter": 0.25,
+        "release": 0.05,
+        "confirm": 0.03,
+        "hot": 1.0
+      },
+      "initial": "idle",
+      "states": {
+        "idle": {
+          "exposure": "flat",
+          "ttl": null,
+          "expire_to": null,
+          "rules": [
+            {
+              "when": {
+                "trigger": "nonzero"
+              },
+              "to": "watch",
+              "reference": "trigger"
+            }
+          ]
+        },
+        "watch": {
+          "exposure": "flat",
+          "ttl": [
+            8,
+            2
+          ],
+          "expire_to": "cooldown",
+          "rules": [
+            {
+              "when": {
+                "trigger": "opposite"
+              },
+              "to": "cooldown",
+              "reference": "clear"
+            },
+            {
+              "when": {
+                "confirm": "opposite"
+              },
+              "to": "recoil",
+              "reference": "keep"
+            }
+          ]
+        },
+        "active": {
+          "exposure": "reference",
+          "ttl": [
+            12,
+            3
+          ],
+          "expire_to": "cooldown",
+          "rules": [
+            {
+              "when": {
+                "trigger": "opposite"
+              },
+              "to": "cooldown",
+              "reference": "clear"
+            }
+          ]
+        },
+        "cooldown": {
+          "exposure": "flat",
+          "ttl": [
+            6,
+            3
+          ],
+          "expire_to": "idle",
+          "rules": [
+            {
+              "when": {
+                "calm": true,
+                "trigger": "zero",
+                "min_age": 3
+              },
+              "to": "idle",
+              "reference": "clear"
+            }
+          ]
+        },
+        "recoil": {
+          "exposure": "flat",
+          "ttl": [
+            4,
+            2
+          ],
+          "expire_to": "cooldown",
+          "rules": [
+            {
+              "when": {
+                "confirm": "same"
+              },
+              "to": "cooldown",
+              "reference": "clear"
+            },
+            {
+              "when": {
+                "confirm": "opposite",
+                "min_age": 1
+              },
+              "to": "active",
+              "reference": "confirm"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "immediate-event-control",
+      "parent_id": "escrow-confirmation",
+      "role": "ablation",
+      "hypothesis": "A matched ablation enters immediately after an event, with exactly the same detector, exposure expiration and cooldown. Comparing it with the candidate separates the effect of delayed confirmation from position persistence.",
+      "failure_addressed": "A sparse policy may appear better solely because it holds a position rather than repeatedly paying roundtrip fees. This control retains the same replay accounting and persistent exposure.",
+      "features": {
+        "impulse": [
+          "sub",
+          [
+            "feature",
+            "return"
+          ],
+          [
+            "mean",
+            8,
+            [
+              "feature",
+              "return"
+            ]
+          ]
+        ],
+        "confirmation": [
+          "feature",
+          "return"
+        ],
+        "regime": [
+          "feature",
+          "range"
+        ]
+      },
+      "detector": {
+        "enter": 0.25,
+        "release": 0.05,
+        "confirm": 0.03,
+        "hot": 1.0
+      },
+      "initial": "idle",
+      "states": {
+        "idle": {
+          "exposure": "flat",
+          "ttl": null,
+          "expire_to": null,
+          "rules": [
+            {
+              "when": {
+                "trigger": "nonzero"
+              },
+              "to": "active",
+              "reference": "trigger"
+            }
+          ]
+        },
+        "watch": {
+          "exposure": "flat",
+          "ttl": [
+            8,
+            2
+          ],
+          "expire_to": "cooldown",
+          "rules": [
+            {
+              "when": {
+                "trigger": "opposite"
+              },
+              "to": "cooldown",
+              "reference": "clear"
+            },
+            {
+              "when": {
+                "confirm": "opposite"
+              },
+              "to": "cooldown",
+              "reference": "clear"
+            },
+            {
+              "when": {
+                "confirm": "same",
+                "min_age": 1
+              },
+              "to": "active",
+              "reference": "keep"
+            }
+          ]
+        },
+        "active": {
+          "exposure": "reference",
+          "ttl": [
+            12,
+            3
+          ],
+          "expire_to": "cooldown",
+          "rules": [
+            {
+              "when": {
+                "trigger": "opposite"
+              },
+              "to": "cooldown",
+              "reference": "clear"
+            }
+          ]
+        },
+        "cooldown": {
+          "exposure": "flat",
+          "ttl": [
+            6,
+            3
+          ],
+          "expire_to": "idle",
+          "rules": [
+            {
+              "when": {
+                "calm": true,
+                "trigger": "zero",
+                "min_age": 3
+              },
+              "to": "idle",
+              "reference": "clear"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "no-conflict-control",
+      "parent_id": "escrow-confirmation",
+      "role": "ablation",
+      "hypothesis": "The controller waits for confirmation but does not discard a pending direction after conflicting evidence. It otherwise uses the same event detector, exposure expiry, cooldown and accounting as the candidate.",
+      "failure_addressed": "If ignoring contradictions performs as well as the full controller, the proposed evidence-cancellation mechanism has no demonstrated predictive contribution; report that negative result explicitly.",
+      "features": {
+        "impulse": [
+          "sub",
+          [
+            "feature",
+            "return"
+          ],
+          [
+            "mean",
+            8,
+            [
+              "feature",
+              "return"
+            ]
+          ]
+        ],
+        "confirmation": [
+          "feature",
+          "return"
+        ],
+        "regime": [
+          "feature",
+          "range"
+        ]
+      },
+      "detector": {
+        "enter": 0.25,
+        "release": 0.05,
+        "confirm": 0.03,
+        "hot": 1.0
+      },
+      "initial": "idle",
+      "states": {
+        "idle": {
+          "exposure": "flat",
+          "ttl": null,
+          "expire_to": null,
+          "rules": [
+            {
+              "when": {
+                "trigger": "nonzero"
+              },
+              "to": "watch",
+              "reference": "trigger"
+            }
+          ]
+        },
+        "watch": {
+          "exposure": "flat",
+          "ttl": [
+            8,
+            2
+          ],
+          "expire_to": "cooldown",
+          "rules": [
+            {
+              "when": {
+                "confirm": "same",
+                "min_age": 1
+              },
+              "to": "active",
+              "reference": "keep"
+            }
+          ]
+        },
+        "active": {
+          "exposure": "reference",
+          "ttl": [
+            12,
+            3
+          ],
+          "expire_to": "cooldown",
+          "rules": [
+            {
+              "when": {
+                "trigger": "opposite"
+              },
+              "to": "cooldown",
+              "reference": "clear"
+            }
+          ]
+        },
+        "cooldown": {
+          "exposure": "flat",
+          "ttl": [
+            6,
+            3
+          ],
+          "expire_to": "idle",
+          "rules": [
+            {
+              "when": {
+                "calm": true,
+                "trigger": "zero",
+                "min_age": 3
+              },
+              "to": "idle",
+              "reference": "clear"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

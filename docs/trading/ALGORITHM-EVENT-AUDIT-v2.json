@@ -1,0 +1,451 @@
+{
+  "abstract_transducer_pairs": [
+    {
+      "events": [
+        {
+          "calm": false,
+          "confirm": -1,
+          "hot": false,
+          "trigger": -1
+        },
+        {
+          "calm": false,
+          "confirm": -1,
+          "hot": false,
+          "trigger": -1
+        }
+      ],
+      "left": "escrow-confirmation",
+      "left_actions": [
+        0,
+        -1
+      ],
+      "right": "countershock-release",
+      "right_actions": [
+        0,
+        0
+      ],
+      "status": "DISTINGUISHED",
+      "visited_pairs": 6
+    },
+    {
+      "events": [
+        {
+          "calm": false,
+          "confirm": -1,
+          "hot": false,
+          "trigger": -1
+        }
+      ],
+      "left": "escrow-confirmation",
+      "left_actions": [
+        0
+      ],
+      "right": "immediate-event-control",
+      "right_actions": [
+        -1
+      ],
+      "status": "DISTINGUISHED",
+      "visited_pairs": 1
+    },
+    {
+      "events": [
+        {
+          "calm": false,
+          "confirm": -1,
+          "hot": false,
+          "trigger": -1
+        },
+        {
+          "calm": false,
+          "confirm": -1,
+          "hot": false,
+          "trigger": 1
+        }
+      ],
+      "left": "escrow-confirmation",
+      "left_actions": [
+        0,
+        0
+      ],
+      "right": "no-conflict-control",
+      "right_actions": [
+        0,
+        -1
+      ],
+      "status": "DISTINGUISHED",
+      "visited_pairs": 12
+    },
+    {
+      "events": [
+        {
+          "calm": false,
+          "confirm": -1,
+          "hot": false,
+          "trigger": -1
+        }
+      ],
+      "left": "countershock-release",
+      "left_actions": [
+        0
+      ],
+      "right": "immediate-event-control",
+      "right_actions": [
+        -1
+      ],
+      "status": "DISTINGUISHED",
+      "visited_pairs": 1
+    },
+    {
+      "events": [
+        {
+          "calm": false,
+          "confirm": -1,
+          "hot": false,
+          "trigger": -1
+        },
+        {
+          "calm": false,
+          "confirm": -1,
+          "hot": false,
+          "trigger": -1
+        }
+      ],
+      "left": "countershock-release",
+      "left_actions": [
+        0,
+        0
+      ],
+      "right": "no-conflict-control",
+      "right_actions": [
+        0,
+        -1
+      ],
+      "status": "DISTINGUISHED",
+      "visited_pairs": 6
+    },
+    {
+      "events": [
+        {
+          "calm": false,
+          "confirm": -1,
+          "hot": false,
+          "trigger": -1
+        }
+      ],
+      "left": "immediate-event-control",
+      "left_actions": [
+        -1
+      ],
+      "right": "no-conflict-control",
+      "right_actions": [
+        0
+      ],
+      "status": "DISTINGUISHED",
+      "visited_pairs": 1
+    }
+  ],
+  "bounds": {
+    "abstract_event_alphabet": 36,
+    "abstract_pair_budget": 30000,
+    "legacy_max_depth": 4,
+    "legacy_return_alphabet_percent": [
+      -0.4,
+      -0.1,
+      0,
+      0.1,
+      0.4
+    ]
+  },
+  "can_submit_orders": false,
+  "legacy_realizable_price_witnesses": [
+    {
+      "candidate": "escrow-confirmation",
+      "candidate_actions": [
+        0
+      ],
+      "events": [
+        {
+          "calm": false,
+          "confirm": -1,
+          "hot": false,
+          "trigger": -1
+        }
+      ],
+      "legacy": "resettable-shock-memory",
+      "legacy_actions": [
+        -1
+      ],
+      "log_return_percent": [
+        -0.4
+      ],
+      "sequences_checked": 1,
+      "status": "DISTINGUISHED_ON_REALIZABLE_PRICE_PROBE"
+    },
+    {
+      "candidate": "escrow-confirmation",
+      "candidate_actions": [
+        0,
+        -1
+      ],
+      "events": [
+        {
+          "calm": false,
+          "confirm": -1,
+          "hot": false,
+          "trigger": -1
+        },
+        {
+          "calm": false,
+          "confirm": -1,
+          "hot": false,
+          "trigger": 0
+        }
+      ],
+      "legacy": "wick-resilience-state",
+      "legacy_actions": [
+        0,
+        0
+      ],
+      "log_return_percent": [
+        -0.4,
+        -0.4
+      ],
+      "sequences_checked": 6,
+      "status": "DISTINGUISHED_ON_REALIZABLE_PRICE_PROBE"
+    },
+    {
+      "candidate": "escrow-confirmation",
+      "candidate_actions": [
+        0
+      ],
+      "events": [
+        {
+          "calm": false,
+          "confirm": -1,
+          "hot": false,
+          "trigger": -1
+        }
+      ],
+      "legacy": "regime-change-accumulator",
+      "legacy_actions": [
+        -1
+      ],
+      "log_return_percent": [
+        -0.4
+      ],
+      "sequences_checked": 1,
+      "status": "DISTINGUISHED_ON_REALIZABLE_PRICE_PROBE"
+    },
+    {
+      "candidate": "countershock-release",
+      "candidate_actions": [
+        0
+      ],
+      "events": [
+        {
+          "calm": false,
+          "confirm": -1,
+          "hot": false,
+          "trigger": -1
+        }
+      ],
+      "legacy": "resettable-shock-memory",
+      "legacy_actions": [
+        -1
+      ],
+      "log_return_percent": [
+        -0.4
+      ],
+      "sequences_checked": 1,
+      "status": "DISTINGUISHED_ON_REALIZABLE_PRICE_PROBE"
+    },
+    {
+      "candidate": "countershock-release",
+      "candidate_actions": [
+        0,
+        0,
+        1
+      ],
+      "events": [
+        {
+          "calm": false,
+          "confirm": -1,
+          "hot": false,
+          "trigger": -1
+        },
+        {
+          "calm": false,
+          "confirm": 1,
+          "hot": false,
+          "trigger": 0
+        },
+        {
+          "calm": false,
+          "confirm": 1,
+          "hot": false,
+          "trigger": 0
+        }
+      ],
+      "legacy": "wick-resilience-state",
+      "legacy_actions": [
+        0,
+        0,
+        0
+      ],
+      "log_return_percent": [
+        -0.4,
+        0.1,
+        0.1
+      ],
+      "sequences_checked": 49,
+      "status": "DISTINGUISHED_ON_REALIZABLE_PRICE_PROBE"
+    },
+    {
+      "candidate": "countershock-release",
+      "candidate_actions": [
+        0
+      ],
+      "events": [
+        {
+          "calm": false,
+          "confirm": -1,
+          "hot": false,
+          "trigger": -1
+        }
+      ],
+      "legacy": "regime-change-accumulator",
+      "legacy_actions": [
+        -1
+      ],
+      "log_return_percent": [
+        -0.4
+      ],
+      "sequences_checked": 1,
+      "status": "DISTINGUISHED_ON_REALIZABLE_PRICE_PROBE"
+    }
+  ],
+  "predictive_edge_proven": false,
+  "proposal_sha256": "12a1b6d6dfda3abf1ecf42dd29d18d8666fff4aeca6cd64f7bb05ed3b4f04f86",
+  "real_market_data_used": false,
+  "schema": "algorithm_event_semantic_audit_v2",
+  "scientific_novelty_proven": false,
+  "synthetic_loss_counterexamples": [
+    {
+      "actions": [
+        0,
+        1,
+        0,
+        0
+      ],
+      "candidate": "escrow-confirmation",
+      "claim_falsified": "Sparse confirmed entries cannot lose: FALSE",
+      "log_returns_percent": [
+        0.5,
+        0.1,
+        -1.0,
+        0.0
+      ],
+      "market_predictive_edge_tested": false,
+      "result": {
+        "cost_drag": 0.00013930348836244176,
+        "entries": 1,
+        "entry_density": 0.05263157894736842,
+        "executions": 2,
+        "exposure_bars": 1,
+        "exposure_fraction": 0.05263157894736842,
+        "gross_return": -0.0009950166250831925,
+        "insolvent": false,
+        "max_drawdown": 0.0011343201134456082,
+        "mean_holding_bars": 1.0,
+        "net_return": -0.0011343201134456082,
+        "observations": 19
+      },
+      "trace": [
+        {
+          "action": 0,
+          "bar": 16,
+          "from": "idle",
+          "reason": "rule:0",
+          "reference": 1,
+          "to": "watch"
+        },
+        {
+          "action": 1,
+          "bar": 17,
+          "from": "watch",
+          "reason": "rule:2",
+          "reference": 1,
+          "to": "active"
+        },
+        {
+          "action": 0,
+          "bar": 18,
+          "from": "active",
+          "reason": "rule:0",
+          "reference": 0,
+          "to": "cooldown"
+        }
+      ]
+    },
+    {
+      "actions": [
+        0,
+        0,
+        -1,
+        -1,
+        -1
+      ],
+      "candidate": "countershock-release",
+      "claim_falsified": "Sparse confirmed entries cannot lose: FALSE",
+      "log_returns_percent": [
+        0.5,
+        -0.1,
+        -0.1,
+        0.8,
+        0.0
+      ],
+      "market_predictive_edge_tested": false,
+      "result": {
+        "cost_drag": 0.00014056224598529913,
+        "entries": 1,
+        "entry_density": 0.05,
+        "executions": 2,
+        "exposure_bars": 2,
+        "exposure_fraction": 0.1,
+        "gross_return": -0.000803208550427344,
+        "insolvent": false,
+        "max_drawdown": 0.000943770796412724,
+        "mean_holding_bars": 2.0,
+        "net_return": -0.000943770796412724,
+        "observations": 20
+      },
+      "trace": [
+        {
+          "action": 0,
+          "bar": 16,
+          "from": "idle",
+          "reason": "rule:0",
+          "reference": 1,
+          "to": "watch"
+        },
+        {
+          "action": 0,
+          "bar": 17,
+          "from": "watch",
+          "reason": "rule:1",
+          "reference": 1,
+          "to": "recoil"
+        },
+        {
+          "action": -1,
+          "bar": 18,
+          "from": "recoil",
+          "reason": "rule:1",
+          "reference": -1,
+          "to": "active"
+        }
+      ]
+    }
+  ]
+}
