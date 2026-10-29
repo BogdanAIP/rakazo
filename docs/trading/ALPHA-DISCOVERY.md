@@ -298,3 +298,62 @@ funding-history response pages. No online fetch is performed.
 
 36 offline tests passed. HTTP 429 stopped the first live page: 0 history pages saved.
 No trading or PAPER execution has been enabled.
+
+## v5 - official OKX monthly archive import (2026-10-29)
+
+Official public metadata endpoint: `GET /api/v5/public/market-data-history`.
+For crypto USDT perpetuals use `instType=SWAP`,
+`instFamilyList=BTC-USDT`, `module=2` for ONE-MINUTE candles,
+`module=3` for historical funding rate, and
+`dateAggrType=monthly`. Month boundaries use UTC+8.
+Current API range limit is 10 months; v5 only requests ONE month.
+The response supplies a `static.okx.com` ZIP URL; the Node downloader
+requires a pinned HTTPS host, path, symbol and ZIP filename, checks bounded
+response sizes and stores immutable archive/receipt SHA256 pairs.
+
+```powershell
+node scripts/trading/okx_archive_download.mjs BTC-USDT-SWAP 2026-07 2 C:/data/archives
+python scripts/trading/okx_archive_import.py --symbol BTC-USDT-SWAP --zip C:/data/archives/BTC-USDT-SWAP-candlesticks-2026-07.zip C:/data/archives/BTC-USDT-SWAP-candlesticks-2026-08.zip C:/data/archives/BTC-USDT-SWAP-candlesticks-2026-09.zip --out C:/data/archives/BTC-USDT-SWAP.csv
+node scripts/trading/okx_archive_download.mjs BTC-USDT-SWAP 2026-07 3 C:/data/archives
+python scripts/trading/okx_funding_archive.py --symbol BTC-USDT-SWAP --zip C:/data/archives/BTC-USDT-SWAP-fundingrates-2026-07.zip --out C:/data/archives/BTC-USDT-SWAP.funding.json
+```
+
+Candle ZIP schema is `instrument_name,open,high,low,close,vol,
+vol_ccy,vol_quote,open_time,confirm`. A complete UTC+8 month
+is required: 1440 contiguous confirmed 1m candles per calendar day,
+correct 15m boundary alignment, valid OHLC and quote volume.
+Each 15m bar aggregates EXACTLY 15 source minutes:
+first open, high=max, low=min, last close, quote volume=sum.
+A single missing minute rejects the market (no interpolation).
+The CSV manifest preserves original archive paths/digests and source
+as `official_archive`. The auditor re-verifies all source ZIPs and
+receipts before allowing a one-use holdout claim.
+
+Funding ZIP has `instrument_name,funding_rate,funding_time`.
+Funding observations are retained separately; they are NOT yet assumed
+to be complete, settled account charges or integrated into strategy PnL.
+
+For 80 current crypto candidates use a separately initiated manual batch
+of <=2 symbols per call. Already verified archives are not re-downloaded.
+A failed archive or HTTP 429 stops the batch; a gap flags DATA_REJECTED.
+No timer, automatic restart, hidden API retries or live trades:
+
+```powershell
+python scripts/trading/okx_archive_batch.py --universe C:/data/universe.json --archive-dir C:/data/archives --offset 0 --count 2
+```
+
+Local real data checkpoint: 2026-07 through 2026-09 archives produced
+8,832 contiguous 15m bars each for BTC-USDT-SWAP and ETH-USDT-SWAP
+(132,480 minute bars per instrument). Both have 276 observed historical
+funding archive entries over those months, with 8-hour spacing in THIS
+sample only. SOL-USDT-SWAP failed strict validation: September archive
+lacks minute 2026-09-01 10:33 UTC. Never fill the gap silently.
+
+No actual strategy profitability has been established. 80 selected
+current-market candidates; only TWO complete 92-day snapshots meet
+the archive-integrity requirements. Research on >=50 instruments remains
+blocked. A current-liquid universe excludes delisted assets and may have
+survivorship bias; future work must reconstruct point-in-time membership.
+Funding calendar completeness, contract rules, liquidation and fill models
+still need testing. All data outside Git; never merge to Trader without
+separate review. 42 local regression tests passed through v5.

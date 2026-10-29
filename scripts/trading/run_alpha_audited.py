@@ -20,12 +20,24 @@ def verify_snapshot(csv_path: Path, manifest_path: Path, allow_fixture=False):
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("format") != "okx_public_15m_research_v1":
         raise ValueError("Unsupported snapshot format")
-    if manifest.get("source") not in ("public_get", "offline_fixture"):
+    if manifest.get("source") not in ("public_get", "offline_fixture", "official_archive"):
         raise ValueError("Invalid source")
     if manifest["source"] == "offline_fixture" and not allow_fixture:
         raise ValueError("Synthetic fixtures require explicit --allow-fixture")
     if not SYMBOL.fullmatch(manifest.get("symbol", "")):
         raise ValueError("Not a validated USDT perpetual symbol")
+    if manifest["source"] == "official_archive":
+        from okx_archive_import import _verify_archive
+        sources = manifest.get("source_archives")
+        if not isinstance(sources, list) or not 1 <= len(sources) <= 24:
+            raise ValueError("Missing original archive receipts")
+        for artifact in sources:
+            rec, digest = _verify_archive(artifact["archive_path"], manifest["symbol"])
+            if (digest != artifact.get("archive_sha256")
+                    or rec["month"] != artifact.get("month")
+                    or rec["size_bytes"] != artifact.get("size_bytes")
+                    or rec["archive_url"] != artifact.get("archive_url")):
+                raise ValueError("Changed archive source")
     digest = hashlib.sha256(csv_path.read_bytes()).hexdigest()
     if digest != manifest.get("csv_sha256"):
         raise ValueError("CSV hash does not match manifest")

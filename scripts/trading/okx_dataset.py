@@ -170,7 +170,7 @@ def collect(inst_id, as_of, page_limit=100, page_count=8, fetcher=None,
 
 
 def export_snapshot(candles, receipts, inst_id, as_of, output_csv: Path,
-                    source: str):
+                    source: str, source_artifacts=None):
     """Two files created exclusively, with independent byte-identity receipt."""
     output_csv = Path(output_csv)
     if output_csv.suffix.lower() != ".csv":
@@ -188,8 +188,9 @@ def export_snapshot(candles, receipts, inst_id, as_of, output_csv: Path,
     manifest = {
         "format": "okx_public_15m_research_v1",
         "source": source,
-        "source_attestation": "unverified public HTTP response" if source == "public_get" else "OFFLINE_FIXTURE_NOT_EXCHANGE_DATA",
+        "source_attestation": "unverified public HTTP response" if source == "public_get" else ("official archive, receipts checked without cryptographic origin attestation" if source == "official_archive" else "OFFLINE_FIXTURE_NOT_EXCHANGE_DATA"),
         "symbol": inst_id, "candle_interval_minutes": 15,
+        "source_archives": source_artifacts if source_artifacts is not None else [],
         "captured_as_of_utc": as_of.isoformat(),
         "first_open_ms": candles[0][0], "last_open_ms": candles[-1][0],
         "closed_bars": len(candles), "pages": receipts,

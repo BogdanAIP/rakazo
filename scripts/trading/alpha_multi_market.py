@@ -38,7 +38,7 @@ def inspect(universe_file, data_dir):
             candles, provenance, digest = verify_snapshot(csv_path, manifest)
             if len(candles) < MIN_BARS_V3:
                 raise ValueError("SHORT_OF_90_DAY_MINIMUM")
-            if provenance["symbol"] != symbol or provenance["source"] != "public_get":
+            if provenance["symbol"] != symbol or provenance["source"] not in ("public_get", "official_archive"):
                 raise ValueError("UNVERIFIED_MARKET_PROVENANCE")
         except (ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
             rejected[symbol] = str(exc)[:100]
