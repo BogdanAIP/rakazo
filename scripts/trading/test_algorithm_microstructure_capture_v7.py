@@ -86,6 +86,14 @@ class MicrostructureTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             analyze_trades(json.dumps(t).encode(),SYMBOLS[0],T+100)
 
+    def test_distinct_trade_ids_can_reverse_within_identical_ms(self):
+        data=json.loads(trades(SYMBOLS[0],T))
+        data["data"][0]["tradeId"]="900"
+        data["data"][1]["tradeId"]="950"
+        data["data"][1]["ts"]=data["data"][0]["ts"]
+        summary=analyze_trades(json.dumps(data).encode(),SYMBOLS[0],T+100)
+        self.assertEqual(summary["trade_count"],10)
+
     def test_full_batch_roundtrip_and_tampering(self):
         doc,evidence=run_capture()
         self.assertEqual(len(evidence),12)
