@@ -123,7 +123,7 @@ def analyze_trades(raw, symbol, received_ms):
     rows=api_rows(raw,singleton=False)
     if not 1<=len(rows)<=100:
         raise ValueError("Empty or oversized recent trade sample")
-    last_id=None;last_time=None
+    seen_ids=set();last_time=None
     buy=sell=Decimal(0)
     for x in rows:
         if not isinstance(x,dict) or x.get("instId")!=symbol:
@@ -133,13 +133,14 @@ def analyze_trades(raw, symbol, received_ms):
             raise ValueError("Malformed trade ID")
         identifier=int(tradeid)
         ts=epoch_ms(x.get("ts"))
-        if last_id is not None and identifier>=last_id:
-            raise ValueError("Duplicate/reordered trade IDs")
+        if identifier in seen_ids:
+            raise ValueError("Duplicate trade IDs")
+        seen_ids.add(identifier)
         if last_time is not None and ts>last_time:
             raise ValueError("Nonchronological trade timestamps")
         if ts>received_ms+1000:
             raise ValueError("Future trade")
-        last_id,last_time=identifier,ts
+        last_time=ts
         side=x.get("side")
         if side not in ("buy","sell") or x.get("source") not in ("0","1"):
             raise ValueError("Unknown taker-side/source")
