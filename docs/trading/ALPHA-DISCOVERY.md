@@ -269,3 +269,32 @@ ZERO at this checkpoint. 80 candidate instruments therefore do NOT qualify
 for multi-market evaluation yet. Do not claim profit, discovery, reliability,
 or real PAPER admission. Keep existing Trader, positions and protections
 untouched. Never retry quickly to evade HTTP 429.
+
+## v4 - resumable historical data (2026-10-29)
+
+Use `okx_backfill.py` for manually started batches of 1-5 public
+OKX history-candle pages, <=100 rows each. Delay >=2.5 sec between
+requests. A fixed capture-time cursor anchors even a first request
+delayed by 429. Pages are immutable with SHA-256 receipts and rechecked
+on resume. HTTP 429 immediately stops the batch without retry.
+
+```powershell
+python scripts/trading/okx_backfill.py --symbol BTC-USDT-SWAP --session C:/data/backfill/BTC-USDT-SWAP --pages 1
+python scripts/trading/okx_backfill.py --symbol BTC-USDT-SWAP --session C:/data/backfill/BTC-USDT-SWAP --finalize C:/data/BTC-USDT-SWAP.csv
+```
+
+Finalization is offline, requires >=8640 contiguous confirmed 15m
+bars, and creates a new CSV plus companion .manifest.json.
+
+`okx_bulk_backfill.py` manually works across <=3 universe symbols,
+<=2 new pages/symbol and stops the entire batch at the first 429:
+
+```powershell
+python scripts/trading/okx_bulk_backfill.py --universe C:/data/universe.json --sessions-root C:/data/backfill --offset 0 --count 3 --pages-per-market 1
+```
+
+`okx_funding_events.py` validates supplied official-format public
+funding-history response pages. No online fetch is performed.
+
+36 offline tests passed. HTTP 429 stopped the first live page: 0 history pages saved.
+No trading or PAPER execution has been enabled.
