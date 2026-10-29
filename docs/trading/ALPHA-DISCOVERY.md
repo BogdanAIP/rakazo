@@ -207,3 +207,65 @@ V2 adaptation means **periodic reselection and mutation of rules using
 past observations**, not autonomous invention of an arbitrary new mathematical
 model or an online neural network. It is not yet an AI model, a commercial
 product, or evidence of positive investment returns.
+
+## v3 - real multi-asset research enrollment and stress gate (2026-10-29)
+
+The previous BTC/SOL use was a smoke test, NOT a two-asset strategy limit.
+`okx_universe.mjs` independently obtains official public OKX perpetual
+instruments and current public tickers. It selects crypto-category USDT-linear
+swaps (excludes tokenized stocks/metals), with live status, >=90 days since
+listing, an estimated >=2 million USDT of current 24h turnover, <=30 bps
+current quoted bid/ask spread, positive and consistent contract metadata.
+It records capture time, response checksums, ranking, filters, and up to
+80 candidate crypto markets in an immutable JSON outside the git repository.
+Current liquidity is not proof of historical liquidity.
+
+First observed 2026-10-29 06:14Z: 125 eligible candidates after filters,
+80 selected for research. The 80-asset selection is a *candidate universe*,
+NOT 80 complete research datasets. Never confuse these counts.
+
+### One-shot manual entrypoints
+
+```powershell
+node scripts/trading/okx_universe.mjs C:/data/okx_crypto_universe.json 80
+python scripts/trading/okx_dataset.py --symbol ETH-USDT-SWAP --pages 90 --limit 100 --out C:/data/ETH-USDT-SWAP.csv
+python scripts/trading/alpha_multi_market.py --universe C:/data/okx_crypto_universe.json --data-dir C:/data --registry C:/data/holdout-registry --reports-dir C:/data/reports --check-only
+python scripts/trading/alpha_multi_market.py --universe C:/data/okx_crypto_universe.json --data-dir C:/data --registry C:/data/holdout-registry --reports-dir C:/data/reports --offset 0 --count 5
+```
+
+Complete and separately audit at least 50 instruments' >=8640 continuous
+CLOSED 15m candles BEFORE permitting any multi-asset holdout evaluation.
+The batch engine uses the same v3 single-use holdout registry and is bounded
+to <=5 instruments per manually initiated run. It fails CLOSED with status
+`INSUFFICIENT_HISTORY_NO_RESEARCH` when fewer than 50 credible histories
+are ready. No automatic retry, unattended work, recurring tasks, execution,
+PAPER Start/Resume, or real order access is added.
+
+The Python history collector now defaults to the same exact pinned official
+read-only OKX endpoint through Node's native fetch and refuses redirects;
+Windows Python urllib received 403 while Node returned 200. Repeated
+history paging then encountered OKX HTTP 429: stop immediately and honor
+the provider's rate limits. The collector returns a failed request without
+inventing bars or successful results. A scalable rate-limited resumable
+bulk-history collection process remains a separate necessary milestone.
+
+### Stress and scope
+
+`alpha_robust.py` requires >=8640 bars (>=90 days), training 960 closed
+bars, 4-bar embargo and 192-bar test folds. Evaluate development first.
+Only if development tests pass is the reserved single-use holdout evaluated.
+Initial modelled one-way costs: 5 bps taker +2 bps slippage; stress:
+5 bps taker +10 bps slippage PLUS a **hypothetical** 2 bps per trade
+adverse funding allowance. This is NOT measured exchange funding. The
+futures contract's real funding times, mark/index basis, orderbook depth,
+price impact, liquidation risk, historical listings, and maintenance
+margin are NOT yet modeled. The v3 comparator is a predeclared momentum
+rule, NOT the existing Rakazo Trader.
+
+Local results: 22 deterministic unit tests passed, including 5 new
+stress/lookahead/no-edge checks; positive synthetic price examples are
+not empirical returns. Actual 90-day complete histories loaded into v3:
+ZERO at this checkpoint. 80 candidate instruments therefore do NOT qualify
+for multi-market evaluation yet. Do not claim profit, discovery, reliability,
+or real PAPER admission. Keep existing Trader, positions and protections
+untouched. Never retry quickly to evade HTTP 429.

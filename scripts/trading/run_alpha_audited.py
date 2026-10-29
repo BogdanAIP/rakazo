@@ -56,8 +56,10 @@ def audited_run(csv_path, manifest_path, registry_dir, out, seed=42,
     bars, manifest, digest = verify_snapshot(
         Path(csv_path), Path(manifest_path), allow_fixture=allow_fixture
     )
-    if protocol not in ("v1", "v2"):
+    if protocol not in ("v1", "v2", "v3"):
         raise ValueError("Unsupported research protocol")
+    if protocol == "v3" and len(bars) < 8640:
+        raise ValueError("V3 requires >=8640 verified closed 15m bars")
     if protocol == "v2" and len(bars) < 2880:
         raise ValueError("V2 requires >=2880 verified closed bars")
     registry_dir, out = Path(registry_dir), Path(out)
@@ -77,7 +79,10 @@ def audited_run(csv_path, manifest_path, registry_dir, out, seed=42,
     with claim_path.open("x", encoding="utf-8") as f:
         json.dump(claim, f, indent=2, sort_keys=True)
         f.write("\n")
-    if protocol == "v2":
+    if protocol == "v3":
+        from alpha_robust import robust_walk_forward
+        result = robust_walk_forward(bars, seed=seed, rounds=rounds)
+    elif protocol == "v2":
         from alpha_walkforward import walk_forward
         result = walk_forward(bars, seed=seed, rounds=rounds)
     else:
@@ -104,11 +109,15 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--rounds", type=int, default=3)
     parser.add_argument("--allow-fixture", action="store_true")
-    parser.add_argument("--protocol", choices=("v1", "v2"), default="v2")
+    parser.add_argument("--protocol", choices=("v1", "v2", "v3"), default="v2")
     args = parser.parse_args()
     result = audited_run(args.csv, args.manifest, args.registry, args.out,
                          args.seed, args.rounds, args.allow_fixture, args.protocol)
-    if args.protocol == "v2":
+    if args.protocol == "v3":
+        print(json.dumps({"status": result["development_gate"]["status"],
+                          "folds": len(result["development_folds"]),
+                          "holdout_used": result["holdout"] is not None}))
+    elif args.protocol == "v2":
         print(json.dumps({"status": result["research_gate"]["status"],
                           "folds": len(result["development_folds"]),
                           "holdout_used": result["holdout"] is not None}))

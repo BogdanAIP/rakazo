@@ -13,6 +13,7 @@ import io
 import json
 import math
 import re
+import subprocess
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -23,7 +24,7 @@ ORIGIN = "https://www.okx.com"
 PATH = "/api/v5/market/history-candles"
 INTERVAL_MS = 900_000
 MAX_BODY = 262_144
-MAX_PAGES = 30
+MAX_PAGES = 120
 MAX_LIMIT = 100
 SYMBOL = re.compile(r"^[A-Z0-9]+-USDT-SWAP$")
 
@@ -53,6 +54,22 @@ def public_page(inst_id: str, cursor: str | None, limit: int):
         if len(data) > MAX_BODY:
             raise ValueError("Oversized history page")
     return json.loads(data.decode("utf-8"))
+
+
+def node_public_page(inst_id: str, cursor: str | None, limit: int):
+    """Official keyless public GET via Node native fetch. No user-supplied URL."""
+    if not SYMBOL.fullmatch(inst_id) or not 1 <= limit <= MAX_LIMIT:
+        raise ValueError("Invalid public history request")
+    if cursor is not None and not re.fullmatch(r"\d{13}", cursor):
+        raise ValueError("Invalid cursor")
+    script = Path(__file__).with_name("okx_public_page.mjs")
+    result = subprocess.run(
+        ["node", str(script), inst_id, cursor if cursor else "-", str(limit)],
+        capture_output=True, text=True, timeout=15, check=False
+    )
+    if result.returncode != 0 or len(result.stdout) > MAX_BODY:
+        raise ValueError("Public OKX history unavailable or oversized")
+    return json.loads(result.stdout)
 
 
 def parse_pages(pages, inst_id: str, as_of: datetime, limit: int):
@@ -116,12 +133,14 @@ def parse_pages(pages, inst_id: str, as_of: datetime, limit: int):
     return ordered, provenance
 
 
-def collect(inst_id, as_of, page_limit=100, page_count=8, fetcher=public_page,
+def collect(inst_id, as_of, page_limit=100, page_count=8, fetcher=None,
             offline_pages=None):
     if not 1 <= page_count <= MAX_PAGES or not 1 <= page_limit <= MAX_LIMIT:
         raise ValueError("Invalid request bounds")
     if not SYMBOL.fullmatch(inst_id):
         raise ValueError("Invalid market")
+    if fetcher is None:
+        fetcher = node_public_page
     pages, cursor = [], None
     if offline_pages is not None:
         if not isinstance(offline_pages, list) or not 1 <= len(offline_pages) <= page_count:
