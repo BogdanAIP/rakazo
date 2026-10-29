@@ -1,8 +1,13 @@
 """No-lookahead observation labels with explicit abstention."""
 import copy
+import hashlib
+import json
+from pathlib import Path
+import tempfile
 import unittest
+from unittest.mock import patch
 
-from algorithm_pit_events_v5 import event_at, event_report
+from algorithm_pit_events_v5 import event_at, event_report, load_verified_panel
 
 T = 1_793_296_000_000
 
@@ -45,6 +50,23 @@ class EventTests(unittest.TestCase):
             event_at(source(),True)
         with self.assertRaises(ValueError):
             event_at(source(oi_sign=2),T+1000)
+
+    def test_event_receipt_references_exact_verified_bytes(self):
+        # CRLF archive bytes, not re-serialized LF strings, own the receipt hash.
+        panel = {"schema": "algorithm_pit_two_snapshot_panel_v5",
+                 "markets": [{"symbol": "BTC-USDT-SWAP", "rank": 1}]}
+        raw = (json.dumps(panel, indent=2).replace("\n", "\r\n") + "\r\n").encode("utf8")
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "paired.json"
+            p.write_bytes(raw)
+            with patch("algorithm_pit_events_v5.build_panel", return_value=panel):
+                value, digest = load_verified_panel(p, td, "universe.json")
+            self.assertEqual(value, panel)
+            self.assertEqual(digest, hashlib.sha256(raw).hexdigest())
+            different = {"schema": panel["schema"], "markets": []}
+            with patch("algorithm_pit_events_v5.build_panel", return_value=different):
+                with self.assertRaises(ValueError):
+                    load_verified_panel(p, td, "universe.json")
 
     def test_frozen_complete_panel_required(self):
         panel={"schema":"algorithm_pit_two_snapshot_panel_v5",
