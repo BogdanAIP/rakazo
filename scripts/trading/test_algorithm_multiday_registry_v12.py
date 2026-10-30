@@ -90,17 +90,17 @@ class MultidayRegistryTests(unittest.TestCase):
                 self.assertEqual(entries[0]["entry_sha256"],digest)
                 with self.assertRaises(FileExistsError):
                     register(p,"2026-11-01",MEMBERS[0],source="/fake/new",now=t+9000)
-            missing_digest=register(p,"2026-11-01",MEMBERS[1],reason="manual source failed",now=t+9000)
-            entries=read_entries(p,recheck_source=False)
-            self.assertEqual(entries[1]["previous_sha256"],digest)
-            self.assertEqual(entries[1]["entry_sha256"],missing_digest)
-            report=make_report(p)
-            self.assertEqual(report["source_verified_count"],1)
-            self.assertEqual(report["explicit_failed_count"],1)
-            self.assertEqual(report["source_unregistered_count"],58)
-            self.assertEqual(report["future_outcome_labels_verified"],0)
-            self.assertFalse(report["independent_alpha_validated"])
-            self.assertEqual(report["status"],"SOURCE_ONLY_AWAITING_FUTURE_DAYS_AND_AUTHENTIC_OUTCOMES")
+                missing_digest=register(p,"2026-11-01",MEMBERS[1],reason="manual source failed",now=t+9000)
+                entries=read_entries(p,recheck_source=False)
+                self.assertEqual(entries[1]["previous_sha256"],digest)
+                self.assertEqual(entries[1]["entry_sha256"],missing_digest)
+                report=make_report(p)
+                self.assertEqual(report["source_verified_count"],1)
+                self.assertEqual(report["explicit_failed_count"],1)
+                self.assertEqual(report["source_unregistered_count"],58)
+                self.assertEqual(report["future_outcome_labels_verified"],0)
+                self.assertFalse(report["independent_alpha_validated"])
+                self.assertEqual(report["status"],"SOURCE_ONLY_AWAITING_FUTURE_DAYS_AND_AUTHENTIC_OUTCOMES")
 
     def test_source_replacement_detected_by_reaudit(self):
         with tempfile.TemporaryDirectory() as td:
