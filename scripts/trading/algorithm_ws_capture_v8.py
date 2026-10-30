@@ -130,14 +130,10 @@ async def collect(symbol, *, seconds=OBSERVATION_SECONDS):
             read_errors.append(f"{source}: {type(exc).__name__}: {exc}")
             connected.set()
 
-    from contextlib import AsyncExitStack
-    async with AsyncExitStack() as stack:
-        # Two parallel socket setups, public-only and no login.
-        book_conn,trade_conn=await asyncio.wait_for(asyncio.gather(
-            connect(BOOK_URL,open_timeout=5,close_timeout=1,max_size=MAX_PAYLOAD),
-            connect(TRADE_URL,open_timeout=5,close_timeout=1,max_size=MAX_PAYLOAD)),timeout=6)
-        await stack.enter_async_context(book_conn)
-        await stack.enter_async_context(trade_conn)
+    async with connect(BOOK_URL,open_timeout=5,close_timeout=1,
+                       max_size=MAX_PAYLOAD) as book_conn, connect(
+                       TRADE_URL,open_timeout=5,close_timeout=1,
+                       max_size=MAX_PAYLOAD) as trade_conn:
         await asyncio.gather(
             book_conn.send(subscribe_message("book",symbol)),
             trade_conn.send(subscribe_message("trade",symbol)))
