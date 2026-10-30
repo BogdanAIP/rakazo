@@ -152,8 +152,12 @@ class MultidayRegistryTests(unittest.TestCase):
             out=seal_model(p,model,NOV01)
             self.assertTrue(HEX64.fullmatch(out))
             self.assertTrue(make_report(p)["holdout_sealed_model"])
+            self.assertEqual((p/"model-spec.json").read_bytes(),model.read_bytes())
             with self.assertRaises(FileExistsError):
                 seal_model(p,model,NOV01)
+            (p/"model-spec.json").write_bytes(b'{"changed":true}')
+            with self.assertRaises(ValueError):
+                make_report(p)
 
     def test_original_ws_source_receipt_replays_and_is_not_future_pnl(self):
         m,e=fixture()
