@@ -43,6 +43,8 @@ def build_buckets(folder):
            "book_ask_added_contracts":Decimal(0),
            "book_ask_reduced_contracts":Decimal(0),
            "quote_readd_events":0,
+           "book_bid_quote_readd_events":0,
+           "book_ask_quote_readd_events":0,
            "book_end_asof_ms":None,
            "best_bid":None,"best_ask":None,
            "top5_bid_contracts":None,"top5_ask_contracts":None,
@@ -70,7 +72,9 @@ def build_buckets(folder):
                     bins[b]["book_update_count"]+=int(side=="bids")
                     bins[b][f"book_{'bid' if side=='bids' else 'ask'}_added_contracts"]+=a
                     bins[b][f"book_{'bid' if side=='bids' else 'ask'}_reduced_contracts"]+=r
-                    bins[b]["quote_readd_events"]+=len(add_prices&prev_reduced[side])
+                    count_readded=len(add_prices&prev_reduced[side])
+                    bins[b]["quote_readd_events"]+=count_readded
+                    bins[b][f"book_{'bid' if side=='bids' else 'ask'}_quote_readd_events"]+=count_readded
                     prev_reduced[side].update(reduced_prices)
             if book["bids"] and book["asks"]:
                 last_book_ms=ms
