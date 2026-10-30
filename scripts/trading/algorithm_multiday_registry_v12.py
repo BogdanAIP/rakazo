@@ -292,7 +292,7 @@ def make_report(study,now=None):
             s.get("plan_sha256")!=psha or
             s.get("can_trade") is not False or
             type(s.get("frozen_at_utc_ms")) is not int or
-            utc_day(s["frozen_at_utc_ms"])>=plan["holdout_first_day_utc"] or
+            utc_day(s["frozen_at_utc_ms"])>=plan["calendar"][6]["date_utc"] or
             not spec.is_file() or
             sha256(spec.read_bytes())!=s.get("spec_sha256")):
             raise ValueError("Invalid or modified pre-holdout model seal/spec")
@@ -315,8 +315,11 @@ def make_report(study,now=None):
 def seal_model(study,spec_file,now=None):
     now=now_ms() if now is None else now
     plan,psha=study_plan(study)
-    if utc_day(now)>=plan["holdout_first_day_utc"]:
-        raise ValueError("Cannot freeze model after holdout begins")
+    # Validation must be genuinely out-of-sample too: seal the model BEFORE
+    # November 7 (not merely before the November 10 holdout begins).
+    first_validation=plan["calendar"][6]["date_utc"]
+    if utc_day(now)>=first_validation:
+        raise ValueError("Cannot freeze the model after validation begins")
     if (Path(study)/"model-seal.json").exists():
         raise FileExistsError("Holdout model seal already exists")
     raw=(Path(spec_file)).read_bytes()
