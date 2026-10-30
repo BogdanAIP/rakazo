@@ -83,7 +83,7 @@ class MultidayRegistryTests(unittest.TestCase):
             p,_=setup(td)
             t=NOV01
             with patch("algorithm_multiday_registry_v12.receipt_fingerprint",
-                       return_value=fake_receipt(MEMBERS[0],t-2000)):
+                       side_effect=lambda _: fake_receipt(MEMBERS[0],t-2000)):
                 digest=register(p,"2026-11-01",MEMBERS[0],source="/fake/capture",now=t+8000)
                 entries=read_entries(p,recheck_source=True)
                 self.assertEqual(len(entries),1)
@@ -107,10 +107,10 @@ class MultidayRegistryTests(unittest.TestCase):
             p,_=setup(td)
             t=NOV01
             with patch("algorithm_multiday_registry_v12.receipt_fingerprint",
-                       return_value=fake_receipt(MEMBERS[0],t-2000)):
+                       side_effect=lambda _: fake_receipt(MEMBERS[0],t-2000)):
                 register(p,"2026-11-01",MEMBERS[0],source="/fake/capture",now=t+8000)
             with patch("algorithm_multiday_registry_v12.receipt_fingerprint",
-                       return_value={**fake_receipt(MEMBERS[0],t-2000),
+                       side_effect=lambda _: {**fake_receipt(MEMBERS[0],t-2000),
                                      "source_messages_sha256":"c"*64}):
                 with self.assertRaises(ValueError):
                     make_report(p)
