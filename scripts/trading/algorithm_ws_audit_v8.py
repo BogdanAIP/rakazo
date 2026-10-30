@@ -48,7 +48,7 @@ def dec(x,positive=False,zero_allowed=False):
 
 
 def level_update(book_levels, payload, side, *, snapshot):
-    if not isinstance(payload,list) or len(payload)>400:
+    if not isinstance(payload,list) or len(payload)>1000:
         raise ValueError("Unbounded level payload")
     prev=None
     removed=added=Decimal(0)
