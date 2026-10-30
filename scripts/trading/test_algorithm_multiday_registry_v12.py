@@ -149,6 +149,9 @@ class MultidayRegistryTests(unittest.TestCase):
             model.write_text(json.dumps(spec))
             with self.assertRaises(ValueError):
                 seal_model(p,model,NOV10)
+            first_validation=int(datetime(2026,11,7,0,tzinfo=timezone.utc).timestamp()*1000)
+            with self.assertRaises(ValueError):
+                seal_model(p,model,first_validation)
             out=seal_model(p,model,NOV01)
             self.assertTrue(HEX64.fullmatch(out))
             self.assertTrue(make_report(p)["holdout_sealed_model"])
