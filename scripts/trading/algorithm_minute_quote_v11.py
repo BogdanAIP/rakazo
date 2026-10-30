@@ -148,6 +148,13 @@ def validate_lock(raw,source,expected_symbol,run):
     if (lock["earliest_exit_request_utc_ms"]!=lock["source_end_utc_ms"]+MIN_WAIT_MS
         or lock["latest_exit_complete_utc_ms"]!=lock["source_end_utc_ms"]+MAX_WAIT_MS):
         raise ValueError("Changed forward outcome rule")
+    # Independent replay of the exact immutable original WS text and
+    # preregistered deterministic selection; detect edited directions or
+    # entry prices even if someone recomputed the local lock's SHA-256.
+    calculated=freeze(source,expected_symbol.split("-USDT-SWAP")[0].lower(),
+                      run,lock["freeze_created_utc_ms"])
+    if calculated!=lock:
+        raise ValueError("Frozen entry/direction does not match audited raw WS source")
     return lock
 
 
