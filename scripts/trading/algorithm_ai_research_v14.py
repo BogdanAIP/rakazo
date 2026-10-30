@@ -19,7 +19,7 @@ from algorithm_multiday_registry_v12 import (
     canonical, sha256, strictly_decode, study_plan, read_entries, GENESIS
 )
 from algorithm_ws_buckets_v8 import build_buckets
-from algorithm_manual_runner_v13 import foreground_lock
+from algorithm_manual_runner_v13 import foreground_lock, setup as runner_setup
 
 SCHEMA="algorithm_ai_hypothesis_v14"
 LEDGER="algorithm_ai_hypothesis_ledger_v14"
@@ -170,6 +170,7 @@ def propose(study,proposal_file,*,now=None):
     if p["created_utc_ms"]>now or now-p["created_utc_ms"]>7*86_400_000:
         raise ValueError("Proposal timestamp is invalid/stale")
     setup(study)
+    runner_setup(study)
     with foreground_lock(study):
         prior=registered(study)
         if len(prior)>=MAX_PROPOSALS:
