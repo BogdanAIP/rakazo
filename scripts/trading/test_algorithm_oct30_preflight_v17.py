@@ -25,13 +25,15 @@ class PreflightTests(unittest.TestCase):
     def test_two_preregistered_hypotheses_one_source_not_two_independent(self):
         with tempfile.TemporaryDirectory() as td:
             src=Path(td)/"ws-v17-oct30-btc-01";src.mkdir()
+            p1=candidate();p1["id"]=CANDIDATES[0]
+            p2=impact_proposal();p2["id"]=CANDIDATES[1]
             h1={"proposal_sha256":"a"*64,"entry_sha256":"b"*64,
                 "registered_utc_ms":T-3600000}
             h2={"proposal_sha256":"c"*64,"entry_sha256":"d"*64,
                 "registered_utc_ms":T-3600000}
             with patch("algorithm_oct30_preflight_v17.build_buckets",return_value=source()):
                 with patch("algorithm_oct30_preflight_v17.registered",
-                           return_value=[(h1,candidate()),(h2,impact_proposal())]):
+                           return_value=[(h1,p1),(h2,p2)]):
                     out=run(src,td,"BTC-USDT-SWAP")
         self.assertEqual(out["schema"],SCHEMA)
         self.assertEqual(len(out["candidate_checks"]),2)
@@ -51,7 +53,7 @@ class PreflightTests(unittest.TestCase):
                 "registered_utc_ms":T-10000}
             with patch("algorithm_oct30_preflight_v17.build_buckets",return_value=source()):
                 with patch("algorithm_oct30_preflight_v17.registered",
-                           return_value=[(h1,candidate()),(h2,impact_proposal())]):
+                           return_value=[(h1,p1),(h2,p2)]):
                     with self.assertRaises(ValueError):
                         run(src,td,"BTC-USDT-SWAP")
                 late=source()
