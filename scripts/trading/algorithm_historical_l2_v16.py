@@ -91,6 +91,10 @@ def unpack_event(raw):
         raise ValueError("Incomplete book sequence identifier pair")
     if seq is not None and (type(seq) is not int or type(prev) is not int):
         raise ValueError("Invalid book sequence integers")
+    instrument=e.get("instId",e.get("symbol"))
+    if instrument is not None and (not isinstance(instrument,str) or
+                                   not SYMBOL_PATTERN.fullmatch(instrument)):
+        raise ValueError("Invalid instrument identifier inside archive")
     sides={}
     if action=="snapshot" and not all(x in e for x in ("bids","asks")):
         raise ValueError("Snapshot must include bid and ask lists")
@@ -113,16 +117,18 @@ def unpack_event(raw):
     if action=="update" and not sides["bids"] and not sides["asks"]:
         # Empty keepalive cannot prove an independently recent book.
         raise ValueError("Empty non-snapshot book event")
-    return ts,action,seq,prev,sides
+    return ts,action,seq,prev,sides,instrument
 
 
-def replay_tar_gz(path,target_ms):
+def replay_tar_gz(path,target_ms,*,expected_symbol=None):
     """One bounded tar.gz NDJSON member. First snapshot before target required.
 
     Returns as-of bid/ask <= target, with a following event > target proving
     coverage across the targeted time. Does not infer any actual fills.
     """
     target_ms=millis(target_ms)
+    if expected_symbol is not None and not SYMBOL_PATTERN.fullmatch(expected_symbol):
+        raise ValueError("Invalid expected instrument")
     path=Path(path)
     if not path.is_file() or not 0<path.stat().st_size<=MAX_ARCHIVE_FILE_BYTES:
         raise ValueError("Archive missing, empty or outside resource cap")
@@ -136,6 +142,7 @@ def replay_tar_gz(path,target_ms):
     count=0
     accepted=0
     members=0
+    instrument_seen=False
     with tarfile.open(path,"r|gz") as tf:
         for member in tf:
             if not member.isfile() or member.issym() or member.islnk():
@@ -159,7 +166,11 @@ def replay_tar_gz(path,target_ms):
                 count+=1
                 if count>MAX_EVENTS:
                     raise ValueError("Archive requires more than bounded event budget")
-                ts,action,seq,prev,sides=unpack_event(line)
+                ts,action,seq,prev,sides,inst=unpack_event(line)
+                if inst is not None:
+                    if expected_symbol is not None and inst!=expected_symbol:
+                        raise ValueError("Archive instrument differs from frozen source")
+                    instrument_seen=True
                 if last_ts is not None and ts<last_ts:
                     raise ValueError("Nonmonotonic exchange event timestamps")
                 last_ts=ts
@@ -218,6 +229,7 @@ def replay_tar_gz(path,target_ms):
         "source_events_applied_since_full_snapshot":accepted,
         "sequence_counters_present":saw_seq,
         "sequence_integrity_checked_if_available":saw_seq is True,
+        "archive_instrument_present_and_matching":instrument_seen,
         "archive_format_real_sample_confirmed":False,
         "is_actual_order_fill":False,
     }
@@ -322,7 +334,7 @@ def label_provisional(study,candidate,day,symbol,archive,origin_metadata):
         or parsed is None or parsed.scheme!="https"
         or not parsed.netloc or parsed.username or parsed.password):
         raise ValueError("Untrusted, mismatched or pre-outcome archive declaration")
-    archive_book=replay_tar_gz(archive,target)
+    archive_book=replay_tar_gz(archive,target,expected_symbol=symbol)
     exit_bid=decimal(archive_book["best_bid"],positive=True)
     exit_ask=decimal(archive_book["best_ask"],positive=True)
     if exit_bid>=exit_ask:
@@ -346,6 +358,8 @@ def label_provisional(study,candidate,day,symbol,archive,origin_metadata):
         "hypothetical_quote_crossing_math":arithmetic,
         "provenance_status":"USER_SUPPLIED_UNAUTHENTICATED_OFFLINE_ARCHIVE",
         "is_prospective_authenticated_test":False,
+        "exchange_archive_vs_local_capture_clock_skew_verified":False,
+        "five_minute_horizon_is_approximate_due_to_clock_domains":True,
         "is_tradeable_realized_pnl":False,
         "counts_toward_validated_alpha":False,
         "risk_of_missing_book_updates_not_eliminated":
