@@ -69,7 +69,8 @@ def audit(study):
         "can_reach_required_qualified_event_count_with_this_plan":
             total_slots>=MIN_EVENTS_FOR_DISCUSSION,
         "repeated_predictions_per_slot_are_independent_events":False,
-        "qualified_observation_count":0,
+        "qualified_observation_count":None,
+        "qualifying_signal_count_not_yet_independently_audited":True,
         "verified_source_receipts_so_far":len(distinct),
         "unverified_future_labels_so_far":current["future_outcome_labels_verified"],
         "unverified_future_labels_must_not_be_scored":True,
