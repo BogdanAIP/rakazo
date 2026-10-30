@@ -66,6 +66,8 @@ def tail_buckets(source,symbol):
     acknowledged={"book":False,"trade":False}
     snap=False
     seq=None
+    pre_tail_exchange_time_fills_excluded=0
+    post_tail_exchange_time_fills_excluded=0
     for line in (folder/"messages.jsonl").read_bytes().splitlines():
         e=strict_load(line)
         src=e["source"];ms=e["received_complete_utc_ms"]
@@ -116,6 +118,12 @@ def tail_buckets(source,symbol):
                 size=dec(tr["sz"],positive=True)
                 rows[b][tr["side"]+"_taker_contracts"]+=size
                 rows[b]["fill_count"]+=1
+            elif exchange_ms<tail_start:
+                # Receipt is inside tail but execution happened in warm-up.
+                # Do NOT count stale delayed trade as a tail prediction input.
+                pre_tail_exchange_time_fills_excluded+=1
+            else:
+                post_tail_exchange_time_fills_excluded+=1
     if not snap or not all(acknowledged.values()):
         raise ValueError("No initial book and subscription ACK")
     for row in rows:
@@ -124,9 +132,15 @@ def tail_buckets(source,symbol):
         for key,val in tuple(row.items()):
             if isinstance(val,Decimal):
                 row[key]=str(val)
-    if sum(r["status"]=="OBSERVED_BOTH" for r in rows)!=audit[
-        "predeclared_overlapping_eight_second_windows"][4]["joint_seconds"]:
-        raise ValueError("Fixed trailing-window reconstruction disagrees with independent 12s audit")
+    strict_joint=sum(r["status"]=="OBSERVED_BOTH" for r in rows)
+    receipt_only_joint=audit["predeclared_overlapping_eight_second_windows"][4]["joint_seconds"]
+    # The 12s audit accepts all trade exchange timestamps inside the
+    # ORIGINAL twelve seconds. The trailing 8s rule additionally excludes
+    # trades originating during the warm-up but arriving later. It can only
+    # decrease coverage; this difference is an expected clock-domain audit,
+    # never a reason to weaken the strict source quality gate.
+    if strict_joint>receipt_only_joint:
+        raise ValueError("Tail replay reports more complete bins than the independent 12s audit")
     return {
         "schema":"algorithm_one_fixed_tail_second_bins_v19",
         "symbol":symbol,
@@ -139,7 +153,11 @@ def tail_buckets(source,symbol):
         "original_capture_duration_ms":end-start,
         "fixed_tail_offset_seconds":4,
         "one_second_bins":rows,
-        "bins_with_both_streams":sum(r["status"]=="OBSERVED_BOTH" for r in rows),
+        "bins_with_both_streams":strict_joint,
+        "independent_12s_auditor_receipt_only_tail_joint_seconds":receipt_only_joint,
+        "delayed_pre_tail_exchange_time_fills_excluded":pre_tail_exchange_time_fills_excluded,
+        "post_tail_exchange_time_fills_excluded":post_tail_exchange_time_fills_excluded,
+        "strict_tail_exchange_time_gate_applied":True,
         "future_outcomes_accessed":False,
         "can_trade":False,
     }
@@ -174,6 +192,8 @@ def evaluate(source,study,symbol):
         "fixed_eight_second_decision_start_utc_ms":data["window_start_utc_ms"],
         "fixed_eight_second_feature_end_utc_ms":data["feature_window_end_utc_ms"],
         "joint_tail_seconds":data["bins_with_both_streams"],
+        "independent_12s_auditor_receipt_only_tail_joint_seconds":data["independent_12s_auditor_receipt_only_tail_joint_seconds"],
+        "delayed_pre_tail_exchange_time_fills_excluded":data["delayed_pre_tail_exchange_time_fills_excluded"],
         "candidate_checks":scored,
         "eligible_candidate_count":sum(x["source_only_result"]["eligible"] for x in scored),
         "candidate_checks_on_same_source_are_not_independent":True,
@@ -199,6 +219,8 @@ def main():
     print(json.dumps({
         "symbol":result["symbol"],
         "joint_tail_seconds":result["joint_tail_seconds"],
+        "receipt_only_joint_seconds":result["independent_12s_auditor_receipt_only_tail_joint_seconds"],
+        "excluded_delayed_pre_tail_fills":result["delayed_pre_tail_exchange_time_fills_excluded"],
         "source_manifest_sha256":result["original_capture_manifest_sha256"],
         "candidate_checks":[{
             "candidate_id":x["id"],
