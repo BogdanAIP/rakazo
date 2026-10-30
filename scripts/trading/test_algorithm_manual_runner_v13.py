@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from algorithm_manual_runner_v13 import (
     catalog,catalog_bytes,setup,status,manual_run,verify_sessions,
-    source_path,SESSION_SCHEMA,MAX_CAPTURES_PER_LAUNCH
+    source_path,foreground_lock,SESSION_SCHEMA,MAX_CAPTURES_PER_LAUNCH
 )
 from algorithm_multiday_registry_v12 import (
     EXPECTED_UNIVERSE_SHA,initialize,read_entries
@@ -153,6 +153,16 @@ class ManualRunnerTests(unittest.TestCase):
             p.write_text(json.dumps(x))
             with self.assertRaises(ValueError):
                 status(study,OCT30)
+
+    def test_concurrent_foreground_run_refuses_second_session(self):
+        with tempfile.TemporaryDirectory() as td:
+            study=init(td)
+            setup(study)
+            with foreground_lock(study):
+                with self.assertRaises(RuntimeError):
+                    manual_run(study,max_captures=0,now_fn=lambda:OCT30)
+            result=manual_run(study,max_captures=0,now_fn=lambda:OCT30)
+            self.assertEqual(result["source_attempt_count"],0)
 
     def test_cannot_force_unbounded_captures(self):
         with tempfile.TemporaryDirectory() as td:
