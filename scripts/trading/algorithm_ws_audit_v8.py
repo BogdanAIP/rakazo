@@ -162,7 +162,11 @@ def verify_and_audit(folder):
             # OKX can push trades before the subscribe ACK. Preserve them
             # in raw evidence, but never count them in the later synchronized
             # window. Data after window start without ACK remains invalid.
-            if ms<start:
+            # The WS trade feed can deliver data before its ACK in the
+            # *same millisecond* as the local sample start. The source ordinal
+            # proves it precedes ACK, but millisecond clocks cannot establish
+            # within-ms start ordering. Exclude, do not treat as source failure.
+            if ms<=start:
                 continue
             rejected="UNACKNOWLEDGED_SOURCE"
             break
