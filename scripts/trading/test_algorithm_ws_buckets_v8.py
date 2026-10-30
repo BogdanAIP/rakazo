@@ -21,6 +21,8 @@ class TimeBinsTests(unittest.TestCase):
         self.assertEqual(d["one_second_bins"][0]["fill_count"],1)
         self.assertEqual(d["one_second_bins"][0]["buy_taker_contracts"],"2")
         self.assertEqual(d["one_second_bins"][1]["quote_readd_events"],1)
+        self.assertEqual(d["one_second_bins"][1]["book_bid_quote_readd_events"],1)
+        self.assertEqual(d["one_second_bins"][1]["book_ask_quote_readd_events"],0)
         self.assertEqual(d["one_second_bins"][2]["status"],"ABSTAIN_INCOMPLETE_SECOND")
         self.assertTrue(d["quote_readd_is_proxy_not_proven_absorption"])
         self.assertTrue(d["trade_stream_gapless_not_certified"])
