@@ -10,7 +10,7 @@ from unittest.mock import patch
 from algorithm_multiday_registry_v12 import (
     FIRST_DAY, EXPECTED_UNIVERSE_SHA, HEX64, make_plan,check_plan,
     initialize,study_plan,assigned,register,read_entries,make_report,
-    seal_model,source_folder,utc_day,receipt_fingerprint,save_exclusive,
+    seal_model,utc_day,receipt_fingerprint,save_exclusive,
 )
 from algorithm_ws_capture_v8 import save_capture
 from test_algorithm_ws_audit_v8 import fixture
