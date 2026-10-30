@@ -157,8 +157,8 @@ def evaluate(source,study,symbol):
         if header["registered_utc_ms"]>=start:
             raise ValueError("Hindsight hypothesis, proposal not committed before new source")
         outcome=source_only_signal(data,p)
-        if outcome["future_quote_labels_accessed"] is not False or
-            outcome["can_trade"] is not False:
+        if (outcome["future_quote_labels_accessed"] is not False or
+            outcome["can_trade"] is not False):
             raise ValueError("Invalid nontrading hypothesis result")
         scored.append({"id":name,"proposal_sha256":header["proposal_sha256"],
                        "ledger_sha256":header["entry_sha256"],
