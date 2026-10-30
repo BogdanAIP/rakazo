@@ -105,6 +105,17 @@ class HistoricalL2ReplayTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     replay_tar_gz(a,T)
 
+    def test_embedded_wrong_instrument_rejected_not_blindly_trusted(self):
+        with tempfile.TemporaryDirectory() as td:
+            good=quote_events()
+            for row in good:
+                row["instId"]="BTC-USDT-SWAP"
+            f=archive_file(Path(td)/"wrong-market.tar.gz",good)
+            with self.assertRaises(ValueError):
+                replay_tar_gz(f,T,expected_symbol="ETH-USDT-SWAP")
+            same=replay_tar_gz(f,T,expected_symbol="BTC-USDT-SWAP")
+            self.assertTrue(same["archive_instrument_present_and_matching"])
+
     def test_without_sequence_still_provisional(self):
         with tempfile.TemporaryDirectory() as td:
             rows=[event(T-1000,"snapshot",bids=[["99","2"]],asks=[["100","2"]]),
