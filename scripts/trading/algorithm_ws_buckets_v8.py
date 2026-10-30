@@ -52,14 +52,27 @@ def build_buckets(folder):
     book={"bids":{},"asks":{}}
     last_book_ms=None
     prev_reduced={"bids":set(),"asks":set()}
+    stream_acked={"book":False,"trade":False}
     for line in (folder/"messages.jsonl").read_bytes().splitlines():
         x=strict_load(line)
         ms=x["received_complete_utc_ms"]
         source=x["source"]
         obj,kind=parse_event(source,manifest["symbol"],x["raw"])
-        if kind in ("ack","notice"):
+        if kind=="ack":
+            stream_acked[source]=True
             continue
-        in_range=start<=ms<start+N*STEP
+        if kind=="notice":
+            continue
+        if not stream_acked[source]:
+            # A pre-ACK trade can have the SAME UTC millisecond as the
+            # synchronized start; its source ordinal proves it was earlier.
+            if ms<=start:
+                continue
+            raise ValueError("In-window frame before its subscription ACK")
+        # The exact within-millisecond start order is unknowable. Include
+        # the initial book snapshot for reconstruction, but not boundary
+        # data in the measured source-second or trade-flow totals.
+        in_range=start<ms<start+N*STEP
         b=(ms-start)//STEP if in_range else None
         if source=="book":
             data=obj["data"][0]
