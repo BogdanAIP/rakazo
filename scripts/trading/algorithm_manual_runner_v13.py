@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -49,6 +50,44 @@ COMBINERS={
     "coupled_sign":"sign(flow) * sign(quote_response)",
     "saturation_contrast":"sign(flow) * sign(quote_response) * abs(flow)/(1+abs(flow))",
 }
+
+
+@contextmanager
+def foreground_lock(study):
+    """OS-released lock: no two manual sessions on the same local study.
+
+    Windows msvcrt.locking and Unix flock release when the process exits,
+    including abnormal termination. The lock file is not a stale PID marker.
+    """
+    import os
+    path=Path(study)/"manual-runner-v13"/"foreground.lock"
+    with path.open("a+b") as fd:
+        fd.seek(0,2)
+        if fd.tell()==0:
+            fd.write(b"1")
+            fd.flush()
+        fd.seek(0)
+        if os.name=="nt":
+            import msvcrt
+            try:
+                msvcrt.locking(fd.fileno(),msvcrt.LK_NBLCK,1)
+            except OSError as exc:
+                raise RuntimeError("A manual research session is already active") from exc
+            try:
+                yield
+            finally:
+                fd.seek(0)
+                msvcrt.locking(fd.fileno(),msvcrt.LK_UNLCK,1)
+        else:
+            import fcntl
+            try:
+                fcntl.flock(fd.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+            except OSError as exc:
+                raise RuntimeError("A manual research session is already active") from exc
+            try:
+                yield
+            finally:
+                fcntl.flock(fd.fileno(),fcntl.LOCK_UN)
 
 
 def utc_now():
@@ -250,39 +289,43 @@ def manual_run(study,*,max_captures=1,now_fn=utc_now,capture_fn=None):
     """Finite foreground cycle; never call repeatedly without user action."""
     if type(max_captures) is not int or not 0<=max_captures<=MAX_CAPTURES_PER_LAUNCH:
         raise ValueError("max_captures must be 0..5 (default 1)")
-    before=status(study,now_fn())
-    plan,plan_sha,cat_sha=setup(study)
-    start=now_fn()
-    initial_day=utc_day(start)
-    observations=[]
-    if capture_fn is None:
-        def capture_fn(symbol):
-            return asyncio.run(capture_one(symbol))
-    for _ in range(max_captures):
-        # Refuse to cross into a different UTC day mid-session.
-        current=status(study,now_fn())
-        if (current["utc_day"]!=initial_day or
-            current["manual_runner_status"]!="READY_MANUAL_SOURCE_CAPTURE_ONLY"):
-            break
-        symbol=current["next_assigned_symbol"]
-        observations.append(execute_one(study,initial_day,symbol,now_fn,capture_fn))
-    after=status(study,now_fn())
-    result={
-        "started_utc_ms":start,"finished_utc_ms":now_fn(),
-        "day_utc":initial_day,
-        "before":before["manual_runner_status"],
-        "after":after["manual_runner_status"],
-        "source_attempts":observations,
-        "source_attempt_count":len(observations),
-        "next_assigned_symbol":after["next_assigned_symbol"],
-        "future_labels_inspected":False,
-        "candidate_catalog_only_no_model_selected":True,
-        "proposed_hypotheses":after["candidate_proposals_not_evaluated"],
-        "can_trade":False,"can_start_paper":False,
-        "forward_labels_scored":False,
-    }
-    digest=append_session(study,plan_sha,cat_sha,result)
-    return {"session_sha256":digest,**result}
+    # Setup is safe/idempotent; the session body and journal append are
+    # protected by a cross-process OS lock, automatically released on exit.
+    setup(study)
+    with foreground_lock(study):
+        before=status(study,now_fn())
+        plan,plan_sha,cat_sha=setup(study)
+        start=now_fn()
+        initial_day=utc_day(start)
+        observations=[]
+        if capture_fn is None:
+            def capture_fn(symbol):
+                return asyncio.run(capture_one(symbol))
+        for _ in range(max_captures):
+            # Refuse to cross into a different UTC day mid-session.
+            current=status(study,now_fn())
+            if (current["utc_day"]!=initial_day or
+                current["manual_runner_status"]!="READY_MANUAL_SOURCE_CAPTURE_ONLY"):
+                break
+            symbol=current["next_assigned_symbol"]
+            observations.append(execute_one(study,initial_day,symbol,now_fn,capture_fn))
+        after=status(study,now_fn())
+        result={
+            "started_utc_ms":start,"finished_utc_ms":now_fn(),
+            "day_utc":initial_day,
+            "before":before["manual_runner_status"],
+            "after":after["manual_runner_status"],
+            "source_attempts":observations,
+            "source_attempt_count":len(observations),
+            "next_assigned_symbol":after["next_assigned_symbol"],
+            "future_labels_inspected":False,
+            "candidate_catalog_only_no_model_selected":True,
+            "proposed_hypotheses":after["candidate_proposals_not_evaluated"],
+            "can_trade":False,"can_start_paper":False,
+            "forward_labels_scored":False,
+        }
+        digest=append_session(study,plan_sha,cat_sha,result)
+        return {"session_sha256":digest,**result}
 
 
 def main():
