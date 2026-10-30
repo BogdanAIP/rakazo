@@ -24,7 +24,7 @@ from algorithm_manual_runner_v13 import foreground_lock
 SCHEMA="algorithm_ai_hypothesis_v14"
 LEDGER="algorithm_ai_hypothesis_ledger_v14"
 SIGNAL_SCHEMA="algorithm_ai_source_signal_v14"
-ALLOWED_RULES={"flow_flip_with_midprice_inertia_v1"}
+ALLOWED_RULES={"flow_sign_flip_with_midprice_inertia_v1"}
 PROPOSAL_ID=re.compile(r"[a-z][a-z0-9_-]{7,47}\Z")
 HEX64=re.compile(r"[a-f0-9]{64}\Z")
 REQUIRED_BASELINES={"cash","flow_only","price_only"}
