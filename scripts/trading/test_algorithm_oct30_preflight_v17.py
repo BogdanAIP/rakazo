@@ -47,6 +47,8 @@ class PreflightTests(unittest.TestCase):
     def test_hindsight_candidate_and_wrong_day_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             src=Path(td)/"ws-v17-oct30-btc-01";src.mkdir()
+            p1=candidate();p1["id"]=CANDIDATES[0]
+            p2=impact_proposal();p2["id"]=CANDIDATES[1]
             h1={"proposal_sha256":"a"*64,"entry_sha256":"b"*64,
                 "registered_utc_ms":T+1}
             h2={"proposal_sha256":"c"*64,"entry_sha256":"d"*64,
