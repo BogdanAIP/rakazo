@@ -24,7 +24,8 @@ from algorithm_manual_runner_v13 import foreground_lock, setup as runner_setup
 SCHEMA="algorithm_ai_hypothesis_v14"
 LEDGER="algorithm_ai_hypothesis_ledger_v14"
 SIGNAL_SCHEMA="algorithm_ai_source_signal_v14"
-ALLOWED_RULES={"flow_sign_flip_with_midprice_inertia_v1"}
+ALLOWED_RULES={"flow_sign_flip_with_midprice_inertia_v1",
+               "impact_per_contract_decay_v1"}
 PROPOSAL_ID=re.compile(r"[a-z][a-z0-9_-]{7,47}\Z")
 HEX64=re.compile(r"[a-f0-9]{64}\Z")
 REQUIRED_BASELINES={"cash","flow_only","price_only"}
@@ -224,6 +225,10 @@ def midpoint(row):
 def source_only_signal(source,proposal):
     """Interpret precisely one audited nonexecuting research rule on 8s data."""
     check_proposal(proposal)
+    if proposal["rule_id"]=="impact_per_contract_decay_v1":
+        # Exact imported allowlisted pure function; never eval AI-authored text.
+        from algorithm_impact_decay_v15 import impact_decay_signal
+        return impact_decay_signal(source,proposal)
     if proposal["rule_id"]!="flow_sign_flip_with_midprice_inertia_v1":
         raise ValueError("Rule not implemented")
     rows=source["one_second_bins"]
