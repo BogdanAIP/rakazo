@@ -159,8 +159,11 @@ def verify_and_audit(folder):
         if kind=="notice":
             continue
         if not ack[stream]:
-            # Exchange may push updates before subscribing ACK? Record as bad
-            # rather than pretending they were part of a verified window.
+            # OKX can push trades before the subscribe ACK. Preserve them
+            # in raw evidence, but never count them in the later synchronized
+            # window. Data after window start without ACK remains invalid.
+            if ms<start:
+                continue
             rejected="UNACKNOWLEDGED_SOURCE"
             break
         if stream=="book":
