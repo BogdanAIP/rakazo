@@ -138,6 +138,18 @@ class WebSocketAuditTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 verify_and_audit(folder)
 
+    def test_incremental_batch_may_exceed_snapshot_depth(self):
+        from algorithm_ws_audit_v8 import level_update
+        book={}
+        payload=[[str(2000-i),"1","0","1"] for i in range(448)]
+        added,removed,_,_=level_update(book,payload,"bids",snapshot=False)
+        self.assertEqual(len(book),448)
+        self.assertEqual(added,448)
+        self.assertEqual(removed,0)
+        with self.assertRaises(ValueError):
+            level_update({},[[str(3000-i),"1","0","1"] for i in range(1001)],
+                         "bids",snapshot=False)
+
     def test_large_or_repeated_keys_json_blocked(self):
         with self.assertRaises(ValueError):
             strict_load(b'{"a":1,"a":2}')
