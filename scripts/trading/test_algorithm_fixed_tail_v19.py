@@ -32,7 +32,7 @@ def trade_event(identifier,ts,side,qty):
     },separators=(",",":"))
 
 
-def create_source(folder,*,flow="flip",tamper=False):
+def create_source(folder,*,flow="flip",delayed_only_first_tail=False):
     frames=[
         ("book",T-400,json.dumps({"event":"subscribe",
             "arg":{"channel":"books","instId":SYMBOL}})),
@@ -52,6 +52,13 @@ def create_source(folder,*,flow="flip",tamper=False):
         frames.append(("book",T+i*1000+100,book_event(
             "update",i+2,i+1,T+i*1000+90,
             [[f"{bid:.4f}","1","0","1"]],[])))
+        if delayed_only_first_tail and i==4:
+            # The WebSocket payload arrives in tail second 0, but this fill
+            # was executed in the warm-up: independent original 12s
+            # receipt-only coverage counts it, strict tail flow must not.
+            frames.append(("trade",T+4000+250,
+                           trade_event(1000+i*2,T+3950,"sell",50)))
+            continue
         for sub in range(2):
             if i<4: # Intentional huge pre-window seller flow.
                 side="sell"
@@ -151,6 +158,17 @@ class FixedTail19Tests(unittest.TestCase):
             self.assertFalse(out["candidate_checks"][0]["source_only_result"]["eligible"])
             self.assertTrue(out["candidate_checks"][1]["source_only_result"]["eligible"])
             self.assertEqual(out["candidate_checks"][1]["source_only_result"]["hypothetical_direction"],-1)
+
+    def test_delayed_warmup_fill_never_enters_tail_flow(self):
+        with tempfile.TemporaryDirectory() as td:
+            folder=Path(td)/"ws-v19-oct30-btc-01"
+            create_source(folder,flow="flip",delayed_only_first_tail=True)
+            data=tail_buckets(folder,SYMBOL)
+            self.assertEqual(data["independent_12s_auditor_receipt_only_tail_joint_seconds"],8)
+            self.assertEqual(data["bins_with_both_streams"],7)
+            self.assertEqual(data["delayed_pre_tail_exchange_time_fills_excluded"],1)
+            self.assertEqual(data["one_second_bins"][0]["sell_taker_contracts"],"0")
+            self.assertEqual(data["one_second_bins"][0]["fill_count"],0)
 
     def test_hindsight_proposal_and_bad_symbol_fail_closed(self):
         with tempfile.TemporaryDirectory() as td:
