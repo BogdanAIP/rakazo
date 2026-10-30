@@ -104,6 +104,7 @@ def make_plan(members,universe_sha,created_ms):
 
 def check_plan(plan):
     if (plan.get("schema")!=SCHEMA
+        or plan.get("universe_sha256")!=EXPECTED_UNIVERSE_SHA
         or plan.get("source_per_market_day")!=1
         or plan.get("can_trade") is not False
         or plan.get("can_start_paper") is not False
@@ -286,10 +287,15 @@ def make_report(study,now=None):
     model_lock_approved=False
     if seal.exists():
         s=load_json(seal)
+        spec=Path(study)/"model-spec.json"
         if (s.get("schema")!=SEAL_SCHEMA or
             s.get("plan_sha256")!=psha or
-            s.get("can_trade") is not False):
-            raise ValueError("Invalid model holdout seal")
+            s.get("can_trade") is not False or
+            type(s.get("frozen_at_utc_ms")) is not int or
+            utc_day(s["frozen_at_utc_ms"])>=plan["holdout_first_day_utc"] or
+            not spec.is_file() or
+            sha256(spec.read_bytes())!=s.get("spec_sha256")):
+            raise ValueError("Invalid or modified pre-holdout model seal/spec")
         model_lock_approved=True
     return {"schema":REPORT_SCHEMA,"study_plan_sha256":psha,
             "asof_utc_ms":now,"registered_source_receipts":len(entries),
@@ -298,7 +304,7 @@ def make_report(study,now=None):
             "source_unregistered_count":sum(d["not_yet_registered"] for d in days),
             "future_outcome_labels_verified":0,
             "holdout_sealed_model":model_lock_approved,
-            "holdout_predeclared_and_unopened":not model_lock_approved,
+            "holdout_future_outcomes_not_evaluated":True,
             "calendar":days,
             "prior_v6_to_v11_evidence_included":False,
             "independent_alpha_validated":False,
@@ -333,6 +339,10 @@ def seal_model(study,spec_file,now=None):
           "evidence_authenticity_independently_proven":False,
           "actual_execution_verified":False,
           "can_trade":False}
+    # Retain the original, exact model specification bytes in the study.
+    # The seal verifies them on every later report, not only at creation.
+    with (Path(study)/"model-spec.json").open("xb") as file:
+        file.write(raw)
     save_exclusive(Path(study)/"model-seal.json",seal)
     return sha256((Path(study)/"model-seal.json").read_bytes())
 
