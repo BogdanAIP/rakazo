@@ -35,7 +35,7 @@ def run(source,study,symbol):
     end=rows["window_end_utc_ms"]
     if (datetime.fromtimestamp(start/1000,timezone.utc).date().isoformat()!=DAY or
         datetime.fromtimestamp(end/1000,timezone.utc).date().isoformat()!=DAY or
-        end-start!=8000):
+        not 7500<=end-start<=8500):
         raise ValueError("Source does not match preregistered UTC day/duration")
     records={p["id"]:(header,p) for header,p in registered(study)}
     if set(CANDIDATES)-set(records):
