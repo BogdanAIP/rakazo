@@ -281,9 +281,14 @@ def recompute_eligibility(panel: Panel, usd: float, days: int = 30) -> dict:
         for i, t in enumerate(panel.times):
             if close[i] == close[i]:
                 daily[t // MS_PER_DAY - day0] += vol[i]
+        # An instrument listed midway through the panel cannot satisfy a
+        # full 30-day point-in-time observation history merely because a
+        # global panel has already accumulated 30 days.
+        first_traded = next((t // MS_PER_DAY - day0 for i, t in enumerate(panel.times)
+                             if close[i] == close[i]), n_days)
         flags = {}
         for d in range(n_days):
-            if d < days:
+            if d < days or d < first_traded + days:
                 flags[d] = 0
                 continue
             window = sorted(daily[d - days:d])
