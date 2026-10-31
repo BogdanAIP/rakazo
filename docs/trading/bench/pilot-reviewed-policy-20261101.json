@@ -1,0 +1,85 @@
+{
+  "schema": "reviewed_builder_pilot_v1",
+  "mode": "DATA_QUALITY_ONLY",
+  "run": {
+    "status": "COMPLETE",
+    "head": "32c62b74270803af33f0268fd7d03a1525226a65",
+    "timeout_seconds": 900,
+    "stages": [
+      {
+        "name": "build",
+        "exit_code": 0,
+        "stderr_sha": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "audit",
+        "exit_code": 0,
+        "stderr_sha": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "stage": "audit",
+    "child_pid": 20276
+  },
+  "builder_audit": {
+    "eligible_rows": 3504,
+    "first_panel_utc": "2023-10-01",
+    "first_possible_eligible_utc": "2023-10-31",
+    "funding_clock": {
+      "maximum_offset_ms": 39000,
+      "outside_window_events": 0,
+      "snapped_events": 13417
+    },
+    "funding_events_observed": 13592,
+    "funding_interval_coverage_certified": false,
+    "funding_unknown_rows": 0,
+    "historical_oi": "UNKNOWN: CSV oi left empty",
+    "identical_duplicate_rows_collapsed": 1496,
+    "incomplete_hour_caveat": "Source gaps are counted, not classified as zero trades; investigate before freezing if material",
+    "incomplete_source_hours": 10,
+    "last_panel_utc": "2023-11-01",
+    "minute_confirm_flags": {
+      "0": 6526501
+    },
+    "missing_archives": 0,
+    "missing_source_minutes": 479,
+    "panel_bytes": 8512487,
+    "panel_rows": 105455,
+    "panel_sha256": "ec58ed6ee9845acfdbb21e721031cdd61f4f5d5572a8226284f84a07f839df6b",
+    "quote_volume_unit": "USDT vol_quote",
+    "requested_main_window_utc": "2023-11-01",
+    "source_archive_days": 33,
+    "source_hourly_rows": 105455,
+    "trailing_liquidity_rule": "median of 30 complete earlier UTC calendar days; zeros for absent days since first archive observation"
+  },
+  "bench_audit": {
+    "bench": "bench-v40.4",
+    "panel_sha256": "ec58ed6ee9845acfdbb21e721031cdd61f4f5d5572a8226284f84a07f839df6b",
+    "bar_ms": 3600000,
+    "bar_ms_matches_expected": true,
+    "bars": 768,
+    "start": "2023-10-01T00:00:00Z",
+    "end_bar_open": "2023-11-01T23:00:00Z",
+    "symbols": 142,
+    "rows": 105455,
+    "bars_present_min": 30,
+    "bars_present_max": 768,
+    "fully_empty_bars": 0,
+    "eligible_rows": 3504,
+    "funding_unknown_row_share": 0.0,
+    "symbols_without_any_settlement": [],
+    "symbols_with_oi": 0,
+    "eligibility_check": {
+      "rule": "median daily quote volume over 30 earlier UTC days >= 5e+06",
+      "assumes_volume_is_quote_currency": true,
+      "mismatched_rows": 0,
+      "mismatched_symbol_days": 0
+    }
+  },
+  "focused_tests_passed": 11,
+  "focused_test_seconds": 1.706,
+  "real_hypotheses_evaluated": 0,
+  "panel_frozen": false,
+  "funding_coverage_certified": false,
+  "known_day_heuristic_still_requires_historical_interval_provenance": true,
+  "first_failures_preserved": true
+}
