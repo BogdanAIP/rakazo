@@ -62,16 +62,19 @@ def membername(day):
 
 
 def day_ms(day):
-    day_meta(day) # Never permit an unregistered future holdout date.
+    # Pure time parser also needs the v23 DEVELOPMENT baseline 2026-09-02.
+    # Only the actual data-accessing target and anchor APIs are allowlisted.
     return int(datetime.fromisoformat(day+"T00:00:00+00:00").timestamp()*1000)
 
 
 def shifted_anchors(day):
+    day_meta(day) # Holdout 2026-09-05 remains inaccessible.
     shift=day_ms(day)-day_ms("2026-09-02")
     return tuple(t+shift for t in v23.anchors())
 
 
 def shifted_targets(day):
+    day_meta(day) # Holdout 2026-09-05 remains inaccessible.
     shift=day_ms(day)-day_ms("2026-09-02")
     return tuple(t+shift for t in v23.targets())
 
