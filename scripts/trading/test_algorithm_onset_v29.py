@@ -75,11 +75,14 @@ class OnsetV29Tests(unittest.TestCase):
         trades,times,prices=self.sample_trade_series(t)
         recent=trades[-5:]
         result=detector_at(t,recent,[x[0] for x in recent],prices)
-        self.assertEqual(result["trigger_qualification"],"SOURCE_MISSING")
-        # Valid source chronology but no volume baseline -> abstain.
-        all_trades=[(t-360000,"buy",D(1))]+recent
+        self.assertEqual(result["trigger_qualification"],"BASELINE_ZERO_ABSTAIN")
+        # Valid source chronology but no volume in five-minute baseline.
+        all_trades=[(t-361000,"buy",D(1))]+recent
         result=detector_at(t,all_trades,[x[0] for x in all_trades],prices)
         self.assertEqual(result["trigger_qualification"],"BASELINE_ZERO_ABSTAIN")
+        # Actual missing completed minute candle is separately SOURCE_MISSING.
+        result=detector_at(t,all_trades,[x[0] for x in all_trades],{t-60000:D(100)})
+        self.assertEqual(result["trigger_qualification"],"SOURCE_MISSING")
 
     def test_first_passage_favorable_and_future_censoring(self):
         t=time_ms("2026-09-03",4,0)
