@@ -89,7 +89,8 @@ def audit(root, start, end, manifest_out, out):
                         "original_funding_events": len(events) - events_before_day})
     full_days = {p for p, hours in observed_hours.items() if len(hours) == 24 and start.isoformat() <= p[0] < end.isoformat()}
     manifest_out.parent.mkdir(parents=True, exist_ok=True)
-    manifest_out.open("x", encoding="utf-8").write(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+    with manifest_out.open("x", encoding="utf-8") as stream:
+        stream.write(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
     result = {
         "schema": "rakazo_bench_source_quality_v1", "mode": "DATA_QUALITY_ONLY",
         "archive_start": start.isoformat(), "archive_end": end.isoformat(),
@@ -110,7 +111,8 @@ def audit(root, start, end, manifest_out, out):
         "historical_oi": "UNKNOWN", "strategy_evaluations": 0, "freeze_approved": False
     }
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.open("x", encoding="utf-8").write(json.dumps(result, sort_keys=True, indent=2) + "\n")
+    with out.open("x", encoding="utf-8") as stream:
+        stream.write(json.dumps(result, sort_keys=True, indent=2) + "\n")
     return result
 
 
