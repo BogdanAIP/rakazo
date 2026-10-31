@@ -62,6 +62,7 @@ def membername(day):
 
 
 def day_ms(day):
+    day_meta(day) # Never permit an unregistered future holdout date.
     return int(datetime.fromisoformat(day+"T00:00:00+00:00").timestamp()*1000)
 
 
