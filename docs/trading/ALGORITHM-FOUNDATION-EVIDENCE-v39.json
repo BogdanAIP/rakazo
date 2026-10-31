@@ -1,0 +1,1082 @@
+{
+  "completed_stages": [
+    {
+      "sha": "64c2ecdef0959c6fd854dbe769424ed4038b57ef12ef2231af089ed5aeace8cc",
+      "stage": "acquire-2026-07-02"
+    },
+    {
+      "sha": "446722939394f94d82b9111bfc19177d370ff3e1d97c947da48c56cdb8a31ba4",
+      "stage": "unpack-NEAR-USDT-SWAP"
+    },
+    {
+      "sha": "f8540a2c7c1429d9109fd177c3ba1b456f853d61b5d8bfffe301ad9f0ff5d151",
+      "stage": "extract-NEAR-USDT-SWAP"
+    },
+    {
+      "sha": "f6d09d444f8491e3b6a2476ae9737a0a42f2a77563c9c856445f03641176072f",
+      "stage": "unpack-SOL-USDT-SWAP"
+    },
+    {
+      "sha": "b9335586b910fcbfdf56c6512fbe9b7cd0921184807171e00e02e3ced0f63543",
+      "stage": "extract-SOL-USDT-SWAP"
+    },
+    {
+      "sha": "283a65bfbcdb755cfcb32e613ad77471e862ac9e0fb8db103dc51eb57ea25529",
+      "stage": "evaluate-2026-07-02"
+    },
+    {
+      "sha": "db6bff25e8143a74684f9ec6641ac2fd35c20d8f63ca6e6da6c64f3bd51c6301",
+      "stage": "retire-NEAR-USDT-SWAP"
+    },
+    {
+      "sha": "e155d458c6d2087fee37bb9155f21ea2bd17ad7271066b199897c83d228f391c",
+      "stage": "retire-SOL-USDT-SWAP"
+    }
+  ],
+  "cumulative_available_decisions": 1211,
+  "cumulative_source_rows": 6588279,
+  "cumulative_summary": {
+    "cash": {
+      "alarms": 0,
+      "detected_early": 0,
+      "mean_quote_20bp": null,
+      "missed": 7,
+      "missing_quote_paths": 0,
+      "unmatched_early_alarms": 0
+    },
+    "liquidity-payoff-memory": {
+      "alarms": 0,
+      "detected_early": 0,
+      "mean_quote_20bp": null,
+      "missed": 7,
+      "missing_quote_paths": 0,
+      "unmatched_early_alarms": 0
+    },
+    "no-incremental-memory": {
+      "alarms": 0,
+      "detected_early": 0,
+      "mean_quote_20bp": null,
+      "missed": 7,
+      "missing_quote_paths": 0,
+      "unmatched_early_alarms": 0
+    },
+    "price-payoff-memory": {
+      "alarms": 0,
+      "detected_early": 0,
+      "mean_quote_20bp": null,
+      "missed": 7,
+      "missing_quote_paths": 0,
+      "unmatched_early_alarms": 0
+    },
+    "rank-flow": {
+      "alarms": 57,
+      "detected_early": 0,
+      "mean_quote_20bp": -20.93881023882616,
+      "missed": 7,
+      "missing_quote_paths": 0,
+      "unmatched_early_alarms": 57
+    },
+    "rank-liquidity": {
+      "alarms": 53,
+      "detected_early": 0,
+      "mean_quote_20bp": -21.543670054953182,
+      "missed": 7,
+      "missing_quote_paths": 0,
+      "unmatched_early_alarms": 53
+    }
+  },
+  "effective_algorithm_confirmed": false,
+  "executable_PnL": false,
+  "first_result_sha": "283a65bfbcdb755cfcb32e613ad77471e862ac9e0fb8db103dc51eb57ea25529",
+  "independent_validation": false,
+  "new_day_cases": [
+    {
+      "availability": {
+        "AVAILABLE": 211,
+        "PRICE_BAND_CROSSED": 42,
+        "RESET_OR_QUOTE_UNAVAILABLE": 31,
+        "TRADE_SPAN_UNAVAILABLE": 183
+      },
+      "available_decisions": 211,
+      "day": "2026-07-02",
+      "decisions": 467,
+      "episodes_before_liquidity_exclusions": 2,
+      "feature_sha": "f8540a2c7c1429d9109fd177c3ba1b456f853d61b5d8bfffe301ad9f0ff5d151",
+      "l2_sha": "d8a9a8ae41368fc7702c008cec817c3690ad92fc65157b85ef3de69d18fbda76",
+      "max_prior_day_blocks": {
+        "liquidity-payoff-memory": 1,
+        "no-incremental-memory": 1,
+        "price-payoff-memory": 1
+      },
+      "memory_reasons": {
+        "liquidity-payoff-memory:COLD_START": 117,
+        "liquidity-payoff-memory:NO_PROPOSAL": 94,
+        "no-incremental-memory:COLD_START": 117,
+        "no-incremental-memory:NO_PROPOSAL": 94,
+        "price-payoff-memory:COLD_START": 172,
+        "price-payoff-memory:NO_PROPOSAL": 39
+      },
+      "memory_state": {
+        "liquidity-payoff-memory": {
+          "fingerprint": "3d777e9005f2b5b3e749d376603e8ace81eac92676897a532714eca8ea132c81",
+          "missing": 0,
+          "resolved": 14
+        },
+        "no-incremental-memory": {
+          "fingerprint": "3d777e9005f2b5b3e749d376603e8ace81eac92676897a532714eca8ea132c81",
+          "missing": 0,
+          "resolved": 14
+        },
+        "price-payoff-memory": {
+          "fingerprint": "1543b9491095459f8d395a589fff1e443fae396829c46ad273347fc3fb22f488",
+          "missing": 0,
+          "resolved": 16
+        }
+      },
+      "programs": {
+        "cash": {
+          "adverse": 0,
+          "alarms": 0,
+          "censored": 0,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 0.0,
+          "mean_cost_proxy_bps": {
+            "10": null,
+            "20": null
+          },
+          "mean_quote_20bp": null,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 0,
+          "quote_outcomes": {},
+          "quote_positive": 0,
+          "sum_quote_20bp": 0,
+          "unmatched_early_alarms": 0,
+          "worst_quoted_counterexamples": []
+        },
+        "liquidity-payoff-memory": {
+          "adverse": 0,
+          "alarms": 0,
+          "censored": 0,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 0.0,
+          "mean_cost_proxy_bps": {
+            "10": null,
+            "20": null
+          },
+          "mean_quote_20bp": null,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 0,
+          "quote_outcomes": {},
+          "quote_positive": 0,
+          "sum_quote_20bp": 0,
+          "unmatched_early_alarms": 0,
+          "worst_quoted_counterexamples": []
+        },
+        "no-incremental-memory": {
+          "adverse": 0,
+          "alarms": 0,
+          "censored": 0,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 0.0,
+          "mean_cost_proxy_bps": {
+            "10": null,
+            "20": null
+          },
+          "mean_quote_20bp": null,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 0,
+          "quote_outcomes": {},
+          "quote_positive": 0,
+          "sum_quote_20bp": 0,
+          "unmatched_early_alarms": 0,
+          "worst_quoted_counterexamples": []
+        },
+        "price-payoff-memory": {
+          "adverse": 0,
+          "alarms": 0,
+          "censored": 0,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 0.0,
+          "mean_cost_proxy_bps": {
+            "10": null,
+            "20": null
+          },
+          "mean_quote_20bp": null,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 0,
+          "quote_outcomes": {},
+          "quote_positive": 0,
+          "sum_quote_20bp": 0,
+          "unmatched_early_alarms": 0,
+          "worst_quoted_counterexamples": []
+        },
+        "rank-flow": {
+          "adverse": 1,
+          "alarms": 12,
+          "censored": 11,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 431.92376475291763,
+          "mean_cost_proxy_bps": {
+            "10": -7.863478742776847,
+            "20": -17.86347874277685
+          },
+          "mean_quote_20bp": -24.408837499449216,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 8,
+          "quote_outcomes": {
+            "ADVERSE": 1,
+            "CENSORED": 11
+          },
+          "quote_positive": 4,
+          "sum_quote_20bp": -292.9060499933906,
+          "unmatched_early_alarms": 12,
+          "worst_quoted_counterexamples": [
+            {
+              "proxy_bp": -166.83011559233896,
+              "t": 1782972540000
+            },
+            {
+              "proxy_bp": -88.08091234656364,
+              "t": 1782962820000
+            },
+            {
+              "proxy_bp": -40.898649194592366,
+              "t": 1782978420000
+            }
+          ]
+        },
+        "rank-liquidity": {
+          "adverse": 1,
+          "alarms": 12,
+          "censored": 11,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 306.55622073835616,
+          "mean_cost_proxy_bps": {
+            "10": -2.2558687402685176,
+            "20": -12.255868740268518
+          },
+          "mean_quote_20bp": -17.92943110609602,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 6,
+          "quote_outcomes": {
+            "ADVERSE": 1,
+            "CENSORED": 11
+          },
+          "quote_positive": 6,
+          "sum_quote_20bp": -215.15317327315225,
+          "unmatched_early_alarms": 12,
+          "worst_quoted_counterexamples": [
+            {
+              "proxy_bp": -166.83011559233896,
+              "t": 1782972540000
+            },
+            {
+              "proxy_bp": -88.08091234656364,
+              "t": 1782962820000
+            },
+            {
+              "proxy_bp": -40.898649194592366,
+              "t": 1782978420000
+            }
+          ]
+        }
+      },
+      "sequence_ids_available": false,
+      "source_rows": 978991,
+      "source_sha": {
+        "BTC-USDT-SWAP": "fe3eca1f0a06d4f40f8d71368f872ee839730622f4ce435e7d33b3171b2d32a4",
+        "ETH-USDT-SWAP": "d719b3e3229cd272a25983c53579a1480da824ead9f70bb563863a72c34f9fdd",
+        "NEAR-USDT-SWAP": "9167d26044e233652092e945c8efa6eaf05b99b7c1c0d1c85dd8fd64d106b856",
+        "tape": "ef70e3489b14f1866445767138a3580c9dc609a099c8b2c6eacd977ab7bd6ec7"
+      },
+      "symbol": "NEAR-USDT-SWAP"
+    },
+    {
+      "availability": {
+        "AVAILABLE": 419,
+        "PRICE_BAND_CROSSED": 13,
+        "RESET_OR_QUOTE_UNAVAILABLE": 31,
+        "TRADE_SPAN_UNAVAILABLE": 4
+      },
+      "available_decisions": 419,
+      "day": "2026-07-02",
+      "decisions": 467,
+      "episodes_before_liquidity_exclusions": 2,
+      "feature_sha": "b9335586b910fcbfdf56c6512fbe9b7cd0921184807171e00e02e3ced0f63543",
+      "l2_sha": "0628faebe697a98cb4af40f6a6c27559fb371a9eb350b1c4fc9f6d684e43eb32",
+      "max_prior_day_blocks": {
+        "liquidity-payoff-memory": 1,
+        "no-incremental-memory": 1,
+        "price-payoff-memory": 1
+      },
+      "memory_reasons": {
+        "liquidity-payoff-memory:COLD_START": 203,
+        "liquidity-payoff-memory:NO_PROPOSAL": 216,
+        "no-incremental-memory:COLD_START": 203,
+        "no-incremental-memory:NO_PROPOSAL": 216,
+        "price-payoff-memory:COLD_START": 387,
+        "price-payoff-memory:NO_PROPOSAL": 32
+      },
+      "memory_state": {
+        "liquidity-payoff-memory": {
+          "fingerprint": "71ae5975ccb19ce6f18c9725f9f16a36ef582cb51f47e25ac2d74e587dbffeb9",
+          "missing": 0,
+          "resolved": 21
+        },
+        "no-incremental-memory": {
+          "fingerprint": "71ae5975ccb19ce6f18c9725f9f16a36ef582cb51f47e25ac2d74e587dbffeb9",
+          "missing": 0,
+          "resolved": 21
+        },
+        "price-payoff-memory": {
+          "fingerprint": "6e5903c185ab08647acad30c2aff35814d1d462d7d6d2e3213eebdbeead99970",
+          "missing": 0,
+          "resolved": 49
+        }
+      },
+      "programs": {
+        "cash": {
+          "adverse": 0,
+          "alarms": 0,
+          "censored": 0,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 0.0,
+          "mean_cost_proxy_bps": {
+            "10": null,
+            "20": null
+          },
+          "mean_quote_20bp": null,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 0,
+          "quote_outcomes": {},
+          "quote_positive": 0,
+          "sum_quote_20bp": 0,
+          "unmatched_early_alarms": 0,
+          "worst_quoted_counterexamples": []
+        },
+        "liquidity-payoff-memory": {
+          "adverse": 0,
+          "alarms": 0,
+          "censored": 0,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 0.0,
+          "mean_cost_proxy_bps": {
+            "10": null,
+            "20": null
+          },
+          "mean_quote_20bp": null,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 0,
+          "quote_outcomes": {},
+          "quote_positive": 0,
+          "sum_quote_20bp": 0,
+          "unmatched_early_alarms": 0,
+          "worst_quoted_counterexamples": []
+        },
+        "no-incremental-memory": {
+          "adverse": 0,
+          "alarms": 0,
+          "censored": 0,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 0.0,
+          "mean_cost_proxy_bps": {
+            "10": null,
+            "20": null
+          },
+          "mean_quote_20bp": null,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 0,
+          "quote_outcomes": {},
+          "quote_positive": 0,
+          "sum_quote_20bp": 0,
+          "unmatched_early_alarms": 0,
+          "worst_quoted_counterexamples": []
+        },
+        "price-payoff-memory": {
+          "adverse": 0,
+          "alarms": 0,
+          "censored": 0,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 0.0,
+          "mean_cost_proxy_bps": {
+            "10": null,
+            "20": null
+          },
+          "mean_quote_20bp": null,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 0,
+          "quote_outcomes": {},
+          "quote_positive": 0,
+          "sum_quote_20bp": 0,
+          "unmatched_early_alarms": 0,
+          "worst_quoted_counterexamples": []
+        },
+        "rank-flow": {
+          "adverse": 0,
+          "alarms": 17,
+          "censored": 17,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 387.8585650679533,
+          "mean_cost_proxy_bps": {
+            "10": -9.43599344666746,
+            "20": -19.43599344666746
+          },
+          "mean_quote_20bp": -20.635329896205292,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 13,
+          "quote_outcomes": {
+            "CENSORED": 17
+          },
+          "quote_positive": 4,
+          "sum_quote_20bp": -350.80060823548996,
+          "unmatched_early_alarms": 17,
+          "worst_quoted_counterexamples": [
+            {
+              "proxy_bp": -67.45119515844385,
+              "t": 1782958200000
+            },
+            {
+              "proxy_bp": -57.05364234352281,
+              "t": 1782966000000
+            },
+            {
+              "proxy_bp": -55.801086698302996,
+              "t": 1782966960000
+            }
+          ]
+        },
+        "rank-liquidity": {
+          "adverse": 0,
+          "alarms": 15,
+          "censored": 15,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 160.4158368416656,
+          "mean_cost_proxy_bps": {
+            "10": 0.9267948698907441,
+            "20": -9.073205130109256
+          },
+          "mean_quote_20bp": -9.918023266942933,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 8,
+          "quote_outcomes": {
+            "CENSORED": 15
+          },
+          "quote_positive": 7,
+          "sum_quote_20bp": -148.770349004144,
+          "unmatched_early_alarms": 15,
+          "worst_quoted_counterexamples": [
+            {
+              "proxy_bp": -55.65942911798611,
+              "t": 1783000920000
+            },
+            {
+              "proxy_bp": -45.618049107305765,
+              "t": 1782972240000
+            },
+            {
+              "proxy_bp": -45.43236365727804,
+              "t": 1782964200000
+            }
+          ]
+        }
+      },
+      "sequence_ids_available": false,
+      "source_rows": 2147286,
+      "source_sha": {
+        "BTC-USDT-SWAP": "fe3eca1f0a06d4f40f8d71368f872ee839730622f4ce435e7d33b3171b2d32a4",
+        "ETH-USDT-SWAP": "d719b3e3229cd272a25983c53579a1480da824ead9f70bb563863a72c34f9fdd",
+        "SOL-USDT-SWAP": "c5e37748c5ad6cea09f8a34563bf94e5e42aca58326686a46e2c3536649410e6",
+        "tape": "dae59708815dd32eab2b8c3253412cc693d9f33ab011a65c39c0bbab61d1ec0d"
+      },
+      "symbol": "SOL-USDT-SWAP"
+    }
+  ],
+  "new_sources": [
+    {
+      "bytes": 1012113,
+      "day": "2026-07-02",
+      "kind": "trades",
+      "sha256": "ef70e3489b14f1866445767138a3580c9dc609a099c8b2c6eacd977ab7bd6ec7",
+      "status": "COMPLETE_ORIGINAL",
+      "symbol": "NEAR-USDT-SWAP"
+    },
+    {
+      "bytes": 35392266,
+      "day": "2026-07-02",
+      "kind": "L2",
+      "sha256": "d8a9a8ae41368fc7702c008cec817c3690ad92fc65157b85ef3de69d18fbda76",
+      "status": "COMPLETE_ORIGINAL",
+      "symbol": "NEAR-USDT-SWAP"
+    },
+    {
+      "bytes": 9631440,
+      "day": "2026-07-02",
+      "kind": "trades",
+      "sha256": "dae59708815dd32eab2b8c3253412cc693d9f33ab011a65c39c0bbab61d1ec0d",
+      "status": "COMPLETE_ORIGINAL",
+      "symbol": "SOL-USDT-SWAP"
+    },
+    {
+      "bytes": 166474998,
+      "day": "2026-07-02",
+      "kind": "L2",
+      "sha256": "0628faebe697a98cb4af40f6a6c27559fb371a9eb350b1c4fc9f6d684e43eb32",
+      "status": "COMPLETE_ORIGINAL",
+      "symbol": "SOL-USDT-SWAP"
+    },
+    {
+      "bytes": 28329,
+      "day": "2026-07-02",
+      "kind": "candlesticks",
+      "sha256": "9167d26044e233652092e945c8efa6eaf05b99b7c1c0d1c85dd8fd64d106b856",
+      "status": "COMPLETE_ORIGINAL",
+      "symbol": "NEAR-USDT-SWAP"
+    },
+    {
+      "bytes": 33400,
+      "day": "2026-07-02",
+      "kind": "candlesticks",
+      "sha256": "c5e37748c5ad6cea09f8a34563bf94e5e42aca58326686a46e2c3536649410e6",
+      "status": "COMPLETE_ORIGINAL",
+      "symbol": "SOL-USDT-SWAP"
+    },
+    {
+      "bytes": 44695,
+      "day": "2026-07-02",
+      "kind": "candlesticks",
+      "sha256": "fe3eca1f0a06d4f40f8d71368f872ee839730622f4ce435e7d33b3171b2d32a4",
+      "status": "COMPLETE_ORIGINAL",
+      "symbol": "BTC-USDT-SWAP"
+    },
+    {
+      "bytes": 43902,
+      "day": "2026-07-02",
+      "kind": "candlesticks",
+      "sha256": "d719b3e3229cd272a25983c53579a1480da824ead9f70bb563863a72c34f9fdd",
+      "status": "COMPLETE_ORIGINAL",
+      "symbol": "ETH-USDT-SWAP"
+    }
+  ],
+  "original_frozen_pipeline_head": "1d4eb395dc7c3f9971d2ecaf5e3644e18c0bf162",
+  "posthoc_market_context_sha": "371880f223472e5d90592d3d1619a0bb74e8ff6af5d8a0407bdf69f69c716fbc",
+  "posthoc_market_summary": {
+    "NEAR-USDT-SWAP:rank-flow": {
+      "alarms": 12,
+      "mean_signed_excess_15m": -11.649793485945635,
+      "scorable": 12
+    },
+    "NEAR-USDT-SWAP:rank-liquidity": {
+      "alarms": 12,
+      "mean_signed_excess_15m": -17.81472936957196,
+      "scorable": 12
+    },
+    "SOL-USDT-SWAP:rank-flow": {
+      "alarms": 17,
+      "mean_signed_excess_15m": -2.697330482263782,
+      "scorable": 17
+    },
+    "SOL-USDT-SWAP:rank-liquidity": {
+      "alarms": 15,
+      "mean_signed_excess_15m": 0.7404357171383292,
+      "scorable": 15
+    }
+  },
+  "prefix_check_sha": "3ef7fea803a2dee9d3f3d29ceaeac1ccb5e6a9b8f2609381247e9f69a0d0de33",
+  "prefix_replay_check": {
+    "all_equal": true,
+    "cases": [
+      {
+        "full_case_equal": true,
+        "new_canonical_sha": "94546c76a5740ece23d6cee0c130e31641f22e3997a630faa7bafcbee1a959cd",
+        "prior_canonical_sha": "94546c76a5740ece23d6cee0c130e31641f22e3997a630faa7bafcbee1a959cd",
+        "symbol": "NEAR-USDT-SWAP"
+      },
+      {
+        "full_case_equal": true,
+        "new_canonical_sha": "3cbd15b1e8441cc62362be39082ef544f97c5fe22ffc3a9f3db91e64c35df3da",
+        "prior_canonical_sha": "3cbd15b1e8441cc62362be39082ef544f97c5fe22ffc3a9f3db91e64c35df3da",
+        "symbol": "SOL-USDT-SWAP"
+      }
+    ],
+    "economic_efficacy_evidence": false,
+    "new_result_sha": "283a65bfbcdb755cfcb32e613ad77471e862ac9e0fb8db103dc51eb57ea25529",
+    "prior_result_sha": "5e4801ca5deba8e63c9b7f15c56fd30f3604e2339c8a9e9d07b8ddab2c064c7a",
+    "schema": "v39_real_prefix_replay_check"
+  },
+  "prior_suite_tests_passed": 92,
+  "proposal_sha": "19237a0f9f465b71d3963e42c5558d198c2602f8b54656ae7d41b8ec6361b892",
+  "retirement": [
+    {
+      "day": "2026-07-02",
+      "decision": "REMOVE_ONLY_REPRODUCIBLE_NEW_BATCH_SPOOL",
+      "derived_spool_removed": true,
+      "feature_sha": "f8540a2c7c1429d9109fd177c3ba1b456f853d61b5d8bfffe301ad9f0ff5d151",
+      "index_sha": "c43fcb9d7f5da035d9aafe4cdb585b2ad8fc9d4ef00c886dcdc481eda4871fd3",
+      "original_and_features_preserved": true,
+      "original_sha": "d8a9a8ae41368fc7702c008cec817c3690ad92fc65157b85ef3de69d18fbda76",
+      "result_sha": "283a65bfbcdb755cfcb32e613ad77471e862ac9e0fb8db103dc51eb57ea25529",
+      "spool_bytes": 298694021,
+      "spool_sha": "2de38d451bd56c9f2cf2965da1bcaca6429a41245e688c1a008d9546abec50e7",
+      "symbol": "NEAR-USDT-SWAP"
+    },
+    {
+      "day": "2026-07-02",
+      "decision": "REMOVE_ONLY_REPRODUCIBLE_NEW_BATCH_SPOOL",
+      "derived_spool_removed": true,
+      "feature_sha": "b9335586b910fcbfdf56c6512fbe9b7cd0921184807171e00e02e3ced0f63543",
+      "index_sha": "c5c69a557f2e4049b2f7671e9572d3674782f9e0f412304d607eefe26cd8b8ad",
+      "original_and_features_preserved": true,
+      "original_sha": "0628faebe697a98cb4af40f6a6c27559fb371a9eb350b1c4fc9f6d684e43eb32",
+      "result_sha": "283a65bfbcdb755cfcb32e613ad77471e862ac9e0fb8db103dc51eb57ea25529",
+      "spool_bytes": 1010859484,
+      "spool_sha": "b1d6f32de9cd217afc78b16c6f1b8aae4323e997827e7a045a0c0f5b75c4a448",
+      "symbol": "SOL-USDT-SWAP"
+    }
+  ],
+  "run_head": "85c78b614064fa73b2a4d96f9fb8c7e0c4197f6f",
+  "schema": "v39_public_chronological_foundation_evidence",
+  "source_admission": {
+    "basis": "Known manifests, all registered research worktrees and research archive; no global filesystem claim",
+    "claim_files_found_in_scope": 0,
+    "global_registry_completeness_certified": false,
+    "independent_cohort_certified": false,
+    "inventory": [
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 0
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 1
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 2
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 3
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 4
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 5
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 6
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 7
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 8
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 9
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 10
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 11
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 12
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 13
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 14
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 15
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 16
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 17
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 18
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 19
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 20
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 21
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 22
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 23
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 24
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 25
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 26
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 27
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 28
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 29
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 30
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 31
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 32
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 33
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 34
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 35
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 36
+      }
+    ],
+    "new_payloads_within_known_train60_spans": true,
+    "old_report_metadata": [
+      {
+        "metadata": {
+          "schema": "algorithm_event_development_v2"
+        },
+        "name": "algorithm-event-v2-development-20261029.json",
+        "sha": "66616ef1feac12daba91df1fbe929ce676db9eec1742b0bfcf940fdff8137616"
+      },
+      {
+        "metadata": {
+          "schema": "algorithm_event_development_v2"
+        },
+        "name": "algorithm-event-v2-sol-doge-development-20261029.json",
+        "sha": "d8f97fe95371185e08cdc177fa02bfac1a2442d9ae066c785ba53b0fe380598c"
+      },
+      {
+        "metadata": {
+          "holdout_used": false,
+          "mode": "EXPLORATORY_DEVELOPMENT_ONLY",
+          "schema": "algorithm_funding_condition_v4"
+        },
+        "name": "algorithm-funding-v4-development-20261029.json",
+        "sha": "2cdb19da903d061a1e1f4d1fb31f467c4e0f40d6a27d017936f7aa9e20a69ba7"
+      },
+      {
+        "metadata": {
+          "holdout_used": false,
+          "schema": "algorithm_funding_count_matched_null_v4"
+        },
+        "name": "algorithm-funding-v4-matched-null-20261029.json",
+        "sha": "df4ae404bc28e71c9a3e6929fe651ab6dcfccb7d450c91c6162aa4106f475fe5"
+      },
+      {
+        "metadata": {
+          "mode": "EXPLORATORY_ONLY",
+          "schema": "algorithm_intrinsic_sequence_v3"
+        },
+        "name": "algorithm-intrinsic-v3-development-20261029.json",
+        "sha": "1033ae11abb86d970cb26acefc6a2e05ec34ea16d02b3c464eb25cdf2c1637af"
+      },
+      {
+        "metadata": {
+          "holdout_reexamined": false,
+          "schema": "operator_research_critique_v1"
+        },
+        "name": "algorithm-operator-v1-btc-critique-20261029.json",
+        "sha": "46ebb81de265eeec3475a729832fb5d9e421d0a665abfefaaf9131ed0a2ffcc4"
+      },
+      {
+        "metadata": {
+          "holdout_used": false,
+          "mode": "DEVELOPMENT_ONLY"
+        },
+        "name": "algorithm-operator-v1-btc-dev-20261029.json",
+        "sha": "0a05278c5bdc57c0641139cf7d06f7323f2110dc6473fc6070e358588231f446"
+      }
+    ],
+    "protected_audit": {
+      "claim_registry_locations_fully_resolved": false,
+      "conflicts": [],
+      "independent_cohort_certified": false,
+      "labels": [
+        "2026-07-01",
+        "2026-07-02",
+        "2026-07-03",
+        "2026-07-04",
+        "2026-07-05",
+        "2026-07-06",
+        "2026-07-07",
+        "2026-07-08",
+        "2026-07-09",
+        "2026-07-10",
+        "2026-07-11",
+        "2026-07-12",
+        "2026-07-13",
+        "2026-07-14",
+        "2026-07-15",
+        "2026-07-16",
+        "2026-07-17",
+        "2026-07-18",
+        "2026-07-19",
+        "2026-07-20"
+      ],
+      "payloads_opened": false,
+      "protected_metadata": [
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "3c55cf0c454858b9ba92e666e71aa283400ff2d8581fddd9dc1cb9615f99e7b0",
+          "end_ms": 1790784000000,
+          "manifest_sha": "9790814104f6f167c8f0648528963fc2c7fcf92cd158ab2f1b0331731d3f11c9",
+          "source_manifest": "BTC-USDT-SWAP.manifest.json",
+          "start_ms": 1789193700000,
+          "symbol": "BTC-USDT-SWAP"
+        },
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "88d49736ab89df74d5f6a7637f6336dc4286e11096233ef3b23f53936838fb6e",
+          "end_ms": 1788192000000,
+          "manifest_sha": "cd011cdfc8aa7bac7b7e53e05e13691e93cb074c15decea881ad11e505b66124",
+          "source_manifest": "DOGE-USDT-SWAP.manifest.json",
+          "start_ms": 1787120100000,
+          "symbol": "DOGE-USDT-SWAP"
+        },
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "020b7ecccf9b94627fc5f2d825f23d9cf8c5a606a5e265cb98cacac627b2673e",
+          "end_ms": 1790784000000,
+          "manifest_sha": "f6eafc4f753bb5d336031f4316d01ff809c86d7a98cdcdf89d52f64d4ffef603",
+          "source_manifest": "ETH-USDT-SWAP.manifest.json",
+          "start_ms": 1789193700000,
+          "symbol": "ETH-USDT-SWAP"
+        },
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "6651d67a0d05373791fd8ef0b227d5d562eeb4f7cb5a8a86c32225487e400825",
+          "end_ms": 1788192000000,
+          "manifest_sha": "d8c905a712b7584036fe23ec752bc2e47f41f6453d9f360dca6843420f36d7d8",
+          "source_manifest": "SOL-USDT-SWAP.manifest.json",
+          "start_ms": 1787120100000,
+          "symbol": "SOL-USDT-SWAP"
+        },
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "caf37774e29fdcf07267860ce092491c3dac337821ec4295647d8875a2acee9d",
+          "end_ms": 1790784000000,
+          "manifest_sha": "347a0a6e58826b37c6f5061ffc350e6edd8e04ec17c57d2d2f27088174e4ccea",
+          "source_manifest": "XRP-USDT-SWAP.manifest.json",
+          "start_ms": 1789193700000,
+          "symbol": "XRP-USDT-SWAP"
+        },
+        {
+          "basis": "Explicit project reservation",
+          "end_ms": 1788652800000,
+          "start_ms": 1788566400000,
+          "symbol": "ALL"
+        },
+        {
+          "basis": "Explicit project reservation",
+          "end_ms": 1794528000000,
+          "start_ms": 1793491200000,
+          "symbol": "ALL"
+        }
+      ],
+      "status": "NO_KNOWN_OVERLAP_NOT_FULLY_CLEARED"
+    },
+    "research_worktrees": 36,
+    "status": "PROJECT_SCOPED_DEVELOPMENT_ADMISSION"
+  },
+  "source_admission_sha": "734db6cb8939f6d72e62a13dde13dab9faf031f3e33cdfac9a674937725d03b8",
+  "source_days_complete": 2,
+  "source_days_registered": 20,
+  "suite_rerun_this_batch": false,
+  "uncertainty": {
+    "days": 2,
+    "status": "UNPOWERED_FEWER_THAN_20_DAYS"
+  },
+  "worst_NEAR_0609_context": [
+    {
+      "direction": -1,
+      "minute_close_context": {
+        "actual_historical_minute_closes_only_not_executable": true,
+        "fixed_5_15_60": [
+          {
+            "h": 5,
+            "instrument_excess_bps": "23.34397496221963844677460400",
+            "instrument_return_bps": "21.14164904862579281183932000",
+            "market_equal_weight_BTC_ETH_return_bps": "-2.202325913593845634935284000",
+            "signed_directional_return_bps": "-21.14164904862579281183932000"
+          },
+          {
+            "h": 15,
+            "instrument_excess_bps": "141.2580043308830212635440650",
+            "instrument_return_bps": "158.5623678646934460887949300",
+            "market_equal_weight_BTC_ETH_return_bps": "17.30436353381042482525086500",
+            "signed_directional_return_bps": "-158.5623678646934460887949300"
+          },
+          {
+            "h": 60,
+            "instrument_excess_bps": "107.6973649794260446407217355",
+            "instrument_return_bps": "79.28118393234672304439746000",
+            "market_equal_weight_BTC_ETH_return_bps": "-28.41618104707932159632427550",
+            "signed_directional_return_bps": "-79.28118393234672304439746000"
+          }
+        ],
+        "minute": 11,
+        "outcome": "ADVERSE_FIRST"
+      },
+      "program": "rank-liquidity",
+      "symbol": "NEAR-USDT-SWAP",
+      "t": 1782972540000
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+# Continue after v39: July 3 under the unchanged foundation protocol
+
+Status: **DEVELOPMENT foundation 2/20, no independent effective algorithm**. First reconstruct current R resources and discover newer checkpoints. Read [v39 results](ALGORITHM-FOUNDATION-RESULT-v39-20261031.md), [aggregate evidence](ALGORITHM-FOUNDATION-EVIDENCE-v39.json), [unchanged complete protocol](ALGORITHM-FOUNDATION-PLAN-v38-20261031.md), [twenty-day source cohort](ALGORITHM-FOUNDATION-COHORT-v38.json) and earlier failures.
+
+Verified completed source days: July 1 and 2. They provide 16 original archives, 6,588,279 replayed L2 messages and 1,211/1,868 available decision minutes. Latest first-result SHA: `283a65bfbcdb755cfcb32e613ad77471e862ac9e0fb8db103dc51eb57ea25529`. July 1's full NEAR/SOL results remained identical when replayed with the later day, and its first result still has SHA `5e4801ca5deba8e63c9b7f15c56fd30f3604e2339c8a9e9d07b8ddab2c064c7a`.
+
+All memory actions remain zero under the unchanged twenty-prior-day requirement. Maximum earlier-day support at July 2 decisions is one; cumulative candidate/ablation/price labels are 35/35/65. Neither cold-start abstention nor passing replay checks validates profitability. Both rank controls remain negative, with no early detection of seven retrospective episodes.
+
+Next source day is **2026-07-03**, selected chronologically before viewing its outcome. Check live computer ownership and existing finite workers/wrapper checkpoints; do not duplicate or steal another run. Use a separate research branch/worktree based on the latest report head. Verify relevant scripts, cohort and typed proposals are identical to original pipeline freeze `1d4eb395dc7c3f9971d2ecaf5e3644e18c0bf162`; v39 ran the same code at `85c78b614064fa73b2a4d96f9fb8c7e0c4197f6f`. Report-only commits do not change the method. The unchanged code's 92 tests were validated in v38; repeat only if changes or unresolved concerns justify it.
+
+Resolve private roots from R and run with a clean expected head:
+
+```text
+python scripts/trading/algorithm_foundation_v38.py run --root PRIVATE_FOUNDATION_ROOT --day 2026-07-03 --manifest-root PRIVATE_ORIGINAL_MANIFEST_ROOT --expected-head EXPECTED_CLEAN_HEAD
+```
+
+The runner must require both earlier batch checkpoints COMPLETE, re-audit source metadata, acquire exactly eight originals, reconstruct two books, evaluate all three training days chronologically and retire only new reproducible spools after success. Enforce the existing 3,600-second outer bound with owned-process-tree termination, stage limits, at least 10 GiB free disk and preserved first logs/results. Prior compressed sources and feature caches suffice; do not re-unpack retired July 1/2 spools into existing receipt locations. Verify the previous full-case prefix again when extending the chronological replay.
+
+On execution failure preserve first errors and partial files; inspect before a declared recovery, never skip a difficult day or silently raise caps. Do not lower maturity, day floor, costs or causal availability filters to produce trades. Continue subsequent July dates only in the registered order. The first twenty source days still cannot provide twenty prior days for their own actions, and sparse states may remain unpowered. Later active evaluation needs later days under a new appropriate frozen protocol; already opened October periods remain DEVELOPMENT and cannot be recycled as independent tests.
+
+The NEAR short at July 2 06:09 is a new counterexample with a large asset-specific move and unknown external cause; the BLS declared clock is later. Posthoc news/market context is not a feature or causal proof. A new mechanism using it needs a falsifiable typed definition, lineage and a new development freeze. Keep OI, liquidations, funding and first availability UNKNOWN unless original provenance is established. Preserve false/missed-event coverage, warning time, control/ablation results, dependent-day uncertainty and multiple-attempt accounting.
+
+Source admission remains limited to audited project scope, not global claim-registry completeness or independent certification. Preserve September 5, November 1-12, the rejected August cohort and every known protected/claimed boundary including UTC+8 overlap. Broad effectiveness requires at least fifty verified markets, point-in-time/survivorship safeguards, a newly audited one-use independent test and subsequent independent forward observation without orders. No Trader/PAPER/orders, risk/accounts/keys/providers, paid data, services/new automations, unrelated projects, main edits, merges or deployments. Publish exact results and the next checkpoint in GitHub/R, verify owned jobs ended and release the lease.
