@@ -1,0 +1,1096 @@
+{
+  "admission": {
+    "basis": "Known manifests, all registered research worktrees and research archive; no global filesystem claim",
+    "claim_files_found_in_scope": 0,
+    "global_registry_completeness_certified": false,
+    "independent_cohort_certified": false,
+    "inventory": [
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 0
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 1
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 2
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 3
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 4
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 5
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 6
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 7
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 8
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 9
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 10
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 11
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 12
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 13
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 14
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 15
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 16
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 17
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 18
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 19
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 20
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 21
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 22
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 23
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 24
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 25
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 26
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 27
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 28
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 29
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 30
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 31
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 32
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 33
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 34
+      },
+      {
+        "matching_metadata_files": 0,
+        "scope_index": 35
+      }
+    ],
+    "new_payloads_within_known_train60_spans": true,
+    "old_report_metadata": [
+      {
+        "metadata": {
+          "schema": "algorithm_event_development_v2"
+        },
+        "name": "algorithm-event-v2-development-20261029.json",
+        "sha": "66616ef1feac12daba91df1fbe929ce676db9eec1742b0bfcf940fdff8137616"
+      },
+      {
+        "metadata": {
+          "schema": "algorithm_event_development_v2"
+        },
+        "name": "algorithm-event-v2-sol-doge-development-20261029.json",
+        "sha": "d8f97fe95371185e08cdc177fa02bfac1a2442d9ae066c785ba53b0fe380598c"
+      },
+      {
+        "metadata": {
+          "holdout_used": false,
+          "mode": "EXPLORATORY_DEVELOPMENT_ONLY",
+          "schema": "algorithm_funding_condition_v4"
+        },
+        "name": "algorithm-funding-v4-development-20261029.json",
+        "sha": "2cdb19da903d061a1e1f4d1fb31f467c4e0f40d6a27d017936f7aa9e20a69ba7"
+      },
+      {
+        "metadata": {
+          "holdout_used": false,
+          "schema": "algorithm_funding_count_matched_null_v4"
+        },
+        "name": "algorithm-funding-v4-matched-null-20261029.json",
+        "sha": "df4ae404bc28e71c9a3e6929fe651ab6dcfccb7d450c91c6162aa4106f475fe5"
+      },
+      {
+        "metadata": {
+          "mode": "EXPLORATORY_ONLY",
+          "schema": "algorithm_intrinsic_sequence_v3"
+        },
+        "name": "algorithm-intrinsic-v3-development-20261029.json",
+        "sha": "1033ae11abb86d970cb26acefc6a2e05ec34ea16d02b3c464eb25cdf2c1637af"
+      },
+      {
+        "metadata": {
+          "holdout_reexamined": false,
+          "schema": "operator_research_critique_v1"
+        },
+        "name": "algorithm-operator-v1-btc-critique-20261029.json",
+        "sha": "46ebb81de265eeec3475a729832fb5d9e421d0a665abfefaaf9131ed0a2ffcc4"
+      },
+      {
+        "metadata": {
+          "holdout_used": false,
+          "mode": "DEVELOPMENT_ONLY"
+        },
+        "name": "algorithm-operator-v1-btc-dev-20261029.json",
+        "sha": "0a05278c5bdc57c0641139cf7d06f7323f2110dc6473fc6070e358588231f446"
+      }
+    ],
+    "protected_audit": {
+      "claim_registry_locations_fully_resolved": false,
+      "conflicts": [],
+      "independent_cohort_certified": false,
+      "labels": [
+        "2026-07-01",
+        "2026-07-02",
+        "2026-07-03",
+        "2026-07-04",
+        "2026-07-05",
+        "2026-07-06",
+        "2026-07-07",
+        "2026-07-08",
+        "2026-07-09",
+        "2026-07-10",
+        "2026-07-11",
+        "2026-07-12",
+        "2026-07-13",
+        "2026-07-14",
+        "2026-07-15",
+        "2026-07-16",
+        "2026-07-17",
+        "2026-07-18",
+        "2026-07-19",
+        "2026-07-20"
+      ],
+      "payloads_opened": false,
+      "protected_metadata": [
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "3c55cf0c454858b9ba92e666e71aa283400ff2d8581fddd9dc1cb9615f99e7b0",
+          "end_ms": 1790784000000,
+          "manifest_sha": "9790814104f6f167c8f0648528963fc2c7fcf92cd158ab2f1b0331731d3f11c9",
+          "source_manifest": "BTC-USDT-SWAP.manifest.json",
+          "start_ms": 1789193700000,
+          "symbol": "BTC-USDT-SWAP"
+        },
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "88d49736ab89df74d5f6a7637f6336dc4286e11096233ef3b23f53936838fb6e",
+          "end_ms": 1788192000000,
+          "manifest_sha": "cd011cdfc8aa7bac7b7e53e05e13691e93cb074c15decea881ad11e505b66124",
+          "source_manifest": "DOGE-USDT-SWAP.manifest.json",
+          "start_ms": 1787120100000,
+          "symbol": "DOGE-USDT-SWAP"
+        },
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "020b7ecccf9b94627fc5f2d825f23d9cf8c5a606a5e265cb98cacac627b2673e",
+          "end_ms": 1790784000000,
+          "manifest_sha": "f6eafc4f753bb5d336031f4316d01ff809c86d7a98cdcdf89d52f64d4ffef603",
+          "source_manifest": "ETH-USDT-SWAP.manifest.json",
+          "start_ms": 1789193700000,
+          "symbol": "ETH-USDT-SWAP"
+        },
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "6651d67a0d05373791fd8ef0b227d5d562eeb4f7cb5a8a86c32225487e400825",
+          "end_ms": 1788192000000,
+          "manifest_sha": "d8c905a712b7584036fe23ec752bc2e47f41f6453d9f360dca6843420f36d7d8",
+          "source_manifest": "SOL-USDT-SWAP.manifest.json",
+          "start_ms": 1787120100000,
+          "symbol": "SOL-USDT-SWAP"
+        },
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "caf37774e29fdcf07267860ce092491c3dac337821ec4295647d8875a2acee9d",
+          "end_ms": 1790784000000,
+          "manifest_sha": "347a0a6e58826b37c6f5061ffc350e6edd8e04ec17c57d2d2f27088174e4ccea",
+          "source_manifest": "XRP-USDT-SWAP.manifest.json",
+          "start_ms": 1789193700000,
+          "symbol": "XRP-USDT-SWAP"
+        },
+        {
+          "basis": "Explicit project reservation",
+          "end_ms": 1788652800000,
+          "start_ms": 1788566400000,
+          "symbol": "ALL"
+        },
+        {
+          "basis": "Explicit project reservation",
+          "end_ms": 1794528000000,
+          "start_ms": 1793491200000,
+          "symbol": "ALL"
+        }
+      ],
+      "status": "NO_KNOWN_OVERLAP_NOT_FULLY_CLEARED"
+    },
+    "research_worktrees": 35,
+    "status": "PROJECT_SCOPED_DEVELOPMENT_ADMISSION"
+  },
+  "cases": [
+    {
+      "availability": {
+        "AVAILABLE": 171,
+        "PRICE_BAND_CROSSED": 27,
+        "RESET_OR_QUOTE_UNAVAILABLE": 31,
+        "TRADE_SPAN_UNAVAILABLE": 238
+      },
+      "available_decisions": 171,
+      "day": "2026-07-01",
+      "decisions": 467,
+      "episodes_before_liquidity_exclusions": 1,
+      "feature_sha": "97d46d6359b7caffb5f8eef7d0bb89b59fc9854a8439feddb4e1a4fe7fd9a630",
+      "l2_sha": "04734e277075f87f7211104b3aa4595d862ac6da770bc45ebb845a6ed511ac9c",
+      "max_prior_day_blocks": {
+        "liquidity-payoff-memory": 0,
+        "no-incremental-memory": 0,
+        "price-payoff-memory": 0
+      },
+      "memory_reasons": {
+        "liquidity-payoff-memory:COLD_START": 101,
+        "liquidity-payoff-memory:NO_PROPOSAL": 70,
+        "no-incremental-memory:COLD_START": 101,
+        "no-incremental-memory:NO_PROPOSAL": 70,
+        "price-payoff-memory:COLD_START": 137,
+        "price-payoff-memory:NO_PROPOSAL": 34
+      },
+      "memory_state": {
+        "liquidity-payoff-memory": {
+          "fingerprint": "9c3afc55109509f2e4551d68b6e4b476ba9af3056352a3d90ec21c2b8b16cb84",
+          "missing": 0,
+          "resolved": 5
+        },
+        "no-incremental-memory": {
+          "fingerprint": "9c3afc55109509f2e4551d68b6e4b476ba9af3056352a3d90ec21c2b8b16cb84",
+          "missing": 0,
+          "resolved": 5
+        },
+        "price-payoff-memory": {
+          "fingerprint": "e87624cac0d196d93e9828214809621ca73dd47c9e73872135f6f2b0d52f723d",
+          "missing": 0,
+          "resolved": 7
+        }
+      },
+      "programs": {
+        "cash": {
+          "adverse": 0,
+          "alarms": 0,
+          "censored": 0,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 1,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 0.0,
+          "mean_cost_proxy_bps": {
+            "10": null,
+            "20": null
+          },
+          "mean_quote_20bp": null,
+          "mean_warning_minutes": null,
+          "missed": 1,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 0,
+          "quote_outcomes": {},
+          "quote_positive": 0,
+          "sum_quote_20bp": 0,
+          "unmatched_early_alarms": 0,
+          "worst_quoted_counterexamples": []
+        },
+        "liquidity-payoff-memory": {
+          "adverse": 0,
+          "alarms": 0,
+          "censored": 0,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 1,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 0.0,
+          "mean_cost_proxy_bps": {
+            "10": null,
+            "20": null
+          },
+          "mean_quote_20bp": null,
+          "mean_warning_minutes": null,
+          "missed": 1,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 0,
+          "quote_outcomes": {},
+          "quote_positive": 0,
+          "sum_quote_20bp": 0,
+          "unmatched_early_alarms": 0,
+          "worst_quoted_counterexamples": []
+        },
+        "no-incremental-memory": {
+          "adverse": 0,
+          "alarms": 0,
+          "censored": 0,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 1,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 0.0,
+          "mean_cost_proxy_bps": {
+            "10": null,
+            "20": null
+          },
+          "mean_quote_20bp": null,
+          "mean_warning_minutes": null,
+          "missed": 1,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 0,
+          "quote_outcomes": {},
+          "quote_positive": 0,
+          "sum_quote_20bp": 0,
+          "unmatched_early_alarms": 0,
+          "worst_quoted_counterexamples": []
+        },
+        "price-payoff-memory": {
+          "adverse": 0,
+          "alarms": 0,
+          "censored": 0,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 1,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 0.0,
+          "mean_cost_proxy_bps": {
+            "10": null,
+            "20": null
+          },
+          "mean_quote_20bp": null,
+          "mean_warning_minutes": null,
+          "missed": 1,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 0,
+          "quote_outcomes": {},
+          "quote_positive": 0,
+          "sum_quote_20bp": 0,
+          "unmatched_early_alarms": 0,
+          "worst_quoted_counterexamples": []
+        },
+        "rank-flow": {
+          "adverse": 0,
+          "alarms": 9,
+          "censored": 9,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 1,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 275.84598830104335,
+          "mean_cost_proxy_bps": {
+            "10": -7.04754142700469,
+            "20": -17.04754142700469
+          },
+          "mean_quote_20bp": -23.15708192708403,
+          "mean_warning_minutes": null,
+          "missed": 1,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 6,
+          "quote_outcomes": {
+            "CENSORED": 9
+          },
+          "quote_positive": 3,
+          "sum_quote_20bp": -208.41373734375625,
+          "unmatched_early_alarms": 9,
+          "worst_quoted_counterexamples": [
+            {
+              "proxy_bp": -86.18887925893755,
+              "t": 1782887340000
+            },
+            {
+              "proxy_bp": -64.59316196764875,
+              "t": 1782890100000
+            },
+            {
+              "proxy_bp": -63.47832936103423,
+              "t": 1782879240000
+            }
+          ]
+        },
+        "rank-liquidity": {
+          "adverse": 0,
+          "alarms": 10,
+          "censored": 10,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 1,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 315.0330368337325,
+          "mean_cost_proxy_bps": {
+            "10": -2.1628541570060857,
+            "20": -12.162854157006086
+          },
+          "mean_quote_20bp": -17.664659241775468,
+          "mean_warning_minutes": null,
+          "missed": 1,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 5,
+          "quote_outcomes": {
+            "CENSORED": 10
+          },
+          "quote_positive": 5,
+          "sum_quote_20bp": -176.64659241775468,
+          "unmatched_early_alarms": 10,
+          "worst_quoted_counterexamples": [
+            {
+              "proxy_bp": -118.36144876713189,
+              "t": 1782877140000
+            },
+            {
+              "proxy_bp": -90.51832857244997,
+              "t": 1782880560000
+            },
+            {
+              "proxy_bp": -70.09751641080294,
+              "t": 1782890520000
+            }
+          ]
+        }
+      },
+      "sequence_ids_available": false,
+      "source_rows": 1051624,
+      "source_sha": {
+        "BTC-USDT-SWAP": "2e354f6903e98e79ff6bcb31d339d30a4f5d56c5a207ba6ecee8622b9322c343",
+        "ETH-USDT-SWAP": "42b8b57fc01d6e30b2481cbe39c589685fe820c3f618ad8b896ece3be4b0544f",
+        "NEAR-USDT-SWAP": "17434840db76dc348b4c4d1a6337803aa28542ee3856e9483acda64e6f5d7714",
+        "tape": "de359ef50db3f73d4341df7f67c48bd4804baa34a6a42f7c85551b2d39de82f4"
+      },
+      "symbol": "NEAR-USDT-SWAP"
+    },
+    {
+      "availability": {
+        "AVAILABLE": 410,
+        "PRICE_BAND_CROSSED": 26,
+        "RESET_OR_QUOTE_UNAVAILABLE": 31
+      },
+      "available_decisions": 410,
+      "day": "2026-07-01",
+      "decisions": 467,
+      "episodes_before_liquidity_exclusions": 2,
+      "feature_sha": "d935d392af4241f994da2c8a42884b284120dd5b653279fda666843515aaa5b2",
+      "l2_sha": "5fd2f5b479956dbe8aa46940a7a03118ede8b63f36f9767b1fbc1088eefd9fb4",
+      "max_prior_day_blocks": {
+        "liquidity-payoff-memory": 0,
+        "no-incremental-memory": 0,
+        "price-payoff-memory": 0
+      },
+      "memory_reasons": {
+        "liquidity-payoff-memory:COLD_START": 209,
+        "liquidity-payoff-memory:NO_PROPOSAL": 201,
+        "no-incremental-memory:COLD_START": 209,
+        "no-incremental-memory:NO_PROPOSAL": 201,
+        "price-payoff-memory:COLD_START": 384,
+        "price-payoff-memory:NO_PROPOSAL": 26
+      },
+      "memory_state": {
+        "liquidity-payoff-memory": {
+          "fingerprint": "6da5b4ff502cfe2ccd3bf89ecf56f388fb56065a7460e1e07253e57bac565e21",
+          "missing": 0,
+          "resolved": 10
+        },
+        "no-incremental-memory": {
+          "fingerprint": "6da5b4ff502cfe2ccd3bf89ecf56f388fb56065a7460e1e07253e57bac565e21",
+          "missing": 0,
+          "resolved": 10
+        },
+        "price-payoff-memory": {
+          "fingerprint": "bcc116ea5ae65496508ec841f7f060ad26ee1a530c8fd7f4db2ea7c4d9c57a1e",
+          "missing": 0,
+          "resolved": 24
+        }
+      },
+      "programs": {
+        "cash": {
+          "adverse": 0,
+          "alarms": 0,
+          "censored": 0,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 0.0,
+          "mean_cost_proxy_bps": {
+            "10": null,
+            "20": null
+          },
+          "mean_quote_20bp": null,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 0,
+          "quote_outcomes": {},
+          "quote_positive": 0,
+          "sum_quote_20bp": 0,
+          "unmatched_early_alarms": 0,
+          "worst_quoted_counterexamples": []
+        },
+        "liquidity-payoff-memory": {
+          "adverse": 0,
+          "alarms": 0,
+          "censored": 0,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 0.0,
+          "mean_cost_proxy_bps": {
+            "10": null,
+            "20": null
+          },
+          "mean_quote_20bp": null,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 0,
+          "quote_outcomes": {},
+          "quote_positive": 0,
+          "sum_quote_20bp": 0,
+          "unmatched_early_alarms": 0,
+          "worst_quoted_counterexamples": []
+        },
+        "no-incremental-memory": {
+          "adverse": 0,
+          "alarms": 0,
+          "censored": 0,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 0.0,
+          "mean_cost_proxy_bps": {
+            "10": null,
+            "20": null
+          },
+          "mean_quote_20bp": null,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 0,
+          "quote_outcomes": {},
+          "quote_positive": 0,
+          "sum_quote_20bp": 0,
+          "unmatched_early_alarms": 0,
+          "worst_quoted_counterexamples": []
+        },
+        "price-payoff-memory": {
+          "adverse": 0,
+          "alarms": 0,
+          "censored": 0,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 0.0,
+          "mean_cost_proxy_bps": {
+            "10": null,
+            "20": null
+          },
+          "mean_quote_20bp": null,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 0,
+          "quote_outcomes": {},
+          "quote_positive": 0,
+          "sum_quote_20bp": 0,
+          "unmatched_early_alarms": 0,
+          "worst_quoted_counterexamples": []
+        },
+        "rank-flow": {
+          "adverse": 0,
+          "alarms": 19,
+          "censored": 19,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 430.5494530664016,
+          "mean_cost_proxy_bps": {
+            "10": -6.987992425652656,
+            "20": -16.987992425652656
+          },
+          "mean_quote_20bp": -17.96798884423444,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 13,
+          "quote_outcomes": {
+            "CENSORED": 19
+          },
+          "quote_positive": 6,
+          "sum_quote_20bp": -341.39178804045434,
+          "unmatched_early_alarms": 19,
+          "worst_quoted_counterexamples": [
+            {
+              "proxy_bp": -124.11199219658008,
+              "t": 1782876900000
+            },
+            {
+              "proxy_bp": -59.71411097465539,
+              "t": 1782880560000
+            },
+            {
+              "proxy_bp": -47.85701874409307,
+              "t": 1782879540000
+            }
+          ]
+        },
+        "rank-liquidity": {
+          "adverse": 1,
+          "alarms": 16,
+          "censored": 15,
+          "detected_early": 0,
+          "early_recall": 0.0,
+          "episodes": 2,
+          "execution_certified": false,
+          "favorable": 0,
+          "funding_and_extra_slippage": "UNKNOWN",
+          "hypothetical_additive_drawdown_bp": 614.8714391184936,
+          "mean_cost_proxy_bps": {
+            "10": -26.24572704655813,
+            "20": -36.24572704655813
+          },
+          "mean_quote_20bp": -37.57777488859173,
+          "mean_warning_minutes": null,
+          "missed": 2,
+          "missing_quote_paths": 0,
+          "news_context": "UNKNOWN",
+          "quote_negative": 13,
+          "quote_outcomes": {
+            "ADVERSE": 1,
+            "CENSORED": 15
+          },
+          "quote_positive": 3,
+          "sum_quote_20bp": -601.2443982174677,
+          "unmatched_early_alarms": 16,
+          "worst_quoted_counterexamples": [
+            {
+              "proxy_bp": -205.79626438959622,
+              "t": 1782914520000
+            },
+            {
+              "proxy_bp": -107.8950924284885,
+              "t": 1782877380000
+            },
+            {
+              "proxy_bp": -89.14123167310613,
+              "t": 1782916380000
+            }
+          ]
+        }
+      },
+      "sequence_ids_available": false,
+      "source_rows": 2410378,
+      "source_sha": {
+        "BTC-USDT-SWAP": "2e354f6903e98e79ff6bcb31d339d30a4f5d56c5a207ba6ecee8622b9322c343",
+        "ETH-USDT-SWAP": "42b8b57fc01d6e30b2481cbe39c589685fe820c3f618ad8b896ece3be4b0544f",
+        "SOL-USDT-SWAP": "2eb7b7201548b67c78bdc0cfbe74fddff3495418d99b6372ecee3e4be9c29f31",
+        "tape": "870efc2c00238ed194aa8a5ee02e7996de4b75c7364d03edeb2abd587899c611"
+      },
+      "symbol": "SOL-USDT-SWAP"
+    }
+  ],
+  "completed_stages": [
+    {
+      "sha": "59332a0755d005c3f6474792835bb66a61c6af6290e1ffebbe0a87cfed207f81",
+      "stage": "acquire-2026-07-01"
+    },
+    {
+      "sha": "ae9fea1b78834ae6f60dcec2fd5774ae92d241bd0ffd18a062d0f689086d95a5",
+      "stage": "unpack-NEAR-USDT-SWAP"
+    },
+    {
+      "sha": "97d46d6359b7caffb5f8eef7d0bb89b59fc9854a8439feddb4e1a4fe7fd9a630",
+      "stage": "extract-NEAR-USDT-SWAP"
+    },
+    {
+      "sha": "1c48ef3df385c097485ac8e932c74b7f0be045af6ca413cabf67579ee5d93e39",
+      "stage": "unpack-SOL-USDT-SWAP"
+    },
+    {
+      "sha": "d935d392af4241f994da2c8a42884b284120dd5b653279fda666843515aaa5b2",
+      "stage": "extract-SOL-USDT-SWAP"
+    },
+    {
+      "sha": "5e4801ca5deba8e63c9b7f15c56fd30f3604e2339c8a9e9d07b8ddab2c064c7a",
+      "stage": "evaluate-2026-07-01"
+    },
+    {
+      "sha": "8c711310b9badd61617534ac657a2c940fcc84144aa28b2147a51f34d0c8ab35",
+      "stage": "retire-NEAR-USDT-SWAP"
+    },
+    {
+      "sha": "1347ce66ff6f54484040a4fef8c4fe2f6be7f96f0d94b13812a67c2204605e2c",
+      "stage": "retire-SOL-USDT-SWAP"
+    }
+  ],
+  "effective_algorithm_confirmed": false,
+  "executable_PnL": false,
+  "first_result_sha": "5e4801ca5deba8e63c9b7f15c56fd30f3604e2339c8a9e9d07b8ddab2c064c7a",
+  "frozen_head": "1d4eb395dc7c3f9971d2ecaf5e3644e18c0bf162",
+  "independent_validation": false,
+  "posthoc_market_context_sha": "2b42e1cfa1881564f8210d10ced690e3cd03aca4762d5d28fe723a243c4f78fd",
+  "posthoc_market_context_summary": {
+    "NEAR-USDT-SWAP:rank-flow": {
+      "alarms": 9,
+      "mean_signed_15m": 8.571753577971535,
+      "mean_signed_excess_15m": -3.7450312150636753,
+      "scorable": 9
+    },
+    "NEAR-USDT-SWAP:rank-liquidity": {
+      "alarms": 10,
+      "mean_signed_15m": 14.395908297648685,
+      "mean_signed_excess_15m": 1.8805380668655025,
+      "scorable": 10
+    },
+    "SOL-USDT-SWAP:rank-flow": {
+      "alarms": 19,
+      "mean_signed_15m": 6.7272397263028445,
+      "mean_signed_excess_15m": 0.4404669199128286,
+      "scorable": 19
+    },
+    "SOL-USDT-SWAP:rank-liquidity": {
+      "alarms": 16,
+      "mean_signed_15m": -13.0591082466601,
+      "mean_signed_excess_15m": -7.23890530170382,
+      "scorable": 16
+    }
+  },
+  "proposal_sha": "19237a0f9f465b71d3963e42c5558d198c2602f8b54656ae7d41b8ec6361b892",
+  "retirement": [
+    {
+      "day": "2026-07-01",
+      "decision": "REMOVE_ONLY_REPRODUCIBLE_NEW_BATCH_SPOOL",
+      "derived_spool_removed": true,
+      "feature_sha": "97d46d6359b7caffb5f8eef7d0bb89b59fc9854a8439feddb4e1a4fe7fd9a630",
+      "index_sha": "4503cc0f2210859d02266afeac1062fa459321a44a979794cc4253b511f77b5c",
+      "original_and_features_preserved": true,
+      "original_sha": "04734e277075f87f7211104b3aa4595d862ac6da770bc45ebb845a6ed511ac9c",
+      "result_sha": "5e4801ca5deba8e63c9b7f15c56fd30f3604e2339c8a9e9d07b8ddab2c064c7a",
+      "spool_bytes": 316670694,
+      "spool_sha": "6370cc2f16b964bf4ecc603fda8c64d7eddefb4e0138a347c376deeb708a3bb7",
+      "symbol": "NEAR-USDT-SWAP"
+    },
+    {
+      "day": "2026-07-01",
+      "decision": "REMOVE_ONLY_REPRODUCIBLE_NEW_BATCH_SPOOL",
+      "derived_spool_removed": true,
+      "feature_sha": "d935d392af4241f994da2c8a42884b284120dd5b653279fda666843515aaa5b2",
+      "index_sha": "c7c8c05e461f022df89012d7d2513873ed868982455dcc452dac7ee1ba8af455",
+      "original_and_features_preserved": true,
+      "original_sha": "5fd2f5b479956dbe8aa46940a7a03118ede8b63f36f9767b1fbc1088eefd9fb4",
+      "result_sha": "5e4801ca5deba8e63c9b7f15c56fd30f3604e2339c8a9e9d07b8ddab2c064c7a",
+      "spool_bytes": 1028872325,
+      "spool_sha": "3147517b67beaf99fc1ab15bca11902ecd991c8825a42ae1dd68b05c982eceff",
+      "symbol": "SOL-USDT-SWAP"
+    }
+  ],
+  "schema": "v38_public_development_batch_evidence",
+  "source_admission_sha": "2e64c0e12f5dbd343e07a226856bca8423076fdd3303c5248d34749fec81bc2f",
+  "source_days_completed": 1,
+  "source_days_registered": 20,
+  "sources": [
+    {
+      "bytes": 759511,
+      "day": "2026-07-01",
+      "kind": "trades",
+      "sha256": "de359ef50db3f73d4341df7f67c48bd4804baa34a6a42f7c85551b2d39de82f4",
+      "status": "COMPLETE_ORIGINAL",
+      "symbol": "NEAR-USDT-SWAP"
+    },
+    {
+      "bytes": 36871761,
+      "day": "2026-07-01",
+      "kind": "L2",
+      "sha256": "04734e277075f87f7211104b3aa4595d862ac6da770bc45ebb845a6ed511ac9c",
+      "status": "COMPLETE_ORIGINAL",
+      "symbol": "NEAR-USDT-SWAP"
+    },
+    {
+      "bytes": 8214343,
+      "day": "2026-07-01",
+      "kind": "trades",
+      "sha256": "870efc2c00238ed194aa8a5ee02e7996de4b75c7364d03edeb2abd587899c611",
+      "status": "COMPLETE_ORIGINAL",
+      "symbol": "SOL-USDT-SWAP"
+    },
+    {
+      "bytes": 169491114,
+      "day": "2026-07-01",
+      "kind": "L2",
+      "sha256": "5fd2f5b479956dbe8aa46940a7a03118ede8b63f36f9767b1fbc1088eefd9fb4",
+      "status": "COMPLETE_ORIGINAL",
+      "symbol": "SOL-USDT-SWAP"
+    },
+    {
+      "bytes": 27220,
+      "day": "2026-07-01",
+      "kind": "candlesticks",
+      "sha256": "17434840db76dc348b4c4d1a6337803aa28542ee3856e9483acda64e6f5d7714",
+      "status": "COMPLETE_ORIGINAL",
+      "symbol": "NEAR-USDT-SWAP"
+    },
+    {
+      "bytes": 32812,
+      "day": "2026-07-01",
+      "kind": "candlesticks",
+      "sha256": "2eb7b7201548b67c78bdc0cfbe74fddff3495418d99b6372ecee3e4be9c29f31",
+      "status": "COMPLETE_ORIGINAL",
+      "symbol": "SOL-USDT-SWAP"
+    },
+    {
+      "bytes": 44445,
+      "day": "2026-07-01",
+      "kind": "candlesticks",
+      "sha256": "2e354f6903e98e79ff6bcb31d339d30a4f5d56c5a207ba6ecee8622b9322c343",
+      "status": "COMPLETE_ORIGINAL",
+      "symbol": "BTC-USDT-SWAP"
+    },
+    {
+      "bytes": 43189,
+      "day": "2026-07-01",
+      "kind": "candlesticks",
+      "sha256": "42b8b57fc01d6e30b2481cbe39c589685fe820c3f618ad8b896ece3be4b0544f",
+      "status": "COMPLETE_ORIGINAL",
+      "symbol": "ETH-USDT-SWAP"
+    }
+  ],
+  "summary": {
+    "cash": {
+      "alarms": 0,
+      "detected_early": 0,
+      "mean_quote_20bp": null,
+      "missed": 3,
+      "missing_quote_paths": 0,
+      "unmatched_early_alarms": 0
+    },
+    "liquidity-payoff-memory": {
+      "alarms": 0,
+      "detected_early": 0,
+      "mean_quote_20bp": null,
+      "missed": 3,
+      "missing_quote_paths": 0,
+      "unmatched_early_alarms": 0
+    },
+    "no-incremental-memory": {
+      "alarms": 0,
+      "detected_early": 0,
+      "mean_quote_20bp": null,
+      "missed": 3,
+      "missing_quote_paths": 0,
+      "unmatched_early_alarms": 0
+    },
+    "price-payoff-memory": {
+      "alarms": 0,
+      "detected_early": 0,
+      "mean_quote_20bp": null,
+      "missed": 3,
+      "missing_quote_paths": 0,
+      "unmatched_early_alarms": 0
+    },
+    "rank-flow": {
+      "alarms": 28,
+      "detected_early": 0,
+      "mean_quote_20bp": -19.635911620864665,
+      "missed": 3,
+      "missing_quote_paths": 0,
+      "unmatched_early_alarms": 28
+    },
+    "rank-liquidity": {
+      "alarms": 26,
+      "detected_early": 0,
+      "mean_quote_20bp": -29.918884255200865,
+      "missed": 3,
+      "missing_quote_paths": 0,
+      "unmatched_early_alarms": 26
+    }
+  },
+  "test_modules": [
+    {
+      "count": 9,
+      "module": "test_algorithm_stream_v31",
+      "ok": true
+    },
+    {
+      "count": 6,
+      "module": "test_algorithm_restoration_v32",
+      "ok": true
+    },
+    {
+      "count": 3,
+      "module": "test_algorithm_rank_v33",
+      "ok": true
+    },
+    {
+      "count": 6,
+      "module": "test_algorithm_independent_v34",
+      "ok": true
+    },
+    {
+      "count": 11,
+      "module": "test_algorithm_path_v35",
+      "ok": true
+    },
+    {
+      "count": 22,
+      "module": "test_algorithm_band_v36",
+      "ok": true
+    },
+    {
+      "count": 24,
+      "module": "test_algorithm_memory_v37",
+      "ok": true
+    },
+    {
+      "count": 11,
+      "module": "test_algorithm_foundation_v38",
+      "ok": true
+    }
+  ],
+  "tests_passed": 92,
+  "uncertainty": {
+    "days": 1,
+    "status": "UNPOWERED_FEWER_THAN_20_DAYS"
+  },
+  "worst_SOL_1402_context": [
+    {
+      "direction": -1,
+      "minute_close_context": {
+        "actual_historical_minute_closes_only_not_executable": true,
+        "fixed_5_15_60": [
+          {
+            "h": 5,
+            "instrument_excess_bps": "4.00329764617177736001522000",
+            "instrument_return_bps": "11.88746532822612600713248000",
+            "market_equal_weight_BTC_ETH_return_bps": "7.88416768205434864711726000",
+            "signed_directional_return_bps": "-11.88746532822612600713248000"
+          },
+          {
+            "h": 15,
+            "instrument_excess_bps": "31.5236804592655395909136200",
+            "instrument_return_bps": "146.6120723814555540879672400",
+            "market_equal_weight_BTC_ETH_return_bps": "115.0883919221900144970536200",
+            "signed_directional_return_bps": "-146.6120723814555540879672400"
+          },
+          {
+            "h": 60,
+            "instrument_excess_bps": "106.8403057334008964206944400",
+            "instrument_return_bps": "165.1036851142517500990622100",
+            "market_equal_weight_BTC_ETH_return_bps": "58.2633793808508536783677700",
+            "signed_directional_return_bps": "-165.1036851142517500990622100"
+          }
+        ],
+        "minute": 15,
+        "outcome": "ADVERSE_FIRST"
+      },
+      "program": "rank-liquidity",
+      "symbol": "SOL-USDT-SWAP",
+      "t": 1782914520000
+    }
+  ]
+}
