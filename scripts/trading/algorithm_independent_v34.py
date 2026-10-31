@@ -111,8 +111,10 @@ def acquire_all(root):
     return {"schema": "v34_acquisition", "sources": completed}
 
 
-def unpack_and_index(root, day, symbol):
-    original, spool, url = file_paths(root,day,symbol)
+def unpack_and_index(root, day, symbol, *, paths=None, context=None, index_name=None):
+    # Reviewed adapters can add a separately frozen DEVELOPMENT cohort; defaults
+    # retain v34's original strict source identity and index name.
+    original, spool, url = (paths or file_paths)(root,day,symbol)
     receipt = json.loads(Path(str(original)+".receipt.json").read_bytes())
     if receipt["source_url"] != url or receipt["original_sha256"] != archives.digest(original):
         raise ValueError("Original archive identity mismatch")
@@ -168,11 +170,11 @@ def unpack_and_index(root, day, symbol):
     if not snapshots:
         raise ValueError("No original snapshots")
     index = {"schema":"v34_original_snapshot_index","original_sha256":receipt["original_sha256"],
-             "context_sha":context_sha(day,symbol),"spool_sha256":h.hexdigest(),
+             "context_sha":(context or context_sha)(day,symbol),"spool_sha256":h.hexdigest(),
              "spool_bytes":seen,"snapshot_entries":snapshots}
     folder = Path(root)/"l2"
     folder.mkdir(exist_ok=True)
-    name = f"{symbol}-{day}-snapshot-index-v34.json"
+    name = index_name or f"{symbol}-{day}-snapshot-index-v34.json"
     archives.jwrite_new(folder/name,index)
     return {"snapshots":len(snapshots),"spool_bytes":seen,"spool_sha":h.hexdigest()}
 
