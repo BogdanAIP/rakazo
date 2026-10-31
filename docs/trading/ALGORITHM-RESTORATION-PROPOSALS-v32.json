@@ -1,0 +1,360 @@
+{
+  "schema": "tape_memory_v31",
+  "programs": [
+    {
+      "id": "restoration-flow-memory",
+      "role": "candidate",
+      "hypothesis": "Accumulated asymmetry of actual best-quote quantity restoration predicts continuation aligned with executed flow.",
+      "state": [
+        "if_pos",
+        [
+          "neg",
+          [
+            "mul",
+            [
+              "feature",
+              "flow"
+            ],
+            [
+              "previous"
+            ]
+          ]
+        ],
+        [
+          "feature",
+          "restoration"
+        ],
+        [
+          "add",
+          [
+            "mul",
+            [
+              "constant",
+              0.85
+            ],
+            [
+              "previous"
+            ]
+          ],
+          [
+            "feature",
+            "restoration"
+          ]
+        ]
+      ],
+      "output": [
+        "if_pos",
+        [
+          "mul",
+          [
+            "current"
+          ],
+          [
+            "feature",
+            "flow"
+          ]
+        ],
+        [
+          "current"
+        ],
+        [
+          "constant",
+          0
+        ]
+      ],
+      "threshold": 0.75
+    },
+    {
+      "id": "restoration-flow-no-memory",
+      "role": "ablation",
+      "hypothesis": "Accumulated asymmetry of actual best-quote quantity restoration predicts continuation aligned with executed flow.",
+      "state": [
+        "feature",
+        "restoration"
+      ],
+      "output": [
+        "if_pos",
+        [
+          "mul",
+          [
+            "current"
+          ],
+          [
+            "feature",
+            "flow"
+          ]
+        ],
+        [
+          "current"
+        ],
+        [
+          "constant",
+          0
+        ]
+      ],
+      "threshold": 0.75
+    },
+    {
+      "id": "fragile-flow-memory",
+      "role": "candidate",
+      "hypothesis": "Executed flow directed at the less-restored side predicts continuation after repeated weak restoration.",
+      "state": [
+        "if_pos",
+        [
+          "neg",
+          [
+            "mul",
+            [
+              "feature",
+              "flow"
+            ],
+            [
+              "previous"
+            ]
+          ]
+        ],
+        [
+          "feature",
+          "fragile_flow"
+        ],
+        [
+          "add",
+          [
+            "mul",
+            [
+              "constant",
+              0.85
+            ],
+            [
+              "previous"
+            ]
+          ],
+          [
+            "feature",
+            "fragile_flow"
+          ]
+        ]
+      ],
+      "output": [
+        "if_pos",
+        [
+          "mul",
+          [
+            "current"
+          ],
+          [
+            "feature",
+            "response"
+          ]
+        ],
+        [
+          "current"
+        ],
+        [
+          "constant",
+          0
+        ]
+      ],
+      "threshold": 1.0
+    },
+    {
+      "id": "fragile-flow-no-memory",
+      "role": "ablation",
+      "hypothesis": "Executed flow directed at the less-restored side predicts continuation after repeated weak restoration.",
+      "state": [
+        "feature",
+        "fragile_flow"
+      ],
+      "output": [
+        "if_pos",
+        [
+          "mul",
+          [
+            "current"
+          ],
+          [
+            "feature",
+            "response"
+          ]
+        ],
+        [
+          "current"
+        ],
+        [
+          "constant",
+          0
+        ]
+      ],
+      "threshold": 1.0
+    },
+    {
+      "id": "restoration-transition-memory",
+      "role": "candidate",
+      "hypothesis": "Memory of restoration transitions adds predictive information beyond the current five-level book imbalance.",
+      "state": [
+        "if_pos",
+        [
+          "neg",
+          [
+            "mul",
+            [
+              "feature",
+              "flow"
+            ],
+            [
+              "previous"
+            ]
+          ]
+        ],
+        [
+          "feature",
+          "restoration_change"
+        ],
+        [
+          "add",
+          [
+            "mul",
+            [
+              "constant",
+              0.85
+            ],
+            [
+              "previous"
+            ]
+          ],
+          [
+            "feature",
+            "restoration_change"
+          ]
+        ]
+      ],
+      "output": [
+        "if_pos",
+        [
+          "mul",
+          [
+            "current"
+          ],
+          [
+            "feature",
+            "flow"
+          ]
+        ],
+        [
+          "if_pos",
+          [
+            "mul",
+            [
+              "current"
+            ],
+            [
+              "feature",
+              "book_imbalance"
+            ]
+          ],
+          [
+            "current"
+          ],
+          [
+            "constant",
+            0
+          ]
+        ],
+        [
+          "constant",
+          0
+        ]
+      ],
+      "threshold": 0.75
+    },
+    {
+      "id": "restoration-transition-no-memory",
+      "role": "ablation",
+      "hypothesis": "Memory of restoration transitions adds predictive information beyond the current five-level book imbalance.",
+      "state": [
+        "feature",
+        "restoration_change"
+      ],
+      "output": [
+        "if_pos",
+        [
+          "mul",
+          [
+            "current"
+          ],
+          [
+            "feature",
+            "flow"
+          ]
+        ],
+        [
+          "if_pos",
+          [
+            "mul",
+            [
+              "current"
+            ],
+            [
+              "feature",
+              "book_imbalance"
+            ]
+          ],
+          [
+            "current"
+          ],
+          [
+            "constant",
+            0
+          ]
+        ],
+        [
+          "constant",
+          0
+        ]
+      ],
+      "threshold": 0.75
+    },
+    {
+      "id": "depth-baseline",
+      "role": "baseline",
+      "hypothesis": "Fixed simple observable baseline under exactly the same source-availability and quote-cost rules.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "feature",
+        "book_imbalance"
+      ],
+      "threshold": 0.2
+    },
+    {
+      "id": "flow-baseline",
+      "role": "baseline",
+      "hypothesis": "Fixed simple observable baseline under exactly the same source-availability and quote-cost rules.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "feature",
+        "flow"
+      ],
+      "threshold": 0.6
+    },
+    {
+      "id": "price-response-baseline",
+      "role": "baseline",
+      "hypothesis": "Fixed simple observable baseline under exactly the same source-availability and quote-cost rules.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "feature",
+        "response"
+      ],
+      "threshold": 1.0
+    }
+  ]
+}
