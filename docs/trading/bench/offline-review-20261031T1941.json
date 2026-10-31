@@ -1,0 +1,103 @@
+{
+  "schema": "rakazo_bench_gpt_offline_review_v2",
+  "baseline_v401": {
+    "status": "COMPLETE",
+    "head": "7ed5c4acd8d94dc041ef45706482db8660916d09",
+    "started_utc": "2026-10-31T19:42:28.677572+00:00",
+    "timeout_seconds": 600,
+    "command": [
+      "python",
+      "-m",
+      "unittest",
+      "test_algorithm_bench_v40",
+      "test_okx_bench_archive_v40",
+      "-v"
+    ],
+    "child_pid": 17028,
+    "exit_code": 0,
+    "finished_utc": "2026-10-31T19:43:34.215282+00:00",
+    "head_unchanged": true,
+    "stdout_sha256": "8645d757f5c1c34c1e53a731a90b342a5a4be070af9daf6010f688f2b4d44151",
+    "stderr_sha256": "471d478853216179c9ac8f8e2c14b046cccfb4eb2248ff6def853c0ab01db8b9",
+    "tests_passed": 29,
+    "unittest_seconds": 65.132
+  },
+  "superseded_local_v401_cost_patch": {
+    "status": "COMPLETE",
+    "head": "7ed5c4acd8d94dc041ef45706482db8660916d09",
+    "started_utc": "2026-10-31T19:50:31.142912+00:00",
+    "timeout_seconds": 600,
+    "source_sha256": {
+      "algorithm_bench_v40.py": "876328f8d49590ed254a91dc6654b1851fa31cc51305e2545a9b305cbd1886a4",
+      "test_algorithm_bench_v40.py": "a2fc0e16ece39d9c949e1f79908f32c0f21436755e8eb1a682814c87e21d5489",
+      "okx_bench_archive_v40.py": "dde53706d4cee0336b195e5db5cf6ea22d750e2caee935e0610464e458ae307f",
+      "test_okx_bench_archive_v40.py": "b63dd8437833f98515aba8bf58880ccee8632dc449fdcebb81f17f2087496cec"
+    },
+    "command": [
+      "python",
+      "-m",
+      "unittest",
+      "test_algorithm_bench_v40",
+      "test_okx_bench_archive_v40",
+      "-v"
+    ],
+    "child_pid": 23112,
+    "exit_code": 0,
+    "finished_utc": "2026-10-31T19:51:18.534753+00:00",
+    "head_unchanged": true,
+    "source_files_unchanged": true,
+    "stdout_sha256": "8645d757f5c1c34c1e53a731a90b342a5a4be070af9daf6010f688f2b4d44151",
+    "stderr_sha256": "444506571cbe93e3c5a1806776c9d607455c48ea6caa488768adcba4f4b60e8e",
+    "tests_passed": 34,
+    "unittest_seconds": 47.035,
+    "interpretation": "Preserved intermediate audit; superseded by Claude's v40.2 engine, not the published active harness"
+  },
+  "current_v402": {
+    "status": "COMPLETE",
+    "head": "99e81d790dc2c4737bd3d9cc9aacc06d23c6f669",
+    "started_utc": "2026-10-31T20:00:35.578801+00:00",
+    "timeout_seconds": 600,
+    "source_sha256": {
+      "algorithm_bench_v40.py": "7e4f7bd986ef6fe9ec85ab06feb708d7ba9f55f24137ee261f5e30a0d4bad501",
+      "test_algorithm_bench_v40.py": "aa2d0709c5380f5f256a0c26a8f12502e8e011290bead2de7667ac78476641f8",
+      "okx_bench_archive_v40.py": "dde53706d4cee0336b195e5db5cf6ea22d750e2caee935e0610464e458ae307f",
+      "test_okx_bench_archive_v40.py": "b63dd8437833f98515aba8bf58880ccee8632dc449fdcebb81f17f2087496cec"
+    },
+    "command": [
+      "python",
+      "-m",
+      "unittest",
+      "test_algorithm_bench_v40",
+      "test_okx_bench_archive_v40",
+      "-v"
+    ],
+    "child_pid": 13156,
+    "exit_code": 0,
+    "finished_utc": "2026-10-31T20:01:26.951360+00:00",
+    "head_unchanged": true,
+    "source_files_unchanged": true,
+    "stdout_sha256": "8645d757f5c1c34c1e53a731a90b342a5a4be070af9daf6010f688f2b4d44151",
+    "stderr_sha256": "8d64a421dd67c1770c573fdf9691355940769718f98d42ed698d81baba16f0fd",
+    "tests_passed": 38,
+    "bench_tests": 30,
+    "builder_tests": 8,
+    "unittest_seconds": 51.026
+  },
+  "hypothesis_batch_sha256": {
+    "claude-2026-10-31.json": "fe81c1b111ec9e09fb11a67e66737a8cb7d50f49adab2cf92878dc7387ef3e62",
+    "gpt-2026-10-31.json": "239973b932f676f29e0887893016c966e7128b48d67c9f22d31260a4f959b8c8",
+    "gpt-medium-horizon-2026-10-31.json": "da1675faad864f7dc8d9e0078e9c5ba3ea4a620119ed845336ff67c87f1e897a"
+  },
+  "registered_hypotheses": 31,
+  "real_strategy_evaluations": 0,
+  "market_holdout_accessed": false,
+  "freeze_approved": false,
+  "independent_efficacy_confirmed": false,
+  "review_counterexamples": "counterexamples-v402-20261031T1941.json",
+  "current_blockers": [
+    "fixed-contract versus constant-weight price/funding accounting",
+    "omitted all-cash calendar steps",
+    "all 31 plus audited prior-trial accounting before first result",
+    "funding completeness, margin/delisting provenance and incomplete full panel"
+  ]
+}

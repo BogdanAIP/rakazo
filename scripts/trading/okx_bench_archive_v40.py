@@ -14,6 +14,7 @@ import hashlib
 import io
 import json
 import os
+import shutil
 import statistics
 import time
 import urllib.error
@@ -28,6 +29,10 @@ HOST = "https://app.okx.com"
 MODULES = {"candles": "2", "funding": "3"}
 UA = {"User-Agent": "Mozilla/5.0 (compatible; historical research audit)"}
 DATE = dt.date.fromisoformat
+MAX_RESPONSE_BYTES = 128 * 1024 * 1024
+MAX_ARCHIVE_MEMBER_BYTES = 512 * 1024 * 1024
+DEFAULT_NEW_BYTES = 512 * 1024 * 1024
+MIN_FREE_BYTES = 10 * 1024 ** 3
 
 
 def days(first, last):
@@ -37,11 +42,23 @@ def days(first, last):
         day += dt.timedelta(days=1)
 
 
-def request_bytes(url: str) -> bytes:
+def request_bytes(url: str, *, max_bytes: int = MAX_RESPONSE_BYTES) -> bytes:
+    if max_bytes <= 0:
+        raise ValueError("Response byte budget must be positive")
     for attempt in range(7):
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=45) as response:
-                return response.read()
+                length = response.headers.get("Content-Length")
+                if length is not None and int(length) > max_bytes:
+                    raise ValueError("Response exceeds finite byte budget")
+                body = bytearray()
+                while True:
+                    chunk = response.read(min(1024 * 1024, max_bytes - len(body) + 1))
+                    if not chunk:
+                        return bytes(body)
+                    body.extend(chunk)
+                    if len(body) > max_bytes:
+                        raise ValueError("Response exceeds finite byte budget")
         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
             if isinstance(exc, urllib.error.HTTPError) and exc.code not in (429, 500, 502, 503, 504):
                 raise
@@ -103,33 +120,56 @@ def file_at(root: Path, module: str, day: dt.date) -> Path:
     return root / "raw" / f"{module}-{day.isoformat()}.zip"
 
 
-def sync(root: Path, start: dt.date, end: dt.date, max_days: int):
+def sync(root: Path, start: dt.date, end: dt.date, max_days: int,
+         *, max_new_bytes: int = DEFAULT_NEW_BYTES, min_free_bytes: int = MIN_FREE_BYTES):
+    if start > end or max_days <= 0 or max_new_bytes <= 0 or min_free_bytes < 0:
+        raise ValueError("Invalid finite acquisition budget or date interval")
     root.mkdir(parents=True, exist_ok=True)
     processed = 0
+    new_bytes = 0
     for day in days(start, end):
         receipt = root / "receipts" / (day.isoformat() + ".json")
         current = json.loads(receipt.read_text()) if receipt.exists() else {}
         missing = [name for name in MODULES if not file_at(root, name, day).exists()]
+        for name in MODULES:
+            path = file_at(root, name, day)
+            if path.exists():
+                info = current.get(name, {})
+                if info.get("sha256") != sha_file(path) or info.get("zip_bytes") != path.stat().st_size:
+                    raise ValueError(f"Existing original/receipt mismatch: {name} {day}")
         if not missing:
             continue
         if processed >= max_days:
             break
         for name in missing:
+            free = shutil.disk_usage(root).free
+            remaining = min(MAX_RESPONSE_BYTES, max_new_bytes - new_bytes, free - min_free_bytes)
+            if remaining <= 0:
+                raise RuntimeError("Finite acquisition byte/disk budget exhausted")
             url = source_url(name, day)
-            data = request_bytes(url)
+            data = request_bytes(url, max_bytes=remaining)
             with zipfile.ZipFile(io.BytesIO(data)) as archive:
                 if len(archive.namelist()) != 1 or not archive.namelist()[0].endswith(".csv"):
                     raise ValueError(f"Unexpected ZIP contents: {name} {day}")
+                if archive.infolist()[0].file_size > MAX_ARCHIVE_MEMBER_BYTES:
+                    raise ValueError("Uncompressed archive member exceeds finite budget")
                 if archive.testzip() is not None:
                     raise ValueError(f"Corrupted archive: {name} {day}")
+            if shutil.disk_usage(root).free - len(data) < min_free_bytes:
+                raise RuntimeError("Free disk would fall below the acquisition floor")
             atomic_bytes(file_at(root, name, day), data)
+            new_bytes += len(data)
             current[name] = {"official_url": url, "sha256": sha(data), "zip_bytes": len(data)}
             atomic_bytes(receipt, (json.dumps(current, sort_keys=True, indent=2) + "\n").encode())
             time.sleep(0.55)  # Stay below OKX index rate cap (5 requests per 2 seconds).
         processed += 1
         print(json.dumps({"archive_day": day.isoformat(), "modules": list(current), "status": "downloaded"}), flush=True)
     total = sum(1 for d in days(start, end) if all(file_at(root, x, d).exists() for x in MODULES))
-    print(json.dumps({"complete_archive_days": total, "required_archive_days": (end - start).days + 1}, indent=2))
+    result = {"complete_archive_days": total, "required_archive_days": (end - start).days + 1,
+              "new_archive_days": processed, "new_bytes": new_bytes,
+              "max_new_bytes": max_new_bytes, "min_free_bytes": min_free_bytes}
+    print(json.dumps(result, indent=2))
+    return result
 
 
 def read_zip_rows(path: Path):
@@ -332,6 +372,8 @@ def main():
         sp.add_argument("--archive-end", type=DATE, required=True)
         if cmd == "sync":
             sp.add_argument("--max-days", type=int, default=3)
+            sp.add_argument("--max-new-bytes", type=int, default=DEFAULT_NEW_BYTES)
+            sp.add_argument("--min-free-bytes", type=int, default=MIN_FREE_BYTES)
         else:
             sp.add_argument("--panel-start", type=DATE, required=True)
             sp.add_argument("--panel-end", type=DATE, required=True)
@@ -339,7 +381,8 @@ def main():
             sp.add_argument("--min-daily-quote-usd", type=float, default=5_000_000)
     args = p.parse_args()
     if args.cmd == "sync":
-        sync(args.root, args.archive_start, args.archive_end, args.max_days)
+        sync(args.root, args.archive_start, args.archive_end, args.max_days,
+             max_new_bytes=args.max_new_bytes, min_free_bytes=args.min_free_bytes)
     else:
         build(args.root, args.archive_start, args.archive_end, args.panel_start, args.panel_end,
               args.out, args.min_daily_quote_usd)

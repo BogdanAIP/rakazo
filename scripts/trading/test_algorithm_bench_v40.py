@@ -320,6 +320,21 @@ class TestCausality(BenchTestCase):
 
 
 class TestSimulation(BenchTestCase):
+    def test_skipped_cohort_flattens_before_reentry(self):
+        rows = []
+        for t in range(5):
+            for i, symbol in enumerate(("A", "B", "C", "D"), 1):
+                rows.append([t * 3_600_000, symbol, i, i, i, i, 1, int(t != 1), "", ""])
+        panel = rows_panel(self.tmp, "skip-reentry.csv", rows)
+        hyp = bench.validate_hypothesis({"id": "skip-reentry", "score": ["field", "close"],
+                                         "horizon_bars": 1, "min_symbols": 2})
+        sim = bench.simulate(panel, hyp, 1, 4, [0, 10])
+        self.assertEqual([p["t"] for p in sim["periods"]], [0, 1, 2])
+        self.assertEqual(sim["counts"]["skipped_small_cohort"], 1)
+        self.assertAlmostEqual(sum(p["turnover"] for p in sim["periods"]), 4.0)
+        self.assertTrue(all(p["gross"] == 0 for p in sim["periods"]))
+        self.assertAlmostEqual(sum(p["net"]["10"] for p in sim["periods"]), -0.004)
+
     def flat_panel(self, name, funding_cells, extra_rows=()):
         rows = []
         for t in range(6):

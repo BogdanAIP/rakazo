@@ -8,6 +8,7 @@ import io
 import json
 import tempfile
 import unittest
+from unittest import mock
 import zipfile
 from pathlib import Path
 
@@ -140,6 +141,58 @@ class TestArchiveBuilder(unittest.TestCase):
             fund_target.write_bytes(compressed("funding.csv", "instrument_name,funding_rate,funding_time\n"))
             with self.assertRaisesRegex(ValueError, "Duplicate minute"):
                 archive.aggregate_day(root, day)
+
+
+class TestAcquisitionBudgets(unittest.TestCase):
+    def test_response_bound_with_and_without_content_length(self):
+        for headers in ({"Content-Length": "6"}, {}):
+            response = io.BytesIO(b"123456")
+            response.headers = headers
+            with mock.patch.object(archive.urllib.request, "urlopen", return_value=response):
+                with self.assertRaisesRegex(ValueError, "byte budget"):
+                    archive.request_bytes("https://static.okx.com/example.zip", max_bytes=5)
+        response = io.BytesIO(b"12345")
+        response.headers = {}
+        with mock.patch.object(archive.urllib.request, "urlopen", return_value=response):
+            self.assertEqual(archive.request_bytes("https://static.okx.com/example.zip", max_bytes=5), b"12345")
+
+    def test_disk_floor_stops_before_network(self):
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch.object(archive.shutil, "disk_usage", return_value=mock.Mock(free=100)):
+                with mock.patch.object(archive, "source_url") as lookup:
+                    with self.assertRaisesRegex(RuntimeError, "byte/disk budget"):
+                        archive.sync(Path(td), dt.date(2023, 10, 8), dt.date(2023, 10, 8), 1,
+                                     min_free_bytes=100)
+                    lookup.assert_not_called()
+
+    def test_new_bytes_quota_leaves_verified_checkpoint(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, day = Path(td), dt.date(2023, 10, 8)
+            payload = compressed("source.csv", "a,b\n1,2\n")
+            def download(url, *, max_bytes):
+                self.assertEqual(max_bytes, len(payload))
+                return payload
+            with mock.patch.object(archive, "source_url", return_value="https://static.okx.com/example.zip"):
+                with mock.patch.object(archive, "request_bytes", side_effect=download) as read:
+                    with mock.patch.object(archive.time, "sleep"):
+                        with self.assertRaisesRegex(RuntimeError, "byte/disk budget"):
+                            archive.sync(root, day, day, 1, max_new_bytes=len(payload), min_free_bytes=0)
+                    self.assertEqual(read.call_count, 1)
+            self.assertTrue(archive.file_at(root, "candles", day).exists())
+            self.assertFalse(archive.file_at(root, "funding", day).exists())
+            receipt = json.loads((root / "receipts" / f"{day}.json").read_text())
+            self.assertEqual(receipt["candles"]["sha256"], hashlib.sha256(payload).hexdigest())
+
+    def test_existing_original_receipt_mismatch_is_not_skipped(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, day = Path(td), dt.date(2023, 10, 8)
+            path = archive.file_at(root, "candles", day)
+            path.parent.mkdir(parents=True)
+            path.write_bytes(compressed("source.csv", "a,b\n1,2\n"))
+            with mock.patch.object(archive, "source_url") as lookup:
+                with self.assertRaisesRegex(ValueError, "original/receipt mismatch"):
+                    archive.sync(root, day, day, 1, min_free_bytes=0)
+                lookup.assert_not_called()
 
 
 if __name__ == "__main__":
