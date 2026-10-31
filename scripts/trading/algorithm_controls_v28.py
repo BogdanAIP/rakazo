@@ -160,7 +160,7 @@ def load_oi_sources(root):
 def historical_oi_context(oi,t):
     floored=(t//3_600_000)*3_600_000
     older=floored-2*3_600_000
-    recent=floored-3_600_000
+    recent=floored-1*3_600_000
     a=oi.get(older)
     b=oi.get(recent)
     return {
