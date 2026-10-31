@@ -257,7 +257,8 @@ def build(root: Path, archive_start: dt.date, archive_end: dt.date, panel_start:
              "historical_oi": "UNKNOWN: CSV oi left empty",
              "trailing_liquidity_rule": "median of 30 complete earlier UTC calendar days; zeros for absent days since first archive observation",
              "first_panel_utc": archive_start.isoformat(),
-             "first_eligible_utc": panel_start.isoformat(),
+             "first_possible_eligible_utc": (archive_start + dt.timedelta(days=30)).isoformat(),
+             "requested_main_window_utc": panel_start.isoformat(),
              "last_panel_utc": panel_end.isoformat(),
              "incomplete_hour_caveat": "Source gaps are counted, not classified as zero trades; investigate before freezing if material"}
 
@@ -294,8 +295,7 @@ def build(root: Path, archive_start: dt.date, archive_end: dt.date, panel_start:
                     all_hours += 1
                     prev = history[sym]
                     enough = (day - first_seen[sym]).days >= 30 and len(prev) == 30
-                    eligible = int(day >= panel_start and enough
-                                   and statistics.median(prev) >= min_daily_quote_usd)
+                    eligible = int(enough and statistics.median(prev) >= min_daily_quote_usd)
                     if eligible:
                         eligible_rows += 1
                     if fr is not None:
