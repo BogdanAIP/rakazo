@@ -51,7 +51,7 @@ Source-linked point-in-time data:
 `scripts/trading/test_algorithm_news_pit_v26.py` covers exactly 5 synthetic/source-structure scenarios: Sep03 event 14:00 macro=45min before signal, Bybit pause 14:30=15min before, future scheduled upgrade 15:00 classified as already announced, hour-level liquidation kept hindsight; Sep04 NFP12:30=405min before, later hour summary excluded; timezone and causal guards. Output file original to Windows private research source root:
 `C:/Users/eahra/RakazoRuntime/trading-live-data-20261011/alpha-research/news-context-v26/NEAR-2026-09-03_04-news-point-in-time.json`.
 
-5/5 v26 dedicated tests passed before output. No claim that these retrospective curated features represent a truly prospectively available real-time news API.
+5/5 v26 dedicated tests passed before output. After publishing this source-linked report, the host executed the disjoint suites: **261/261** `test_algorithm*.py` and **26/26** `test_[!a]*.py`, hence **287/287 executed tests PASSED**. The separately blocked/unchecked `test_alpha*.py` group is NOT claimed. Research GitHub worktree was clean and tracking its branch. No claim that these retrospective curated features represent a truly prospectively available real-time news API.
 
 ## Concrete next investigation: beyond news headlines
 
