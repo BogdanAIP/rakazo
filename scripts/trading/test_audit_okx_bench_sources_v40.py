@@ -1,11 +1,45 @@
 """Offline tests of funding-coverage diagnostics; no expected schedule is fabricated."""
 import datetime as dt
+import hashlib
+import io
+import json
+from pathlib import Path
+import tempfile
 import unittest
+import zipfile
 
 import audit_okx_bench_sources_v40 as audit
 
 
 class TestFundingCoverageDiagnostics(unittest.TestCase):
+    def test_real_archive_audit_preserves_off_hour_event_and_counts(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            day = dt.date(2023, 10, 1)
+            t = int(dt.datetime(2023, 9, 30, 16, tzinfo=dt.timezone.utc).timestamp() * 1000)
+            candles = "instrument_name,open,high,low,close,vol,vol_ccy,vol_quote,open_time,confirm\n"
+            candles += "".join(f"X-USDT-SWAP,1,1,1,1,0,0,0,{t+m*60000},0\n" for m in range(60))
+            funding = f"instrument_name,funding_rate,funding_time\nX-USDT-SWAP,0,{t+8000}\n"
+            receipts = {}
+            for kind, content in (("candles", candles), ("funding", funding)):
+                buf = io.BytesIO()
+                with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+                    z.writestr("source.csv", content)
+                payload = buf.getvalue()
+                p = audit.source.file_at(root, kind, day)
+                p.parent.mkdir(exist_ok=True)
+                p.write_bytes(payload)
+                receipts[kind] = {"sha256": hashlib.sha256(payload).hexdigest(), "zip_bytes": len(payload),
+                                  "official_url": "https://static.okx.com/example.zip"}
+            (root / "receipts").mkdir()
+            (root / "receipts" / f"{day}.json").write_text(json.dumps(receipts))
+            result = audit.audit(root, day, day, root / "manifest.json", root / "audit.json")
+            self.assertEqual(result["source_minutes"], 60)
+            self.assertEqual(result["per_archive_quality"][0]["original_funding_events"], 1)
+            self.assertEqual(result["funding"]["observed_events"], 1)
+            self.assertEqual(result["funding"]["non_hour_aligned_events"], 1)
+            self.assertNotIn("funding_events", result["per_archive_quality"][0])
+
     def test_original_off_hour_clock_is_reported_without_rounding(self):
         t = int(dt.datetime(2023, 10, 1, 8, tzinfo=dt.timezone.utc).timestamp() * 1000) + 8000
         events = {(t, "X"): 0.001}

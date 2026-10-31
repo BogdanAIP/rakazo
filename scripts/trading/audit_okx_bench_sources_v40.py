@@ -62,6 +62,7 @@ def audit(root, start, end, manifest_out, out):
             if not info["official_url"].startswith("https://static.okx.com/"):
                 raise ValueError("Unexpected original host")
             manifest.append({"day": day.isoformat(), "module": kind, **info})
+        events_before_day = len(events)
         for row in source.read_zip_rows(source.file_at(root, "funding", day)):
             symbol = row["instrument_name"]
             if not symbol.endswith("-USDT-SWAP"):
@@ -76,6 +77,7 @@ def audit(root, start, end, manifest_out, out):
                 raise ValueError("Duplicate original settlement")
             events[key] = rate
         rows, stats = source.aggregate_day(root, day, {})
+        stats.pop("funding_events")  # aggregate_day received no event map; never report its placeholder zero.
         day_symbols = set()
         for hour, symbol, *rest in rows:
             if not span_start <= hour < span_start + source.DAY:
@@ -83,7 +85,8 @@ def audit(root, start, end, manifest_out, out):
             symbols.add(symbol)
             day_symbols.add(symbol)
             observed_hours[(utc_day(hour), symbol)].add(hour % source.DAY // source.HOUR)
-        per_day.append({**stats, "symbols": len(day_symbols), "source_minutes": sum(r[8] for r in rows)})
+        per_day.append({**stats, "symbols": len(day_symbols), "source_minutes": sum(r[8] for r in rows),
+                        "original_funding_events": len(events) - events_before_day})
     full_days = {p for p, hours in observed_hours.items() if len(hours) == 24 and start.isoformat() <= p[0] < end.isoformat()}
     manifest_out.parent.mkdir(parents=True, exist_ok=True)
     manifest_out.open("x", encoding="utf-8").write(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
