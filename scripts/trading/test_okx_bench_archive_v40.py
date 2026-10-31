@@ -136,7 +136,7 @@ class TestArchiveBuilder(unittest.TestCase):
             repeated = "X-USDT-SWAP,1,1,1,1,0,0,0,1698854400000,0\n"
             target = archive.file_at(root, "candles", day)
             target.parent.mkdir(parents=True)
-            target.write_bytes(compressed("candles.csv", header + repeated * 2))
+            target.write_bytes(compressed("candles.csv", header + repeated + repeated.replace(",1,1,1,1,", ",2,2,2,2,")))
             fund_target = archive.file_at(root, "funding", day)
             fund_target.write_bytes(compressed("funding.csv", "instrument_name,funding_rate,funding_time\n"))
             with self.assertRaisesRegex(ValueError, "Duplicate minute"):

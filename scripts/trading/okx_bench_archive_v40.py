@@ -182,9 +182,18 @@ def read_zip_rows(path: Path):
             yield from reader
 
 
-def load_funding(root: Path, archive_dates):
+def nominal_funding_hour(timestamp):
+    hour = timestamp // HOUR * HOUR
+    if not 0 <= timestamp - hour < 60000:
+        raise ValueError("Funding clock outside reviewed [H,H+60s) window")
+    return hour
+
+
+def load_funding(root: Path, archive_dates, clock_audit=None):
     """Settlement-time rates; events belong to the hour ENDING at settlement T."""
     events = {}
+    counters = clock_audit if clock_audit is not None else {}
+    counters.update(snapped_events=0, maximum_offset_ms=0, outside_window_events=0)
     known_days = set()
     count = 0
     for day in archive_dates:
@@ -193,9 +202,15 @@ def load_funding(root: Path, archive_dates):
             if not symbol.endswith("-USDT-SWAP"):
                 continue
             settlement = int(row["funding_time"])
-            if settlement % HOUR:
-                raise ValueError(f"Funding settlement is not hourly aligned: {symbol} {settlement}")
-            bar_open = settlement - HOUR
+            try:
+                nominal = nominal_funding_hour(settlement)
+            except ValueError:
+                counters["outside_window_events"] += 1
+                raise
+            offset = settlement - nominal
+            counters["snapped_events"] += int(offset != 0)
+            counters["maximum_offset_ms"] = max(counters["maximum_offset_ms"], offset)
+            bar_open = nominal - HOUR
             key = (bar_open, symbol)
             if key in events:
                 raise ValueError(f"Duplicate settlement for {symbol} at {settlement}")
@@ -213,7 +228,8 @@ def aggregate_day(root: Path, day: dt.date, funding=None):
     else:
         local_funding_events = 0
     by_hour = {}
-    minutes_seen = set()
+    minutes_seen = {}
+    identical_duplicates = 0
     confirm = collections.Counter()
     for row in read_zip_rows(file_at(root, "candles", day)):
         symbol = row["instrument_name"]
@@ -223,9 +239,13 @@ def aggregate_day(root: Path, day: dt.date, funding=None):
         if minute % 60_000:
             raise ValueError(f"Not minute aligned: {symbol} {minute}")
         key_min = (minute, symbol)
+        fingerprint = tuple(sorted(row.items()))
         if key_min in minutes_seen:
-            raise ValueError(f"Duplicate minute {symbol} {minute}")
-        minutes_seen.add(key_min)
+            if minutes_seen[key_min] != fingerprint:
+                raise ValueError(f"Duplicate minute conflicting fields: {symbol} {minute}")
+            identical_duplicates += 1
+            continue
+        minutes_seen[key_min] = fingerprint
         key = (minute // HOUR * HOUR, symbol)
         op, hi, lo, cl, vol = map(float, (row["open"], row["high"], row["low"], row["close"], row["vol_quote"]))
         if min(op, hi, lo, cl) <= 0 or vol < 0 or hi < max(op, cl, lo) or lo > min(op, cl, hi):
@@ -257,6 +277,7 @@ def aggregate_day(root: Path, day: dt.date, funding=None):
                     funding.get((hour, sym)), acc[7]))
     return out, {"archive_date": day.isoformat(), "usable_hours": len(out),
                  "incomplete_hours": incomplete, "missing_source_minutes": missing_minutes,
+                 "identical_duplicate_rows_collapsed": identical_duplicates,
                  "confirm_counts": dict(confirm), "funding_events": local_funding_events}
 
 
@@ -280,8 +301,9 @@ def build(root: Path, archive_start: dt.date, archive_end: dt.date, panel_start:
 
     # A funding record in archive-day D+1 can settle the last UTC hour
     # of archive-day D. Pre-indexing avoids assigning it to the wrong bar.
+    funding_clock_audit = {}
     funding, funding_known_days, funding_count = load_funding(
-        root, days(archive_start, archive_end))
+        root, days(archive_start, archive_end), funding_clock_audit)
     history = collections.defaultdict(lambda: collections.deque(maxlen=30))
     first_seen = {}
     current_day = None
@@ -293,6 +315,8 @@ def build(root: Path, archive_start: dt.date, archive_end: dt.date, panel_start:
              "missing_archives": 0, "source_hourly_rows": 0, "incomplete_source_hours": 0,
              "missing_source_minutes": 0, "funding_events_observed": funding_count,
              "funding_unknown_rows": 0, "minute_confirm_flags": {},
+             "funding_clock": funding_clock_audit, "funding_interval_coverage_certified": False,
+             "identical_duplicate_rows_collapsed": 0,
              "quote_volume_unit": "USDT vol_quote",
              "historical_oi": "UNKNOWN: CSV oi left empty",
              "trailing_liquidity_rule": "median of 30 complete earlier UTC calendar days; zeros for absent days since first archive observation",
@@ -311,6 +335,7 @@ def build(root: Path, archive_start: dt.date, archive_end: dt.date, panel_start:
                         "eligible", "funding", "oi"))
             for archive_date in days(archive_start, archive_end):
                 records, stats = aggregate_day(root, archive_date, funding)
+                audit["identical_duplicate_rows_collapsed"] += stats["identical_duplicate_rows_collapsed"]
                 audit["incomplete_source_hours"] += stats["incomplete_hours"]
                 audit["missing_source_minutes"] += stats["missing_source_minutes"]
                 for flag, count in stats["confirm_counts"].items():
