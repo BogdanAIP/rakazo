@@ -1,0 +1,42 @@
+{
+  "schema": "rakazo_okx_archive_rest_crosscheck_v1",
+  "date_utc": "2026-10-31",
+  "source_archive_exchange_day": "2023-11-02",
+  "source_archive_sha256": "4bfa1c2ec05fda87f273559cb083e8df7692d23c0ef4e3eb8ebc6314c9d478c5",
+  "source_kind": "OKX official allswap-candlesticks daily ZIP",
+  "rest_url": "https://app.okx.com/api/v5/market/history-candles",
+  "rest_query": {
+    "bar": "1m",
+    "after_utc": "2023-11-02T00:00:00Z",
+    "limit": 100,
+    "instId": [
+      "BTC-USDT-SWAP",
+      "ETH-USDT-SWAP",
+      "SOL-USDT-SWAP"
+    ]
+  },
+  "observed_counts": {
+    "BTC-USDT-SWAP": 100,
+    "ETH-USDT-SWAP": 100,
+    "SOL-USDT-SWAP": 100
+  },
+  "matched_archive_minutes": 300,
+  "compared_numeric_fields": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "vol",
+    "vol_ccy",
+    "vol_quote"
+  ],
+  "numeric_comparison": "decimal exact numeric equality",
+  "mismatching_minutes": 0,
+  "archive_confirm_flags": {
+    "0": 300
+  },
+  "rest_confirm_flags": {
+    "1": 300
+  },
+  "interpretation": "For this 300-minute crosscheck only, archive confirm=0 does not mean its OHLCV values differ from final history-candles. This is NOT a completeness or correctness guarantee for other dates, symbols, or sparse hours."
+}
