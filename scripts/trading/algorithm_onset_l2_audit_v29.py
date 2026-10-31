@@ -130,7 +130,9 @@ def audit(root,onset_result,day):
     raw=Path(onset_result).read_bytes()
     if sha256(raw)!=ORIGINAL_ONSET_SHA:
         raise ValueError("Original all-minute onset study changed after outcomes")
-    result=strictly_decode(raw)
+    # The immutable 934-decision result is ~1.58MB; default v12 bound is 1MB.
+    # Keep strict duplicate/nonfinite rejection and cap at exactly 2MiB.
+    result=strictly_decode(raw,max_bytes=2*1024*1024)
     if (result.get("schema")!="algorithm_onset_first_passage_v29"
         or len(result.get("all_934_precommitted_decision_minutes_including_abstains",[]))!=934
         or result.get("sep05_frozen_holdout_untouched") is not True):
