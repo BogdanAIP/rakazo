@@ -167,6 +167,23 @@ class TestPanel(BenchTestCase):
         self.assertEqual(bench.audit_panel(bad, None, 24 * 1000 * 0.9, 30)["eligibility_check"]["mismatched_rows"], 1)
 
 
+    def test_recent_listing_requires_its_own_30_prior_days(self):
+        rows = []
+        for d in range(61):
+            for symbol in ("EARLY", "LATE"):
+                if symbol == "LATE" and d < 20:
+                    continue
+                rows.append((d * bench.MS_PER_DAY, symbol, 1, 1, 1, 1,
+                             10_000_000, 0, "", ""))
+        panel = rows_panel(self.tmp, "listing-warmup.csv", rows)
+        flags = bench.recompute_eligibility(panel, usd=5_000_000, days=30)
+        self.assertEqual(flags["EARLY"][29], 0)
+        self.assertEqual(flags["EARLY"][30], 1)
+        self.assertEqual(flags["LATE"][35], 0)
+        self.assertEqual(flags["LATE"][49], 0)
+        self.assertEqual(flags["LATE"][50], 1)
+
+
 class TestOperators(BenchTestCase):
     def test_rolling_windows_match_naive(self):
         rng = random.Random(8)
