@@ -1,0 +1,61 @@
+{
+ "schema": "rakazo_bench_hypothesis_v1",
+ "hypotheses": [
+  {
+   "id": "funding-crowding-contrarian",
+   "author": "claude",
+   "rationale": "Persistently high funding marks crowded leveraged longs. Short the highest-funding perps and long the lowest: collects funding carry and bets on crowding unwinding.",
+   "score": ["neg", ["csrank", ["field", "funding"]]],
+   "horizon_bars": 8
+  },
+  {
+   "id": "funding-acceleration-contrarian",
+   "author": "claude",
+   "rationale": "A fast rise in funding means leverage is being added quickly; fade it relative to peers.",
+   "score": ["neg", ["csrank", ["delta", ["field", "funding"], 24]]],
+   "horizon_bars": 8
+  },
+  {
+   "id": "xs-momentum-7d",
+   "author": "claude",
+   "rationale": "Cross-sectional time-series momentum documented in crypto at weekly horizons.",
+   "score": ["csrank", ["sum", ["field", "ret"], 168]],
+   "horizon_bars": 24
+  },
+  {
+   "id": "xs-reversal-1d",
+   "author": "claude",
+   "rationale": "Daily cross-sectional overreaction reverses; liquidity providers are paid to absorb it.",
+   "score": ["neg", ["csrank", ["sum", ["field", "ret"], 24]]],
+   "horizon_bars": 24
+  },
+  {
+   "id": "xs-reversal-1h",
+   "author": "claude",
+   "rationale": "Hourly reversal. Expected to have positive IC but fail after costs; a check that the cost model bites.",
+   "score": ["neg", ["csrank", ["field", "ret"]]],
+   "horizon_bars": 1
+  },
+  {
+   "id": "oi-confirmed-trend",
+   "author": "claude",
+   "rationale": "Price moves accompanied by rising open interest reflect new positioning and persist; moves on falling OI are covering and fade.",
+   "score": ["csrank", ["mul", ["sum", ["field", "ret"], 24], ["sign", ["pct", ["field", "oi"], 24]]]],
+   "horizon_bars": 24
+  },
+  {
+   "id": "low-volatility",
+   "author": "claude",
+   "rationale": "Low-volatility anomaly: lottery-like high-volatility perps are overpriced relative to calm ones.",
+   "score": ["neg", ["csrank", ["std", ["field", "ret"], 168]]],
+   "horizon_bars": 24
+  },
+  {
+   "id": "volume-shock-reversal",
+   "author": "claude",
+   "rationale": "Returns on abnormally high own-volume are more likely liquidity shocks and partially reverse.",
+   "score": ["neg", ["csrank", ["mul", ["sum", ["field", "ret"], 24], ["z", ["log1p", ["field", "volume"]], 168]]]],
+   "horizon_bars": 24
+  }
+ ]
+}
