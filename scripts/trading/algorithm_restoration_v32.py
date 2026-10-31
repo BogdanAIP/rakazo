@@ -164,7 +164,7 @@ def quote_outcome(rows, quotes, alarm):
             "funding_and_additional_slippage": "UNAVAILABLE"}
 
 
-def evaluate(root, cache_folder, definitions, proposal_sha):
+def evaluate(root, cache_folder, definitions, proposal_sha, action_function=None):
     lab.FEATURES.update(EXTRA_FEATURES)  # fixed reviewed leaves, never arbitrary code
     results = []
     for day, symbol in lab.ORIGINALS:
@@ -176,7 +176,7 @@ def evaluate(root, cache_folder, definitions, proposal_sha):
         scores = {}
         for definition in definitions:
             # An unavailable feature interval cannot silently carry prior memory.
-            actions = causal_available_actions(definition, rows)
+            actions = (action_function or causal_available_actions)(definition, rows)
             s = lab.score(rows, actions, scope, labels)
             s["quoted_scenarios"] = [quote_outcome(rows, quotes, a) for a in s["records"]]
             values = [x["after_20bp_fee_bps"] for x in s["quoted_scenarios"]
