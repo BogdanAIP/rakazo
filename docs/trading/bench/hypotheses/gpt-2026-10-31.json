@@ -1,0 +1,402 @@
+{
+  "schema": "rakazo_bench_hypothesis_v1",
+  "hypotheses": [
+    {
+      "id": "gpt-trend-acceleration-8h",
+      "author": "gpt",
+      "rationale": "Test whether a recent 8h return impulse above its own 72h drift forecasts cross-sectional continuation rather than an unsustainable spike.",
+      "score": [
+        "csrank",
+        [
+          "sub",
+          [
+            "sum",
+            [
+              "field",
+              "ret"
+            ],
+            8
+          ],
+          [
+            "div",
+            [
+              "sum",
+              [
+                "field",
+                "ret"
+              ],
+              72
+            ],
+            [
+              "const",
+              9
+            ]
+          ]
+        ]
+      ],
+      "horizon_bars": 8,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-risk-adjusted-drift-3d",
+      "author": "gpt",
+      "rationale": "Select medium-horizon drift that is large relative to its own realized return volatility; penalize noisy directional rallies.",
+      "score": [
+        "csrank",
+        [
+          "div",
+          [
+            "sum",
+            [
+              "field",
+              "ret"
+            ],
+            72
+          ],
+          [
+            "std",
+            [
+              "field",
+              "ret"
+            ],
+            72
+          ]
+        ]
+      ],
+      "horizon_bars": 24,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-volatility-compression-1d-7d",
+      "author": "gpt",
+      "rationale": "Trade relative short-term volatility compression as a cross-sectional low-risk anomaly, controlling each contract by its own one-week volatility.",
+      "score": [
+        "neg",
+        [
+          "csrank",
+          [
+            "div",
+            [
+              "std",
+              [
+                "field",
+                "ret"
+              ],
+              24
+            ],
+            [
+              "std",
+              [
+                "field",
+                "ret"
+              ],
+              168
+            ]
+          ]
+        ]
+      ],
+      "horizon_bars": 12,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-range-spike-reversal-8h",
+      "author": "gpt",
+      "rationale": "An extreme hourly high-low range coupled to a same-direction hourly return reflects exhausted liquidity and predicts partial reversal.",
+      "score": [
+        "neg",
+        [
+          "csrank",
+          [
+            "mul",
+            [
+              "field",
+              "ret"
+            ],
+            [
+              "z",
+              [
+                "field",
+                "range"
+              ],
+              72
+            ]
+          ]
+        ]
+      ],
+      "horizon_bars": 8,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-volume-impulse-followthrough-6h",
+      "author": "gpt",
+      "rationale": "Test whether high abnormal quote volume confirms an aligned 6h directional impulse rather than causing immediate reversal.",
+      "score": [
+        "csrank",
+        [
+          "mul",
+          [
+            "sum",
+            [
+              "field",
+              "ret"
+            ],
+            6
+          ],
+          [
+            "z",
+            [
+              "log1p",
+              [
+                "field",
+                "volume"
+              ]
+            ],
+            168
+          ]
+        ]
+      ],
+      "horizon_bars": 8,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-short-volume-shock-reversal",
+      "author": "gpt",
+      "rationale": "A 1h shock with high relative volume may contain liquidity pressure that partly mean reverts over the next four bars.",
+      "score": [
+        "neg",
+        [
+          "csrank",
+          [
+            "mul",
+            [
+              "field",
+              "ret"
+            ],
+            [
+              "z",
+              [
+                "field",
+                "volume"
+              ],
+              72
+            ]
+          ]
+        ]
+      ],
+      "horizon_bars": 4,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-persistent-volume-trend",
+      "author": "gpt",
+      "rationale": "Compare 24h signed drift conditioned on whether 24h average quote flow is elevated against the trailing one-week regime.",
+      "score": [
+        "csrank",
+        [
+          "mul",
+          [
+            "sum",
+            [
+              "field",
+              "ret"
+            ],
+            24
+          ],
+          [
+            "z",
+            [
+              "mean",
+              [
+                "field",
+                "volume"
+              ],
+              24
+            ],
+            168
+          ]
+        ]
+      ],
+      "horizon_bars": 24,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-close-location-persistence",
+      "author": "gpt",
+      "rationale": "Current-hour close location within the observed high-low range may predict next-bar buying or selling pressure across perps.",
+      "score": [
+        "csrank",
+        [
+          "div",
+          [
+            "sub",
+            [
+              "field",
+              "close"
+            ],
+            [
+              "field",
+              "low"
+            ]
+          ],
+          [
+            "sub",
+            [
+              "field",
+              "high"
+            ],
+            [
+              "field",
+              "low"
+            ]
+          ]
+        ]
+      ],
+      "horizon_bars": 4,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-oi-unwind-8h",
+      "author": "gpt",
+      "rationale": "Conditional on independently verified point-in-time OI coverage only: test whether price gains with 8h OI expansion unwind at short horizon.",
+      "score": [
+        "neg",
+        [
+          "csrank",
+          [
+            "mul",
+            [
+              "sum",
+              [
+                "field",
+                "ret"
+              ],
+              8
+            ],
+            [
+              "pct",
+              [
+                "field",
+                "oi"
+              ],
+              8
+            ]
+          ]
+        ]
+      ],
+      "horizon_bars": 8,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-funding-vol-adjusted-crowding",
+      "author": "gpt",
+      "rationale": "Only if independently complete funding coverage is proven: fade funding crowding scaled by realized 72h contract volatility.",
+      "score": [
+        "neg",
+        [
+          "csrank",
+          [
+            "div",
+            [
+              "field",
+              "funding"
+            ],
+            [
+              "std",
+              [
+                "field",
+                "ret"
+              ],
+              72
+            ]
+          ]
+        ]
+      ],
+      "horizon_bars": 8,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-funding-price-divergence",
+      "author": "gpt",
+      "rationale": "Only with point-in-time funding coverage: test whether high same-sign funding and 24h price drift predicts crowded-position reversal.",
+      "score": [
+        "neg",
+        [
+          "csrank",
+          [
+            "mul",
+            [
+              "field",
+              "funding"
+            ],
+            [
+              "sum",
+              [
+                "field",
+                "ret"
+              ],
+              24
+            ]
+          ]
+        ]
+      ],
+      "horizon_bars": 8,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-stress-reversal-zreturn-range",
+      "author": "gpt",
+      "rationale": "An extreme hourly standardized return co-occurring with extreme standardized range is an overreaction candidate for 4h reversal.",
+      "score": [
+        "neg",
+        [
+          "csrank",
+          [
+            "mul",
+            [
+              "z",
+              [
+                "field",
+                "ret"
+              ],
+              48
+            ],
+            [
+              "z",
+              [
+                "field",
+                "range"
+              ],
+              48
+            ]
+          ]
+        ]
+      ],
+      "horizon_bars": 4,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    }
+  ]
+}
