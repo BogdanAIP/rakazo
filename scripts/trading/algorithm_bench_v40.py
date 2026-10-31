@@ -46,7 +46,7 @@ from statistics import NormalDist
 
 SCHEMA_HYP = "rakazo_bench_hypothesis_v1"
 SCHEMA_CONFIG = "rakazo_bench_config_v1"
-VERSION = "bench-v40.3"
+VERSION = "bench-v40.4"
 
 MAX_DEPTH = 8
 MAX_NODES = 64
@@ -593,14 +593,17 @@ def _base_feature(panel: Panel, name: str):
         elif name == "range":
             h, l = s["high"][sym], s["low"][sym]
             out[sym] = _clean([math.log(a / b) if a == a else NAN for a, b in zip(h, l)])
-        else:  # funding: last settled rate; an unknown bar resets it to unknown
+        else:  # funding: last settled rate known before bar t's settlements; unknown resets it
+            # A settlement assigned to bar t (the bar ending at T) is billed to positions held
+            # through T, but archive clocks can lag T by seconds, so as a feature it becomes
+            # available only at the next decision (t + 1).
             raw, flag, seq, last = s["funding"][sym], panel.settled[sym], nan_array(panel.T), NAN
             for t in range(panel.T):
+                seq[t] = last
                 if raw[t] != raw[t]:
                     last = NAN
                 elif flag[t]:
                     last = raw[t]
-                seq[t] = last
             out[sym] = seq
     return out
 
@@ -767,7 +770,7 @@ def simulate(panel: Panel, hyp: dict, first_entry: int, last_exit: int, costs_bp
             for sym, (wt, p0, last) in tr["legs"].items():
                 book[sym] += wt * last / p0
         turnover = math.fsum(abs(book.get(sym, 0.0) - held.get(sym, 0.0)) for sym in set(book) | set(held))
-        if not book and turnover == 0.0:
+        if not book and turnover == 0.0 and not steps:  # the calendar starts at the first trade
             t += r
             continue
         gross = penalty = fund = 0.0
@@ -802,8 +805,12 @@ def simulate(panel: Panel, hyp: dict, first_entry: int, last_exit: int, costs_bp
             for sym, (wt, p0, last) in tr["legs"].items():
                 held[sym] += wt * last / p0
         steps.append({"t": t, "gross": gross, "penalty": penalty, "funding": fund, "turnover": turnover,
-                      "ic": ic, "n": n_cohort, "weights": new_weights})
+                      "ic": ic, "n": n_cohort, "weights": new_weights, "cash": not book})
         t += r
+    # All-cash steps between trades stay in the calendar as zero returns; only the tail
+    # after the last trade (no tranche can still finish inside the window) is dropped.
+    while steps and steps[-1]["cash"] and steps[-1]["turnover"] == 0.0:
+        steps.pop()
     if steps:  # liquidate whatever is still held
         steps[-1]["turnover"] += math.fsum(abs(x) for x in held.values())
     for p in steps:
@@ -975,6 +982,7 @@ DEFAULT_GATE = {
     "holdout_budget": 3,
     "holdout_alpha": 0.05,
     "prior_trials": 0,
+    "registered_hypotheses": [],
 }
 
 
@@ -1027,15 +1035,21 @@ def append_ledger(path, entry: dict) -> None:
         os.fsync(fh.fileno())
 
 
-def trial_stats(ledger: list[dict], panel_sha: str, current_sha: str, current_sr: float) -> list[float]:
-    """Annualised gate Sharpe ratios of all distinct development trials on this panel.
-    Annual units make hypotheses with different rebalance steps comparable."""
+def trial_stats(ledger: list[dict], panel_sha: str, current_sha: str, current_sr: float) -> dict:
+    """Annualised gate Sharpe ratios of all distinct development trials on this panel,
+    keyed by hypothesis SHA. Annual units make different rebalance steps comparable."""
     srs = {}
     for e in ledger:
         if e.get("region") == "development" and e.get("panel_sha256") == panel_sha and e.get("sharpe_annual_gate") is not None:
             srs[e["hypothesis_sha256"]] = e["sharpe_annual_gate"]
     srs[current_sha] = current_sr
-    return list(srs.values())
+    return srs
+
+
+def count_trials(gate: dict, evaluated_shas) -> int:
+    """Distinct trials: every hypothesis registered at freeze or evaluated on the panel,
+    plus audited prior trials. Independent of evaluation order."""
+    return len(set(evaluated_shas) | set(gate.get("registered_hypotheses", []))) + int(gate.get("prior_trials", 0))
 
 
 def write_signoff(directory, hypothesis_sha256: str, panel_sha256: str, reviewer: str, note: str = "") -> Path:
@@ -1077,8 +1091,9 @@ def evaluate_development(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledg
         report["verdict"] = "INSUFFICIENT_DATA"
     else:
         ppy = summary["periods_per_year"]
-        srs = trial_stats(read_ledger(ledger_path), panel.sha, hsha, g["sharpe_annual"])
-        n_trials = len(srs) + int(gate.get("prior_trials", 0))
+        by_sha = trial_stats(read_ledger(ledger_path), panel.sha, hsha, g["sharpe_annual"])
+        srs = list(by_sha.values())
+        n_trials = count_trials(gate, by_sha)
         # Null sampling variance of an annual Sharpe estimate is about 1 / years.
         var_annual = max(moments(srs)[1] ** 2 if len(srs) >= 2 else 0.0, ppy / n)
         dsr = deflated_sharpe(g["sharpe_period_lr"], n, g["skew"], g["kurtosis"], n_trials, var_annual / ppy)
@@ -1223,7 +1238,10 @@ def main(argv=None):
     p.add_argument("--out", required=True)
     p.add_argument("--expect-bar-ms", type=int, default=3_600_000)
     p.add_argument("--holdout-frac", type=float, default=0.25)
-    p.add_argument("--prior-trials", type=int, default=0)
+    p.add_argument("--prior-trials", type=int, required=True,
+                   help="audited count of distinct rules already tried before this bench")
+    p.add_argument("--registered-hyp", action="append", required=True,
+                   help="every committed hypothesis batch; all count as trials before the first result")
     for name in ("evaluate", "holdout"):
         p = sub.add_parser(name)
         for arg in ("--panel", "--config", "--hyp", "--ledger", "--out"):
@@ -1259,7 +1277,9 @@ def main(argv=None):
         print(json.dumps(audit_panel(panel, args.expect_bar_ms, args.eligibility_usd, args.eligibility_days), indent=1))
         return
     if args.cmd == "freeze":
-        cfg = freeze_config(panel, args.holdout_frac, args.out, {"prior_trials": args.prior_trials}, args.expect_bar_ms)
+        registered = sorted({hypothesis_sha(h) for f in args.registered_hyp for h in read_hypotheses(f)})
+        cfg = freeze_config(panel, args.holdout_frac, args.out,
+                            {"prior_trials": args.prior_trials, "registered_hypotheses": registered}, args.expect_bar_ms)
         print(json.dumps({k: cfg[k] for k in ("panel_sha256", "holdout_start_utc")}, indent=1))
         return
     cfg, boundary = load_config(args.config, panel)

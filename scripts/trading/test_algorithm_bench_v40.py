@@ -1,7 +1,9 @@
 """Offline calibration tests for Algorithm Bench v40. No network, no orders."""
 from __future__ import annotations
 
+import contextlib
 import csv
+import io
 import json
 import math
 import random
@@ -184,8 +186,9 @@ class TestPanel(BenchTestCase):
         self.assertEqual((p.series["funding"]["B"][1], p.settled["B"][1]), (0.0, 0))
         self.assertEqual(list(p.eligible["B"]), [0, 1, 1, 0])
         last = bench.evaluate_expression(["field", "funding"], p)["A"]
-        self.assertEqual(last[0], 0.001)
-        self.assertTrue(all(math.isnan(x) for x in last[1:]))  # missing rows and NA reset it
+        self.assertTrue(math.isnan(last[0]))  # a settlement in bar t is a feature only from t + 1
+        self.assertEqual(last[1], 0.001)
+        self.assertTrue(all(math.isnan(x) for x in last[2:]))  # missing rows and NA reset it
 
     def test_eligibility_audit(self):
         path = self.tmp / "elig.csv"
@@ -334,6 +337,32 @@ class TestSimulation(BenchTestCase):
         self.assertAlmostEqual(sum(p["turnover"] for p in sim["periods"]), 4.0)
         self.assertTrue(all(p["gross"] == 0 for p in sim["periods"]))
         self.assertAlmostEqual(sum(p["net"]["10"] for p in sim["periods"]), -0.004)
+
+    def test_all_cash_steps_stay_in_calendar(self):
+        # GPT's fixture: decisions at bars 1 and 2 are ineligible; the cash step at t=2 must count.
+        rows = []
+        for t in range(6):
+            for i, symbol in enumerate(("A", "B", "C", "D"), 1):
+                rows.append([t * 3_600_000, symbol, i, i, i, i, 1, int(t not in (1, 2)), "", ""])
+        panel = rows_panel(self.tmp, "cash-gap.csv", rows)
+        hyp = bench.validate_hypothesis({"id": "cash-gap", "score": ["field", "close"],
+                                         "horizon_bars": 1, "min_symbols": 2})
+        sim = bench.simulate(panel, hyp, 1, 5, [0])
+        self.assertEqual([p["t"] for p in sim["periods"]], [0, 1, 2, 3])
+        self.assertEqual([p["cash"] for p in sim["periods"]], [False, True, True, False])
+        self.assertAlmostEqual(sum(p["turnover"] for p in sim["periods"]), 4.0)
+
+    def test_calendar_ends_at_last_trade(self):
+        rows = []
+        for t in range(8):
+            for i, symbol in enumerate(("A", "B", "C", "D"), 1):
+                rows.append([t * 3_600_000, symbol, i, i, i, i, 1, int(t < 2), "", ""])
+        panel = rows_panel(self.tmp, "cash-tail.csv", rows)
+        hyp = bench.validate_hypothesis({"id": "cash-tail", "score": ["field", "close"],
+                                         "horizon_bars": 1, "min_symbols": 2})
+        sim = bench.simulate(panel, hyp, 1, 7, [0])
+        self.assertEqual([p["t"] for p in sim["periods"]], [0, 1, 2])  # trades, then the exit
+        self.assertFalse(sim["periods"][-1]["cash"] and sim["periods"][-1]["turnover"] == 0)
 
     def flat_panel(self, name, funding_cells, extra_rows=()):
         rows = []
@@ -572,3 +601,31 @@ class TestHoldoutDiscipline(BenchTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTrialAccounting(unittest.TestCase):
+    def test_registered_floor_is_order_independent(self):
+        gate = {"prior_trials": 5, "registered_hypotheses": ["a", "b", "c"]}
+        self.assertEqual(bench.count_trials(gate, {"a": 0.1}), 8)
+        self.assertEqual(bench.count_trials(gate, {"c": 0.1, "b": 0.2, "a": 0.0}), 8)
+        self.assertEqual(bench.count_trials(gate, {"a": 0.1, "z": 0.3}), 9)  # unregistered still counts
+        self.assertEqual(bench.count_trials({}, {"a": 0.1}), 1)
+
+    def test_freeze_requires_and_records_registered_trials(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            panel = d / "p.csv"
+            bench.synthesize(panel, symbols=4, bars=200, seed=3)
+            hyp = d / "h.json"
+            hyp.write_text(json.dumps({"schema": "rakazo_bench_hypothesis_v1", "hypotheses": [
+                {"id": "x", "author": "claude", "score": ["field", "close"], "horizon_bars": 4},
+                {"id": "y", "author": "gpt", "score": ["neg", ["field", "close"]], "horizon_bars": 4}]}))
+            with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+                bench.main(["freeze", "--panel", str(panel), "--out", str(d / "c0.json"), "--prior-trials", "3"])
+            with contextlib.redirect_stdout(io.StringIO()):
+                bench.main(["freeze", "--panel", str(panel), "--out", str(d / "c.json"), "--prior-trials", "3",
+                            "--registered-hyp", str(hyp)])
+            gate = json.loads((d / "c.json").read_text())["gate"]
+            self.assertEqual(gate["prior_trials"], 3)
+            self.assertEqual(len(gate["registered_hypotheses"]), 2)
+            self.assertEqual(bench.count_trials(gate, {}), 5)
