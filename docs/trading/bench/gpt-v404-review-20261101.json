@@ -1,0 +1,31 @@
+{
+  "schema": "v404_independent_review",
+  "source_head": "11129c5307253b4765e6d1a57d91b0de50ac8aa6",
+  "cash_decisions": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "funding_availability_lag_fixture_pass": true,
+  "registered_hypotheses": 31,
+  "synthetic_prior_trials": 7,
+  "first_trial_count": 38,
+  "all_evaluated_trial_count": 38,
+  "actual_prior_trials_audited": false,
+  "real_strategy_evaluations": 0,
+  "freeze_approved": false,
+  "full_suite": {
+    "head": "11129c5307253b4765e6d1a57d91b0de50ac8aa6",
+    "status": "COMPLETE",
+    "started": "2026-10-31T21:23:52.497289+00:00",
+    "timeout_seconds": 600,
+    "child_pid": 16744,
+    "exit_code": 0,
+    "finished": "2026-10-31T21:25:06.090502+00:00",
+    "head_unchanged": true,
+    "stderr_sha256": "014033cb663756224ce6fb1b9c74c9f7effeb8d0f3cc7a4d00d4c05e58a4ed16"
+  },
+  "tests_passed": 50,
+  "unittest_seconds": 73.077
+}
