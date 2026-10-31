@@ -1,0 +1,334 @@
+{
+  "schema": "matured_payoff_v37",
+  "settings": {
+    "minimum_days": 20,
+    "maturity_minutes": 17,
+    "delete_best_days": 2
+  },
+  "programs": [
+    {
+      "id": "liquidity-payoff-memory",
+      "role": "candidate",
+      "hypothesis": "Matured economic episode memory admits a liquidity proposal only after twenty earlier day blocks support absolute and incremental empirical payoff stability.",
+      "operator": "matured-economic-memory",
+      "score": [
+        "sub",
+        [
+          "mul",
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "band_flow"
+              ]
+            ],
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "ask_upper"
+                ]
+              ]
+            ]
+          ],
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "bid_lower"
+              ]
+            ],
+            [
+              "feature",
+              "buy_capacity"
+            ]
+          ]
+        ],
+        [
+          "mul",
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "band_flow"
+                ]
+              ]
+            ],
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "bid_upper"
+                ]
+              ]
+            ]
+          ],
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "ask_lower"
+              ]
+            ],
+            [
+              "feature",
+              "sell_capacity"
+            ]
+          ]
+        ]
+      ],
+      "baseline": [
+        "feature",
+        "response"
+      ],
+      "cell": "capacity",
+      "require_incremental": true
+    },
+    {
+      "id": "no-incremental-memory",
+      "role": "ablation",
+      "hypothesis": "Remove only the incremental-versus-raw-price admission condition to test whether positive net episode memory adds information beyond ordinary price direction.",
+      "operator": "matured-economic-memory",
+      "score": [
+        "sub",
+        [
+          "mul",
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "band_flow"
+              ]
+            ],
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "ask_upper"
+                ]
+              ]
+            ]
+          ],
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "bid_lower"
+              ]
+            ],
+            [
+              "feature",
+              "buy_capacity"
+            ]
+          ]
+        ],
+        [
+          "mul",
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "band_flow"
+                ]
+              ]
+            ],
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "bid_upper"
+                ]
+              ]
+            ]
+          ],
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "ask_lower"
+              ]
+            ],
+            [
+              "feature",
+              "sell_capacity"
+            ]
+          ]
+        ]
+      ],
+      "baseline": [
+        "feature",
+        "response"
+      ],
+      "cell": "capacity",
+      "require_incremental": false
+    },
+    {
+      "id": "price-payoff-memory",
+      "role": "baseline",
+      "hypothesis": "A price-and-cost learner uses the same matured feedback and day-deletion stability rules; incremental labels are compared with raw executed flow.",
+      "operator": "matured-economic-memory",
+      "score": [
+        "feature",
+        "response"
+      ],
+      "baseline": [
+        "feature",
+        "flow"
+      ],
+      "cell": "volatility",
+      "require_incremental": true
+    },
+    {
+      "id": "rank-liquidity",
+      "role": "baseline",
+      "hypothesis": "The unchanged v36 relative-rank rule is retained to verify exact old alarm parity without presenting the same outcomes as new independent evidence.",
+      "operator": "past-rank",
+      "score": [
+        "sub",
+        [
+          "mul",
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "band_flow"
+              ]
+            ],
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "ask_upper"
+                ]
+              ]
+            ]
+          ],
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "bid_lower"
+              ]
+            ],
+            [
+              "feature",
+              "buy_capacity"
+            ]
+          ]
+        ],
+        [
+          "mul",
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "band_flow"
+                ]
+              ]
+            ],
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "bid_upper"
+                ]
+              ]
+            ]
+          ],
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "ask_lower"
+              ]
+            ],
+            [
+              "feature",
+              "sell_capacity"
+            ]
+          ]
+        ]
+      ],
+      "baseline": [
+        "feature",
+        "response"
+      ],
+      "cell": "none",
+      "require_incremental": false
+    },
+    {
+      "id": "rank-flow",
+      "role": "baseline",
+      "hypothesis": "The unchanged executed-flow rank control verifies source and admission parity with the preceding v36 experiment.",
+      "operator": "past-rank",
+      "score": [
+        "feature",
+        "flow"
+      ],
+      "baseline": [
+        "feature",
+        "response"
+      ],
+      "cell": "none",
+      "require_incremental": false
+    },
+    {
+      "id": "cash",
+      "role": "baseline",
+      "hypothesis": "Always abstain is an explicit zero-exposure comparator; zero exposure never establishes profitable trading efficacy.",
+      "operator": "cash",
+      "score": [
+        "constant",
+        0
+      ],
+      "baseline": [
+        "constant",
+        0
+      ],
+      "cell": "none",
+      "require_incremental": false
+    }
+  ]
+}
