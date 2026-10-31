@@ -201,14 +201,12 @@ def build(research_root):
     news=load_news()
     all_decisions=[]
     onsets=[]
+    trade_times_by_day={day:[event[0] for event in rows] for day,rows in trades.items()}
     next_permitted_ms=-1
     for t in decision_grid():
         day=datetime.fromtimestamp(t/1000,timezone.utc).date().isoformat()
         rows=trades[day]
-        times=[x[0] for x in rows] if day!=all_decisions[-1]["decision_utc"][:10] if False else None
-        # Executed-trade timestamp index is derived only from original source.
-        if not hasattr(build,"_trade_times_do_not_cache"):pass
-        d=detector_at(t,rows,[x[0] for x in rows],source[day]["NEAR-USDT-SWAP"])
+        d=detector_at(t,rows,trade_times_by_day[day],source[day]["NEAR-USDT-SWAP"])
         if d["trigger_qualification"]=="QUALIFIED_WITHOUT_COOLDOWN":
             if t<next_permitted_ms:
                 d["cooldown_suppressed"]=True
