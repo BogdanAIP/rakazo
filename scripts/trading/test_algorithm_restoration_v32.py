@@ -1,5 +1,10 @@
 import unittest
 from decimal import Decimal as D
+import hashlib
+import json
+from pathlib import Path
+import tempfile
+from unittest.mock import patch
 
 import algorithm_restoration_v32 as r
 
@@ -43,6 +48,53 @@ class RestorationTests(unittest.TestCase):
         self.assertEqual(r.restoration_share(0,0), .5)
         self.assertEqual(r.restoration_share(10,0), 1)
         self.assertEqual(r.restoration_share(0,10), 0)
+
+    def test_original_replay_excludes_update_exactly_at_decision(self):
+        # Synthetic stream exercises actual seek/index/window logic, not real data.
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            day, symbol = "synthetic", "SYNTHETIC"
+            events = []
+            for start, end in [(60, 9*60+16), (13*60, 15*60+1)]:
+                events.append({"ts": (start-1)*60000, "action": "snapshot", "qty": 20})
+                for k in range(start, end+1):
+                    events.append({"ts": k*60000-1000, "action": "update", "qty": 20})
+                    events.append({"ts": k*60000, "action": "update", "qty": 30})
+                events.append({"ts": end*60000+1000, "action": "update", "qty": 30})
+            events.sort(key=lambda x: x["ts"])
+            spool = root/"original.data"
+            snapshots, offset = [], 0
+            with spool.open("wb") as out:
+                for e in events:
+                    line = (json.dumps(e)+"\n").encode()
+                    if e["action"] == "snapshot":
+                        snapshots.append({"ts": e["ts"], "offset": offset,
+                                          "line_sha256": hashlib.sha256(line).hexdigest()})
+                    out.write(line)
+                    offset += len(line)
+            idx = {"original_sha256": "fake-receipt", "tape_sha256": "fake-tape",
+                   "spool_bytes": spool.stat().st_size, "spool_sha256": r.digest(spool),
+                   "snapshot_entries": snapshots}
+            (root/"l2").mkdir()
+            (root/"l2"/f"{symbol}-{day}-snapshot-index-v30.json").write_text(json.dumps(idx))
+            def unpack(line):
+                e = json.loads(line)
+                sides = {"bids": [(D(99), D(10))] if e["action"] == "snapshot" else [],
+                         "asks": [(D(101), D(e["qty"]))]}
+                return e["ts"], e["action"], None, None, sides, symbol
+            def quote(book, heaps, asof, target, bracket):
+                return {"ask_quantity": str(book["asks"][D(101)]), "asof": asof,
+                        "target": target, "next": bracket}
+            evidence = (None, spool, None, {"original_sha256": "fake-receipt"}, "fake-tape", [], [])
+            with patch.object(r, "manifest", return_value=evidence), \
+                 patch.object(r, "unpack_event", side_effect=unpack), \
+                 patch.object(r, "asof_original", side_effect=quote), \
+                 patch.object(r.lab.source.v29, "time_ms", return_value=0):
+                result = r.extract(root, day, symbol)
+            first = result["quotes"][60*60000]
+            self.assertEqual(first["ask_quantity"], "20")
+            self.assertLess(first["asof"], 60*60000)
+            self.assertEqual(first["next"], 60*60000)
 
 
 if __name__ == "__main__":
