@@ -91,6 +91,11 @@ class RestorationTests(unittest.TestCase):
                  patch.object(r, "asof_original", side_effect=quote), \
                  patch.object(r.lab.source.v29, "time_ms", return_value=0):
                 result = r.extract(root, day, symbol)
+                from algorithm_path_v35 import PathHook
+                instrumented = r.extract(root, day, symbol, transition_hook=PathHook())
+            self.assertEqual(result["quotes"], instrumented["quotes"])
+            self.assertEqual(instrumented["bins"][60*60000]["path"]["n"], 1)
+            self.assertEqual(instrumented["bins"][60*60000]["path"]["ofi"], 0)
             first = result["quotes"][60*60000]
             self.assertEqual(first["ask_quantity"], "20")
             self.assertLess(first["asof"], 60*60000)

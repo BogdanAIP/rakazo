@@ -41,7 +41,8 @@ def positive_and_negative_changes(book, best, sides):
     return values
 
 
-def extract(root, day, symbol, *, source_manifest=None, index_name=None):
+def extract(root, day, symbol, *, source_manifest=None, index_name=None,
+            transition_hook=None):
     _, spool, _, receipt, onset_sha, _, _ = (source_manifest or manifest)(root, day, symbol)
     index_path = Path(root)/"l2"/(index_name or f"{symbol}-{day}-snapshot-index-v30.json")
     idx = json.loads(index_path.read_bytes())
@@ -77,6 +78,8 @@ def extract(root, day, symbol, *, source_manifest=None, index_name=None):
                 ts, action, seq, prev, sides, inst = unpack_event(line)
                 if inst != symbol or (last_ts is not None and ts < last_ts):
                     raise ValueError("Original book instrument/time invalid")
+                if transition_hook is not None:
+                    transition_hook.advance(ts, book, heaps)
                 # Strictly prior to each decision, matching tape prints < T.
                 while n < len(target_minutes) and ts > target_minutes[n]-1:
                     t = target_minutes[n]
@@ -100,6 +103,8 @@ def extract(root, day, symbol, *, source_manifest=None, index_name=None):
                     last_seq = seq
                     delta = positive_and_negative_changes(book, current_best(book, heaps), sides)
                     b["changes"] = [x+y for x, y in zip(b["changes"], delta)]
+                if transition_hook is not None:
+                    transition_hook.stage(ts, action, book, heaps, b)
                 apply_levels(book, heaps, sides, action)
                 current_best(book, heaps)
                 last_ts = ts
@@ -166,7 +171,7 @@ def quote_outcome(rows, quotes, alarm):
 
 
 def evaluate(root, cache_folder, definitions, proposal_sha, action_function=None,
-             *, cohort=None, locator=None):
+             *, cohort=None, locator=None, feature_attacher=None):
     lab.FEATURES.update(EXTRA_FEATURES)  # fixed reviewed leaves, never arbitrary code
     results = []
     for day, symbol in (lab.ORIGINALS if cohort is None else cohort):
@@ -174,7 +179,7 @@ def evaluate(root, cache_folder, definitions, proposal_sha, action_function=None
         book = json.loads(p.read_bytes())
         rows, _v29, hashes, scope = lab.load_case(Path(root)/"source", day, symbol, locator=locator)
         labels = lab.episodes(rows, scope)
-        rows, quotes = attach(rows, book)
+        rows, quotes = (feature_attacher or attach)(rows, book)
         scores = {}
         for definition in definitions:
             # An unavailable feature interval cannot silently carry prior memory.

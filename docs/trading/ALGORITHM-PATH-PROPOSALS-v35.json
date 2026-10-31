@@ -1,0 +1,164 @@
+{
+  "schema": "tape_memory_v31",
+  "programs": [
+    {
+      "id": "queue-leads-price",
+      "role": "candidate",
+      "hypothesis": "Queue pressure preceding price transport may select continuing moves better than aggregate OFI alone.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "mul",
+        [
+          "feature",
+          "event_ofi"
+        ],
+        [
+          "positive",
+          [
+            "feature",
+            "phase_area"
+          ]
+        ]
+      ],
+      "threshold": 0.1
+    },
+    {
+      "id": "queue-follows-price",
+      "role": "ablation",
+      "hypothesis": "Reverse ordering tests whether any apparent edge is specific to queue pressure preceding price instead of following it.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "mul",
+        [
+          "feature",
+          "event_ofi"
+        ],
+        [
+          "positive",
+          [
+            "neg",
+            [
+              "feature",
+              "phase_area"
+            ]
+          ]
+        ]
+      ],
+      "threshold": 0.1
+    },
+    {
+      "id": "order-blind-area",
+      "role": "ablation",
+      "hypothesis": "Discard the area sign to test whether selection depends on event ordering rather than only path activity.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "mul",
+        [
+          "feature",
+          "event_ofi"
+        ],
+        [
+          "abs",
+          [
+            "feature",
+            "phase_area"
+          ]
+        ]
+      ],
+      "threshold": 0.1
+    },
+    {
+      "id": "canonical-ofi",
+      "role": "baseline",
+      "hypothesis": "Known best-quote order-flow imbalance provides a direct signed-flow comparator with price-level changes.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "feature",
+        "event_ofi"
+      ],
+      "threshold": 0.1
+    },
+    {
+      "id": "static-queue",
+      "role": "baseline",
+      "hypothesis": "Only unchanged-price queue contributions test whether best-price transport adds information to size changes.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "feature",
+        "queue_ofi"
+      ],
+      "threshold": 0.1
+    },
+    {
+      "id": "price-transport",
+      "role": "baseline",
+      "hypothesis": "Only price-level replacement contributions test whether static queue history adds anything to repricing.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "feature",
+        "transport_ofi"
+      ],
+      "threshold": 0.1
+    },
+    {
+      "id": "flow-baseline",
+      "role": "baseline",
+      "hypothesis": "Executed taker-flow imbalance is the unchanged simple comparator used throughout the preceding pilots.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "feature",
+        "flow"
+      ],
+      "threshold": 0.1
+    },
+    {
+      "id": "depth-baseline",
+      "role": "baseline",
+      "hypothesis": "Current top-five displayed depth imbalance is an unchanged simple state comparator from earlier research.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "feature",
+        "book_imbalance"
+      ],
+      "threshold": 0.1
+    },
+    {
+      "id": "return-baseline",
+      "role": "baseline",
+      "hypothesis": "The previous completed minute return tests whether apparent ordered pressure is ordinary price continuation.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "feature",
+        "response"
+      ],
+      "threshold": 0.1
+    }
+  ]
+}
