@@ -116,7 +116,7 @@ def acquire(root,day,symbol,kind,seconds=11):
         with zipfile.ZipFile(part) as z:
             expected=f"{symbol}-{kind}-{day}.csv"
             if z.namelist()!=[expected]:raise ValueError("Unexpected original archive ZIP member")
-            if z.getinfo(expected).file_size>80*1024*1024:raise ValueError("Oversized ZIP member")
+            if z.getinfo(expected).file_size>128*1024*1024:raise ValueError("Oversized ZIP member (>128 MiB)")
             # CRC and decompression integrity validated by zipfile.
             with z.open(expected) as f:
                 while f.read(1024*1024):pass
