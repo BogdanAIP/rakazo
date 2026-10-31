@@ -1,0 +1,31 @@
+# Continuation after v37: cleared development foundation and complete economic pipeline
+
+Status: **proposal, not a frozen acquisition protocol or an effective algorithm**. First reconstruct current R project resources rather than assuming v37 is still latest. Read [v37 results](ALGORITHM-MEMORY-RESULT-v37-20261031.md), [its frozen engineering protocol](ALGORITHM-MEMORY-PLAN-v37-20261031.md) and the earlier negative results. Keep all prior outputs.
+
+v37 implemented the mature-label queue and completed real opened-data prefix stress: 12/12 invariant comparisons and 7/12 detections of a deliberately premature reader. All three memory policies abstained because each queried state had at most one earlier observed day, below the fixed twenty-day floor. This is an engineering pass; no new economic test has occurred.
+
+## First resolve the source boundary
+
+Do not fetch the rejected August 1-20 proposal. SOL's existing 62-day original-price manifest places its conservative final-20% tail at August 19 06:15 UTC; archive labels August 19 and 20 overlap it. The known metadata audit is reproducible from five manifest SHA values in v37 evidence. It is not proof of an actual old holdout claim.
+
+The alternative July 1-20 UTC+8 labels for NEAR/SOL, with BTC/ETH minute-candle controls, have no known overlap in this limited audit. They remain **unapproved for acquisition**. Resolve older holdout/claim registry locations through project-scoped metadata, reviewed CLI/run receipts and known research worktrees; do not read protected outcomes or search unrelated projects/accounts. The public runners take a caller-provided registry directory. No registry file was found in the previously searched research archive and old discovery worktree; those searches are not exhaustive proof of nonexistence. Explicitly retain that limitation if locations cannot be established.
+
+Before accepting any replacement, register the full UTC span of each raw file and all known protected/claimed regions, including related control instruments. Reject overlaps before price access. Preserve September 5 and November 1-12 and adjacent UTC+8 archive overlap. July would be DEVELOPMENT even if cleared: older price-only research may have seen these markets. Do not relabel it independent.
+
+## Freeze the complete economic experiment before new payloads
+
+The v37 engineering pipeline is complete for its narrow test; the future economic learning/acquisition pipeline is not. Implement and review it in a separate research worktree. Existing source adapters intentionally bind October 1/8; do not bypass guards by weakening validation ad hoc. Introduce an explicit reviewed source-cohort manifest for the accepted replacement, original-free official URLs, instruments, archive labels, UTC bounds, file size limits, contract units, receipts and SHA identities. Reuse verified parsing and restoration primitives. No new model/provider configuration or paid data is required.
+
+Freeze six definitions or transparently preregister any mechanism revision before reading replacement prices. Preserve v37's exact matured-label rule, minimum-day floor and state lineage; do not relax them to induce actions. Twenty calendar files may still provide fewer than twenty observed blocks in a sparse state. A causal extension would need a predeclared chronological data-acquisition rule and a new protocol, not selection by favorable returns. Initial twenty-day material is a training foundation; an active rule needs later non-training days. Repeated October dates can supply only further DEVELOPMENT diagnostics.
+
+Declare paired net outcomes against both raw controls and the price-memory learner, ablations, abstention/exposure time, false signals, missed independent episodes and warning time. Block by market day/event dependence; predeclare uncertainty estimation, loss tails, drawdown and multiple-program/state/attempt accounting. The v37 mean after deleting two best days is an empirical sensitivity statistic, not a calibrated lower bound. Either implement a justified uncertainty-aware admission scheme before the first new-data economic run, or explicitly restrict that run to development diagnostics and keep efficacy untested. No positive mean or sparse-state result alone is a discovery.
+
+Prespecify realistic fees, bid/ask, size/slippage, funding and latency provenance; unavailable terms remain UNKNOWN. Keep historical quote scenarios distinct from executable PnL. Historical news may enter a predictor only with original source and first-availability time; a selective scheduled calendar is context, not a complete news stream. Funding/OI/liquidations without historical provenance remain UNKNOWN.
+
+## Finite source and compute batches
+
+After complete source clearance and protocol/code publication, register a small first acquisition batch by file identity, not by viewed returns. Check disk, current research jobs, lease and AGENTS before starting. Original compressed archives and verified receipts are the source of truth. Every extraction must check hashes and sequence/reset limitations and preserve coverage reasons. Budget runtime and spool disk before attempting twenty full L2 days. Retire a reproducible spool only under a recorded decision with verified original and spool SHA; preserve originals and features, and never delete unrelated data.
+
+Use a finite timeout-bounded worker with first-result preservation, a terminal status checkpoint and no monitor/service. Check for a prior active worker rather than duplicating it. Publish each completed batch's code/source lineage, variant count, metrics and counterexamples in GitHub and R; release control afterward. No deployments, main edits, PR merges, orders, Trader/PAPER sessions, account/risk/key/provider changes, paid sources or new automations.
+
+Only a development survivor can justify a newly frozen single-use independent test. Already used periods remain DEVELOPMENT and may not be recycled as holdouts. Broad transferability requires at least fifty independently checked markets with point-in-time selection and survivorship controls, temporally separated untouched evaluation, and subsequent independent forward observation without orders. The existing research goal remains unmet; do not claim efficacy or stop the continuing task based on a causal-engineering pass.

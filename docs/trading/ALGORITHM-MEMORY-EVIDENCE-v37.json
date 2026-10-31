@@ -1,0 +1,501 @@
+{
+  "first_private_result_sha256": "425c35b51f0ee45e811322af1fb3c230e836757337fd1fecbba1ab78032302fd",
+  "frozen_result": {
+    "cohort_audit_august": {
+      "claim_registry_locations_fully_resolved": false,
+      "conflicts": [
+        {
+          "archive_day_label": "2026-08-19",
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "protected_from_utc": "2026-08-19T06:15:00+00:00",
+          "symbol": "SOL-USDT-SWAP"
+        },
+        {
+          "archive_day_label": "2026-08-20",
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "protected_from_utc": "2026-08-19T06:15:00+00:00",
+          "symbol": "SOL-USDT-SWAP"
+        }
+      ],
+      "independent_cohort_certified": false,
+      "labels": [
+        "2026-08-01",
+        "2026-08-02",
+        "2026-08-03",
+        "2026-08-04",
+        "2026-08-05",
+        "2026-08-06",
+        "2026-08-07",
+        "2026-08-08",
+        "2026-08-09",
+        "2026-08-10",
+        "2026-08-11",
+        "2026-08-12",
+        "2026-08-13",
+        "2026-08-14",
+        "2026-08-15",
+        "2026-08-16",
+        "2026-08-17",
+        "2026-08-18",
+        "2026-08-19",
+        "2026-08-20"
+      ],
+      "payloads_opened": false,
+      "protected_metadata": [
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "3c55cf0c454858b9ba92e666e71aa283400ff2d8581fddd9dc1cb9615f99e7b0",
+          "end_ms": 1790784000000,
+          "manifest_sha": "9790814104f6f167c8f0648528963fc2c7fcf92cd158ab2f1b0331731d3f11c9",
+          "source_manifest": "BTC-USDT-SWAP.manifest.json",
+          "start_ms": 1789193700000,
+          "symbol": "BTC-USDT-SWAP"
+        },
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "88d49736ab89df74d5f6a7637f6336dc4286e11096233ef3b23f53936838fb6e",
+          "end_ms": 1788192000000,
+          "manifest_sha": "cd011cdfc8aa7bac7b7e53e05e13691e93cb074c15decea881ad11e505b66124",
+          "source_manifest": "DOGE-USDT-SWAP.manifest.json",
+          "start_ms": 1787120100000,
+          "symbol": "DOGE-USDT-SWAP"
+        },
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "020b7ecccf9b94627fc5f2d825f23d9cf8c5a606a5e265cb98cacac627b2673e",
+          "end_ms": 1790784000000,
+          "manifest_sha": "f6eafc4f753bb5d336031f4316d01ff809c86d7a98cdcdf89d52f64d4ffef603",
+          "source_manifest": "ETH-USDT-SWAP.manifest.json",
+          "start_ms": 1789193700000,
+          "symbol": "ETH-USDT-SWAP"
+        },
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "6651d67a0d05373791fd8ef0b227d5d562eeb4f7cb5a8a86c32225487e400825",
+          "end_ms": 1788192000000,
+          "manifest_sha": "d8c905a712b7584036fe23ec752bc2e47f41f6453d9f360dca6843420f36d7d8",
+          "source_manifest": "SOL-USDT-SWAP.manifest.json",
+          "start_ms": 1787120100000,
+          "symbol": "SOL-USDT-SWAP"
+        },
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "caf37774e29fdcf07267860ce092491c3dac337821ec4295647d8875a2acee9d",
+          "end_ms": 1790784000000,
+          "manifest_sha": "347a0a6e58826b37c6f5061ffc350e6edd8e04ec17c57d2d2f27088174e4ccea",
+          "source_manifest": "XRP-USDT-SWAP.manifest.json",
+          "start_ms": 1789193700000,
+          "symbol": "XRP-USDT-SWAP"
+        },
+        {
+          "basis": "Explicit project reservation",
+          "end_ms": 1788652800000,
+          "start_ms": 1788566400000,
+          "symbol": "ALL"
+        },
+        {
+          "basis": "Explicit project reservation",
+          "end_ms": 1794528000000,
+          "start_ms": 1793491200000,
+          "symbol": "ALL"
+        }
+      ],
+      "status": "REJECTED_CONSERVATIVE_OVERLAP"
+    },
+    "cohort_proposal_july": {
+      "claim_registry_locations_fully_resolved": false,
+      "conflicts": [],
+      "independent_cohort_certified": false,
+      "labels": [
+        "2026-07-01",
+        "2026-07-02",
+        "2026-07-03",
+        "2026-07-04",
+        "2026-07-05",
+        "2026-07-06",
+        "2026-07-07",
+        "2026-07-08",
+        "2026-07-09",
+        "2026-07-10",
+        "2026-07-11",
+        "2026-07-12",
+        "2026-07-13",
+        "2026-07-14",
+        "2026-07-15",
+        "2026-07-16",
+        "2026-07-17",
+        "2026-07-18",
+        "2026-07-19",
+        "2026-07-20"
+      ],
+      "payloads_opened": false,
+      "protected_metadata": [
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "3c55cf0c454858b9ba92e666e71aa283400ff2d8581fddd9dc1cb9615f99e7b0",
+          "end_ms": 1790784000000,
+          "manifest_sha": "9790814104f6f167c8f0648528963fc2c7fcf92cd158ab2f1b0331731d3f11c9",
+          "source_manifest": "BTC-USDT-SWAP.manifest.json",
+          "start_ms": 1789193700000,
+          "symbol": "BTC-USDT-SWAP"
+        },
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "88d49736ab89df74d5f6a7637f6336dc4286e11096233ef3b23f53936838fb6e",
+          "end_ms": 1788192000000,
+          "manifest_sha": "cd011cdfc8aa7bac7b7e53e05e13691e93cb074c15decea881ad11e505b66124",
+          "source_manifest": "DOGE-USDT-SWAP.manifest.json",
+          "start_ms": 1787120100000,
+          "symbol": "DOGE-USDT-SWAP"
+        },
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "020b7ecccf9b94627fc5f2d825f23d9cf8c5a606a5e265cb98cacac627b2673e",
+          "end_ms": 1790784000000,
+          "manifest_sha": "f6eafc4f753bb5d336031f4316d01ff809c86d7a98cdcdf89d52f64d4ffef603",
+          "source_manifest": "ETH-USDT-SWAP.manifest.json",
+          "start_ms": 1789193700000,
+          "symbol": "ETH-USDT-SWAP"
+        },
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "6651d67a0d05373791fd8ef0b227d5d562eeb4f7cb5a8a86c32225487e400825",
+          "end_ms": 1788192000000,
+          "manifest_sha": "d8c905a712b7584036fe23ec752bc2e47f41f6453d9f360dca6843420f36d7d8",
+          "source_manifest": "SOL-USDT-SWAP.manifest.json",
+          "start_ms": 1787120100000,
+          "symbol": "SOL-USDT-SWAP"
+        },
+        {
+          "basis": "Conservative declared final20% tail, not proof of claim or prior access",
+          "csv_sha": "caf37774e29fdcf07267860ce092491c3dac337821ec4295647d8875a2acee9d",
+          "end_ms": 1790784000000,
+          "manifest_sha": "347a0a6e58826b37c6f5061ffc350e6edd8e04ec17c57d2d2f27088174e4ccea",
+          "source_manifest": "XRP-USDT-SWAP.manifest.json",
+          "start_ms": 1789193700000,
+          "symbol": "XRP-USDT-SWAP"
+        },
+        {
+          "basis": "Explicit project reservation",
+          "end_ms": 1788652800000,
+          "start_ms": 1788566400000,
+          "symbol": "ALL"
+        },
+        {
+          "basis": "Explicit project reservation",
+          "end_ms": 1794528000000,
+          "start_ms": 1793491200000,
+          "symbol": "ALL"
+        }
+      ],
+      "status": "NO_KNOWN_OVERLAP_NOT_FULLY_CLEARED"
+    },
+    "effective_algorithm_confirmed": false,
+    "empirical_envelope_is_confidence_interval": false,
+    "frozen_head": "909fece17b9dd6f9172b41659ae1be90db408286",
+    "future_corruption_stress": [
+      {
+        "causal_prefix_equal": true,
+        "cutoff_utc": "2026-10-01T04:00:00+00:00",
+        "premature_negative_control_detected": true,
+        "symbol": "NEAR-USDT-SWAP"
+      },
+      {
+        "causal_prefix_equal": true,
+        "cutoff_utc": "2026-10-01T08:00:00+00:00",
+        "premature_negative_control_detected": true,
+        "symbol": "NEAR-USDT-SWAP"
+      },
+      {
+        "causal_prefix_equal": true,
+        "cutoff_utc": "2026-10-01T14:30:00+00:00",
+        "premature_negative_control_detected": false,
+        "symbol": "NEAR-USDT-SWAP"
+      },
+      {
+        "causal_prefix_equal": true,
+        "cutoff_utc": "2026-10-08T04:00:00+00:00",
+        "premature_negative_control_detected": false,
+        "symbol": "NEAR-USDT-SWAP"
+      },
+      {
+        "causal_prefix_equal": true,
+        "cutoff_utc": "2026-10-08T08:00:00+00:00",
+        "premature_negative_control_detected": true,
+        "symbol": "NEAR-USDT-SWAP"
+      },
+      {
+        "causal_prefix_equal": true,
+        "cutoff_utc": "2026-10-08T14:30:00+00:00",
+        "premature_negative_control_detected": false,
+        "symbol": "NEAR-USDT-SWAP"
+      },
+      {
+        "causal_prefix_equal": true,
+        "cutoff_utc": "2026-10-01T04:00:00+00:00",
+        "premature_negative_control_detected": true,
+        "symbol": "SOL-USDT-SWAP"
+      },
+      {
+        "causal_prefix_equal": true,
+        "cutoff_utc": "2026-10-01T08:00:00+00:00",
+        "premature_negative_control_detected": true,
+        "symbol": "SOL-USDT-SWAP"
+      },
+      {
+        "causal_prefix_equal": true,
+        "cutoff_utc": "2026-10-01T14:30:00+00:00",
+        "premature_negative_control_detected": false,
+        "symbol": "SOL-USDT-SWAP"
+      },
+      {
+        "causal_prefix_equal": true,
+        "cutoff_utc": "2026-10-08T04:00:00+00:00",
+        "premature_negative_control_detected": true,
+        "symbol": "SOL-USDT-SWAP"
+      },
+      {
+        "causal_prefix_equal": true,
+        "cutoff_utc": "2026-10-08T08:00:00+00:00",
+        "premature_negative_control_detected": true,
+        "symbol": "SOL-USDT-SWAP"
+      },
+      {
+        "causal_prefix_equal": true,
+        "cutoff_utc": "2026-10-08T14:30:00+00:00",
+        "premature_negative_control_detected": false,
+        "symbol": "SOL-USDT-SWAP"
+      }
+    ],
+    "independent_validation": false,
+    "interpretation": "Engineering causality/readiness experiment on two opened dates. Cold-start abstention is expected and is not economic validation.",
+    "new_source_payloads_downloaded": false,
+    "prior_v36_sha": "e51d7d6e25c33c5d2a784f8d063e3756cbac93fe80d2712fab3f5d1014f56d5c",
+    "proposal_sha": "19237a0f9f465b71d3963e42c5558d198c2602f8b54656ae7d41b8ec6361b892",
+    "readiness": [
+      {
+        "actions": {
+          "rank-flow": 29,
+          "rank-liquidity": 29
+        },
+        "max_prior_day_blocks": {
+          "liquidity-payoff-memory": 1,
+          "no-incremental-memory": 1,
+          "price-payoff-memory": 1
+        },
+        "memory_fingerprints": {
+          "liquidity-payoff-memory": "4a99686104b63b7bcb727e3044bcf3a8ef324f839fa0e4443d7504d3c8aacfd1",
+          "no-incremental-memory": "4a99686104b63b7bcb727e3044bcf3a8ef324f839fa0e4443d7504d3c8aacfd1",
+          "price-payoff-memory": "80e1dcd2a256e94cf070826c973f10ee2c9b08d6d5287ac1a4b7f1d18f02d257"
+        },
+        "missing_labels": {
+          "liquidity-payoff-memory": 0,
+          "no-incremental-memory": 0,
+          "price-payoff-memory": 0
+        },
+        "resolved_labels": {
+          "liquidity-payoff-memory": 10,
+          "no-incremental-memory": 10,
+          "price-payoff-memory": 36
+        },
+        "statuses": {
+          "liquidity-payoff-memory:COLD_START": 181,
+          "liquidity-payoff-memory:NO_PROPOSAL": 465,
+          "no-incremental-memory:COLD_START": 181,
+          "no-incremental-memory:NO_PROPOSAL": 465,
+          "price-payoff-memory:COLD_START": 609,
+          "price-payoff-memory:NO_PROPOSAL": 37
+        },
+        "symbol": "NEAR-USDT-SWAP"
+      },
+      {
+        "actions": {
+          "rank-flow": 33,
+          "rank-liquidity": 38
+        },
+        "max_prior_day_blocks": {
+          "liquidity-payoff-memory": 1,
+          "no-incremental-memory": 1,
+          "price-payoff-memory": 1
+        },
+        "memory_fingerprints": {
+          "liquidity-payoff-memory": "335a833e58fa0aca1da60634d7cef0238e56ddd084b9d6f085cc9a0e28ac21e1",
+          "no-incremental-memory": "335a833e58fa0aca1da60634d7cef0238e56ddd084b9d6f085cc9a0e28ac21e1",
+          "price-payoff-memory": "df6686e6c763b44f4ac0c7c034ab8ba30959e2e006168d4897de3772936b0dde"
+        },
+        "missing_labels": {
+          "liquidity-payoff-memory": 0,
+          "no-incremental-memory": 0,
+          "price-payoff-memory": 0
+        },
+        "resolved_labels": {
+          "liquidity-payoff-memory": 32,
+          "no-incremental-memory": 32,
+          "price-payoff-memory": 51
+        },
+        "statuses": {
+          "liquidity-payoff-memory:COLD_START": 476,
+          "liquidity-payoff-memory:NO_PROPOSAL": 372,
+          "no-incremental-memory:COLD_START": 476,
+          "no-incremental-memory:NO_PROPOSAL": 372,
+          "price-payoff-memory:COLD_START": 791,
+          "price-payoff-memory:NO_PROPOSAL": 57
+        },
+        "symbol": "SOL-USDT-SWAP"
+      }
+    ],
+    "sampling_uncertainty_calibrated": false,
+    "schema": "v37_causal_readiness_and_cohort_audit",
+    "trading_efficacy_evaluated": false,
+    "unresolved_claim_registry_locations": true
+  },
+  "source_inputs": [
+    {
+      "available_decisions": 341,
+      "certification": {
+        "conditional_accounting_identity_certified": false,
+        "network_availability_certified": false,
+        "sequence_ids_available": false
+      },
+      "day": "2026-10-01",
+      "l2_and_feature_lineage": {
+        "index_sha": "64c8b59df77cac16d9dc909892b289edf04b6b2af38137aec99970498fa15258",
+        "original_archive_sha": "6a825d5aedc682a4e71ceb09fe2700dd7c75d3d8bac96881414e628c15a74c51",
+        "prior_cache_sha": "37575617e50e0784b6f8a81f6e093c1bfb9894c6e93101c5737e8fcc7eef5538",
+        "prior_path_cache_sha": "2c60a6cf3f53c8c9a8d52d7563eb4fc8c86819a8931e80a86806557a4c396068",
+        "spool_sha": "eb93b17ff4fd1aac1c05dbd0c5a42eac2cf9ce04707743ff7bbb85b77ab52e02",
+        "trade_price_source_sha": "c3706fa01de04efcade57288b9fb30ef72e42b4fc2ad78eb9497378a4595870f"
+      },
+      "restoration_cache_sha": "569dd07afabb6c1eb8ae1c87131a1cef86dc33dc9d53cc8c585d1006a19eb15c",
+      "source_sha": {
+        "BTC-USDT-SWAP": "73b8ab5c1dbfe4c301288f91429374fbec4b1d4c8ff29c7be7ac092bcd75f32b",
+        "ETH-USDT-SWAP": "b8891bd8b477c6876519196586a55921909867801f21dde7632387d1c426e83c",
+        "NEAR-USDT-SWAP": "ebe729e959bf0ea8999f5c6edd3fd3d8f1c7b5b15dd05e2d179a6e14d81fd8a9",
+        "tape": "c3706fa01de04efcade57288b9fb30ef72e42b4fc2ad78eb9497378a4595870f"
+      },
+      "symbol": "NEAR-USDT-SWAP"
+    },
+    {
+      "available_decisions": 423,
+      "certification": {
+        "conditional_accounting_identity_certified": false,
+        "network_availability_certified": false,
+        "sequence_ids_available": false
+      },
+      "day": "2026-10-01",
+      "l2_and_feature_lineage": {
+        "index_sha": "c6ebb76afa72a967e02eb996a3a90f6e17a0615f2a09082d798d9e7ce6385b1a",
+        "original_archive_sha": "5832e030c1921ae12017accbcf4c50e8f7c10b8b8c93ab10845242046cd2826f",
+        "prior_cache_sha": "6b39e0e8b73dada3d6e673a05ac8e741c1309970a1a77e48cc098e5da1811055",
+        "prior_path_cache_sha": "2adeb8fe56e3aff825731e18d4579023976db04b18e8d58667eba1e17fd8d2cc",
+        "spool_sha": "944f2d75ad13556336c54725349f7f13dabb08342aa1cd22d114651edb4a65ef",
+        "trade_price_source_sha": "5752de8c0592a11094c74be4849d62000f9ca62180d6a574adf310a193f16cae"
+      },
+      "restoration_cache_sha": "c43ed61aacae11787ebace2fa78eee045b00c099ed631ddbb78bd55b79632f42",
+      "source_sha": {
+        "BTC-USDT-SWAP": "73b8ab5c1dbfe4c301288f91429374fbec4b1d4c8ff29c7be7ac092bcd75f32b",
+        "ETH-USDT-SWAP": "b8891bd8b477c6876519196586a55921909867801f21dde7632387d1c426e83c",
+        "SOL-USDT-SWAP": "d5a1ffbb0b3740d2c2d1903bff78458582c4eec28d7b9673e5f18c54823e1605",
+        "tape": "5752de8c0592a11094c74be4849d62000f9ca62180d6a574adf310a193f16cae"
+      },
+      "symbol": "SOL-USDT-SWAP"
+    },
+    {
+      "available_decisions": 305,
+      "certification": {
+        "conditional_accounting_identity_certified": false,
+        "network_availability_certified": false,
+        "sequence_ids_available": false
+      },
+      "day": "2026-10-08",
+      "l2_and_feature_lineage": {
+        "index_sha": "6162f205d0f8c431b26f6e7fa61ebe8c29c67abf6a3bac707425e6fbf74b7dfe",
+        "original_archive_sha": "c1c9cd8d5ec4d9ab1e4b5f69058ee57512fcd7d097bc22daa3afc77b63689171",
+        "prior_cache_sha": "1bc7b0f04eed7b8cc32049d0b5b4677cac2c5e94b5b71844cbe7124dd581294d",
+        "prior_path_cache_sha": "64d6168196d48de802cb4a68dc1bcfffb981666bce650eede16585ed8680b411",
+        "spool_sha": "8733dd21a183f8785d334aa471309ddf5edada3c67df8738f6b26de9266d250b",
+        "trade_price_source_sha": "e6d741becdeb1f50c46e4a5b75f946b8fb0aa80216b10cb5db29d12ad16d9f47"
+      },
+      "restoration_cache_sha": "3e51ec87c3206855405e3529e0f0a5e275571f717388e32bddccafef72275314",
+      "source_sha": {
+        "BTC-USDT-SWAP": "92727c6dbc1aa0bdfdd5a2cbe3c297d48b6218cad133347ccf5c24ae82c43960",
+        "ETH-USDT-SWAP": "a3cd35513eda1c4f3b23b29facefaaa839f0954b1ed663dd41da264597e0a543",
+        "NEAR-USDT-SWAP": "3b2dbb0e46dcffc863a00806c2bd195930b006feede890678934fc75090ccb52",
+        "tape": "e6d741becdeb1f50c46e4a5b75f946b8fb0aa80216b10cb5db29d12ad16d9f47"
+      },
+      "symbol": "NEAR-USDT-SWAP"
+    },
+    {
+      "available_decisions": 425,
+      "certification": {
+        "conditional_accounting_identity_certified": false,
+        "network_availability_certified": false,
+        "sequence_ids_available": false
+      },
+      "day": "2026-10-08",
+      "l2_and_feature_lineage": {
+        "index_sha": "c29f8ed499066aa21c821591bb5b567e55c3b64e7f57d65e82c520c7bb864225",
+        "original_archive_sha": "2f99d81f60ada060313afd24488e35e0a1824b584da49586dfb82b76143c0c8c",
+        "prior_cache_sha": "2f420ac8902206bee9dcafc7fc3bf194a344c633c97a5c1667fc51a9aa4170fa",
+        "prior_path_cache_sha": "f49606ad818f4be7482cd06a03f2281d7cbad846b4a47c1e260e93e3591137ef",
+        "spool_sha": "4570000b2a31d6039cb864366ef6eaa8f6fb8810de65f2c0e0f05c0d235de5b9",
+        "trade_price_source_sha": "0e44d9714ba1901154b2930b232a7c0877313d10dca94b68c8aec31127e0676f"
+      },
+      "restoration_cache_sha": "67be46ce711d16d1d15aaefa9d711d949bd065433f487d012d66723d95af081a",
+      "source_sha": {
+        "BTC-USDT-SWAP": "92727c6dbc1aa0bdfdd5a2cbe3c297d48b6218cad133347ccf5c24ae82c43960",
+        "ETH-USDT-SWAP": "a3cd35513eda1c4f3b23b29facefaaa839f0954b1ed663dd41da264597e0a543",
+        "SOL-USDT-SWAP": "3b43c5a644203d4eb9b0b2df7be0f06ce46e94471c54007b05c97f2c7509a2ed",
+        "tape": "0e44d9714ba1901154b2930b232a7c0877313d10dca94b68c8aec31127e0676f"
+      },
+      "symbol": "SOL-USDT-SWAP"
+    }
+  ],
+  "status": "DEVELOPMENT_CAUSAL_READINESS_NOT_EFFICACY",
+  "verification": {
+    "all_ok": true,
+    "isolated_test_total": 81,
+    "modules": [
+      {
+        "count": 9,
+        "module": "test_algorithm_stream_v31",
+        "ok": true
+      },
+      {
+        "count": 6,
+        "module": "test_algorithm_restoration_v32",
+        "ok": true
+      },
+      {
+        "count": 3,
+        "module": "test_algorithm_rank_v33",
+        "ok": true
+      },
+      {
+        "count": 6,
+        "module": "test_algorithm_independent_v34",
+        "ok": true
+      },
+      {
+        "count": 11,
+        "module": "test_algorithm_path_v35",
+        "ok": true
+      },
+      {
+        "count": 22,
+        "module": "test_algorithm_band_v36",
+        "ok": true
+      },
+      {
+        "count": 24,
+        "module": "test_algorithm_memory_v37",
+        "ok": true
+      }
+    ],
+    "prior_shared_process_attempt": {
+      "failures": 1,
+      "reason": "Historical stream feature catalog shared with later grammar extensions",
+      "tests": 377
+    }
+  }
+}
