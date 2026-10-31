@@ -98,6 +98,16 @@ class TestValidation(BenchTestCase):
         with self.assertRaises(ValueError):
             bench.validate_hypothesis({"id": "x", "score": ["field", "close"], "horizon_bars": 1, "code": "x"})
 
+    def test_medium_and_three_month_horizon_validation(self):
+        for hours in (48, 168, 336, 720, 1440, 2160):
+            rule = bench.validate_hypothesis({"id": f"h-{hours}", "score": ["field", "ret"],
+                                             "horizon_bars": hours})
+            self.assertEqual(rule["horizon_bars"], hours)
+        for hours in (0, 2161, -1, 1.5, True):
+            with self.assertRaises(ValueError):
+                bench.validate_hypothesis({"id": "bad", "score": ["field", "ret"],
+                                          "horizon_bars": hours})
+
     def test_hypothesis_identity_ignores_metadata(self):
         a = bench.validate_hypothesis({"id": "a", "author": "gpt", "score": ["field", "ret"], "horizon_bars": 4})
         b = bench.validate_hypothesis({"id": "b", "author": "claude", "rationale": "x", "score": ["field", "ret"], "horizon_bars": 4})
