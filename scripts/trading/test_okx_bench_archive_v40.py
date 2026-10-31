@@ -69,7 +69,7 @@ class TestArchiveBuilder(unittest.TestCase):
                 rows = list(csv.DictReader(f))
             self.assertEqual(len(rows), 64)  # All traded bars, including 30-day warmup and ineligible symbols.
             eligible = [row for row in rows if row["eligible"] == "1"]
-            self.assertEqual(len(eligible), 1)
+            self.assertEqual(len(eligible), 2)
             self.assertTrue(all(row["symbol"] == "HIGH-USDT-SWAP" for row in eligible))
             self.assertEqual(float(eligible[-1]["funding"]), 0.0001)
             self.assertEqual(float(eligible[-1]["volume"]), 6_000_000)
@@ -78,9 +78,13 @@ class TestArchiveBuilder(unittest.TestCase):
             self.assertEqual(rows[-1]["eligible"], "0")
             audit = json.loads((root / "hourly.audit.json").read_text())
             self.assertEqual(audit["panel_rows"], 64)
-            self.assertEqual(audit["eligible_rows"], 1)
+            self.assertEqual(audit["eligible_rows"], 2)
             self.assertEqual(audit["funding_unknown_rows"], 1)
             self.assertEqual(audit["first_panel_utc"], "2023-10-01")
+            import algorithm_bench_v40 as bench
+            independent = bench.audit_panel(bench.load_panel(panel), expect_bar_ms=archive.HOUR,
+                                             eligibility_usd=5_000_000)
+            self.assertEqual(independent["eligibility_check"]["mismatched_rows"], 0)
             self.assertEqual(audit["minute_confirm_flags"]["0"], (end-start).days*120 + 120)
 
     def test_sparse_hour_is_preserved_and_audited(self):
