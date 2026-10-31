@@ -1,0 +1,267 @@
+{
+  "schema": "rakazo_bench_hypothesis_v1",
+  "hypotheses": [
+    {
+      "id": "gpt-xs-trend14d-hold2d",
+      "author": "gpt",
+      "rationale": "Whether 14-day relative price strength persists for two days after all-in costs.",
+      "score": [
+        "csrank",
+        [
+          "sum",
+          [
+            "field",
+            "ret"
+          ],
+          336
+        ]
+      ],
+      "horizon_bars": 48,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-xs-trend30d-hold7d",
+      "author": "gpt",
+      "rationale": "Whether month-long momentum persists over a one-week rebalance without intraday churn.",
+      "score": [
+        "csrank",
+        [
+          "sum",
+          [
+            "field",
+            "ret"
+          ],
+          720
+        ]
+      ],
+      "horizon_bars": 168,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-xs-trend90d-hold30d",
+      "author": "gpt",
+      "rationale": "Slow multi-month cross-sectional momentum with one-month non-overlapping holds.",
+      "score": [
+        "csrank",
+        [
+          "sum",
+          [
+            "field",
+            "ret"
+          ],
+          2160
+        ]
+      ],
+      "horizon_bars": 720,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-xs-trend30d-hold30d",
+      "author": "gpt",
+      "rationale": "Compare one-month holding to the one-week version on the same 30-day momentum feature; count as distinct trial.",
+      "score": [
+        "csrank",
+        [
+          "sum",
+          [
+            "field",
+            "ret"
+          ],
+          720
+        ]
+      ],
+      "horizon_bars": 720,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-xs-low-vol30d-hold14d",
+      "author": "gpt",
+      "rationale": "The low-volatility anomaly across perpetuals over a two-week holding period.",
+      "score": [
+        "neg",
+        [
+          "csrank",
+          [
+            "std",
+            [
+              "field",
+              "ret"
+            ],
+            720
+          ]
+        ]
+      ],
+      "horizon_bars": 336,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-xs-mean-revert30d-hold7d",
+      "author": "gpt",
+      "rationale": "Test if 30-day excess returns reverse over the following week after costs and funding.",
+      "score": [
+        "neg",
+        [
+          "csrank",
+          [
+            "sum",
+            [
+              "field",
+              "ret"
+            ],
+            720
+          ]
+        ]
+      ],
+      "horizon_bars": 168,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-xs-risk-adjusted-trend30d-hold14d",
+      "author": "gpt",
+      "rationale": "Rank risk-adjusted 30-day price drift for two-week holdings rather than raw winner concentration.",
+      "score": [
+        "csrank",
+        [
+          "div",
+          [
+            "sum",
+            [
+              "field",
+              "ret"
+            ],
+            720
+          ],
+          [
+            "std",
+            [
+              "field",
+              "ret"
+            ],
+            720
+          ]
+        ]
+      ],
+      "horizon_bars": 336,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-xs-volume-confirmed-trend14d-hold7d",
+      "author": "gpt",
+      "rationale": "Does elevated one-week volume relative to a one-month baseline confirm a two-week price trend that persists another week?",
+      "score": [
+        "csrank",
+        [
+          "mul",
+          [
+            "sum",
+            [
+              "field",
+              "ret"
+            ],
+            336
+          ],
+          [
+            "z",
+            [
+              "mean",
+              [
+                "field",
+                "volume"
+              ],
+              168
+            ],
+            720
+          ]
+        ]
+      ],
+      "horizon_bars": 168,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-xs-funding-carry-hold14d",
+      "author": "gpt",
+      "rationale": "CONDITIONAL on complete point-in-time settlement coverage: monthly-style funding carry on two-week holds; unknown funding must gate.",
+      "score": [
+        "neg",
+        [
+          "csrank",
+          [
+            "field",
+            "funding"
+          ]
+        ]
+      ],
+      "horizon_bars": 336,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-xs-risk-adjusted-trend60d-hold60d",
+      "author": "gpt",
+      "rationale": "EXPLORATORY/LIKELY UNPOWERED: two-month risk-adjusted trend with non-overlapping two-month holdings.",
+      "score": [
+        "csrank",
+        [
+          "div",
+          [
+            "sum",
+            [
+              "field",
+              "ret"
+            ],
+            1440
+          ],
+          [
+            "std",
+            [
+              "field",
+              "ret"
+            ],
+            1440
+          ]
+        ]
+      ],
+      "horizon_bars": 1440,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    },
+    {
+      "id": "gpt-xs-trend90d-hold90d",
+      "author": "gpt",
+      "rationale": "EXPLORATORY/LIKELY UNPOWERED: three-month trend with a three-month hold; explicitly report few independent trades and uncertainty.",
+      "score": [
+        "csrank",
+        [
+          "sum",
+          [
+            "field",
+            "ret"
+          ],
+          2160
+        ]
+      ],
+      "horizon_bars": 2160,
+      "mode": "cross_section",
+      "quantile": 0.2,
+      "min_symbols": 10
+    }
+  ]
+}
