@@ -46,7 +46,7 @@ from statistics import NormalDist
 
 SCHEMA_HYP = "rakazo_bench_hypothesis_v1"
 SCHEMA_CONFIG = "rakazo_bench_config_v1"
-VERSION = "bench-v40.2"
+VERSION = "bench-v40.3"
 
 MAX_DEPTH = 8
 MAX_NODES = 64
@@ -711,14 +711,20 @@ def default_rebalance(h: int) -> int:
 def simulate(panel: Panel, hyp: dict, first_entry: int, last_exit: int, costs_bp, missing_exit_penalty_bp=300.0) -> dict:
     """Staggered-tranche book, evaluated one rebalance step (r bars) at a time.
 
-    Every r bars, after the close of bar t, a new tranche is formed from the cohort known
-    at t (score, eligible == 1, close at t) and held for h = horizon_bars. The book holds
-    K = h / r overlapping tranches, each with 1/K of the gross; K = 1 is the plain
-    non-overlapping strategy. Legs enter at open t+1 (a missing open leaves that leg in
-    cash) and are marked at each step boundary's open. A leg whose boundary price is
-    missing closes at its last observed close and pays the missing-exit penalty. Funding:
-    a long pays the settled rate, a short receives it. Costs are charged on the change of
-    book weights at each boundary. Entries >= first_entry, exits <= last_exit.
+    Position convention (self-financing, fixed units): every r bars, after the close of
+    bar t, a new tranche is formed from the cohort known at t (score, eligible == 1,
+    close at t). Each leg buys a fixed quantity worth weight / K at the entry open t+1
+    and holds that quantity for h = horizon_bars; its notional then drifts with price.
+    K = h / r tranches overlap; K = 1 is the plain non-overlapping strategy.
+    - Step P&L of a leg: weight * (P_end - P_start) / P_entry.
+    - Funding: a long pays, a short receives, the settled rate times the leg's notional
+      at the settlement bar's close.
+    - Costs: turnover is the change of book notional at each boundary, where the
+      notional before trading includes price drift; expiring and new tranches on the
+      same contract net out.
+    - A missing entry open leaves the leg in cash. A missing boundary price closes the
+      leg at its last observed close and charges the penalty on its notional then.
+    Entries >= first_entry, exits <= last_exit.
     """
     h = hyp["horizon_bars"]
     r = hyp.get("rebalance_bars") or default_rebalance(h)
@@ -726,8 +732,8 @@ def simulate(panel: Panel, hyp: dict, first_entry: int, last_exit: int, costs_bp
     score = evaluate_expression(hyp["score"], panel)
     opens, closes, funding, elig = panel.series["open"], panel.series["close"], panel.series["funding"], panel.eligible
     pen = missing_exit_penalty_bp / 1e4
-    steps, tranches = [], []  # tranche: {"legs": {sym: [weight, mark]}, "left": steps remaining}
-    book_prev: dict = {}
+    steps, tranches = [], []  # tranche: {"legs": {sym: [weight, entry_price, last_price]}, "left": steps remaining}
+    held = Counter()  # book notional after the previous step's price moves, before trading
     counts = Counter()
     t = max(first_entry - 1, 0)
     while t + 1 + r <= last_exit:
@@ -744,7 +750,7 @@ def simulate(panel: Panel, hyp: dict, first_entry: int, last_exit: int, costs_bp
                 for sym, wt in new_weights.items():
                     o = opens[sym][s]
                     if o == o:
-                        legs[sym] = [wt / K, o]
+                        legs[sym] = [wt / K, o, o]
                     else:
                         counts["entry_missed"] += 1
                 tranches.append({"legs": legs, "left": K})
@@ -758,44 +764,48 @@ def simulate(panel: Panel, hyp: dict, first_entry: int, last_exit: int, costs_bp
                 counts["skipped_small_cohort"] += 1
         book = Counter()
         for tr in tranches:
-            for sym, (wt, _) in tr["legs"].items():
-                book[sym] += wt
-        turnover = math.fsum(abs(book.get(sym, 0.0) - book_prev.get(sym, 0.0)) for sym in set(book) | set(book_prev))
+            for sym, (wt, p0, last) in tr["legs"].items():
+                book[sym] += wt * last / p0
+        turnover = math.fsum(abs(book.get(sym, 0.0) - held.get(sym, 0.0)) for sym in set(book) | set(held))
         if not book and turnover == 0.0:
             t += r
             continue
         gross = penalty = fund = 0.0
         for tr in tranches:
             for sym in list(tr["legs"]):
-                wt, mark = tr["legs"][sym]
+                wt, p0, last = tr["legs"][sym]
                 px = opens[sym][e]
                 missing = px != px
                 if missing:
-                    px = next((closes[sym][j] for j in range(e - 1, s - 1, -1) if closes[sym][j] == closes[sym][j]), mark)
-                gross += wt * (px / mark - 1.0)
-                fr = funding[sym][s:e]
-                counts["position_bars"] += len(fr)
-                for f in fr:
+                    px = next((closes[sym][j] for j in range(e - 1, s - 1, -1) if closes[sym][j] == closes[sym][j]), last)
+                gross += wt * (px - last) / p0
+                mark = last
+                for j in range(s, e):
+                    c = closes[sym][j]
+                    if c == c:
+                        mark = c
+                    f = funding[sym][j]
+                    counts["position_bars"] += 1
                     if f == f:
-                        fund -= wt * f
+                        fund -= wt * mark / p0 * f
                     else:
                         counts["position_bars_funding_unknown"] += 1
                 if missing:
                     counts["missing_exits"] += 1
-                    penalty += abs(wt) * pen
+                    penalty += abs(wt * px / p0) * pen
                     del tr["legs"][sym]
                 else:
-                    tr["legs"][sym][1] = px
+                    tr["legs"][sym][2] = px
             tr["left"] -= 1
-        book_prev = Counter()
+        held = Counter()
         for tr in tranches:
-            for sym, (wt, _) in tr["legs"].items():
-                book_prev[sym] += wt
+            for sym, (wt, p0, last) in tr["legs"].items():
+                held[sym] += wt * last / p0
         steps.append({"t": t, "gross": gross, "penalty": penalty, "funding": fund, "turnover": turnover,
                       "ic": ic, "n": n_cohort, "weights": new_weights})
         t += r
     if steps:  # liquidate whatever is still held
-        steps[-1]["turnover"] += math.fsum(abs(x) for x in book_prev.values())
+        steps[-1]["turnover"] += math.fsum(abs(x) for x in held.values())
     for p in steps:
         base = p["gross"] - p["penalty"] + p["funding"]
         p["net"] = {str(c): base - p["turnover"] * c / 1e4 for c in costs_bp}

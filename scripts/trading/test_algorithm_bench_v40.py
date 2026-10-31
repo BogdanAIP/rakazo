@@ -53,7 +53,7 @@ def random_hypothesis(rng: random.Random, i: int) -> dict:
 
 
 def reference_nonoverlapping(panel, hyp, first_entry, last_exit, costs_bp, penalty_bp=300.0):
-    """Independent plain backtest: one position per period, held h bars, no tranches."""
+    """Independent plain backtest: one position per period in fixed units, held h bars, no tranches."""
     h = hyp["horizon_bars"]
     score = bench.evaluate_expression(hyp["score"], panel)
     out, prev = [], {}
@@ -72,11 +72,17 @@ def reference_nonoverlapping(panel, hyp, first_entry, last_exit, costs_bp, penal
             res = bench._realized(panel, s, entry, exit_)
             if res is None:
                 continue
+            o, px, missing = res
             entered[s] = wt
-            gross += wt * (res[1] / res[0] - 1.0)
-            fund -= wt * math.fsum(f for f in panel.series["funding"][s][entry:exit_] if f == f)
-            if not res[2]:
-                held[s] = wt
+            gross += wt * (px / o - 1.0)
+            mark = o
+            for j in range(entry, exit_):
+                c, f = panel.series["close"][s][j], panel.series["funding"][s][j]
+                mark = c if c == c else mark
+                if f == f:
+                    fund -= wt * mark / o * f
+            if not missing:
+                held[s] = wt * px / o  # notional at exit, after drift
         turnover = math.fsum(abs(entered.get(s, 0.0) - prev.get(s, 0.0)) for s in set(entered) | set(prev))
         out.append({"t": t, "weights": w, "gross": gross, "funding": fund, "turnover": turnover})
         prev = held
@@ -405,8 +411,11 @@ class TestStaggeredTranches(BenchTestCase):
         self.assertEqual((sim["tranches"], sim["rebalance_bars"]), (4, 24))
         steady = sim["periods"][5:-5]
         self.assertTrue(steady)
-        for p in steady:  # each tranche turns over 1/K of the book per step at most twice
-            self.assertLessEqual(p["turnover"], 2 * 1.0 / 4 + 1e-9)
+        # One tranche of 1/K gross leaves and one enters per step; the leaving one has drifted
+        # with prices, so single steps may exceed 2/K slightly, but not on average.
+        turns = [p["turnover"] for p in steady]
+        self.assertLessEqual(sum(turns) / len(turns), 2 * 1.0 / 4)
+        self.assertLessEqual(max(turns), 2 * 1.0 / 4 * 1.5)
 
     def test_default_rebalance_is_daily_for_long_holds(self):
         self.assertEqual([bench.default_rebalance(h) for h in (1, 8, 24, 48, 168, 2160, 36)], [1, 8, 24, 24, 24, 24, 12])
@@ -427,6 +436,45 @@ class TestStaggeredTranches(BenchTestCase):
         self.assertGreater(n_eff, len(overlapping) / 25)
         lrv_iid, g0_iid = bench.long_run_variance(noise, 5)
         self.assertAlmostEqual(lrv_iid / g0_iid, 1.0, delta=0.15)
+
+
+class TestFixedUnitAccounting(BenchTestCase):
+    """GPT's counterexample: boundary prices 100 -> 120 -> 132 with 48 h holds and daily tranches."""
+
+    def path_panel(self, name, funding_cell=""):
+        rows = []
+        for t in range(121):
+            a = 100.0 if t < 25 else 120.0 if t < 49 else 132.0
+            for sym, px in (("A", a), ("B", 50.0), ("C", 10.0)):
+                rows.append([t * 3_600_000, sym, px, px, px, px, 1, 1, funding_cell if sym == "A" else "", ""])
+        return rows_panel(self.tmp, name, rows)
+
+    def hyp(self):
+        return bench.validate_hypothesis({"id": "x", "score": ["field", "close"], "horizon_bars": 48,
+                                          "rebalance_bars": 24, "quantile": 0.34, "min_symbols": 3})
+
+    def test_two_step_pnl_uses_entry_price(self):
+        sim = bench.simulate(self.path_panel("path.csv"), self.hyp(), 1, 120, [0])
+        gross = [round(p["gross"], 12) for p in sim["periods"][:3]]
+        self.assertEqual(gross[:2], [0.05, 0.055])  # 0.25*0.2 ; 0.25*12/100 + 0.25*12/120
+        self.assertAlmostEqual(gross[2], 0.0)
+
+    def test_turnover_includes_price_drift(self):
+        sim = bench.simulate(self.path_panel("path-t.csv"), self.hyp(), 1, 120, [0])
+        turns = [p["turnover"] for p in sim["periods"][:3]]
+        self.assertAlmostEqual(turns[0], 0.5)   # open tranche 1: +0.25 A, -0.25 C
+        self.assertAlmostEqual(turns[1], 0.5)   # add tranche 2
+        # tranche 1 expires worth 0.25*1.32 on A, tranche 3 enters at 0.25: A 0.605 -> 0.525
+        self.assertAlmostEqual(turns[2], 0.08)
+
+    def test_funding_on_current_notional(self):
+        sim = bench.simulate(self.path_panel("path-f.csv", funding_cell="0.001"), self.hyp(), 1, 120, [0])
+        first = sim["periods"][0]["funding"]
+        second = sim["periods"][1]["funding"]
+        # step 1: 24 bars, A at 100 for bars 1..24 except bar 24 closes at 100 -> notional 0.25
+        self.assertAlmostEqual(first, -0.25 * 0.001 * 24)
+        # step 2: tranche 1 worth 0.25*1.2, tranche 2 worth 0.25, both long A for 24 bars at 120
+        self.assertAlmostEqual(second, -(0.25 * 1.2 + 0.25) * 0.001 * 24)
 
 
 class TestCalibration(BenchTestCase):
