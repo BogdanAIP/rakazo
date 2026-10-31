@@ -55,6 +55,14 @@ def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def sha_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def atomic_bytes(path: Path, data: bytes):
     path.parent.mkdir(parents=True, exist_ok=True)
     part = path.with_suffix(path.suffix + ".part")
@@ -199,7 +207,7 @@ def build(root: Path, archive_start: dt.date, archive_end: dt.date, panel_start:
     for d in days(archive_start, archive_end):
         receipt = json.loads((root / "receipts" / (d.isoformat() + ".json")).read_text())
         for name in MODULES:
-            if sha(file_at(root, name, d).read_bytes()) != receipt[name]["sha256"]:
+            if sha_file(file_at(root, name, d)) != receipt[name]["sha256"]:
                 raise ValueError(f"Source SHA differs from download receipt: {name} {d}")
     history = collections.defaultdict(lambda: collections.deque(maxlen=30))
     first_seen = {}
@@ -209,7 +217,7 @@ def build(root: Path, archive_start: dt.date, archive_end: dt.date, panel_start:
     all_hours = 0
     audit = {"source_archive_days": (archive_end - archive_start).days + 1,
              "missing_archives": 0, "source_hourly_rows": 0, "incomplete_source_hours": 0,
-             "funding_events_observed": 0, "quote_volume_unit": "USDT vol_quote",
+             "funding_events_observed": 0, "minute_confirm_flags": {}, "quote_volume_unit": "USDT vol_quote",
              "historical_oi": "UNKNOWN: CSV oi left empty",
              "trailing_liquidity_rule": "median of 30 complete earlier UTC calendar days; zeros for missing days after first listing",
              "first_eligible_utc": panel_start.isoformat(), "last_eligible_utc": panel_end.isoformat()}
@@ -223,6 +231,8 @@ def build(root: Path, archive_start: dt.date, archive_end: dt.date, panel_start:
                 records, stats = aggregate_day(root, archive_date)
                 audit["incomplete_source_hours"] += stats["incomplete_hours"]
                 audit["funding_events_observed"] += stats["funding_events"]
+                for flag, count in stats["confirm_counts"].items():
+                    audit["minute_confirm_flags"][flag] = audit["minute_confirm_flags"].get(flag, 0) + count
                 for hour, sym, op, hi, lo, cl, vol, fr in records:
                     day = dt.datetime.fromtimestamp(hour / 1000, tz=dt.timezone.utc).date()
                     if current_day is None:
@@ -254,7 +264,7 @@ def build(root: Path, archive_start: dt.date, archive_end: dt.date, panel_start:
         raise
     audit["source_hourly_rows"] = all_hours
     audit["panel_rows"] = output_count
-    audit["panel_sha256"] = sha(out.read_bytes())
+    audit["panel_sha256"] = sha_file(out)
     audit["panel_bytes"] = out.stat().st_size
     atomic_bytes(out.with_suffix(".audit.json"), (json.dumps(audit, sort_keys=True, indent=2) + "\n").encode())
     print(json.dumps(audit, indent=2))
