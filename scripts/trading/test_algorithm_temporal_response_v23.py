@@ -76,9 +76,9 @@ class TemporalResponseTests(unittest.TestCase):
             "snapshot",bids=[["100","10","1"]],asks=[["101","10","1"]]),targets())
         self.assertEqual(state["next_target_index"],0)
         apply_one(state,book,heaps,event(first_target+4,
-            "update",bids=[["200","10","2"]],asks=[["201","10","2"]]),targets())
+            "update",bids=[["100.5","10","2"]],asks=[["101.5","10","2"]]),targets())
         # Before applying later update, the quote MUST be the old 100/101,
-        # and the source future 200/201 must never contaminate it.
+        # and the later 100.5/101.5 levels must never contaminate it.
         result=state["quotes"][str(first_target)]
         self.assertEqual(result["bid"],"100")
         self.assertEqual(result["ask"],"101")
