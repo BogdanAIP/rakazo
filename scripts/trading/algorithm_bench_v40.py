@@ -387,8 +387,8 @@ def validate_hypothesis(rec: dict) -> dict:
     if _count_nodes(rec["score"]) > MAX_NODES:
         raise ValueError("expression has too many nodes")
     h = rec["horizon_bars"]
-    if isinstance(h, bool) or not isinstance(h, int) or not 1 <= h <= 500:
-        raise ValueError("horizon_bars must be an integer in 1..500")
+    if isinstance(h, bool) or not isinstance(h, int) or not 1 <= h <= 2160:
+        raise ValueError("horizon_bars must be an integer in 1..2160")
     out = {
         "id": rec["id"],
         "author": str(rec.get("author", "unknown"))[:40],
