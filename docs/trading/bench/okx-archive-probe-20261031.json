@@ -1,0 +1,56 @@
+{
+  "schema": "okx-archive-v40-probe-v1",
+  "as_of_date_utc": "2026-10-31",
+  "archive_date_exchange_utc8": "2023-11-02",
+  "scope": "SINGLE DAILY SOURCE PROBE ONLY: not a complete panel, not audited/frozen for evaluation",
+  "sources": {
+    "minute_candles": "https://static.okx.com/cdn/okex/traderecords/candlesticks/daily/20231102/allswap-candlesticks-2023-11-02.zip?v=1001",
+    "funding_settlements": "https://static.okx.com/cdn/okex/traderecords/swaprates/daily/20231102/allswap-fundingrates-2023-11-02.zip?v=1001",
+    "instruments": "https://app.okx.com/api/v5/public/instruments?instType=SWAP",
+    "archive_index": "https://app.okx.com/api/v5/public/market-data-history"
+  },
+  "file_receipts": {
+    "candles": {
+      "bytes": 4825871,
+      "sha256": "4bfa1c2ec05fda87f273559cb083e8df7692d23c0ef4e3eb8ebc6314c9d478c5"
+    },
+    "funding": {
+      "bytes": 6972,
+      "sha256": "e3581aa7307a6637fcca068e4b4ebfa34da671a8c58ae395785dba81a1732d17"
+    }
+  },
+  "candle_rows_all_swap": 254880,
+  "candle_rows_usdt_swap": 204480,
+  "distinct_usdt_swap_contracts": 142,
+  "historic_usdt_swap_symbols_absent_from_current_list": 48,
+  "funding_usdt_swap_contracts": 142,
+  "funding_usdt_settlements": 426,
+  "bar_open_timestamp_min_utc": "2023-11-01T16:00:00Z",
+  "bar_open_timestamp_max_utc": "2023-11-02T15:59:00Z",
+  "exchange_archive_cutover": "UTC+8; the exchange-labeled 2023-11-02 file spans 2023-11-01 16:00 to 2023-11-02 15:59 UTC",
+  "volume_quote_unit": "vol_quote column in official minute candle archive, quote notional for USDT-SWAP",
+  "confirm_flag_counts": {
+    "0": 254880
+  },
+  "limitations": [
+    "This is one archive day and cannot satisfy a 30-day trailing volume rule.",
+    "Official archived minute rows all have confirm=0, so completion semantics must be documented before treating them as finalized.",
+    "The complete three-year historical listing/universe and delisting availability require full acquisition and QA.",
+    "Historical OI source not yet obtained.",
+    "No panel freeze, strategy evaluation, ledger mutation or holdout access."
+  ],
+  "examples_of_historic_contracts_absent_today": [
+    "AIDOGE-USDT-SWAP",
+    "ALPHA-USDT-SWAP",
+    "ANT-USDT-SWAP",
+    "BADGER-USDT-SWAP",
+    "BAL-USDT-SWAP",
+    "BNT-USDT-SWAP",
+    "BSV-USDT-SWAP",
+    "CEL-USDT-SWAP",
+    "CETUS-USDT-SWAP",
+    "CSPR-USDT-SWAP",
+    "CVC-USDT-SWAP",
+    "EOS-USDT-SWAP"
+  ]
+}
