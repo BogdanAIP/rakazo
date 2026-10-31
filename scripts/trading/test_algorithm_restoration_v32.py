@@ -93,6 +93,15 @@ class RestorationTests(unittest.TestCase):
                 result = r.extract(root, day, symbol)
                 from algorithm_path_v35 import PathHook
                 instrumented = r.extract(root, day, symbol, transition_hook=PathHook())
+                class QuoteAudit:
+                    def __init__(self):self.seen=[]
+                    def observe(self,t,book,heaps,quote):
+                        self.seen.append((t,str(book["asks"][D(101)])))
+                audit=QuoteAudit()
+                sampled = r.extract(root,day,symbol,quote_hook=audit)
+            self.assertEqual(result["quotes"],sampled["quotes"])
+            self.assertEqual(len(audit.seen),len(result["quotes"]))
+            self.assertEqual(audit.seen[0],(60*60000,"20"))
             self.assertEqual(result["quotes"], instrumented["quotes"])
             self.assertEqual(instrumented["bins"][60*60000]["path"]["n"], 1)
             self.assertEqual(instrumented["bins"][60*60000]["path"]["ofi"], 0)

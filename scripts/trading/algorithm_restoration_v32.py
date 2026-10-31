@@ -42,7 +42,7 @@ def positive_and_negative_changes(book, best, sides):
 
 
 def extract(root, day, symbol, *, source_manifest=None, index_name=None,
-            transition_hook=None):
+            transition_hook=None, quote_hook=None):
     _, spool, _, receipt, onset_sha, _, _ = (source_manifest or manifest)(root, day, symbol)
     index_path = Path(root)/"l2"/(index_name or f"{symbol}-{day}-snapshot-index-v30.json")
     idx = json.loads(index_path.read_bytes())
@@ -84,6 +84,8 @@ def extract(root, day, symbol, *, source_manifest=None, index_name=None,
                 while n < len(target_minutes) and ts > target_minutes[n]-1:
                     t = target_minutes[n]
                     quotes[t] = asof_original(book, heaps, last_ts, t-1, ts)
+                    if quote_hook is not None:
+                        quote_hook.observe(t, book, heaps, quotes[t])
                     n += 1
                 if n == len(target_minutes):
                     break

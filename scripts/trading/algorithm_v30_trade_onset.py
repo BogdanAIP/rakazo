@@ -67,7 +67,7 @@ def load_bars(root,day,symbol,*,locator=None):
     if len(bars)!=1440:raise ValueError("Daily official 1440 one-minute bars incomplete")
     return bars,sha
 
-def load_trades(root,day,symbol,*,locator=None):
+def load_trades(root,day,symbol,*,locator=None,include_price=False):
     z,name,sha=source_zip(root,day,symbol,"trades",locator=locator)
     data=[]
     prior=None
@@ -77,16 +77,18 @@ def load_trades(root,day,symbol,*,locator=None):
         if rd.fieldnames!=TRADE_FIELDS:raise ValueError("Official executed-taker CSV columns invalid")
         for x in rd:
             ms=int(x["created_time"])
+            price=D(x["price"])
             local=datetime.fromtimestamp((ms+8*3600000)/1000,timezone.utc).date().isoformat()
             if (x["instrument_name"]!=symbol or x["side"] not in ("buy","sell")
                 or local!=day or (prior is not None and ms<prior)
-                or x["trade_id"] in seen or D(x["price"])<=0):
+                or x["trade_id"] in seen or not price.is_finite() or price<=0):
                 raise ValueError("Official taker trade source invalid")
             qty=D(x["size"])
-            if qty<=0:raise ValueError("Zero/negative original execution contracts")
+            if not qty.is_finite() or qty<=0:raise ValueError("Zero/negative original execution contracts")
             prior=ms
             seen.add(x["trade_id"])
-            data.append((ms,x["side"],qty))
+            row=(ms,x["side"],qty)
+            data.append(row+(price,) if include_price else row)
     z.close()
     return data,sha
 

@@ -1,0 +1,345 @@
+{
+  "schema": "tape_memory_v31",
+  "programs": [
+    {
+      "id": "interval-accounting",
+      "role": "candidate",
+      "hypothesis": "Require negative upper supply-change bound and positive lower demand-change bound, supporting band flow and cost-corridor capacity.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "sub",
+        [
+          "mul",
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "band_flow"
+              ]
+            ],
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "ask_upper"
+                ]
+              ]
+            ]
+          ],
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "bid_lower"
+              ]
+            ],
+            [
+              "feature",
+              "buy_capacity"
+            ]
+          ]
+        ],
+        [
+          "mul",
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "band_flow"
+                ]
+              ]
+            ],
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "bid_upper"
+                ]
+              ]
+            ]
+          ],
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "ask_lower"
+              ]
+            ],
+            [
+              "feature",
+              "sell_capacity"
+            ]
+          ]
+        ]
+      ],
+      "threshold": 0.1
+    },
+    {
+      "id": "all-visible-point",
+      "role": "ablation",
+      "hypothesis": "Assume all recorded band executions consume displayed liquidity and compare the resulting point estimate with the conditional interval rule.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "sub",
+        [
+          "mul",
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "band_flow"
+              ]
+            ],
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "ask_upper"
+                ]
+              ]
+            ]
+          ],
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "bid_upper"
+              ]
+            ],
+            [
+              "feature",
+              "buy_capacity"
+            ]
+          ]
+        ],
+        [
+          "mul",
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "band_flow"
+                ]
+              ]
+            ],
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "bid_upper"
+                ]
+              ]
+            ]
+          ],
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "ask_upper"
+              ]
+            ],
+            [
+              "feature",
+              "sell_capacity"
+            ]
+          ]
+        ]
+      ],
+      "threshold": 0.1
+    },
+    {
+      "id": "depth-delta-only",
+      "role": "ablation",
+      "hypothesis": "Ignore executed-volume accounting to test whether apparent pressure is simply an observed decrease in displayed band quantities.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "sub",
+        [
+          "mul",
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "band_flow"
+              ]
+            ],
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "ask_lower"
+                ]
+              ]
+            ]
+          ],
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "bid_lower"
+              ]
+            ],
+            [
+              "feature",
+              "buy_capacity"
+            ]
+          ]
+        ],
+        [
+          "mul",
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "band_flow"
+                ]
+              ]
+            ],
+            [
+              "positive",
+              [
+                "neg",
+                [
+                  "feature",
+                  "bid_lower"
+                ]
+              ]
+            ]
+          ],
+          [
+            "mul",
+            [
+              "positive",
+              [
+                "feature",
+                "ask_lower"
+              ]
+            ],
+            [
+              "feature",
+              "sell_capacity"
+            ]
+          ]
+        ]
+      ],
+      "threshold": 0.1
+    },
+    {
+      "id": "band-capacity-state",
+      "role": "baseline",
+      "hypothesis": "Current displayed imbalance in the same fixed band tests whether temporal accounting adds information beyond the present depth state.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "feature",
+        "band_imbalance"
+      ],
+      "threshold": 0.1
+    },
+    {
+      "id": "canonical-ofi",
+      "role": "baseline",
+      "hypothesis": "The unchanged canonical best-quote OFI from the verified v35 cache is retained on the same current coverage universe.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "feature",
+        "event_ofi"
+      ],
+      "threshold": 0.1
+    },
+    {
+      "id": "flow-baseline",
+      "role": "baseline",
+      "hypothesis": "Actual executed taker-flow imbalance across the completed minute is the unchanged simple trade-flow comparator.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "feature",
+        "flow"
+      ],
+      "threshold": 0.1
+    },
+    {
+      "id": "depth-baseline",
+      "role": "baseline",
+      "hypothesis": "Original top-five displayed depth imbalance remains a simple state baseline under exactly the same coverage mask.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "feature",
+        "book_imbalance"
+      ],
+      "threshold": 0.1
+    },
+    {
+      "id": "return-baseline",
+      "role": "baseline",
+      "hypothesis": "Completed minute return normalized with strictly earlier volatility tests ordinary price continuation as the source of apparent predictive value.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "feature",
+        "response"
+      ],
+      "threshold": 0.1
+    }
+  ]
+}
