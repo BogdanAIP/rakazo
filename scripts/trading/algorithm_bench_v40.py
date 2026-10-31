@@ -7,29 +7,38 @@ Design rules
 - Hypotheses are typed JSON expression trees. Nothing is eval'd or exec'd.
 - Every operator only reads values at or before the decision bar, so the
   score at bar t is identical whether or not later bars exist (tested).
+- The traded cohort is fixed from decision-time information only: score,
+  eligibility and close at bar t. Whether a symbol later trades, delists or
+  disappears never affects who is ranked (tested).
+- A position whose exit bar is missing is closed at its last observed price
+  minus a conservative penalty; missing funding observations are counted and
+  gate the verdict instead of silently becoming zero.
 - Development evaluation physically truncates the panel before the frozen
   holdout boundary; holdout data cannot influence a development report.
 - Every development evaluation is appended to a ledger. The deflated Sharpe
-  ratio (Bailey & Lopez de Prado, 2014) uses the number of distinct trials in
-  that ledger, so trying many ideas raises the bar for each one.
-- A failed test is only called REJECT when it had the power to detect the
-  target effect. Otherwise it is INCONCLUSIVE_UNPOWERED.
-- The holdout is one-use per hypothesis and globally budgeted.
+  ratio (Bailey & Lopez de Prado, 2014) uses the number of distinct trials,
+  so trying many ideas raises the bar for each one.
+- A failed test is only REJECT when it had power for the target effect or a
+  non-positive mean; otherwise it is INCONCLUSIVE_UNPOWERED.
+- The holdout needs a PASS_DEV, a sign-off file from a reviewer other than the
+  author, and is one-use per hypothesis within a global budget. The sign-off
+  is a procedural check, not a cryptographic one.
 - Research only: this module never places orders or touches accounts.
 
-Stdlib only. Python 3.10+.
+Stdlib only. Python 3.10+. Series are array('d') with NaN for missing.
 """
 from __future__ import annotations
 
 import argparse
+import bisect
 import csv
 import hashlib
-import io
 import json
 import math
 import os
 import random
 import re
+from array import array
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,7 +46,7 @@ from statistics import NormalDist
 
 SCHEMA_HYP = "rakazo_bench_hypothesis_v1"
 SCHEMA_CONFIG = "rakazo_bench_config_v1"
-VERSION = "bench-v40"
+VERSION = "bench-v40.1"
 
 MAX_DEPTH = 8
 MAX_NODES = 64
@@ -45,42 +54,27 @@ MAX_WINDOW = 2000
 MAX_HYPOTHESES_PER_FILE = 32
 MAX_HYP_FILE_BYTES = 65_536
 EPS = 1e-12
-MS_PER_YEAR = 365.25 * 24 * 3600 * 1000
+NAN = float("nan")
+BIG = 1e300
+MS_PER_DAY = 86_400_000
+MS_PER_YEAR = 365.25 * MS_PER_DAY
+REVIEWERS = ("claude", "gpt", "human")
 
-BASE_FIELDS = ("open", "high", "low", "close", "volume")
-OPTIONAL_FIELDS = ("funding", "oi")
+PRICE_FIELDS = ("open", "high", "low", "close", "volume")
 FEATURE_FIELDS = ("open", "high", "low", "close", "volume", "oi", "funding", "ret", "range")
 SYMBOL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,39}")
 ID_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
 
-# op -> (kind, arity of expression children, integer params)
+# op -> (kind, arity of expression children)
 OPS = {
-    "field": ("leaf", 0, 0),
-    "const": ("leaf", 0, 0),
-    "neg": ("unary", 1, 0),
-    "abs": ("unary", 1, 0),
-    "sign": ("unary", 1, 0),
-    "tanh": ("unary", 1, 0),
-    "log1p": ("unary", 1, 0),
-    "add": ("binary", 2, 0),
-    "sub": ("binary", 2, 0),
-    "mul": ("binary", 2, 0),
-    "div": ("binary", 2, 0),
-    "max": ("binary", 2, 0),
-    "min": ("binary", 2, 0),
-    "clip": ("clip", 1, 0),
-    "lag": ("window", 1, 1),
-    "delta": ("window", 1, 1),
-    "pct": ("window", 1, 1),
-    "sum": ("window", 1, 1),
-    "mean": ("window", 1, 1),
-    "std": ("window", 1, 1),
-    "z": ("window", 1, 1),
-    "ema": ("window", 1, 1),
-    "tsrank": ("window", 1, 1),
-    "csrank": ("cross", 1, 0),
-    "csz": ("cross", 1, 0),
-    "csdemean": ("cross", 1, 0),
+    "field": ("leaf", 0), "const": ("leaf", 0),
+    "neg": ("unary", 1), "abs": ("unary", 1), "sign": ("unary", 1), "tanh": ("unary", 1), "log1p": ("unary", 1),
+    "add": ("binary", 2), "sub": ("binary", 2), "mul": ("binary", 2), "div": ("binary", 2),
+    "max": ("binary", 2), "min": ("binary", 2),
+    "clip": ("clip", 1),
+    "lag": ("window", 1), "delta": ("window", 1), "pct": ("window", 1), "sum": ("window", 1),
+    "mean": ("window", 1), "std": ("window", 1), "z": ("window", 1), "ema": ("window", 1), "tsrank": ("window", 1),
+    "csrank": ("cross", 1), "csz": ("cross", 1), "csdemean": ("cross", 1),
 }
 
 
@@ -94,15 +88,37 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def sha256_file(path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def utc_iso(ms: int) -> str:
     return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def now_utc() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _finite(x) -> bool:
-    return x is not None and isinstance(x, (int, float)) and math.isfinite(x)
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+
+
+def nan_array(n: int) -> array:
+    return array("d", [NAN]) * n
+
+
+def _clean(values) -> array:
+    """Finite values pass through; NaN, inf and overflow become the NaN constant."""
+    return array("d", [v if -BIG < v < BIG else NAN for v in values])
 
 
 def write_exclusive(path: Path, payload: dict) -> None:
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
     with os.fdopen(fd, "wb") as fh:
@@ -114,29 +130,39 @@ def write_exclusive(path: Path, payload: dict) -> None:
 # -------------------------------------------------------------------- panel
 
 class Panel:
-    """Aligned bar panel. series[field][symbol] is a list over the time grid."""
+    """Aligned bar panel.
 
-    def __init__(self, times, symbols, series, bar_ms, sha, funding_known):
+    series[f][sym]  array('d'), NaN = no row; f in open/high/low/close/volume/oi/funding.
+                    funding holds the settled rate, 0.0 for a known non-settlement bar,
+                    NaN when the funding state is unknown or the row is missing.
+    settled[sym]    bytearray, 1 where a funding settlement happened.
+    eligible[sym]   bytearray, 1 where the symbol may enter the decision cohort.
+    """
+
+    def __init__(self, times, symbols, series, settled, eligible, bar_ms, sha):
         self.times = times
         self.symbols = symbols
         self.series = series
+        self.settled = settled
+        self.eligible = eligible
         self.bar_ms = bar_ms
         self.sha = sha
-        self.funding_known = funding_known  # symbols with at least one funding row
 
     @property
     def T(self) -> int:
         return len(self.times)
 
-    def truncated(self, end_index: int) -> "Panel":
-        """Panel containing only bars [0, end_index). Used to hide the holdout."""
-        series = {f: {s: v[:end_index] for s, v in d.items()} for f, d in self.series.items()}
-        return Panel(self.times[:end_index], self.symbols, series, self.bar_ms, self.sha, self.funding_known)
+    def truncated(self, end: int) -> "Panel":
+        """Bars [0, end) only. Used to make the holdout physically absent."""
+        series = {f: {s: v[:end] for s, v in d.items()} for f, d in self.series.items()}
+        return Panel(self.times[:end], self.symbols, series,
+                     {s: v[:end] for s, v in self.settled.items()},
+                     {s: v[:end] for s, v in self.eligible.items()}, self.bar_ms, self.sha)
 
 
-def _parse_float(text, name, line):
-    if text is None or text == "":
-        return None
+def _num(text, name, line, allow_empty=True):
+    if text == "" and allow_empty:
+        return NAN
     try:
         value = float(text)
     except ValueError as exc:
@@ -146,47 +172,46 @@ def _parse_float(text, name, line):
     return value
 
 
-def load_panel(path) -> Panel:
-    """Read the panel CSV.
+def _csv_rows(path):
+    with open(path, newline="", encoding="utf-8-sig") as fh:
+        reader = csv.reader(fh)
+        header = next(reader, None)
+        if not header:
+            raise ValueError("panel is empty")
+        col = {name: i for i, name in enumerate(header)}
+        missing = {"ts", "symbol", *PRICE_FIELDS} - set(col)
+        if missing:
+            raise ValueError(f"panel missing columns: {sorted(missing)}")
+        yield col
+        for line, row in enumerate(reader, start=2):
+            if len(row) != len(header):
+                raise ValueError(f"line {line}: expected {len(header)} fields")
+            yield line, row
 
-    Columns: ts,symbol,open,high,low,close,volume[,funding][,oi]
-    ts      bar OPEN time, integer milliseconds UTC, on one fixed grid
-    funding funding rate SETTLED during this bar (empty = no settlement)
-    oi      open interest observed at bar close (empty = unknown)
+
+def load_panel(path) -> Panel:
+    """Read the panel CSV in two streaming passes.
+
+    Columns: ts,symbol,open,high,low,close,volume[,eligible][,funding][,oi]
+    ts       bar OPEN time, integer ms UTC, on one fixed grid
+    eligible 1 or 0: may the symbol enter the cohort at this bar (absent column = 1)
+    funding  rate settled during this bar; empty = no settlement; NA = unknown
+    oi       open interest at bar close; empty = unknown
+    A missing row means no market data for that symbol and bar.
     """
-    raw = Path(path).read_bytes()
-    sha = sha256_bytes(raw)
-    reader = csv.DictReader(io.StringIO(raw.decode("utf-8-sig")))
-    cols = set(reader.fieldnames or [])
-    missing = {"ts", "symbol", *BASE_FIELDS} - cols
-    if missing:
-        raise ValueError(f"panel missing columns: {sorted(missing)}")
-    rows = {}
-    stamps = set()
-    for line, row in enumerate(reader, start=2):
-        sym = row["symbol"]
-        if not SYMBOL_RE.fullmatch(sym or ""):
+    sha_before = sha256_file(path)
+    rows = _csv_rows(path)
+    col = next(rows)
+    stamps, symbols = set(), set()
+    for line, row in rows:
+        if not SYMBOL_RE.fullmatch(row[col["symbol"]]):
             raise ValueError(f"line {line}: bad symbol")
         try:
-            ts = int(row["ts"])
+            stamps.add(int(row[col["ts"]]))
         except ValueError as exc:
             raise ValueError(f"line {line}: ts must be integer ms") from exc
-        key = (ts, sym)
-        if key in rows:
-            raise ValueError(f"line {line}: duplicate bar {sym} {ts}")
-        vals = {f: _parse_float(row.get(f), f, line) for f in BASE_FIELDS}
-        if any(vals[f] is None for f in BASE_FIELDS):
-            raise ValueError(f"line {line}: empty OHLCV value")
-        o, h, l, c, v = (vals[f] for f in BASE_FIELDS)
-        if min(o, h, l, c) <= 0 or v < 0:
-            raise ValueError(f"line {line}: non-positive price or negative volume")
-        if h + EPS < max(o, c, l) or l - EPS > min(o, c, h):
-            raise ValueError(f"line {line}: inconsistent high/low")
-        for f in OPTIONAL_FIELDS:
-            vals[f] = _parse_float(row.get(f), f, line) if f in cols else None
-        rows[key] = vals
-        stamps.add(ts)
-    if not rows:
+        symbols.add(row[col["symbol"]])
+    if not stamps:
         raise ValueError("panel is empty")
     ordered = sorted(stamps)
     if len(ordered) < 2:
@@ -195,35 +220,125 @@ def load_panel(path) -> Panel:
     bar_ms = max(diffs, key=lambda d: (diffs[d], -d))  # most common step; gaps are multiples of it
     if bar_ms <= 0 or any((t - ordered[0]) % bar_ms for t in ordered):
         raise ValueError("timestamps are not on one fixed grid")
-    times = list(range(ordered[0], ordered[-1] + bar_ms, bar_ms))
-    index = {t: i for i, t in enumerate(times)}
-    symbols = sorted({s for _, s in rows})
-    T = len(times)
-    series = {f: {s: [None] * T for s in symbols} for f in BASE_FIELDS + OPTIONAL_FIELDS}
-    for (ts, sym), vals in rows.items():
-        i = index[ts]
-        for f in BASE_FIELDS + OPTIONAL_FIELDS:
-            series[f][sym][i] = vals[f]
-    funding_known = {s for s in symbols if any(x is not None for x in series["funding"][s])}
-    return Panel(times, symbols, series, bar_ms, sha, funding_known)
+    t0 = ordered[0]
+    T = (ordered[-1] - t0) // bar_ms + 1
+    times = [t0 + i * bar_ms for i in range(T)]
+    symbols = sorted(symbols)
+    del stamps, ordered
+    series = {f: {s: nan_array(T) for s in symbols} for f in PRICE_FIELDS + ("oi", "funding")}
+    settled = {s: bytearray(T) for s in symbols}
+    eligible = {s: bytearray(T) for s in symbols}
+    ci = [col[f] for f in PRICE_FIELDS]
+    c_el, c_fu, c_oi = col.get("eligible"), col.get("funding"), col.get("oi")
+    rows = _csv_rows(path)
+    next(rows)
+    for line, row in rows:
+        sym = row[col["symbol"]]
+        i = (int(row[col["ts"]]) - t0) // bar_ms
+        if series["close"][sym][i] == series["close"][sym][i]:
+            raise ValueError(f"line {line}: duplicate bar {sym} {row[col['ts']]}")
+        o, h, l, c, v = (_num(row[k], f, line, allow_empty=False) for k, f in zip(ci, PRICE_FIELDS))
+        if min(o, h, l, c) <= 0 or v < 0:
+            raise ValueError(f"line {line}: non-positive price or negative volume")
+        if h + EPS < max(o, c, l) or l - EPS > min(o, c, h):
+            raise ValueError(f"line {line}: inconsistent high/low")
+        for f, x in zip(PRICE_FIELDS, (o, h, l, c, v)):
+            series[f][sym][i] = x
+        if c_el is None:
+            eligible[sym][i] = 1
+        else:
+            flag = row[c_el]
+            if flag not in ("0", "1"):
+                raise ValueError(f"line {line}: eligible must be 0 or 1")
+            eligible[sym][i] = flag == "1"
+        if c_fu is None:
+            series["funding"][sym][i] = NAN
+        else:
+            cell = row[c_fu]
+            if cell == "NA":
+                series["funding"][sym][i] = NAN
+            elif cell == "":
+                series["funding"][sym][i] = 0.0
+            else:
+                series["funding"][sym][i] = _num(cell, "funding", line)
+                settled[sym][i] = 1
+        if c_oi is not None and row[c_oi] != "":
+            series["oi"][sym][i] = _num(row[c_oi], "oi", line)
+    if sha256_file(path) != sha_before:
+        raise ValueError("panel file changed while it was being read")
+    return Panel(times, symbols, series, settled, eligible, bar_ms, sha_before)
 
 
-def audit_panel(panel: Panel) -> dict:
-    present = {s: sum(x is not None for x in panel.series["close"][s]) for s in panel.symbols}
-    empty_bars = sum(1 for i in range(panel.T) if all(panel.series["close"][s][i] is None for s in panel.symbols))
-    return {
+def recompute_eligibility(panel: Panel, usd: float, days: int = 30) -> dict:
+    """Eligibility implied by trailing median daily quote volume of strictly earlier
+    UTC days (days without rows count as zero). Returns {symbol: {day_index: 0/1}}."""
+    day0 = panel.times[0] // MS_PER_DAY
+    n_days = panel.times[-1] // MS_PER_DAY - day0 + 1
+    out = {}
+    for s in panel.symbols:
+        vol, close = panel.series["volume"][s], panel.series["close"][s]
+        daily = [0.0] * n_days
+        for i, t in enumerate(panel.times):
+            if close[i] == close[i]:
+                daily[t // MS_PER_DAY - day0] += vol[i]
+        flags = {}
+        for d in range(n_days):
+            if d < days:
+                flags[d] = 0
+                continue
+            window = sorted(daily[d - days:d])
+            mid = days // 2
+            med = window[mid] if days % 2 else (window[mid - 1] + window[mid]) / 2
+            flags[d] = int(med >= usd)
+        out[s] = flags
+    return out
+
+
+def audit_panel(panel: Panel, expect_bar_ms: int | None = None, eligibility_usd: float | None = None,
+                eligibility_days: int = 30) -> dict:
+    present = {s: sum(1 for x in panel.series["close"][s] if x == x) for s in panel.symbols}
+    total_present = sum(present.values())
+    empty_bars = sum(1 for i in range(panel.T) if all(panel.series["close"][s][i] != panel.series["close"][s][i]
+                                                      for s in panel.symbols))
+    unknown_funding = sum(1 for s in panel.symbols for c, f in zip(panel.series["close"][s], panel.series["funding"][s])
+                          if c == c and f != f)
+    out = {
+        "bench": VERSION,
         "panel_sha256": panel.sha,
         "bar_ms": panel.bar_ms,
+        "bar_ms_matches_expected": None if expect_bar_ms is None else panel.bar_ms == expect_bar_ms,
         "bars": panel.T,
         "start": utc_iso(panel.times[0]),
         "end_bar_open": utc_iso(panel.times[-1]),
         "symbols": len(panel.symbols),
+        "rows": total_present,
         "bars_present_min": min(present.values()),
         "bars_present_max": max(present.values()),
         "fully_empty_bars": empty_bars,
-        "symbols_without_funding": sorted(set(panel.symbols) - panel.funding_known),
-        "symbols_with_oi": sum(1 for s in panel.symbols if any(x is not None for x in panel.series["oi"][s])),
+        "eligible_rows": sum(sum(v) for v in panel.eligible.values()),
+        "funding_unknown_row_share": unknown_funding / total_present if total_present else None,
+        "symbols_without_any_settlement": sorted(s for s in panel.symbols if not any(panel.settled[s])),
+        "symbols_with_oi": sum(1 for s in panel.symbols if any(x == x for x in panel.series["oi"][s])),
     }
+    if eligibility_usd is not None:
+        implied = recompute_eligibility(panel, eligibility_usd, eligibility_days)
+        day0 = panel.times[0] // MS_PER_DAY
+        bad_rows, bad_days = 0, set()
+        for s in panel.symbols:
+            close, elig = panel.series["close"][s], panel.eligible[s]
+            for i, t in enumerate(panel.times):
+                if close[i] == close[i]:
+                    d = t // MS_PER_DAY - day0
+                    if elig[i] != implied[s][d]:
+                        bad_rows += 1
+                        bad_days.add((s, d))
+        out["eligibility_check"] = {
+            "rule": f"median daily quote volume over {eligibility_days} earlier UTC days >= {eligibility_usd:g}",
+            "assumes_volume_is_quote_currency": True,
+            "mismatched_rows": bad_rows,
+            "mismatched_symbol_days": len(bad_days),
+        }
+    return out
 
 
 # --------------------------------------------------------------- hypotheses
@@ -236,17 +351,17 @@ def _count_nodes(node, depth=1):
     op = node[0]
     if op not in OPS:
         raise ValueError(f"unknown operator {op!r}")
-    kind, arity, nparams = OPS[op]
+    kind, arity = OPS[op]
     if op == "field":
         if len(node) != 2 or node[1] not in FEATURE_FIELDS:
             raise ValueError(f"field must name one of {FEATURE_FIELDS}")
         return 1
     if op == "const":
-        if len(node) != 2 or isinstance(node[1], bool) or not _finite(node[1]):
+        if len(node) != 2 or not _finite(node[1]):
             raise ValueError("const needs one finite number")
         return 1
     if kind == "clip":
-        if len(node) != 3 or isinstance(node[2], bool) or not _finite(node[2]) or node[2] <= 0:
+        if len(node) != 3 or not _finite(node[2]) or node[2] <= 0:
             raise ValueError("clip needs [clip, expr, positive bound]")
         return 1 + _count_nodes(node[1], depth + 1)
     if kind == "window":
@@ -286,8 +401,7 @@ def validate_hypothesis(rec: dict) -> dict:
     }
     if out["mode"] not in ("cross_section", "time_series"):
         raise ValueError("mode must be cross_section or time_series")
-    q = out["quantile"]
-    if isinstance(q, bool) or not _finite(q) or not 0 < q <= 0.5:
+    if not _finite(out["quantile"]) or not 0 < out["quantile"] <= 0.5:
         raise ValueError("quantile must be in (0, 0.5]")
     m = out["min_symbols"]
     if isinstance(m, bool) or not isinstance(m, int) or not 2 <= m <= 1000:
@@ -320,76 +434,98 @@ def read_hypotheses(path) -> list[dict]:
 
 # ------------------------------------------------------- causal evaluation
 
-def _rolling(xs, n, fn):
-    """Apply fn to each full window xs[t-n+1..t]; any None in window gives None."""
-    out = [None] * len(xs)
-    nones = 0
-    for t, x in enumerate(xs):
-        if x is None:
-            nones += 1
-        if t >= n and xs[t - n] is None:
-            nones -= 1
-        if t >= n - 1 and nones == 0:
-            out[t] = fn(xs, t - n + 1, t + 1)
+def _rolling_stats(xs, n):
+    """Trailing-window sum, mean and sample std. Any NaN in the window gives NaN.
+    Running sums around a reference value, resynchronised exactly every n steps."""
+    T = len(xs)
+    s_out, m_out, sd_out = nan_array(T), nan_array(T), nan_array(T)
+    bad = 0
+    valid_prev = False
+    since = 0
+    ref = s1 = s2 = 0.0
+    for t in range(T):
+        x = xs[t]
+        if x != x:
+            bad += 1
+        if t >= n and xs[t - n] != xs[t - n]:
+            bad -= 1
+        if bad or t < n - 1:
+            valid_prev = False
+            continue
+        if not valid_prev or since >= n:
+            w = xs[t - n + 1:t + 1]
+            ref = w[0]
+            s1 = math.fsum(v - ref for v in w)
+            s2 = math.fsum((v - ref) ** 2 for v in w)
+            since = 0
+        else:
+            y = xs[t - n]
+            s1 += (x - ref) - (y - ref)
+            s2 += (x - ref) ** 2 - (y - ref) ** 2
+            since += 1
+        valid_prev = True
+        mean_dev = s1 / n
+        s_out[t] = ref * n + s1
+        m_out[t] = ref + mean_dev
+        if n > 1:
+            var = (s2 - n * mean_dev * mean_dev) / (n - 1)
+            sd_out[t] = math.sqrt(var) if var > 0 else 0.0
+    return s_out, m_out, sd_out
+
+
+def _tsrank(xs, n):
+    T = len(xs)
+    out = nan_array(T)
+    win: list = []
+    start = 0  # first index of the current NaN-free run
+    for t in range(T):
+        x = xs[t]
+        if x != x:
+            win = []
+            start = t + 1
+            continue
+        bisect.insort(win, x)
+        if t - n >= start:
+            del win[bisect.bisect_left(win, xs[t - n])]
+        if t - start + 1 >= n:
+            lo, hi = bisect.bisect_left(win, x), bisect.bisect_right(win, x)
+            out[t] = (lo + (hi - lo - 1) / 2) / (n - 1) - 0.5
     return out
-
-
-def _win_sum(xs, a, b):
-    return math.fsum(xs[a:b])
-
-
-def _win_mean(xs, a, b):
-    return math.fsum(xs[a:b]) / (b - a)
-
-
-def _win_std(xs, a, b):
-    w = xs[a:b]
-    mu = math.fsum(w) / len(w)
-    var = math.fsum((x - mu) ** 2 for x in w) / (len(w) - 1)
-    return math.sqrt(var) if var > 0 else 0.0
-
-
-def _win_z(xs, a, b):
-    sd = _win_std(xs, a, b)
-    if sd < EPS:
-        return None
-    return (xs[b - 1] - _win_mean(xs, a, b)) / sd
-
-
-def _win_tsrank(xs, a, b):
-    w = xs[a:b]
-    cur = w[-1]
-    below = sum(1 for x in w if x < cur)
-    equal = sum(1 for x in w if x == cur)
-    return (below + (equal - 1) / 2) / (len(w) - 1) - 0.5
 
 
 def _ts_op(op, xs, n):
     T = len(xs)
     if op == "lag":
-        return [xs[t - n] if t >= n else None for t in range(T)]
+        return nan_array(min(n, T)) + xs[:max(T - n, 0)]
     if op == "delta":
-        return [xs[t] - xs[t - n] if t >= n and xs[t] is not None and xs[t - n] is not None else None for t in range(T)]
+        return _clean([xs[t] - xs[t - n] if t >= n else NAN for t in range(T)])
     if op == "pct":
-        return [xs[t] / xs[t - n] - 1 if t >= n and xs[t] is not None and xs[t - n] is not None and abs(xs[t - n]) > EPS else None for t in range(T)]
+        return _clean([xs[t] / xs[t - n] - 1 if t >= n and abs(xs[t - n]) > EPS else NAN for t in range(T)])
     if op == "ema":
-        out, state, warm = [None] * T, None, 0
-        alpha = 2.0 / (n + 1)
+        out, state, warm, alpha = nan_array(T), 0.0, 0, 2.0 / (n + 1)
         for t, x in enumerate(xs):
-            if x is None:
-                state, warm = None, 0
+            if x != x:
+                warm = 0
                 continue
-            state = x if state is None else alpha * x + (1 - alpha) * state
+            state = x if warm == 0 else alpha * x + (1 - alpha) * state
             warm += 1
             if warm >= n:
                 out[t] = state
         return out
-    fn = {"sum": _win_sum, "mean": _win_mean, "std": _win_std, "z": _win_z, "tsrank": _win_tsrank}[op]
-    return _rolling(xs, n, fn)
+    if op == "tsrank":
+        return _tsrank(xs, n)
+    s, m, sd = _rolling_stats(xs, n)
+    if op == "sum":
+        return _clean(s)
+    if op == "mean":
+        return _clean(m)
+    if op == "std":
+        return _clean(sd)
+    return _clean([(x - mu) / d if d > EPS else NAN for x, mu, d in zip(xs, m, sd)])  # z
 
 
 def _avg_ranks(values):
-    order = sorted(range(len(values)), key=lambda i: values[i])
+    order = sorted(range(len(values)), key=values.__getitem__)
     ranks = [0.0] * len(values)
     i = 0
     while i < len(order):
@@ -404,135 +540,128 @@ def _avg_ranks(values):
 
 
 def _cross_op(op, by_sym, symbols, T):
-    out = {s: [None] * T for s in symbols}
+    out = {s: nan_array(T) for s in symbols}
+    cols = [by_sym[s] for s in symbols]
+    outs = [out[s] for s in symbols]
     for t in range(T):
-        live = [s for s in symbols if by_sym[s][t] is not None]
-        if not live:
+        live = [k for k, c in enumerate(cols) if c[t] == c[t]]
+        m = len(live)
+        if m == 0:
             continue
-        vals = [by_sym[s][t] for s in live]
-        m = len(vals)
+        vals = [cols[k][t] for k in live]
         if op == "csrank":
             if m < 2:
                 continue
-            ranks = _avg_ranks(vals)
-            for s, r in zip(live, ranks):
-                out[s][t] = r / (m - 1) - 0.5
-        else:
-            mu = math.fsum(vals) / m
-            if op == "csdemean":
-                for s, v in zip(live, vals):
-                    out[s][t] = v - mu
-            else:
-                if m < 3:
-                    continue
-                sd = math.sqrt(math.fsum((v - mu) ** 2 for v in vals) / (m - 1))
-                if sd < EPS:
-                    continue
-                for s, v in zip(live, vals):
-                    out[s][t] = (v - mu) / sd
+            for k, r in zip(live, _avg_ranks(vals)):
+                outs[k][t] = r / (m - 1) - 0.5
+            continue
+        mu = math.fsum(vals) / m
+        if op == "csdemean":
+            for k, v in zip(live, vals):
+                outs[k][t] = v - mu
+            continue
+        if m < 3:
+            continue
+        sd = math.sqrt(math.fsum((v - mu) ** 2 for v in vals) / (m - 1))
+        if sd < EPS:
+            continue
+        for k, v in zip(live, vals):
+            outs[k][t] = (v - mu) / sd
     return out
 
 
 def _base_feature(panel: Panel, name: str):
     s = panel.series
-    if name in BASE_FIELDS or name == "oi":
+    if name in PRICE_FIELDS or name == "oi":
         return s[name]
     out = {}
     for sym in panel.symbols:
         if name == "ret":
             c = s["close"][sym]
-            out[sym] = [math.log(c[t] / c[t - 1]) if t and c[t] is not None and c[t - 1] is not None else None for t in range(panel.T)]
+            out[sym] = _clean([math.log(c[t] / c[t - 1]) if t and c[t] == c[t] and c[t - 1] == c[t - 1] else NAN
+                               for t in range(panel.T)])
         elif name == "range":
             h, l = s["high"][sym], s["low"][sym]
-            out[sym] = [math.log(h[t] / l[t]) if h[t] is not None else None for t in range(panel.T)]
-        elif name == "funding":
-            # last funding rate settled at or before this bar, forward filled
-            raw, last, seq = s["funding"][sym], None, []
-            for x in raw:
-                if x is not None:
-                    last = x
-                seq.append(last)
+            out[sym] = _clean([math.log(a / b) if a == a else NAN for a, b in zip(h, l)])
+        else:  # funding: last settled rate; an unknown bar resets it to unknown
+            raw, flag, seq, last = s["funding"][sym], panel.settled[sym], nan_array(panel.T), NAN
+            for t in range(panel.T):
+                if raw[t] != raw[t]:
+                    last = NAN
+                elif flag[t]:
+                    last = raw[t]
+                seq[t] = last
             out[sym] = seq
     return out
 
 
-def _unary(op, x):
-    if op == "neg":
-        return -x
-    if op == "abs":
-        return abs(x)
-    if op == "sign":
-        return (x > 0) - (x < 0)
-    if op == "tanh":
-        return math.tanh(x)
-    if op == "log1p":
-        return math.copysign(math.log1p(abs(x)), x)
-    raise AssertionError(op)
+def _unary(op):
+    return {
+        "neg": lambda x: -x,
+        "abs": abs,
+        "sign": lambda x: (x > 0) - (x < 0),
+        "tanh": math.tanh,
+        "log1p": lambda x: math.copysign(math.log1p(abs(x)), x),
+    }[op]
 
 
-def _binary(op, a, b):
-    if op == "add":
-        return a + b
-    if op == "sub":
-        return a - b
-    if op == "mul":
-        return a * b
-    if op == "div":
-        return a / b if abs(b) > EPS else None
-    if op == "max":
-        return max(a, b)
-    if op == "min":
-        return min(a, b)
-    raise AssertionError(op)
+def _binary(op):
+    return {
+        "add": lambda a, b: a + b,
+        "sub": lambda a, b: a - b,
+        "mul": lambda a, b: a * b,
+        "div": lambda a, b: a / b if abs(b) > EPS else NAN,
+        "max": max,
+        "min": min,
+    }[op]
 
 
 def evaluate_expression(node, panel: Panel, cache=None):
-    """Return {symbol: [value or None per bar]} using only past and current bars."""
+    """Return {symbol: array of values, NaN = unavailable} using only past and current bars.
+    Only leaf fields are cached, which keeps peak memory near tree depth x panel size."""
     cache = {} if cache is None else cache
-    key = canonical(node)
-    if key in cache:
-        return cache[key]
     op = node[0]
     kind = OPS[op][0]
     syms, T = panel.symbols, panel.T
     if op == "field":
-        res = _base_feature(panel, node[1])
-    elif op == "const":
-        res = {s: [float(node[1])] * T for s in syms}
-    elif kind == "unary":
-        x = evaluate_expression(node[1], panel, cache)
-        res = {s: [_unary(op, v) if v is not None else None for v in x[s]] for s in syms}
-    elif kind == "binary":
+        if node[1] not in cache:
+            cache[node[1]] = _base_feature(panel, node[1])
+        return cache[node[1]]
+    if op == "const":
+        return {s: array("d", [float(node[1])]) * T for s in syms}
+    if kind == "unary":
+        x, f = evaluate_expression(node[1], panel, cache), _unary(op)
+        return {s: _clean([f(v) if v == v else NAN for v in x[s]]) for s in syms}
+    if kind == "binary":
         a = evaluate_expression(node[1], panel, cache)
         b = evaluate_expression(node[2], panel, cache)
-        res = {s: [_binary(op, u, v) if u is not None and v is not None else None for u, v in zip(a[s], b[s])] for s in syms}
-    elif kind == "clip":
-        x = evaluate_expression(node[1], panel, cache)
-        c = float(node[2])
-        res = {s: [max(-c, min(c, v)) if v is not None else None for v in x[s]] for s in syms}
-    elif kind == "window":
-        x = evaluate_expression(node[1], panel, cache)
-        res = {s: _ts_op(op, x[s], node[2]) for s in syms}
-    else:
-        x = evaluate_expression(node[1], panel, cache)
-        res = _cross_op(op, x, syms, T)
-    for s in syms:
-        res[s] = [v if v is None or math.isfinite(v) else None for v in res[s]]
-    cache[key] = res
-    return res
+        f = _binary(op)
+        return {s: _clean([f(u, v) if u == u and v == v else NAN for u, v in zip(a[s], b[s])]) for s in syms}
+    if kind == "clip":
+        x, c = evaluate_expression(node[1], panel, cache), float(node[2])
+        return {s: _clean([max(-c, min(c, v)) if v == v else NAN for v in x[s]]) for s in syms}
+    x = evaluate_expression(node[1], panel, cache)
+    if kind == "window":
+        return {s: _ts_op(op, x[s], node[2]) for s in syms}
+    return _cross_op(op, x, syms, T)
 
 
 # ------------------------------------------------------------- simulation
 
-def _exit_price(panel: Panel, sym, entry, exit_):
-    px = panel.series["open"][sym][exit_] if exit_ < panel.T else None
-    if px is not None:
-        return px, False
+def _realized(panel: Panel, sym, entry, exit_):
+    """Return (entry_price, exit_price, exit_missing) or None if not enterable.
+    A missing exit bar closes at the last observed close in [entry, exit) or at entry."""
+    o = panel.series["open"][sym][entry]
+    if o != o:
+        return None
+    px = panel.series["open"][sym][exit_]
+    if px == px:
+        return o, px, False
     closes = panel.series["close"][sym]
-    for j in range(min(exit_, panel.T) - 1, entry - 1, -1):
-        if closes[j] is not None:
-            return closes[j], True
-    return None, True
+    for j in range(exit_ - 1, entry - 1, -1):
+        if closes[j] == closes[j]:
+            return o, closes[j], True
+    return o, o, True
 
 
 def _spearman(xs, ys):
@@ -546,63 +675,86 @@ def _spearman(xs, ys):
     return num / den if den > EPS else None
 
 
-def simulate(panel: Panel, hyp: dict, first_entry: int, last_exit: int, costs_bp: list[float]) -> dict:
-    """Non-overlapping rebalances. Decision after close of bar t, entry at open
-    of bar t+1, exit at open of bar t+1+h. Entries >= first_entry, exits <= last_exit.
-    Weights: cross_section long top q / short bottom q, +0.5 / -0.5 gross each side;
-    time_series sign(score)/m. Funding: a long pays the settled rate, a short receives it.
+def target_weights(cohort, hyp) -> dict:
+    """cohort: list of (symbol, score) known at the decision bar."""
+    w = {}
+    if hyp["mode"] == "cross_section":
+        ranked = sorted(cohort, key=lambda c: (c[1], c[0]))
+        k = max(1, int(hyp["quantile"] * len(ranked)))
+        for s, _ in ranked[-k:]:
+            w[s] = 0.5 / k
+        for s, _ in ranked[:k]:
+            w[s] = w.get(s, 0.0) - 0.5 / k
+    else:
+        m = len(cohort)
+        for s, sc in cohort:
+            if sc:
+                w[s] = (1.0 if sc > 0 else -1.0) / m
+    return w
+
+
+def simulate(panel: Panel, hyp: dict, first_entry: int, last_exit: int, costs_bp, missing_exit_penalty_bp=300.0) -> dict:
+    """Non-overlapping rebalances. Decision after close of bar t; the cohort is every
+    symbol with a score, eligible==1 and a close at t. Entry at open t+1, exit at open
+    t+1+h. Entries >= first_entry, exits <= last_exit. Weights: cross_section long top q,
+    short bottom q (+0.5/-0.5 gross); time_series sign(score)/m. A long pays settled
+    funding, a short receives it. Legs that cannot be entered stay in cash.
     """
     h = hyp["horizon_bars"]
     score = evaluate_expression(hyp["score"], panel)
-    opens, closes, funding = panel.series["open"], panel.series["close"], panel.series["funding"]
+    closes, funding, elig = panel.series["close"], panel.series["funding"], panel.eligible
+    pen = missing_exit_penalty_bp / 1e4
     periods = []
     prev_w: dict = {}
-    forced = 0
+    counts = Counter()
     t = max(first_entry - 1, 0)
     while t + 1 + h <= last_exit:
         entry, exit_ = t + 1, t + 1 + h
-        cand = []
-        for s in panel.symbols:
-            sc = score[s][t]
-            if sc is None or closes[s][t] is None or opens[s][entry] is None:
-                continue
-            px, was_forced = _exit_price(panel, s, entry, exit_)
-            if px is None:
-                continue
-            fr = math.fsum(f for f in funding[s][entry:exit_] if f is not None)
-            cand.append((s, sc, px / opens[s][entry] - 1.0, fr, was_forced))
-        if len(cand) < hyp["min_symbols"]:
+        cohort = [(s, score[s][t]) for s in panel.symbols
+                  if score[s][t] == score[s][t] and elig[s][t] and closes[s][t] == closes[s][t]]
+        if len(cohort) < hyp["min_symbols"]:
+            counts["skipped_small_cohort"] += 1
             t += h
             continue
-        w = {}
-        if hyp["mode"] == "cross_section":
-            ranked = sorted(cand, key=lambda c: (c[1], c[0]))
-            k = max(1, int(hyp["quantile"] * len(ranked)))
-            for c in ranked[-k:]:
-                w[c[0]] = 0.5 / k
-            for c in ranked[:k]:
-                w[c[0]] = w.get(c[0], 0.0) - 0.5 / k
-        else:
-            m = len(cand)
-            for c in cand:
-                if c[1] > 0:
-                    w[c[0]] = 1.0 / m
-                elif c[1] < 0:
-                    w[c[0]] = -1.0 / m
-        info = {c[0]: c for c in cand}
-        gross = math.fsum(wt * info[s][2] for s, wt in w.items())
-        fund = -math.fsum(wt * info[s][3] for s, wt in w.items())
-        turnover = math.fsum(abs(w.get(s, 0.0) - prev_w.get(s, 0.0)) for s in set(w) | set(prev_w))
-        forced += sum(1 for s in w if info[s][4])
-        ic = _spearman([c[1] for c in cand], [c[2] for c in cand])
-        periods.append({"t": t, "gross": gross, "funding": fund, "turnover": turnover, "ic": ic, "n": len(cand)})
-        prev_w = w
+        target = target_weights(cohort, hyp)
+        outcome = {s: _realized(panel, s, entry, exit_) for s, _ in cohort}
+        held, gross, penalty, fund = {}, 0.0, 0.0, 0.0
+        for s, wt in target.items():
+            r = outcome[s]
+            if r is None:
+                counts["entry_missed"] += 1
+                continue
+            o, px, missing = r
+            gross += wt * (px / o - 1.0)
+            if missing:
+                counts["missing_exits"] += 1
+                penalty += abs(wt) * pen
+            else:
+                held[s] = wt
+            fr = funding[s][entry:exit_]
+            counts["position_bars"] += len(fr)
+            for f in fr:
+                if f == f:
+                    fund -= wt * f
+                else:
+                    counts["position_bars_funding_unknown"] += 1
+        entered = {s: target[s] for s in target if outcome[s] is not None}
+        turnover = math.fsum(abs(entered.get(s, 0.0) - prev_w.get(s, 0.0)) for s in set(entered) | set(prev_w))
+        labelled = [(sc, outcome[s][1] / outcome[s][0] - 1.0) for s, sc in cohort if outcome[s] is not None]
+        ic = _spearman([a for a, _ in labelled], [b for _, b in labelled])
+        periods.append({"t": t, "gross": gross, "penalty": penalty, "funding": fund, "turnover": turnover,
+                        "ic": ic, "n": len(cohort), "weights": target})
+        prev_w = held  # positions closed by a missing exit already paid the penalty
         t += h
     if periods:  # liquidate at the end
         periods[-1]["turnover"] += math.fsum(abs(x) for x in prev_w.values())
     for p in periods:
-        p["net"] = {str(c): p["gross"] + p["funding"] - p["turnover"] * c / 1e4 for c in costs_bp}
-    return {"periods": periods, "forced_exits": forced, "periods_per_year": MS_PER_YEAR / (panel.bar_ms * h)}
+        base = p["gross"] - p["penalty"] + p["funding"]
+        p["net"] = {str(c): base - p["turnover"] * c / 1e4 for c in costs_bp}
+    pb = counts["position_bars"]
+    return {"periods": periods, "counts": dict(counts),
+            "funding_unknown_share": counts["position_bars_funding_unknown"] / pb if pb else 0.0,
+            "periods_per_year": MS_PER_YEAR / (panel.bar_ms * h)}
 
 
 # ------------------------------------------------------------- statistics
@@ -648,9 +800,7 @@ def deflated_sharpe(sr: float, n_obs: int, skew: float, kurt: float, n_trials: i
     if n_obs < 3:
         return 0.0
     sr0 = expected_max_sharpe(n_trials, var_sr)
-    denom = 1 - skew * sr + (kurt - 1) / 4 * sr * sr
-    if denom <= EPS:
-        denom = EPS
+    denom = max(1 - skew * sr + (kurt - 1) / 4 * sr * sr, EPS)
     return ND.cdf((sr - sr0) * math.sqrt(n_obs - 1) / math.sqrt(denom))
 
 
@@ -684,7 +834,8 @@ def summarize(sim: dict, costs_bp, gate_cost, folds: int) -> dict:
     periods = sim["periods"]
     n = len(periods)
     ppy = sim["periods_per_year"]
-    out = {"periods": n, "periods_per_year": ppy, "forced_exits": sim["forced_exits"]}
+    out = {"periods": n, "periods_per_year": ppy, "counts": sim["counts"],
+           "funding_unknown_share": sim["funding_unknown_share"]}
     if n < 2:
         return out
     by_cost = {}
@@ -693,22 +844,16 @@ def summarize(sim: dict, costs_bp, gate_cost, folds: int) -> dict:
         mu, sd, skew, kurt = moments(xs)
         sr = mu / sd if sd > EPS else 0.0
         by_cost[str(c)] = {
-            "mean_bp": mu * 1e4,
-            "std_bp": sd * 1e4,
-            "sharpe_period": sr,
-            "sharpe_annual": sr * math.sqrt(ppy),
-            "t_stat": sr * math.sqrt(n),
-            "skew": skew,
-            "kurtosis": kurt,
-            "hit_rate": sum(1 for x in xs if x > 0) / n,
+            "mean_bp": mu * 1e4, "std_bp": sd * 1e4, "sharpe_period": sr,
+            "sharpe_annual": sr * math.sqrt(ppy), "t_stat": sr * math.sqrt(n),
+            "skew": skew, "kurtosis": kurt, "hit_rate": sum(1 for x in xs if x > 0) / n,
             "max_drawdown_bp": max_drawdown(xs) * 1e4,
         }
     out["by_cost_bp_per_side"] = by_cost
-    gate = [p["net"][str(gate_cost)] for p in periods]
-    lo, hi = block_bootstrap_mean(gate)
+    lo, hi = block_bootstrap_mean([p["net"][str(gate_cost)] for p in periods])
     out["gate_mean_bp_ci95_block_bootstrap"] = [lo * 1e4, hi * 1e4]
-    out["gross_mean_bp"] = math.fsum(p["gross"] for p in periods) / n * 1e4
-    out["funding_mean_bp"] = math.fsum(p["funding"] for p in periods) / n * 1e4
+    for key in ("gross", "penalty", "funding"):
+        out[f"{key}_mean_bp"] = math.fsum(p[key] for p in periods) / n * 1e4
     out["turnover_mean"] = math.fsum(p["turnover"] for p in periods) / n
     ics = [p["ic"] for p in periods if p["ic"] is not None]
     if len(ics) >= 2:
@@ -717,31 +862,28 @@ def summarize(sim: dict, costs_bp, gate_cost, folds: int) -> dict:
         out["ic_t_stat"] = mu / sd * math.sqrt(len(ics)) if sd > EPS else 0.0
     out["symbols_per_period_mean"] = math.fsum(p["n"] for p in periods) / n
     size = math.ceil(n / folds)
-    fold_rows = []
+    out["folds"] = []
     for k in range(folds):
         chunk = periods[k * size:(k + 1) * size]
-        if not chunk:
-            continue
-        fi = [p["ic"] for p in chunk if p["ic"] is not None]
-        fold_rows.append({
-            "periods": len(chunk),
-            "net_mean_bp": math.fsum(p["net"][str(gate_cost)] for p in chunk) / len(chunk) * 1e4,
-            "ic_mean": math.fsum(fi) / len(fi) if fi else None,
-        })
-    out["folds"] = fold_rows
+        if chunk:
+            fi = [p["ic"] for p in chunk if p["ic"] is not None]
+            out["folds"].append({
+                "periods": len(chunk),
+                "net_mean_bp": math.fsum(p["net"][str(gate_cost)] for p in chunk) / len(chunk) * 1e4,
+                "ic_mean": math.fsum(fi) / len(fi) if fi else None,
+            })
     mde = mde_sharpe(n)
-    out["power"] = {
-        "mde_sharpe_period": mde,
-        "mde_sharpe_annual": mde * math.sqrt(ppy),
-    }
+    out["power"] = {"mde_sharpe_period": mde, "mde_sharpe_annual": mde * math.sqrt(ppy)}
     return out
 
 
 # ---------------------------------------------------------- config/ledger
 
 DEFAULT_GATE = {
-    "costs_bp_per_side": [0, 3, 6, 10],
-    "gate_cost_bp_per_side": 6,
+    "costs_bp_per_side": [0, 5, 10, 15],
+    "gate_cost_bp_per_side": 10,
+    "missing_exit_penalty_bp": 300,
+    "max_funding_unknown_share": 0.05,
     "dsr_min": 0.95,
     "folds": 4,
     "folds_positive_min": 3,
@@ -753,26 +895,24 @@ DEFAULT_GATE = {
 }
 
 
-def freeze_config(panel: Panel, holdout_frac: float, out: Path, gate_overrides: dict | None = None) -> dict:
+def freeze_config(panel: Panel, holdout_frac: float, out, gate_overrides: dict | None = None,
+                  expect_bar_ms: int | None = None) -> dict:
     if not 0.05 <= holdout_frac <= 0.5:
         raise ValueError("holdout fraction must be in [0.05, 0.5]")
+    if expect_bar_ms is not None and panel.bar_ms != expect_bar_ms:
+        raise ValueError(f"panel bar is {panel.bar_ms} ms, expected {expect_bar_ms}")
     b = int(panel.T * (1 - holdout_frac))
     gate = dict(DEFAULT_GATE)
     gate.update(gate_overrides or {})
+    if gate["gate_cost_bp_per_side"] not in gate["costs_bp_per_side"]:
+        raise ValueError("gate cost must be one of the reported cost levels")
     cfg = {
-        "schema": SCHEMA_CONFIG,
-        "version": VERSION,
-        "panel_sha256": panel.sha,
-        "bar_ms": panel.bar_ms,
-        "symbols": panel.symbols,
-        "panel_start_ts": panel.times[0],
-        "panel_end_ts": panel.times[-1],
-        "holdout_start_ts": panel.times[b],
-        "holdout_start_utc": utc_iso(panel.times[b]),
-        "gate": gate,
-        "frozen_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "schema": SCHEMA_CONFIG, "version": VERSION, "panel_sha256": panel.sha, "bar_ms": panel.bar_ms,
+        "symbols": panel.symbols, "panel_start_ts": panel.times[0], "panel_end_ts": panel.times[-1],
+        "holdout_start_ts": panel.times[b], "holdout_start_utc": utc_iso(panel.times[b]),
+        "gate": gate, "frozen_at_utc": now_utc(),
     }
-    write_exclusive(out, cfg)
+    write_exclusive(Path(out), cfg)
     return cfg
 
 
@@ -782,7 +922,9 @@ def load_config(path, panel: Panel) -> tuple[dict, int]:
         raise ValueError("bad config schema")
     if cfg["panel_sha256"] != panel.sha:
         raise ValueError("panel SHA differs from the frozen config; refuse to evaluate")
-    b = panel.times.index(cfg["holdout_start_ts"])
+    b = (cfg["holdout_start_ts"] - panel.times[0]) // panel.bar_ms
+    if not 0 < b < panel.T or panel.times[b] != cfg["holdout_start_ts"]:
+        raise ValueError("holdout boundary is not on the panel grid")
     return cfg, b
 
 
@@ -802,13 +944,34 @@ def append_ledger(path, entry: dict) -> None:
         os.fsync(fh.fileno())
 
 
-def trial_stats(ledger: list[dict], panel_sha: str, current_sha: str, current_sr: float, gate_cost) -> tuple[int, list[float]]:
+def trial_stats(ledger: list[dict], panel_sha: str, current_sha: str, current_sr: float) -> list[float]:
     srs = {}
     for e in ledger:
         if e.get("region") == "development" and e.get("panel_sha256") == panel_sha and e.get("sharpe_period_gate") is not None:
             srs[e["hypothesis_sha256"]] = e["sharpe_period_gate"]
     srs[current_sha] = current_sr
-    return len(srs), list(srs.values())
+    return list(srs.values())
+
+
+def write_signoff(directory, hypothesis_sha256: str, panel_sha256: str, reviewer: str, note: str = "") -> Path:
+    if reviewer not in REVIEWERS:
+        raise ValueError(f"reviewer must be one of {REVIEWERS}")
+    path = Path(directory) / f"{hypothesis_sha256}.signoff.json"
+    write_exclusive(path, {"hypothesis_sha256": hypothesis_sha256, "panel_sha256": panel_sha256,
+                           "reviewer": reviewer, "note": note[:2000], "signed_at_utc": now_utc()})
+    return path
+
+
+def _check_signoff(directory, hsha: str, panel_sha: str, author: str) -> dict:
+    path = Path(directory) / f"{hsha}.signoff.json"
+    if not path.exists():
+        raise PermissionError("holdout requires a sign-off file from a reviewer other than the author")
+    doc = json.loads(path.read_text())
+    if doc.get("hypothesis_sha256") != hsha or doc.get("panel_sha256") != panel_sha:
+        raise PermissionError("sign-off does not match this hypothesis and panel")
+    if doc.get("reviewer") not in REVIEWERS or doc.get("reviewer") == author:
+        raise PermissionError("sign-off must come from a known reviewer other than the hypothesis author")
+    return doc
 
 
 # ------------------------------------------------------------- verdicts
@@ -816,213 +979,212 @@ def trial_stats(ledger: list[dict], panel_sha: str, current_sha: str, current_sr
 def evaluate_development(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledger_path) -> dict:
     gate = cfg["gate"]
     dev = panel.truncated(boundary)  # holdout bars do not exist for this computation
-    sim = simulate(dev, hyp, first_entry=1, last_exit=boundary - 1, costs_bp=gate["costs_bp_per_side"])
+    sim = simulate(dev, hyp, first_entry=1, last_exit=boundary - 1, costs_bp=gate["costs_bp_per_side"],
+                   missing_exit_penalty_bp=gate["missing_exit_penalty_bp"])
     summary = summarize(sim, gate["costs_bp_per_side"], gate["gate_cost_bp_per_side"], gate["folds"])
     hsha = hypothesis_sha(hyp)
-    report = {
-        "bench": VERSION,
-        "region": "development",
-        "hypothesis": hyp,
-        "hypothesis_sha256": hsha,
-        "panel_sha256": panel.sha,
-        "development_end_utc": utc_iso(panel.times[boundary]),
-        "summary": summary,
-    }
+    report = {"bench": VERSION, "region": "development", "hypothesis": hyp, "hypothesis_sha256": hsha,
+              "panel_sha256": panel.sha, "development_end_utc": utc_iso(panel.times[boundary]),
+              "summary": summary, "sharpe_period_gate": None}
     n = summary["periods"]
     if n < gate["min_periods"] or "by_cost_bp_per_side" not in summary:
         report["verdict"] = "INSUFFICIENT_DATA"
-        report["sharpe_period_gate"] = None
     else:
         g = summary["by_cost_bp_per_side"][str(gate["gate_cost_bp_per_side"])]
-        ledger = read_ledger(ledger_path)
-        n_trials, srs = trial_stats(ledger, panel.sha, hsha, g["sharpe_period"], gate["gate_cost_bp_per_side"])
-        n_trials_total = n_trials + int(gate.get("prior_trials", 0))
-        var_trials = moments(srs)[1] ** 2 if len(srs) >= 2 else 0.0
-        var_sr = max(var_trials, 1.0 / max(n - 1, 1))
-        dsr = deflated_sharpe(g["sharpe_period"], n, g["skew"], g["kurtosis"], n_trials_total, var_sr)
+        srs = trial_stats(read_ledger(ledger_path), panel.sha, hsha, g["sharpe_period"])
+        n_trials = len(srs) + int(gate.get("prior_trials", 0))
+        var_sr = max(moments(srs)[1] ** 2 if len(srs) >= 2 else 0.0, 1.0 / max(n - 1, 1))
+        dsr = deflated_sharpe(g["sharpe_period"], n, g["skew"], g["kurtosis"], n_trials, var_sr)
         folds_pos = sum(1 for f in summary["folds"] if f["net_mean_bp"] > 0)
         ic_ok = summary.get("ic_mean", 0) > 0
         report["selection"] = {
-            "trials_counted": n_trials_total,
-            "var_sharpe_used": var_sr,
-            "expected_max_null_sharpe_period": expected_max_sharpe(n_trials_total, var_sr),
-            "deflated_sharpe": dsr,
-            "folds_positive": folds_pos,
-            "ic_positive": ic_ok,
+            "trials_counted": n_trials, "var_sharpe_used": var_sr,
+            "expected_max_null_sharpe_period": expected_max_sharpe(n_trials, var_sr),
+            "deflated_sharpe": dsr, "folds_positive": folds_pos, "ic_positive": ic_ok,
         }
         report["sharpe_period_gate"] = g["sharpe_period"]
         powered = summary["power"]["mde_sharpe_annual"] <= gate["target_sharpe_annual"]
-        if dsr >= gate["dsr_min"] and folds_pos >= gate["folds_positive_min"] and ic_ok:
+        if summary["funding_unknown_share"] > gate["max_funding_unknown_share"]:
+            report["verdict"] = "FUNDING_UNKNOWN"
+        elif dsr >= gate["dsr_min"] and folds_pos >= gate["folds_positive_min"] and ic_ok:
             report["verdict"] = "PASS_DEV"
         elif g["mean_bp"] <= 0 or powered:
             report["verdict"] = "REJECT"
         else:
             report["verdict"] = "INCONCLUSIVE_UNPOWERED"
-        report["power_note"] = (
-            f"{n} periods detect annual Sharpe >= {summary['power']['mde_sharpe_annual']:.2f} "
-            f"with 80% power; target {gate['target_sharpe_annual']}"
-        )
+        report["power_note"] = (f"{n} periods detect annual Sharpe >= {summary['power']['mde_sharpe_annual']:.2f} "
+                                f"with 80% power; target {gate['target_sharpe_annual']}")
     append_ledger(ledger_path, {
-        "time_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "region": "development",
-        "hypothesis_id": hyp["id"],
-        "author": hyp["author"],
-        "hypothesis_sha256": hsha,
-        "panel_sha256": panel.sha,
-        "periods": n,
-        "sharpe_period_gate": report["sharpe_period_gate"],
-        "verdict": report["verdict"],
+        "time_utc": now_utc(), "region": "development", "hypothesis_id": hyp["id"], "author": hyp["author"],
+        "hypothesis_sha256": hsha, "panel_sha256": panel.sha, "periods": n,
+        "sharpe_period_gate": report["sharpe_period_gate"], "verdict": report["verdict"],
     })
     return report
 
 
-def evaluate_holdout(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledger_path, claims_dir) -> dict:
+def evaluate_holdout(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledger_path, claims_dir, signoffs_dir) -> dict:
     gate = cfg["gate"]
     hsha = hypothesis_sha(hyp)
-    ledger = read_ledger(ledger_path)
-    passed = [e for e in ledger if e.get("hypothesis_sha256") == hsha and e.get("panel_sha256") == panel.sha
-              and e.get("region") == "development" and e.get("verdict") == "PASS_DEV"]
+    passed = [e for e in read_ledger(ledger_path) if e.get("hypothesis_sha256") == hsha
+              and e.get("panel_sha256") == panel.sha and e.get("region") == "development"
+              and e.get("verdict") == "PASS_DEV"]
     if not passed:
         raise PermissionError("holdout requires a recorded PASS_DEV for this exact hypothesis and panel")
+    signoff = _check_signoff(signoffs_dir, hsha, panel.sha, passed[-1]["author"])
     claims = Path(claims_dir)
     claims.mkdir(parents=True, exist_ok=True)
-    used = sorted(claims.glob("*.claim.json"))
-    if len(used) >= gate["holdout_budget"]:
+    if len(list(claims.glob("*.claim.json"))) >= gate["holdout_budget"]:
         raise PermissionError(f"holdout budget of {gate['holdout_budget']} claims is exhausted")
-    claim = claims / f"{hsha}.claim.json"
     try:
-        write_exclusive(claim, {"hypothesis_sha256": hsha, "panel_sha256": panel.sha,
-                                "claimed_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")})
+        write_exclusive(claims / f"{hsha}.claim.json", {"hypothesis_sha256": hsha, "panel_sha256": panel.sha,
+                                                         "reviewer": signoff["reviewer"], "claimed_at_utc": now_utc()})
     except FileExistsError as exc:
         raise PermissionError("this hypothesis already used its single holdout claim") from exc
-    sim = simulate(panel, hyp, first_entry=boundary, last_exit=panel.T - 1, costs_bp=gate["costs_bp_per_side"])
+    sim = simulate(panel, hyp, first_entry=boundary, last_exit=panel.T - 1, costs_bp=gate["costs_bp_per_side"],
+                   missing_exit_penalty_bp=gate["missing_exit_penalty_bp"])
     summary = summarize(sim, gate["costs_bp_per_side"], gate["gate_cost_bp_per_side"], gate["folds"])
     report = {"bench": VERSION, "region": "holdout", "hypothesis": hyp, "hypothesis_sha256": hsha,
-              "panel_sha256": panel.sha, "summary": summary}
+              "panel_sha256": panel.sha, "reviewer": signoff["reviewer"], "summary": summary}
     if summary["periods"] < 2 or "by_cost_bp_per_side" not in summary:
         report["verdict"] = "HOLDOUT_INSUFFICIENT_DATA"
+    elif summary["funding_unknown_share"] > gate["max_funding_unknown_share"]:
+        report["verdict"] = "HOLDOUT_FUNDING_UNKNOWN"
     else:
         g = summary["by_cost_bp_per_side"][str(gate["gate_cost_bp_per_side"])]
-        p_one_sided = 1 - ND.cdf(g["t_stat"])
-        report["p_value_one_sided"] = p_one_sided
-        ok = p_one_sided < gate["holdout_alpha"] and summary.get("ic_mean", 0) > 0
+        report["p_value_one_sided"] = 1 - ND.cdf(g["t_stat"])
+        ok = report["p_value_one_sided"] < gate["holdout_alpha"] and summary.get("ic_mean", 0) > 0
         report["verdict"] = "PASS_HOLDOUT" if ok else "FAIL_HOLDOUT"
     append_ledger(ledger_path, {
-        "time_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "region": "holdout", "hypothesis_id": hyp["id"], "author": hyp["author"],
-        "hypothesis_sha256": hsha, "panel_sha256": panel.sha,
-        "periods": summary["periods"], "verdict": report["verdict"],
+        "time_utc": now_utc(), "region": "holdout", "hypothesis_id": hyp["id"], "author": hyp["author"],
+        "hypothesis_sha256": hsha, "panel_sha256": panel.sha, "periods": summary["periods"],
+        "verdict": report["verdict"],
     })
     return report
 
 
 # --------------------------------------------------------- synthetic data
 
-def synthesize(symbols=30, bars=3000, seed=1, plant=0.0, bar_ms=3_600_000, start_ms=1_767_225_600_000) -> str:
-    """Synthetic hourly perp panel. Funding settles every 8 bars.
+def synthesize(out, symbols=30, bars=3000, seed=1, plant=0.0, delist_frac=0.0,
+               bar_ms=3_600_000, start_ms=1_767_225_600_000) -> None:
+    """Write a synthetic hourly perp panel to `out`. Funding settles every 8 bars.
 
-    With plant > 0 the next bar's idiosyncratic return loads on minus the
-    cross-sectional z-score of the last settled funding rate:
-    contrarian-to-crowding. plant is that loading in units of idio vol.
+    plant > 0: the next bar's idiosyncratic return loads on minus the
+    cross-sectional z-score of the last settled funding rate (in idio-vol units).
+    delist_frac: share of symbols whose rows stop at a random bar after the first quarter.
     """
     rng = random.Random(seed)
-    syms = [f"SYN{i:02d}-USDT-SWAP" for i in range(symbols)]
+    syms = [f"SYN{i:03d}-USDT-SWAP" for i in range(symbols)]
     price = {s: 10 * math.exp(rng.gauss(0, 1)) for s in syms}
     beta = {s: 0.7 + 0.6 * rng.random() for s in syms}
     latent = {s: rng.gauss(1e-4, 2e-4) for s in syms}
     last_settled = dict(latent)
     oi = {s: 1e6 * (1 + rng.random()) for s in syms}
+    end = {s: bars for s in syms}
+    for s in rng.sample(syms, int(delist_frac * symbols)):
+        end[s] = rng.randrange(bars // 4, bars)
     sig_m, sig_i = 0.006, 0.008
-    buf = io.StringIO()
-    w = csv.writer(buf, lineterminator="\n")
-    w.writerow(["ts", "symbol", "open", "high", "low", "close", "volume", "funding", "oi"])
-    for t in range(bars):
-        m = rng.gauss(0, sig_m)
-        vals = list(last_settled.values())
-        mu = sum(vals) / len(vals)
-        sd = math.sqrt(sum((v - mu) ** 2 for v in vals) / (len(vals) - 1)) or 1.0
-        for s in syms:
-            latent[s] = 1e-4 + 0.98 * (latent[s] - 1e-4) + rng.gauss(0, 4e-5)
-            drift = -plant * sig_i * (last_settled[s] - mu) / sd
-            r = beta[s] * m + rng.gauss(drift, sig_i)
-            o = price[s]
-            c = o * math.exp(r)
-            hi = max(o, c) * math.exp(abs(rng.gauss(0, 0.002)))
-            lo = min(o, c) * math.exp(-abs(rng.gauss(0, 0.002)))
-            price[s] = c
-            oi[s] *= math.exp(rng.gauss(0, 0.01))
-            fund = ""
-            if t % 8 == 7:
-                last_settled[s] = latent[s]
-                fund = f"{latent[s]:.8f}"
-            w.writerow([start_ms + t * bar_ms, s, f"{o:.8g}", f"{hi:.8g}", f"{lo:.8g}", f"{c:.8g}",
-                        f"{abs(rng.gauss(1000, 300)):.4f}", fund, f"{oi[s]:.2f}"])
-    return buf.getvalue()
+    with open(out, "w", newline="") as fh:
+        w = csv.writer(fh, lineterminator="\n")
+        w.writerow(["ts", "symbol", "open", "high", "low", "close", "volume", "eligible", "funding", "oi"])
+        for t in range(bars):
+            m = rng.gauss(0, sig_m)
+            vals = list(last_settled.values())
+            mu = sum(vals) / len(vals)
+            sd = math.sqrt(sum((v - mu) ** 2 for v in vals) / (len(vals) - 1)) or 1.0
+            for s in syms:
+                latent[s] = 1e-4 + 0.98 * (latent[s] - 1e-4) + rng.gauss(0, 4e-5)
+                r = beta[s] * m + rng.gauss(-plant * sig_i * (last_settled[s] - mu) / sd, sig_i)
+                o = price[s]
+                c = o * math.exp(r)
+                hi = max(o, c) * math.exp(abs(rng.gauss(0, 0.002)))
+                lo = min(o, c) * math.exp(-abs(rng.gauss(0, 0.002)))
+                price[s] = c
+                oi[s] *= math.exp(rng.gauss(0, 0.01))
+                vol = abs(rng.gauss(1000, 300))
+                fund = ""
+                if t % 8 == 7:
+                    last_settled[s] = latent[s]
+                    fund = f"{latent[s]:.8f}"
+                if t < end[s]:
+                    w.writerow([start_ms + t * bar_ms, s, f"{o:.8g}", f"{hi:.8g}", f"{lo:.8g}", f"{c:.8g}",
+                                f"{vol:.4f}", 1, fund, f"{oi[s]:.2f}"])
 
 
 # ------------------------------------------------------------------- CLI
 
-def _cmd_power(args):
-    ppy = args.periods_per_year
-    per = args.target_sharpe_annual / math.sqrt(ppy)
-    need = periods_needed(per)
-    print(json.dumps({
-        "target_sharpe_annual": args.target_sharpe_annual,
-        "periods_per_year": ppy,
-        "periods_needed_80pct_power": need,
-        "years_needed": need / ppy,
-        "mde_sharpe_annual_at_n": mde_sharpe(args.n) * math.sqrt(ppy) if args.n else None,
-    }, indent=1))
-
-
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Rakazo Algorithm Bench v40 (research only, no orders)")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("synth"); p.add_argument("--out", required=True); p.add_argument("--symbols", type=int, default=30)
-    p.add_argument("--bars", type=int, default=3000); p.add_argument("--seed", type=int, default=1); p.add_argument("--plant", type=float, default=0.0)
-    p = sub.add_parser("audit"); p.add_argument("--panel", required=True)
-    p = sub.add_parser("freeze"); p.add_argument("--panel", required=True); p.add_argument("--out", required=True)
-    p.add_argument("--holdout-frac", type=float, default=0.25); p.add_argument("--prior-trials", type=int, default=0)
+    p = sub.add_parser("synth")
+    p.add_argument("--out", required=True)
+    p.add_argument("--symbols", type=int, default=30)
+    p.add_argument("--bars", type=int, default=3000)
+    p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--plant", type=float, default=0.0)
+    p.add_argument("--delist-frac", type=float, default=0.0)
+    p = sub.add_parser("audit")
+    p.add_argument("--panel", required=True)
+    p.add_argument("--expect-bar-ms", type=int, default=3_600_000)
+    p.add_argument("--eligibility-usd", type=float)
+    p.add_argument("--eligibility-days", type=int, default=30)
+    p = sub.add_parser("freeze")
+    p.add_argument("--panel", required=True)
+    p.add_argument("--out", required=True)
+    p.add_argument("--expect-bar-ms", type=int, default=3_600_000)
+    p.add_argument("--holdout-frac", type=float, default=0.25)
+    p.add_argument("--prior-trials", type=int, default=0)
     for name in ("evaluate", "holdout"):
         p = sub.add_parser(name)
-        p.add_argument("--panel", required=True); p.add_argument("--config", required=True)
-        p.add_argument("--hyp", required=True); p.add_argument("--ledger", required=True)
-        p.add_argument("--out", required=True)
+        for arg in ("--panel", "--config", "--hyp", "--ledger", "--out"):
+            p.add_argument(arg, required=True)
         if name == "holdout":
-            p.add_argument("--claims", required=True); p.add_argument("--id", required=True)
-    p = sub.add_parser("power"); p.add_argument("--target-sharpe-annual", type=float, default=1.0)
-    p.add_argument("--periods-per-year", type=float, required=True); p.add_argument("--n", type=int, default=0)
+            for arg in ("--claims", "--signoffs", "--id"):
+                p.add_argument(arg, required=True)
+    p = sub.add_parser("signoff")
+    for arg in ("--signoffs", "--hypothesis-sha", "--panel-sha", "--reviewer"):
+        p.add_argument(arg, required=True)
+    p.add_argument("--note", default="")
+    p = sub.add_parser("power")
+    p.add_argument("--target-sharpe-annual", type=float, default=2.0)
+    p.add_argument("--periods-per-year", type=float, required=True)
+    p.add_argument("--n", type=int, default=0)
     args = ap.parse_args(argv)
 
     if args.cmd == "synth":
-        Path(args.out).write_text(synthesize(args.symbols, args.bars, args.seed, args.plant))
+        synthesize(args.out, args.symbols, args.bars, args.seed, args.plant, args.delist_frac)
         return
     if args.cmd == "power":
-        _cmd_power(args)
+        need = periods_needed(args.target_sharpe_annual / math.sqrt(args.periods_per_year))
+        print(json.dumps({"target_sharpe_annual": args.target_sharpe_annual, "periods_needed_80pct_power": need,
+                          "years_needed": need / args.periods_per_year,
+                          "mde_sharpe_annual_at_n": mde_sharpe(args.n) * math.sqrt(args.periods_per_year) if args.n else None},
+                         indent=1))
+        return
+    if args.cmd == "signoff":
+        print(write_signoff(args.signoffs, args.hypothesis_sha, args.panel_sha, args.reviewer, args.note))
         return
     panel = load_panel(args.panel)
     if args.cmd == "audit":
-        print(json.dumps(audit_panel(panel), indent=1))
+        print(json.dumps(audit_panel(panel, args.expect_bar_ms, args.eligibility_usd, args.eligibility_days), indent=1))
         return
     if args.cmd == "freeze":
-        cfg = freeze_config(panel, args.holdout_frac, Path(args.out), {"prior_trials": args.prior_trials})
+        cfg = freeze_config(panel, args.holdout_frac, args.out, {"prior_trials": args.prior_trials}, args.expect_bar_ms)
         print(json.dumps({k: cfg[k] for k in ("panel_sha256", "holdout_start_utc")}, indent=1))
         return
     cfg, boundary = load_config(args.config, panel)
     hyps = read_hypotheses(args.hyp)
-    out = Path(args.out)
     if args.cmd == "evaluate":
         reports = [evaluate_development(panel, cfg, boundary, h, args.ledger) for h in hyps]
-        write_exclusive(out, {"reports": reports})
+        write_exclusive(Path(args.out), {"reports": reports})
         for r in reports:
-            print(f"{r['hypothesis']['id']:40s} {r['verdict']}")
-    else:
-        hyp = next((h for h in hyps if h["id"] == args.id), None)
-        if hyp is None:
-            raise SystemExit(f"no hypothesis with id {args.id}")
-        r = evaluate_holdout(panel, cfg, boundary, hyp, args.ledger, args.claims)
-        write_exclusive(out, r)
-        print(f"{hyp['id']} {r['verdict']}")
+            print(f"{r['hypothesis']['id']:40s} {r['hypothesis_sha256'][:12]} {r['verdict']}")
+        return
+    hyp = next((h for h in hyps if h["id"] == args.id), None)
+    if hyp is None:
+        raise SystemExit(f"no hypothesis with id {args.id}")
+    r = evaluate_holdout(panel, cfg, boundary, hyp, args.ledger, args.claims, args.signoffs)
+    write_exclusive(Path(args.out), r)
+    print(f"{hyp['id']} {r['verdict']}")
 
 
 if __name__ == "__main__":
