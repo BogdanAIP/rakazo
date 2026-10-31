@@ -104,7 +104,11 @@ def detector_at(t,records,timestamps,near_completed_close):
         "cooldown_suppressed":False,
         "no_future_trades_or_candles_in_detector":True,
     }
-    if pnow is None or pprior is None or not records or timestamps[0]>t-360000 or timestamps[-1]<t:
+    # The original immutable UTC+8 daily ZIP verifies continuous source-day
+    # COVERAGE, not that a trade must exist at the exact observation boundary.
+    # Absence of trades during an interval is an authentic zero-volume sample,
+    # NOT evidence that the source file is missing.
+    if pnow is None or pprior is None:
         result["trigger_qualification"]="SOURCE_MISSING"
         return result
     old_vol=D(old["taker_total_contracts"])
