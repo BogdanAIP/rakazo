@@ -1,0 +1,829 @@
+{
+  "schema": "rakazo_bench_data_quality_pilot_result_v1",
+  "mode": "DATA_QUALITY_NOT_EFFICACY",
+  "acquisition_head": "be86d2f3797a8abdb61d1720fd9e2ba3e2e4faaa",
+  "audit_head": "6e0ab56f0bd1f51d46e70a6722ff22a04c412e63",
+  "plan": "acquisition-plan-20261031T1941.json",
+  "acquisition": {
+    "status": "COMPLETE",
+    "head": "be86d2f3797a8abdb61d1720fd9e2ba3e2e4faaa",
+    "started_utc": "2026-10-31T20:19:39.103244+00:00",
+    "completed": [
+      {
+        "stage": "tests",
+        "exit_code": 0,
+        "stdout_sha256": "8645d757f5c1c34c1e53a731a90b342a5a4be070af9daf6010f688f2b4d44151",
+        "stderr_sha256": "ee81285db3b6f60dd0f03e63579885f0c477095135a2351da5fc2243cfc1f9df"
+      },
+      {
+        "stage": "acquire",
+        "exit_code": 0,
+        "stdout_sha256": "be5b433f16a8b77d52f7f46463c9768b37d98a71636261f4f6b096db503fe4b6",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "stage": "acquire",
+    "child_pid": 21036,
+    "stage_timeout_seconds": 900,
+    "finished_utc": "2026-10-31T20:24:08.400620+00:00"
+  },
+  "new_archive_days": 25,
+  "new_original_bytes": 101490124,
+  "raw_original_files": 66,
+  "raw_original_bytes": 132450355,
+  "first_pilot_attempt": {
+    "status": "FAILED",
+    "head": "f0f3bb5e2267f45c8b53852766e5c3707e8f6491",
+    "started_utc": "2026-10-31T20:31:20.572430+00:00",
+    "timeout_seconds": 900,
+    "completed": [
+      {
+        "stage": "build",
+        "exit_code": 1,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "a48ef9bd2c2881c22864cade849b8a1b53cc67cd8826ca613343a18ac09053eb"
+      },
+      {
+        "stage": "source-audit",
+        "exit_code": 1,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "2167cecee39abdbe2f7f0993c02c3e56feed9cc9dcc124aed30f5df8c52105b0"
+      }
+    ],
+    "stage": "source-audit",
+    "child_pid": 16940,
+    "error": "Source audit failed; preserve first evidence",
+    "finished_utc": "2026-10-31T20:31:46.124238+00:00"
+  },
+  "first_build_error": "ValueError: Funding settlement is not hourly aligned: 1INCH-USDT-SWAP 1696089604000",
+  "first_strict_audit_error": "ValueError: Duplicate minute 1INCH-USDT-SWAP 1697108400000",
+  "diagnostic_recovery": {
+    "status": "COMPLETE",
+    "mode": "DECLARED_NON_MUTATING_DIAGNOSTIC_RECOVERY",
+    "head": "6e0ab56f0bd1f51d46e70a6722ff22a04c412e63",
+    "started_utc": "2026-10-31T20:37:57.434969+00:00",
+    "timeout_seconds": 900,
+    "preserved_first_failure": "pilot-20261031T2030/status.json",
+    "child_pid": 20992,
+    "exit_code": 0,
+    "finished_utc": "2026-10-31T20:39:56.162222+00:00",
+    "stdout_sha256": "99b14e43ae5032da932f0ce47c40eed90227c527fbe3454b72f69ff53491ec25",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "source_quality_sha256": "757bd449178138465ceb4602485b75a85f193a9dc876c9b1fe89a2be37d54b83",
+  "source_quality": {
+    "archive_days": 33,
+    "archive_end": "2023-11-02",
+    "archive_start": "2023-10-01",
+    "duplicate_identical_fields": 1496,
+    "duplicate_minute_rows": 1496,
+    "duplicate_nonidentical_fields": 0,
+    "duplicate_price_selection_performed": false,
+    "freeze_approved": false,
+    "funding": {
+      "coverage_certified": false,
+      "full_observed_hour_contract_days": 4387,
+      "gaps_greater_than_eight_hours": 5250,
+      "historical_settlement_schedule_verified": false,
+      "hour_bucket_rounding_performed": false,
+      "hour_offset_histogram_ms": {
+        "0": 175,
+        "1000": 382,
+        "2000": 1194,
+        "3000": 1693,
+        "4000": 1969,
+        "5000": 2161,
+        "6000": 2190,
+        "7000": 1630,
+        "8000": 773,
+        "9000": 233,
+        "10000": 133,
+        "11000": 104,
+        "12000": 66,
+        "13000": 64,
+        "14000": 62,
+        "15000": 64,
+        "16000": 59,
+        "17000": 58,
+        "18000": 56,
+        "19000": 48,
+        "20000": 43,
+        "21000": 37,
+        "22000": 42,
+        "23000": 41,
+        "24000": 29,
+        "25000": 39,
+        "26000": 40,
+        "27000": 32,
+        "28000": 28,
+        "29000": 24,
+        "30000": 22,
+        "31000": 27,
+        "32000": 21,
+        "33000": 13,
+        "34000": 10,
+        "35000": 12,
+        "36000": 4,
+        "37000": 5,
+        "38000": 5,
+        "39000": 4
+      },
+      "interpretation": "Counts/gaps are diagnostics, not proof of missing events or known zero funding; historical schedules and listing edges require provenance.",
+      "largest_observed_gap_hours": 8.006388888888889,
+      "non_hour_aligned_events": 13417,
+      "observed_events": 13592,
+      "original_event_time_preserved": true,
+      "settlement_count_histogram_full_days": {
+        "3": 4387
+      },
+      "symbols_with_varying_full_day_counts": [],
+      "zero_observed_settlement_full_days": 0
+    },
+    "historical_oi": "UNKNOWN",
+    "incomplete_source_hours": 10,
+    "invalid_ohlcv_rows": 0,
+    "missing_minute_causes": "UNKNOWN",
+    "missing_minutes_in_observed_hours": 479,
+    "mode": "DATA_QUALITY_ONLY",
+    "observed_historical_usdt_symbols": 142,
+    "observed_hours": 108783,
+    "original_files": 66,
+    "original_minute_rows": 6527997,
+    "originals_and_receipts_verified": true,
+    "per_archive_quality": [
+      {
+        "archive_date": "2023-10-01",
+        "confirm_counts": {
+          "0": 190080
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 396,
+        "original_minute_rows": 190080,
+        "source_minutes": 190080,
+        "symbols": 132,
+        "usable_hours": 3168
+      },
+      {
+        "archive_date": "2023-10-02",
+        "confirm_counts": {
+          "0": 190080
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 396,
+        "original_minute_rows": 190080,
+        "source_minutes": 190080,
+        "symbols": 132,
+        "usable_hours": 3168
+      },
+      {
+        "archive_date": "2023-10-03",
+        "confirm_counts": {
+          "0": 190080
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 396,
+        "original_minute_rows": 190080,
+        "source_minutes": 190080,
+        "symbols": 132,
+        "usable_hours": 3168
+      },
+      {
+        "archive_date": "2023-10-04",
+        "confirm_counts": {
+          "0": 190080
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 396,
+        "original_minute_rows": 190080,
+        "source_minutes": 190080,
+        "symbols": 132,
+        "usable_hours": 3168
+      },
+      {
+        "archive_date": "2023-10-05",
+        "confirm_counts": {
+          "0": 190080
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 396,
+        "original_minute_rows": 190080,
+        "source_minutes": 190080,
+        "symbols": 132,
+        "usable_hours": 3168
+      },
+      {
+        "archive_date": "2023-10-06",
+        "confirm_counts": {
+          "0": 191287
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 2,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 113,
+        "original_funding_events": 398,
+        "original_minute_rows": 191287,
+        "source_minutes": 191287,
+        "symbols": 134,
+        "usable_hours": 3190
+      },
+      {
+        "archive_date": "2023-10-07",
+        "confirm_counts": {
+          "0": 192960
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 402,
+        "original_minute_rows": 192960,
+        "source_minutes": 192960,
+        "symbols": 134,
+        "usable_hours": 3216
+      },
+      {
+        "archive_date": "2023-10-08",
+        "confirm_counts": {
+          "0": 192960
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 402,
+        "original_minute_rows": 192960,
+        "source_minutes": 192960,
+        "symbols": 134,
+        "usable_hours": 3216
+      },
+      {
+        "archive_date": "2023-10-09",
+        "confirm_counts": {
+          "0": 194169
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 2,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 111,
+        "original_funding_events": 404,
+        "original_minute_rows": 194169,
+        "source_minutes": 194169,
+        "symbols": 136,
+        "usable_hours": 3238
+      },
+      {
+        "archive_date": "2023-10-10",
+        "confirm_counts": {
+          "0": 195840
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 408,
+        "original_minute_rows": 195840,
+        "source_minutes": 195840,
+        "symbols": 136,
+        "usable_hours": 3264
+      },
+      {
+        "archive_date": "2023-10-11",
+        "confirm_counts": {
+          "0": 195840
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 408,
+        "original_minute_rows": 195840,
+        "source_minutes": 195840,
+        "symbols": 136,
+        "usable_hours": 3264
+      },
+      {
+        "archive_date": "2023-10-12",
+        "confirm_counts": {
+          "0": 197521
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 1496,
+        "duplicate_minute_rows": 1496,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 1,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 55,
+        "original_funding_events": 408,
+        "original_minute_rows": 197521,
+        "source_minutes": 196025,
+        "symbols": 137,
+        "usable_hours": 3268
+      },
+      {
+        "archive_date": "2023-10-13",
+        "confirm_counts": {
+          "0": 197280
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 411,
+        "original_minute_rows": 197280,
+        "source_minutes": 197280,
+        "symbols": 137,
+        "usable_hours": 3288
+      },
+      {
+        "archive_date": "2023-10-14",
+        "confirm_counts": {
+          "0": 197280
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 411,
+        "original_minute_rows": 197280,
+        "source_minutes": 197280,
+        "symbols": 137,
+        "usable_hours": 3288
+      },
+      {
+        "archive_date": "2023-10-15",
+        "confirm_counts": {
+          "0": 197280
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 411,
+        "original_minute_rows": 197280,
+        "source_minutes": 197280,
+        "symbols": 137,
+        "usable_hours": 3288
+      },
+      {
+        "archive_date": "2023-10-16",
+        "confirm_counts": {
+          "0": 197280
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 411,
+        "original_minute_rows": 197280,
+        "source_minutes": 197280,
+        "symbols": 137,
+        "usable_hours": 3288
+      },
+      {
+        "archive_date": "2023-10-17",
+        "confirm_counts": {
+          "0": 198004
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 1,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 56,
+        "original_funding_events": 412,
+        "original_minute_rows": 198004,
+        "source_minutes": 198004,
+        "symbols": 138,
+        "usable_hours": 3301
+      },
+      {
+        "archive_date": "2023-10-18",
+        "confirm_counts": {
+          "0": 198720
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 414,
+        "original_minute_rows": 198720,
+        "source_minutes": 198720,
+        "symbols": 138,
+        "usable_hours": 3312
+      },
+      {
+        "archive_date": "2023-10-19",
+        "confirm_counts": {
+          "0": 199445
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 1,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 55,
+        "original_funding_events": 415,
+        "original_minute_rows": 199445,
+        "source_minutes": 199445,
+        "symbols": 139,
+        "usable_hours": 3325
+      },
+      {
+        "archive_date": "2023-10-20",
+        "confirm_counts": {
+          "0": 200160
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 417,
+        "original_minute_rows": 200160,
+        "source_minutes": 200160,
+        "symbols": 139,
+        "usable_hours": 3336
+      },
+      {
+        "archive_date": "2023-10-21",
+        "confirm_counts": {
+          "0": 200160
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 417,
+        "original_minute_rows": 200160,
+        "source_minutes": 200160,
+        "symbols": 139,
+        "usable_hours": 3336
+      },
+      {
+        "archive_date": "2023-10-22",
+        "confirm_counts": {
+          "0": 200160
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 417,
+        "original_minute_rows": 200160,
+        "source_minutes": 200160,
+        "symbols": 139,
+        "usable_hours": 3336
+      },
+      {
+        "archive_date": "2023-10-23",
+        "confirm_counts": {
+          "0": 200160
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 417,
+        "original_minute_rows": 200160,
+        "source_minutes": 200160,
+        "symbols": 139,
+        "usable_hours": 3336
+      },
+      {
+        "archive_date": "2023-10-24",
+        "confirm_counts": {
+          "0": 200996
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 2,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 64,
+        "original_funding_events": 417,
+        "original_minute_rows": 200996,
+        "source_minutes": 200996,
+        "symbols": 141,
+        "usable_hours": 3351
+      },
+      {
+        "archive_date": "2023-10-25",
+        "confirm_counts": {
+          "0": 203040
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 423,
+        "original_minute_rows": 203040,
+        "source_minutes": 203040,
+        "symbols": 141,
+        "usable_hours": 3384
+      },
+      {
+        "archive_date": "2023-10-26",
+        "confirm_counts": {
+          "0": 203040
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 423,
+        "original_minute_rows": 203040,
+        "source_minutes": 203040,
+        "symbols": 141,
+        "usable_hours": 3384
+      },
+      {
+        "archive_date": "2023-10-27",
+        "confirm_counts": {
+          "0": 203040
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 423,
+        "original_minute_rows": 203040,
+        "source_minutes": 203040,
+        "symbols": 141,
+        "usable_hours": 3384
+      },
+      {
+        "archive_date": "2023-10-28",
+        "confirm_counts": {
+          "0": 203040
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 423,
+        "original_minute_rows": 203040,
+        "source_minutes": 203040,
+        "symbols": 141,
+        "usable_hours": 3384
+      },
+      {
+        "archive_date": "2023-10-29",
+        "confirm_counts": {
+          "0": 203040
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 423,
+        "original_minute_rows": 203040,
+        "source_minutes": 203040,
+        "symbols": 141,
+        "usable_hours": 3384
+      },
+      {
+        "archive_date": "2023-10-30",
+        "confirm_counts": {
+          "0": 203040
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 423,
+        "original_minute_rows": 203040,
+        "source_minutes": 203040,
+        "symbols": 141,
+        "usable_hours": 3384
+      },
+      {
+        "archive_date": "2023-10-31",
+        "confirm_counts": {
+          "0": 203040
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 423,
+        "original_minute_rows": 203040,
+        "source_minutes": 203040,
+        "symbols": 141,
+        "usable_hours": 3384
+      },
+      {
+        "archive_date": "2023-11-01",
+        "confirm_counts": {
+          "0": 204335
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 1,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 25,
+        "original_funding_events": 425,
+        "original_minute_rows": 204335,
+        "source_minutes": 204335,
+        "symbols": 142,
+        "usable_hours": 3406
+      },
+      {
+        "archive_date": "2023-11-02",
+        "confirm_counts": {
+          "0": 204480
+        },
+        "duplicate_differing_fields": {},
+        "duplicate_identical_fields": 0,
+        "duplicate_minute_rows": 0,
+        "duplicate_nonidentical_fields": 0,
+        "duplicate_price_selection_performed": false,
+        "incomplete_hours": 0,
+        "invalid_ohlcv_rows": 0,
+        "missing_source_minutes": 0,
+        "original_funding_events": 426,
+        "original_minute_rows": 204480,
+        "source_minutes": 204480,
+        "symbols": 142,
+        "usable_hours": 3408
+      }
+    ],
+    "private_source_manifest_sha256": "e23d4bc3a8e39bba2a0534201f1167fec2b57165879d915613d7afa40fed21d3",
+    "schema": "rakazo_bench_source_quality_v1",
+    "source_bytes": 132450355,
+    "source_minutes": 6526501,
+    "strategy_evaluations": 0,
+    "survivorship_completeness_certified": false,
+    "whole_missing_hours_or_unobserved_contracts_certified_absent": false
+  },
+  "v403_independent_canaries": {
+    "cases": [
+      {
+        "fixed_contract_funding": -0.01,
+        "fixed_contract_gross": 0.75,
+        "id": "fixed_quantity_and_settlement_notional",
+        "observed_funding": -0.01,
+        "observed_gross": 0.75,
+        "status": "RESOLVED_IN_V403"
+      },
+      {
+        "expected_calendar_steps": 4,
+        "id": "cash_calendar_gap",
+        "observed_decision_bars": [
+          0,
+          1,
+          3
+        ],
+        "observed_steps": 3,
+        "status": "OPEN_CALENDAR_INFERENCE_REVIEW",
+        "total_turnover": 4
+      }
+    ],
+    "engine_head": "6e0ab56f0bd1f51d46e70a6722ff22a04c412e63",
+    "engine_sha256": "252f0b6d4ed25622c9e62196d0a590d31e58d993af0fb1c033040eb73086f6d9",
+    "engine_version": "bench-v40.3",
+    "freeze_approved": false,
+    "market_trials": 0,
+    "recipe_file": "counterexamples-v402-20261031T1941.json",
+    "schema": "rakazo_bench_v403_canary_replay",
+    "synthetic_only": true
+  },
+  "remaining_free_bytes": 40971710464,
+  "pilot_csv_created": false,
+  "full_three_year_panel_built": false,
+  "panel_frozen": false,
+  "real_hypotheses_evaluated": 0,
+  "market_holdout_accessed": false,
+  "original_receipts_committed": false
+}
