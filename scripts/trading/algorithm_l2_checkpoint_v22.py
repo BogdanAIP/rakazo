@@ -65,7 +65,8 @@ def unpack(folder):
     hashed=hashlib.sha256()
     seen=0
     with tarfile.open(archive,"r|gz") as tf:
-        item=next(iter(tf),None)
+        members=iter(tf)
+        item=next(members,None)
         if (item is None or not item.isfile() or item.issym() or item.islnk()
             or item.name!=REQUIRED_MEMBER
             or not 0<item.size<=MAX_UNCOMPRESSED_BYTES):
@@ -85,7 +86,7 @@ def unpack(folder):
                 out.write(buf)
         if seen!=item.size:
             raise ValueError("Historical archive truncated")
-        if next(tf,None) is not None:
+        if next(members,None) is not None:
             raise ValueError("Extra tar member; expected exactly one .data file")
     result={
         "schema":SPOOL_RECEIPT_SCHEMA,
