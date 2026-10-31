@@ -15,6 +15,47 @@ def utc_day(ms):
     return dt.datetime.fromtimestamp(ms / 1000, dt.timezone.utc).date().isoformat()
 
 
+def inspect_candles(root, day):
+    """Count every original record; never choose a price from duplicate variants."""
+    span = int(dt.datetime.combine(day, dt.time(), dt.timezone.utc).timestamp() * 1000) - 8 * source.HOUR
+    seen, hours, flags, differing = {}, defaultdict(set), Counter(), Counter()
+    duplicates = identical = variants = invalid = total = 0
+    for row in source.read_zip_rows(source.file_at(root, "candles", day)):
+        symbol = row["instrument_name"]
+        if not symbol.endswith("-USDT-SWAP"):
+            continue
+        t = int(row["open_time"])
+        if not span <= t < span + source.DAY or t % 60000:
+            raise ValueError("Original minute outside full archive span or grid")
+        total += 1
+        flags[row["confirm"]] += 1
+        op, hi, lo, cl, vol = (float(row[f]) for f in ("open", "high", "low", "close", "vol_quote"))
+        if (not all(math.isfinite(v) for v in (op, hi, lo, cl, vol))
+                or min(op, hi, lo, cl) <= 0 or vol < 0 or hi < max(op, cl, lo) or lo > min(op, cl, hi)):
+            invalid += 1
+        key = (t, symbol)
+        fingerprint = tuple(sorted(row.items()))
+        if key in seen:
+            duplicates += 1
+            if seen[key] == fingerprint:
+                identical += 1
+            else:
+                variants += 1
+                old = dict(seen[key])
+                differing.update(k for k, v in row.items() if old.get(k) != v)
+        else:
+            seen[key] = fingerprint
+            hours[(t // source.HOUR * source.HOUR, symbol)].add(t // 60000 % 60)
+    stats = {"archive_date": day.isoformat(), "source_minutes": len(seen), "original_minute_rows": total,
+             "usable_hours": len(hours), "incomplete_hours": sum(len(v) != 60 for v in hours.values()),
+             "missing_source_minutes": sum(60 - len(v) for v in hours.values()),
+             "confirm_counts": dict(flags), "symbols": len({s for _, s in seen}),
+             "duplicate_minute_rows": duplicates, "duplicate_identical_fields": identical,
+             "duplicate_nonidentical_fields": variants, "duplicate_differing_fields": dict(differing),
+             "invalid_ohlcv_rows": invalid, "duplicate_price_selection_performed": False}
+    return stats, hours
+
+
 def funding_diagnostics(events, full_days):
     counts = Counter((utc_day(t), symbol) for t, symbol in events)
     values = defaultdict(list)
@@ -76,17 +117,13 @@ def audit(root, start, end, manifest_out, out):
             if key in events:
                 raise ValueError("Duplicate original settlement")
             events[key] = rate
-        rows, stats = source.aggregate_day(root, day, {})
-        stats.pop("funding_events")  # aggregate_day received no event map; never report its placeholder zero.
-        day_symbols = set()
-        for hour, symbol, *rest in rows:
+        stats, hour_coverage = inspect_candles(root, day)
+        for hour, symbol in hour_coverage:
             if not span_start <= hour < span_start + source.DAY:
                 raise ValueError("Original candle outside its full UTC+8 archive span")
             symbols.add(symbol)
-            day_symbols.add(symbol)
             observed_hours[(utc_day(hour), symbol)].add(hour % source.DAY // source.HOUR)
-        per_day.append({**stats, "symbols": len(day_symbols), "source_minutes": sum(r[8] for r in rows),
-                        "original_funding_events": len(events) - events_before_day})
+        per_day.append({**stats, "original_funding_events": len(events) - events_before_day})
     full_days = {p for p, hours in observed_hours.items() if len(hours) == 24 and start.isoformat() <= p[0] < end.isoformat()}
     manifest_out.parent.mkdir(parents=True, exist_ok=True)
     with manifest_out.open("x", encoding="utf-8") as stream:
@@ -101,6 +138,12 @@ def audit(root, start, end, manifest_out, out):
         "observed_historical_usdt_symbols": len(symbols),
         "survivorship_completeness_certified": False,
         "source_minutes": sum(x["source_minutes"] for x in per_day),
+        "original_minute_rows": sum(x["original_minute_rows"] for x in per_day),
+        "duplicate_minute_rows": sum(x["duplicate_minute_rows"] for x in per_day),
+        "duplicate_identical_fields": sum(x["duplicate_identical_fields"] for x in per_day),
+        "duplicate_nonidentical_fields": sum(x["duplicate_nonidentical_fields"] for x in per_day),
+        "invalid_ohlcv_rows": sum(x["invalid_ohlcv_rows"] for x in per_day),
+        "duplicate_price_selection_performed": False,
         "observed_hours": sum(x["usable_hours"] for x in per_day),
         "incomplete_source_hours": sum(x["incomplete_hours"] for x in per_day),
         "missing_minutes_in_observed_hours": sum(x["missing_source_minutes"] for x in per_day),

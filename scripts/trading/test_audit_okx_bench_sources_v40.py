@@ -12,6 +12,25 @@ import audit_okx_bench_sources_v40 as audit
 
 
 class TestFundingCoverageDiagnostics(unittest.TestCase):
+    def test_duplicate_variants_are_counted_without_selecting_a_price(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, day = Path(td), dt.date(2023, 10, 1)
+            t = int(dt.datetime(2023, 9, 30, 16, tzinfo=dt.timezone.utc).timestamp() * 1000)
+            text = "instrument_name,open,high,low,close,vol,vol_ccy,vol_quote,open_time,confirm\n"
+            first = f"X-USDT-SWAP,1,1,1,1,0,0,0,{t},0\n"
+            text += first + first + f"X-USDT-SWAP,2,2,2,2,0,0,0,{t},0\n"
+            p = audit.source.file_at(root, "candles", day)
+            p.parent.mkdir()
+            with zipfile.ZipFile(p, "w", zipfile.ZIP_DEFLATED) as z:
+                z.writestr("source.csv", text)
+            result, hours = audit.inspect_candles(root, day)
+            self.assertEqual(result["source_minutes"], 1)
+            self.assertEqual(result["original_minute_rows"], 3)
+            self.assertEqual(result["duplicate_identical_fields"], 1)
+            self.assertEqual(result["duplicate_nonidentical_fields"], 1)
+            self.assertFalse(result["duplicate_price_selection_performed"])
+            self.assertEqual(len(hours), 1)
+
     def test_real_archive_audit_preserves_off_hour_event_and_counts(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
