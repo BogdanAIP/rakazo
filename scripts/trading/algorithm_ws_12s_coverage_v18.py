@@ -19,14 +19,18 @@ N=12
 STEP=1000
 
 
-def analyze(folder):
+def analyze(folder, *, expected_seconds=N):
+    # v21 adds a bounded 15-second diagnostic without changing the original
+    # default 12-second auditor used by v18-v20 or its independent raw hashes.
+    if type(expected_seconds) is not int or expected_seconds not in (12,15):
+        raise ValueError("Unregistered source duration")
     folder=Path(folder)
     manifest_raw=(folder/"manifest.json").read_bytes()
     if not 0<len(manifest_raw)<=100_000:
         raise ValueError("Invalid manifest size")
     m=strict_load(manifest_raw)
     if (m.get("schema")!=ORIGINAL_SCHEMA or
-        m.get("observation_seconds")!=N or
+        m.get("observation_seconds")!=expected_seconds or
         m.get("source_urls")!={"book":BOOK_URL,"trade":TRADE_URL}
         or m.get("source_channels")!=CHANNELS
         or m.get("can_trade") is not False
@@ -38,7 +42,7 @@ def analyze(folder):
     symbol=m["symbol"]
     safe_symbol(symbol)
     start,end=m["start_utc_ms"],m["end_utc_ms"]
-    if type(start) is not int or type(end) is not int or not 11900<=end-start<=12200:
+    if type(start) is not int or type(end) is not int or not expected_seconds*1000-100<=end-start<=expected_seconds*1000+200:
         raise ValueError("Capture duration outside prereg 12s range")
     raw=(folder/"messages.jsonl").read_bytes()
     if (not 0<len(raw)<=MAX_BYTES*3
@@ -50,7 +54,7 @@ def analyze(folder):
         raise ValueError("Original source frame count mismatch")
     bins=[{"second":i,"book_updates":0,"taker_fills":0,
            "taker_buy_contracts":Decimal(0),
-           "taker_sell_contracts":Decimal(0)} for i in range(N)]
+           "taker_sell_contracts":Decimal(0)} for i in range(expected_seconds)]
     levels={"bids":{},"asks":{}}
     stream_count={"book":0,"trade":0}
     stream_ack={"book":False,"trade":False}
@@ -89,7 +93,7 @@ def analyze(folder):
             if ms<=start:
                 continue
             raise ValueError("In-window data before ACK")
-        b=(ms-start)//STEP if start<ms<start+N*STEP else None
+        b=(ms-start)//STEP if start<ms<start+expected_seconds*STEP else None
         if src=="book":
             data=obj["data"][0]
             timestamp=int(data["ts"])
@@ -152,7 +156,7 @@ def analyze(folder):
                "joint_seconds":sum(b["availability"]=="BOTH" for b in bins[i:i+8]),
                "eligible_for_existing_6_of_8_quality_only":
                    sum(b["availability"]=="BOTH" for b in bins[i:i+8])>=6}
-              for i in range(5)]
+              for i in range(expected_seconds-7)]
     return {
         "schema":SCHEMA,"symbol":symbol,
         "source_folder":folder.name,
@@ -164,8 +168,8 @@ def analyze(folder):
         "taker_gapless_stream_proven":False,
         "cross_feed_matching_engine_order_proven":False,
         "each_one_second":bins,
-        "joint_seconds":both,"total_seconds":N,
-        "coverage_fraction":str(Decimal(both)/Decimal(N)),
+        "joint_seconds":both,"total_seconds":expected_seconds,
+        "coverage_fraction":str(Decimal(both)/Decimal(expected_seconds)),
         "book_only_seconds":sum(b["availability"]=="BOOK_ONLY" for b in bins),
         "trades_only_seconds":sum(b["availability"]=="TRADES_ONLY" for b in bins),
         "neither_seconds":sum(b["availability"]=="NEITHER" for b in bins),
