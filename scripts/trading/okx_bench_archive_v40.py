@@ -142,7 +142,36 @@ def read_zip_rows(path: Path):
             yield from reader
 
 
-def aggregate_day(root: Path, day: dt.date):
+def load_funding(root: Path, archive_dates):
+    """Settlement-time rates; events belong to the hour ENDING at settlement T."""
+    events = {}
+    known_days = set()
+    count = 0
+    for day in archive_dates:
+        for row in read_zip_rows(file_at(root, "funding", day)):
+            symbol = row["instrument_name"]
+            if not symbol.endswith("-USDT-SWAP"):
+                continue
+            settlement = int(row["funding_time"])
+            if settlement % HOUR:
+                raise ValueError(f"Funding settlement is not hourly aligned: {symbol} {settlement}")
+            bar_open = settlement - HOUR
+            key = (bar_open, symbol)
+            if key in events:
+                raise ValueError(f"Duplicate settlement for {symbol} at {settlement}")
+            events[key] = float(row["funding_rate"])
+            utc_day = dt.datetime.fromtimestamp(bar_open / 1000, tz=dt.timezone.utc).date()
+            known_days.add((utc_day, symbol))
+            count += 1
+    return events, known_days, count
+
+
+def aggregate_day(root: Path, day: dt.date, funding=None):
+    """Every observed trading hour is retained; count missing source minutes."""
+    if funding is None:
+        funding, _, local_funding_events = load_funding(root, [day])
+    else:
+        local_funding_events = 0
     by_hour = {}
     minutes_seen = set()
     confirm = collections.Counter()
@@ -174,22 +203,21 @@ def aggregate_day(root: Path, day: dt.date):
                 acc[0], acc[2] = minute, op
             if minute >= acc[1]:
                 acc[1], acc[5] = minute, cl
-    funding = collections.defaultdict(float)
-    for row in read_zip_rows(file_at(root, "funding", day)):
-        symbol = row["instrument_name"]
-        if symbol.endswith("-USDT-SWAP"):
-            timestamp = int(row["funding_time"])
-            funding[(timestamp // HOUR * HOUR, symbol)] += float(row["funding_rate"])
     incomplete = 0
+    missing_minutes = 0
     out = []
     for (hour, sym), acc in sorted(by_hour.items()):
+        # A sparse archive could mean no trades or data loss. Preserve OHLC
+        # based on observed minutes and disclose incomplete hours; NEVER
+        # silently describe them as complete market observations.
         if acc[7] != 60 or acc[0] != hour or acc[1] != hour + 59 * 60_000:
             incomplete += 1
-            continue
-        out.append((hour, sym, acc[2], acc[3], acc[4], acc[5], acc[6], funding.get((hour, sym))))
+            missing_minutes += 60 - acc[7]
+        out.append((hour, sym, acc[2], acc[3], acc[4], acc[5], acc[6],
+                    funding.get((hour, sym)), acc[7]))
     return out, {"archive_date": day.isoformat(), "usable_hours": len(out),
-                 "incomplete_hours": incomplete, "confirm_counts": dict(confirm),
-                 "funding_events": len(funding)}
+                 "incomplete_hours": incomplete, "missing_source_minutes": missing_minutes,
+                 "confirm_counts": dict(confirm), "funding_events": local_funding_events}
 
 
 def build(root: Path, archive_start: dt.date, archive_end: dt.date, panel_start: dt.date,
@@ -209,32 +237,49 @@ def build(root: Path, archive_start: dt.date, archive_end: dt.date, panel_start:
         for name in MODULES:
             if sha_file(file_at(root, name, d)) != receipt[name]["sha256"]:
                 raise ValueError(f"Source SHA differs from download receipt: {name} {d}")
+
+    # A funding record in archive-day D+1 can settle the last UTC hour
+    # of archive-day D. Pre-indexing avoids assigning it to the wrong bar.
+    funding, funding_known_days, funding_count = load_funding(
+        root, days(archive_start, archive_end))
     history = collections.defaultdict(lambda: collections.deque(maxlen=30))
     first_seen = {}
     current_day = None
     daily_volume = collections.defaultdict(float)
     output_count = 0
+    eligible_rows = 0
     all_hours = 0
     audit = {"source_archive_days": (archive_end - archive_start).days + 1,
              "missing_archives": 0, "source_hourly_rows": 0, "incomplete_source_hours": 0,
-             "funding_events_observed": 0, "minute_confirm_flags": {}, "quote_volume_unit": "USDT vol_quote",
+             "missing_source_minutes": 0, "funding_events_observed": funding_count,
+             "funding_unknown_rows": 0, "minute_confirm_flags": {},
+             "quote_volume_unit": "USDT vol_quote",
              "historical_oi": "UNKNOWN: CSV oi left empty",
-             "trailing_liquidity_rule": "median of 30 complete earlier UTC calendar days; zeros for missing days after first listing",
-             "first_eligible_utc": panel_start.isoformat(), "last_eligible_utc": panel_end.isoformat()}
+             "trailing_liquidity_rule": "median of 30 complete earlier UTC calendar days; zeros for absent days since first archive observation",
+             "first_panel_utc": archive_start.isoformat(),
+             "first_eligible_utc": panel_start.isoformat(),
+             "last_panel_utc": panel_end.isoformat(),
+             "incomplete_hour_caveat": "Source gaps are counted, not classified as zero trades; investigate before freezing if material"}
+
     partial = out.with_suffix(out.suffix + ".part")
     out.parent.mkdir(parents=True, exist_ok=True)
     try:
         with open(partial, "w", encoding="utf-8", newline="") as f:
             w = csv.writer(f)
-            w.writerow(("ts", "symbol", "open", "high", "low", "close", "volume", "funding", "oi"))
+            w.writerow(("ts", "symbol", "open", "high", "low", "close", "volume",
+                        "eligible", "funding", "oi"))
             for archive_date in days(archive_start, archive_end):
-                records, stats = aggregate_day(root, archive_date)
+                records, stats = aggregate_day(root, archive_date, funding)
                 audit["incomplete_source_hours"] += stats["incomplete_hours"]
-                audit["funding_events_observed"] += stats["funding_events"]
+                audit["missing_source_minutes"] += stats["missing_source_minutes"]
                 for flag, count in stats["confirm_counts"].items():
                     audit["minute_confirm_flags"][flag] = audit["minute_confirm_flags"].get(flag, 0) + count
-                for hour, sym, op, hi, lo, cl, vol, fr in records:
+                for hour, sym, op, hi, lo, cl, vol, fr, minute_count in records:
                     day = dt.datetime.fromtimestamp(hour / 1000, tz=dt.timezone.utc).date()
+                    # The exchange archive opens 16:00 UTC on the preceding
+                    # calendar day. Discard that partial UTC pre-history day.
+                    if not archive_start <= day <= panel_end:
+                        continue
                     if current_day is None:
                         current_day = day
                     if day != current_day:
@@ -247,28 +292,35 @@ def build(root: Path, archive_start: dt.date, archive_end: dt.date, panel_start:
                     if sym not in first_seen:
                         first_seen[sym] = day
                     all_hours += 1
-                    if panel_start <= day <= panel_end:
-                        prev = history[sym]
-                        enough_history = (day - first_seen[sym]).days >= 30 and len(prev) == 30
-                        if enough_history and statistics.median(prev) >= min_daily_quote_usd:
-                            w.writerow((hour, sym, op, hi, lo, cl, vol, "" if fr is None else fr, ""))
-                            output_count += 1
+                    prev = history[sym]
+                    enough = (day - first_seen[sym]).days >= 30 and len(prev) == 30
+                    eligible = int(day >= panel_start and enough
+                                   and statistics.median(prev) >= min_daily_quote_usd)
+                    if eligible:
+                        eligible_rows += 1
+                    if fr is not None:
+                        funding_cell = fr
+                    elif (day, sym) in funding_known_days:
+                        funding_cell = ""   # known: no settlement in this bar
+                    else:
+                        funding_cell = "NA" # no settlement evidence for this symbol/day
+                        audit["funding_unknown_rows"] += 1
+                    w.writerow((hour, sym, op, hi, lo, cl, vol, eligible, funding_cell, ""))
+                    output_count += 1
                     daily_volume[sym] += vol
-        if audit["incomplete_source_hours"]:
-            raise ValueError(f"Missing minute data in {audit['incomplete_source_hours']} hourly bars; refuse freeze")
         if output_count == 0:
-            raise ValueError("No eligible panel rows; check dates and liquidity rule")
+            raise ValueError("No panel rows; check archive range")
         os.replace(partial, out)
     except Exception:
         partial.unlink(missing_ok=True)
         raise
     audit["source_hourly_rows"] = all_hours
     audit["panel_rows"] = output_count
+    audit["eligible_rows"] = eligible_rows
     audit["panel_sha256"] = sha_file(out)
     audit["panel_bytes"] = out.stat().st_size
     atomic_bytes(out.with_suffix(".audit.json"), (json.dumps(audit, sort_keys=True, indent=2) + "\n").encode())
     print(json.dumps(audit, indent=2))
-
 
 def main():
     p = argparse.ArgumentParser(description="OKX archive-to-hourly panel, research-only")
