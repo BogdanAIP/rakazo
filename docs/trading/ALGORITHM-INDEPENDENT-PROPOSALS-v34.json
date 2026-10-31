@@ -1,0 +1,63 @@
+{
+  "schema": "tape_memory_v31",
+  "programs": [
+    {
+      "id": "restoration-flow-no-memory",
+      "role": "ablation",
+      "hypothesis": "Accumulated asymmetry of actual best-quote quantity restoration predicts continuation aligned with executed flow.",
+      "state": [
+        "feature",
+        "restoration"
+      ],
+      "output": [
+        "if_pos",
+        [
+          "mul",
+          [
+            "current"
+          ],
+          [
+            "feature",
+            "flow"
+          ]
+        ],
+        [
+          "current"
+        ],
+        [
+          "constant",
+          0
+        ]
+      ],
+      "threshold": 0.75
+    },
+    {
+      "id": "depth-baseline",
+      "role": "baseline",
+      "hypothesis": "Fixed simple observable baseline under exactly the same source-availability and quote-cost rules.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "feature",
+        "book_imbalance"
+      ],
+      "threshold": 0.2
+    },
+    {
+      "id": "flow-baseline",
+      "role": "baseline",
+      "hypothesis": "Fixed simple observable baseline under exactly the same source-availability and quote-cost rules.",
+      "state": [
+        "constant",
+        0
+      ],
+      "output": [
+        "feature",
+        "flow"
+      ],
+      "threshold": 0.6
+    }
+  ]
+}

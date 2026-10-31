@@ -27,12 +27,12 @@ TRADE_FIELDS=["instrument_name","trade_id","side","price","size","created_time",
 CTRL_TIMES=((2,15),(3,15),(4,15),(5,15),(6,15),(7,15),(8,15),(14,15))
 MAX_ZIP_MEMBER=128*1024*1024
 
-def path(root,day,symbol,kind):
-    name,_=registered(day,symbol,kind)
+def path(root,day,symbol,kind,*,locator=None):
+    name,_=(locator or registered)(day,symbol,kind)
     return Path(root)/day/symbol/kind/name
 
-def source_zip(root,day,symbol,kind):
-    p=path(root,day,symbol,kind)
+def source_zip(root,day,symbol,kind,*,locator=None):
+    p=path(root,day,symbol,kind,locator=locator)
     r=json.loads(Path(str(p)+".receipt.json").read_text(encoding="utf-8"))
     if (r.get("schema")!="algorithm_v30_original_source_receipt"
        or r.get("day_utc_plus8_label")!=day or r.get("symbol")!=symbol
@@ -45,8 +45,8 @@ def source_zip(root,day,symbol,kind):
         raise ValueError("Historical original ZIP structure or bound invalid")
     return z,expected,r["original_sha256"]
 
-def load_bars(root,day,symbol):
-    z,name,sha=source_zip(root,day,symbol,"candlesticks")
+def load_bars(root,day,symbol,*,locator=None):
+    z,name,sha=source_zip(root,day,symbol,"candlesticks",locator=locator)
     bars={}
     with z.open(name) as binary:
         rd=csv.DictReader(io.TextIOWrapper(binary,encoding="utf-8-sig"))
@@ -67,8 +67,8 @@ def load_bars(root,day,symbol):
     if len(bars)!=1440:raise ValueError("Daily official 1440 one-minute bars incomplete")
     return bars,sha
 
-def load_trades(root,day,symbol):
-    z,name,sha=source_zip(root,day,symbol,"trades")
+def load_trades(root,day,symbol,*,locator=None):
+    z,name,sha=source_zip(root,day,symbol,"trades",locator=locator)
     data=[]
     prior=None
     seen=set()

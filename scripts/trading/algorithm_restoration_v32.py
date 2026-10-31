@@ -41,11 +41,12 @@ def positive_and_negative_changes(book, best, sides):
     return values
 
 
-def extract(root, day, symbol):
-    _, spool, _, receipt, onset_sha, _, _ = manifest(root, day, symbol)
-    index_path = Path(root)/"l2"/f"{symbol}-{day}-snapshot-index-v30.json"
+def extract(root, day, symbol, *, source_manifest=None, index_name=None):
+    _, spool, _, receipt, onset_sha, _, _ = (source_manifest or manifest)(root, day, symbol)
+    index_path = Path(root)/"l2"/(index_name or f"{symbol}-{day}-snapshot-index-v30.json")
     idx = json.loads(index_path.read_bytes())
-    if idx["original_sha256"] != receipt["original_sha256"] or idx["tape_sha256"] != onset_sha:
+    if (idx["original_sha256"] != receipt["original_sha256"]
+            or idx.get("context_sha", idx.get("tape_sha256")) != onset_sha):
         raise ValueError("Original index/source identity changed")
     if idx["spool_bytes"] != spool.stat().st_size or idx["spool_sha256"] != digest(spool):
         raise ValueError("Original uncompressed source SHA mismatch")
@@ -164,13 +165,14 @@ def quote_outcome(rows, quotes, alarm):
             "funding_and_additional_slippage": "UNAVAILABLE"}
 
 
-def evaluate(root, cache_folder, definitions, proposal_sha, action_function=None):
+def evaluate(root, cache_folder, definitions, proposal_sha, action_function=None,
+             *, cohort=None, locator=None):
     lab.FEATURES.update(EXTRA_FEATURES)  # fixed reviewed leaves, never arbitrary code
     results = []
-    for day, symbol in lab.ORIGINALS:
+    for day, symbol in (lab.ORIGINALS if cohort is None else cohort):
         p = Path(cache_folder)/f"{symbol}-{day}-restoration-v32.json"
         book = json.loads(p.read_bytes())
-        rows, _v29, hashes, scope = lab.load_case(Path(root)/"source", day, symbol)
+        rows, _v29, hashes, scope = lab.load_case(Path(root)/"source", day, symbol, locator=locator)
         labels = lab.episodes(rows, scope)
         rows, quotes = attach(rows, book)
         scores = {}

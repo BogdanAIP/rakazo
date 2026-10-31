@@ -167,11 +167,11 @@ def features_from_minutes(minutes):
     return rows
 
 
-def load_case(root, day, symbol):
+def load_case(root, day, symbol, *, locator=None):
     bars, hashes = {}, {}
     for s in (symbol,) + source.SYMS:
-        bars[s], hashes[s] = source.load_bars(root, day, s)
-    trades, hashes["tape"] = source.load_trades(root, day, symbol)
+        bars[s], hashes[s] = source.load_bars(root, day, s, locator=locator)
+    trades, hashes["tape"] = source.load_trades(root, day, symbol, locator=locator)
     stamps = [x[0] for x in trades]
     buckets = {}
     for ms, side, size in trades:

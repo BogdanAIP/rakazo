@@ -23,8 +23,8 @@ KINDS=("trades","candlesticks","L2")
 MAX_SOURCE_BYTES=400*1024*1024
 MAX_CHUNK_SECONDS=11
 
-def registered(day,symbol,kind):
-    if day not in DAYS or kind not in KINDS:
+def registered(day,symbol,kind,*,days=DAYS):
+    if day not in days or kind not in KINDS:
         raise ValueError("Not a v30 registered archive day or source kind")
     if kind!="candlesticks" and symbol not in PRIMARIES:
         raise ValueError("Only preregistered primary instruments have trade/L2 inputs")
@@ -49,8 +49,8 @@ def jwrite_new(path,data):
         json.dump(data,f,sort_keys=True,separators=(",",":"),ensure_ascii=False)
         f.write("\n")
 
-def acquire(root,day,symbol,kind,seconds=11):
-    name,url=registered(day,symbol,kind)
+def acquire(root,day,symbol,kind,seconds=11,*,locator=None):
+    name,url=(locator or registered)(day,symbol,kind)
     if not 1<=seconds<=MAX_CHUNK_SECONDS:
         raise ValueError("Bounded foreground time budget exceeded")
     folder=Path(root)/day/symbol/kind
