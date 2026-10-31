@@ -46,7 +46,7 @@ from statistics import NormalDist
 
 SCHEMA_HYP = "rakazo_bench_hypothesis_v1"
 SCHEMA_CONFIG = "rakazo_bench_config_v1"
-VERSION = "bench-v40.1"
+VERSION = "bench-v40.2"
 
 MAX_DEPTH = 8
 MAX_NODES = 64
@@ -384,7 +384,7 @@ def _count_nodes(node, depth=1):
 
 
 def validate_hypothesis(rec: dict) -> dict:
-    allowed = {"id", "author", "rationale", "score", "mode", "horizon_bars", "quantile", "min_symbols"}
+    allowed = {"id", "author", "rationale", "score", "mode", "horizon_bars", "rebalance_bars", "quantile", "min_symbols"}
     if not isinstance(rec, dict) or not set(rec) <= allowed or not {"id", "score", "horizon_bars"} <= set(rec):
         raise ValueError("hypothesis needs id, score, horizon_bars and only known fields")
     if not isinstance(rec["id"], str) or not ID_RE.fullmatch(rec["id"]):
@@ -404,6 +404,11 @@ def validate_hypothesis(rec: dict) -> dict:
         "quantile": rec.get("quantile", 0.2),
         "min_symbols": rec.get("min_symbols", 10),
     }
+    if "rebalance_bars" in rec:
+        r = rec["rebalance_bars"]
+        if isinstance(r, bool) or not isinstance(r, int) or not 1 <= r <= h or h % r:
+            raise ValueError("rebalance_bars must be an integer that divides horizon_bars")
+        out["rebalance_bars"] = r
     if out["mode"] not in ("cross_section", "time_series"):
         raise ValueError("mode must be cross_section or time_series")
     if not _finite(out["quantile"]) or not 0 < out["quantile"] <= 0.5:
@@ -416,7 +421,7 @@ def validate_hypothesis(rec: dict) -> dict:
 
 def hypothesis_sha(h: dict) -> str:
     """Identity of the testable rule; rationale/author/id do not change it."""
-    core = {k: h[k] for k in ("score", "mode", "horizon_bars", "quantile", "min_symbols")}
+    core = {k: h[k] for k in ("score", "mode", "horizon_bars", "quantile", "min_symbols", "rebalance_bars") if k in h}
     return sha256_bytes(canonical(core))
 
 
@@ -698,68 +703,106 @@ def target_weights(cohort, hyp) -> dict:
     return w
 
 
+def default_rebalance(h: int) -> int:
+    """Daily staggered tranches for holds longer than a day; otherwise one tranche."""
+    return h if h <= 24 else math.gcd(h, 24)
+
+
 def simulate(panel: Panel, hyp: dict, first_entry: int, last_exit: int, costs_bp, missing_exit_penalty_bp=300.0) -> dict:
-    """Non-overlapping rebalances. Decision after close of bar t; the cohort is every
-    symbol with a score, eligible==1 and a close at t. Entry at open t+1, exit at open
-    t+1+h. Entries >= first_entry, exits <= last_exit. Weights: cross_section long top q,
-    short bottom q (+0.5/-0.5 gross); time_series sign(score)/m. A long pays settled
-    funding, a short receives it. Legs that cannot be entered stay in cash.
+    """Staggered-tranche book, evaluated one rebalance step (r bars) at a time.
+
+    Every r bars, after the close of bar t, a new tranche is formed from the cohort known
+    at t (score, eligible == 1, close at t) and held for h = horizon_bars. The book holds
+    K = h / r overlapping tranches, each with 1/K of the gross; K = 1 is the plain
+    non-overlapping strategy. Legs enter at open t+1 (a missing open leaves that leg in
+    cash) and are marked at each step boundary's open. A leg whose boundary price is
+    missing closes at its last observed close and pays the missing-exit penalty. Funding:
+    a long pays the settled rate, a short receives it. Costs are charged on the change of
+    book weights at each boundary. Entries >= first_entry, exits <= last_exit.
     """
     h = hyp["horizon_bars"]
+    r = hyp.get("rebalance_bars") or default_rebalance(h)
+    K = h // r
     score = evaluate_expression(hyp["score"], panel)
-    closes, funding, elig = panel.series["close"], panel.series["funding"], panel.eligible
+    opens, closes, funding, elig = panel.series["open"], panel.series["close"], panel.series["funding"], panel.eligible
     pen = missing_exit_penalty_bp / 1e4
-    periods = []
-    prev_w: dict = {}
+    steps, tranches = [], []  # tranche: {"legs": {sym: [weight, mark]}, "left": steps remaining}
+    book_prev: dict = {}
     counts = Counter()
     t = max(first_entry - 1, 0)
-    while t + 1 + h <= last_exit:
-        entry, exit_ = t + 1, t + 1 + h
-        cohort = [(s, score[s][t]) for s in panel.symbols
-                  if score[s][t] == score[s][t] and elig[s][t] and closes[s][t] == closes[s][t]]
-        if len(cohort) < hyp["min_symbols"]:
-            counts["skipped_small_cohort"] += 1
-            t += h
-            continue
-        target = target_weights(cohort, hyp)
-        outcome = {s: _realized(panel, s, entry, exit_) for s, _ in cohort}
-        held, gross, penalty, fund = {}, 0.0, 0.0, 0.0
-        for s, wt in target.items():
-            r = outcome[s]
-            if r is None:
-                counts["entry_missed"] += 1
-                continue
-            o, px, missing = r
-            gross += wt * (px / o - 1.0)
-            if missing:
-                counts["missing_exits"] += 1
-                penalty += abs(wt) * pen
+    while t + 1 + r <= last_exit:
+        s, e = t + 1, t + 1 + r
+        tranches = [tr for tr in tranches if tr["left"] > 0]
+        new_weights, ic, n_cohort = None, None, 0
+        if s + h <= last_exit:
+            cohort = [(sym, score[sym][t]) for sym in panel.symbols
+                      if score[sym][t] == score[sym][t] and elig[sym][t] and closes[sym][t] == closes[sym][t]]
+            n_cohort = len(cohort)
+            if n_cohort >= hyp["min_symbols"]:
+                new_weights = target_weights(cohort, hyp)
+                legs = {}
+                for sym, wt in new_weights.items():
+                    o = opens[sym][s]
+                    if o == o:
+                        legs[sym] = [wt / K, o]
+                    else:
+                        counts["entry_missed"] += 1
+                tranches.append({"legs": legs, "left": K})
+                labelled = []
+                for sym, sc in cohort:
+                    out = _realized(panel, sym, s, s + h)
+                    if out is not None:
+                        labelled.append((sc, out[1] / out[0] - 1.0))
+                ic = _spearman([a for a, _ in labelled], [b for _, b in labelled])
             else:
-                held[s] = wt
-            fr = funding[s][entry:exit_]
-            counts["position_bars"] += len(fr)
-            for f in fr:
-                if f == f:
-                    fund -= wt * f
+                counts["skipped_small_cohort"] += 1
+        book = Counter()
+        for tr in tranches:
+            for sym, (wt, _) in tr["legs"].items():
+                book[sym] += wt
+        turnover = math.fsum(abs(book.get(sym, 0.0) - book_prev.get(sym, 0.0)) for sym in set(book) | set(book_prev))
+        if not book and turnover == 0.0:
+            t += r
+            continue
+        gross = penalty = fund = 0.0
+        for tr in tranches:
+            for sym in list(tr["legs"]):
+                wt, mark = tr["legs"][sym]
+                px = opens[sym][e]
+                missing = px != px
+                if missing:
+                    px = next((closes[sym][j] for j in range(e - 1, s - 1, -1) if closes[sym][j] == closes[sym][j]), mark)
+                gross += wt * (px / mark - 1.0)
+                fr = funding[sym][s:e]
+                counts["position_bars"] += len(fr)
+                for f in fr:
+                    if f == f:
+                        fund -= wt * f
+                    else:
+                        counts["position_bars_funding_unknown"] += 1
+                if missing:
+                    counts["missing_exits"] += 1
+                    penalty += abs(wt) * pen
+                    del tr["legs"][sym]
                 else:
-                    counts["position_bars_funding_unknown"] += 1
-        entered = {s: target[s] for s in target if outcome[s] is not None}
-        turnover = math.fsum(abs(entered.get(s, 0.0) - prev_w.get(s, 0.0)) for s in set(entered) | set(prev_w))
-        labelled = [(sc, outcome[s][1] / outcome[s][0] - 1.0) for s, sc in cohort if outcome[s] is not None]
-        ic = _spearman([a for a, _ in labelled], [b for _, b in labelled])
-        periods.append({"t": t, "gross": gross, "penalty": penalty, "funding": fund, "turnover": turnover,
-                        "ic": ic, "n": len(cohort), "weights": target})
-        prev_w = held  # positions closed by a missing exit already paid the penalty
-        t += h
-    if periods:  # liquidate at the end
-        periods[-1]["turnover"] += math.fsum(abs(x) for x in prev_w.values())
-    for p in periods:
+                    tr["legs"][sym][1] = px
+            tr["left"] -= 1
+        book_prev = Counter()
+        for tr in tranches:
+            for sym, (wt, _) in tr["legs"].items():
+                book_prev[sym] += wt
+        steps.append({"t": t, "gross": gross, "penalty": penalty, "funding": fund, "turnover": turnover,
+                      "ic": ic, "n": n_cohort, "weights": new_weights})
+        t += r
+    if steps:  # liquidate whatever is still held
+        steps[-1]["turnover"] += math.fsum(abs(x) for x in book_prev.values())
+    for p in steps:
         base = p["gross"] - p["penalty"] + p["funding"]
         p["net"] = {str(c): base - p["turnover"] * c / 1e4 for c in costs_bp}
     pb = counts["position_bars"]
-    return {"periods": periods, "counts": dict(counts),
+    return {"periods": steps, "counts": dict(counts), "tranches": K, "rebalance_bars": r,
             "funding_unknown_share": counts["position_bars_funding_unknown"] / pb if pb else 0.0,
-            "periods_per_year": MS_PER_YEAR / (panel.bar_ms * h)}
+            "periods_per_year": MS_PER_YEAR / (panel.bar_ms * r)}
 
 
 # ------------------------------------------------------------- statistics
@@ -835,36 +878,60 @@ def max_drawdown(xs):
     return dd
 
 
+def long_run_variance(xs, lag: int):
+    """Newey-West (Bartlett) long-run variance of the mean's terms; never below 0."""
+    n = len(xs)
+    mu = math.fsum(xs) / n
+    d = [x - mu for x in xs]
+    g0 = math.fsum(v * v for v in d) / n
+    lrv = g0
+    for l in range(1, min(lag, n - 1) + 1):
+        gl = math.fsum(d[i] * d[i - l] for i in range(l, n)) / n
+        lrv += 2 * (1 - l / (lag + 1)) * gl
+    return max(lrv, 0.0), g0
+
+
 def summarize(sim: dict, costs_bp, gate_cost, folds: int) -> dict:
+    """Step statistics. Inference uses the Newey-West long-run variance with lag
+    max(K - 1, 4 (n/100)^(2/9)), so overlapping tranches are not counted as
+    independent observations. sharpe_annual is mean / sqrt(long-run variance),
+    annualised; n_effective = n * variance / long-run variance (capped at n)."""
     periods = sim["periods"]
     n = len(periods)
     ppy = sim["periods_per_year"]
-    out = {"periods": n, "periods_per_year": ppy, "counts": sim["counts"],
-           "funding_unknown_share": sim["funding_unknown_share"]}
-    if n < 2:
+    K = sim.get("tranches", 1)
+    out = {"periods": n, "periods_per_year": ppy, "tranches": K, "rebalance_bars": sim.get("rebalance_bars"),
+           "years": n / ppy, "counts": sim["counts"], "funding_unknown_share": sim["funding_unknown_share"]}
+    if n < 3:
         return out
+    lag = max(K - 1, math.floor(4 * (n / 100) ** (2 / 9)))
+    out["hac_lag"] = lag
     by_cost = {}
     for c in costs_bp:
         xs = [p["net"][str(c)] for p in periods]
         mu, sd, skew, kurt = moments(xs)
-        sr = mu / sd if sd > EPS else 0.0
+        lrv, g0 = long_run_variance(xs, lag)
+        lr_sd = math.sqrt(lrv) if lrv > 0 else sd
+        sr_lr = mu / lr_sd if lr_sd > EPS else 0.0
         by_cost[str(c)] = {
-            "mean_bp": mu * 1e4, "std_bp": sd * 1e4, "sharpe_period": sr,
-            "sharpe_annual": sr * math.sqrt(ppy), "t_stat": sr * math.sqrt(n),
+            "mean_bp": mu * 1e4, "std_bp": sd * 1e4, "long_run_std_bp": lr_sd * 1e4,
+            "sharpe_period_lr": sr_lr, "sharpe_annual": sr_lr * math.sqrt(ppy), "t_stat": sr_lr * math.sqrt(n),
+            "n_effective": min(n, n * g0 / lrv) if lrv > EPS else n,
             "skew": skew, "kurtosis": kurt, "hit_rate": sum(1 for x in xs if x > 0) / n,
             "max_drawdown_bp": max_drawdown(xs) * 1e4,
         }
     out["by_cost_bp_per_side"] = by_cost
-    lo, hi = block_bootstrap_mean([p["net"][str(gate_cost)] for p in periods])
+    lo, hi = block_bootstrap_mean([p["net"][str(gate_cost)] for p in periods], block=max(K, round(n ** (1 / 3))))
     out["gate_mean_bp_ci95_block_bootstrap"] = [lo * 1e4, hi * 1e4]
     for key in ("gross", "penalty", "funding"):
         out[f"{key}_mean_bp"] = math.fsum(p[key] for p in periods) / n * 1e4
     out["turnover_mean"] = math.fsum(p["turnover"] for p in periods) / n
     ics = [p["ic"] for p in periods if p["ic"] is not None]
-    if len(ics) >= 2:
-        mu, sd, _, _ = moments(ics)
+    if len(ics) >= 3:
+        mu = math.fsum(ics) / len(ics)
+        lrv, _ = long_run_variance(ics, lag)
         out["ic_mean"] = mu
-        out["ic_t_stat"] = mu / sd * math.sqrt(len(ics)) if sd > EPS else 0.0
+        out["ic_t_stat"] = mu / math.sqrt(lrv / len(ics)) if lrv > EPS else 0.0
     out["symbols_per_period_mean"] = math.fsum(p["n"] for p in periods) / n
     size = math.ceil(n / folds)
     out["folds"] = []
@@ -877,8 +944,8 @@ def summarize(sim: dict, costs_bp, gate_cost, folds: int) -> dict:
                 "net_mean_bp": math.fsum(p["net"][str(gate_cost)] for p in chunk) / len(chunk) * 1e4,
                 "ic_mean": math.fsum(fi) / len(fi) if fi else None,
             })
-    mde = mde_sharpe(n)
-    out["power"] = {"mde_sharpe_period": mde, "mde_sharpe_annual": mde * math.sqrt(ppy)}
+    z = ND.inv_cdf(0.975) + ND.inv_cdf(0.8)
+    out["power"] = {"mde_sharpe_annual": z / math.sqrt(n / ppy)}
     return out
 
 
@@ -893,6 +960,7 @@ DEFAULT_GATE = {
     "folds": 4,
     "folds_positive_min": 3,
     "min_periods": 30,
+    "min_effective_periods": 20,
     "target_sharpe_annual": 2.0,
     "holdout_budget": 3,
     "holdout_alpha": 0.05,
@@ -950,10 +1018,12 @@ def append_ledger(path, entry: dict) -> None:
 
 
 def trial_stats(ledger: list[dict], panel_sha: str, current_sha: str, current_sr: float) -> list[float]:
+    """Annualised gate Sharpe ratios of all distinct development trials on this panel.
+    Annual units make hypotheses with different rebalance steps comparable."""
     srs = {}
     for e in ledger:
-        if e.get("region") == "development" and e.get("panel_sha256") == panel_sha and e.get("sharpe_period_gate") is not None:
-            srs[e["hypothesis_sha256"]] = e["sharpe_period_gate"]
+        if e.get("region") == "development" and e.get("panel_sha256") == panel_sha and e.get("sharpe_annual_gate") is not None:
+            srs[e["hypothesis_sha256"]] = e["sharpe_annual_gate"]
     srs[current_sha] = current_sr
     return list(srs.values())
 
@@ -990,24 +1060,26 @@ def evaluate_development(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledg
     hsha = hypothesis_sha(hyp)
     report = {"bench": VERSION, "region": "development", "hypothesis": hyp, "hypothesis_sha256": hsha,
               "panel_sha256": panel.sha, "development_end_utc": utc_iso(panel.times[boundary]),
-              "summary": summary, "sharpe_period_gate": None}
+              "summary": summary, "sharpe_annual_gate": None}
     n = summary["periods"]
-    if n < gate["min_periods"] or "by_cost_bp_per_side" not in summary:
+    g = summary.get("by_cost_bp_per_side", {}).get(str(gate["gate_cost_bp_per_side"]))
+    if n < gate["min_periods"] or g is None or g["n_effective"] < gate["min_effective_periods"]:
         report["verdict"] = "INSUFFICIENT_DATA"
     else:
-        g = summary["by_cost_bp_per_side"][str(gate["gate_cost_bp_per_side"])]
-        srs = trial_stats(read_ledger(ledger_path), panel.sha, hsha, g["sharpe_period"])
+        ppy = summary["periods_per_year"]
+        srs = trial_stats(read_ledger(ledger_path), panel.sha, hsha, g["sharpe_annual"])
         n_trials = len(srs) + int(gate.get("prior_trials", 0))
-        var_sr = max(moments(srs)[1] ** 2 if len(srs) >= 2 else 0.0, 1.0 / max(n - 1, 1))
-        dsr = deflated_sharpe(g["sharpe_period"], n, g["skew"], g["kurtosis"], n_trials, var_sr)
+        # Null sampling variance of an annual Sharpe estimate is about 1 / years.
+        var_annual = max(moments(srs)[1] ** 2 if len(srs) >= 2 else 0.0, ppy / n)
+        dsr = deflated_sharpe(g["sharpe_period_lr"], n, g["skew"], g["kurtosis"], n_trials, var_annual / ppy)
         folds_pos = sum(1 for f in summary["folds"] if f["net_mean_bp"] > 0)
         ic_ok = summary.get("ic_mean", 0) > 0
         report["selection"] = {
-            "trials_counted": n_trials, "var_sharpe_used": var_sr,
-            "expected_max_null_sharpe_period": expected_max_sharpe(n_trials, var_sr),
+            "trials_counted": n_trials, "var_annual_sharpe_used": var_annual,
+            "expected_max_null_sharpe_annual": expected_max_sharpe(n_trials, var_annual),
             "deflated_sharpe": dsr, "folds_positive": folds_pos, "ic_positive": ic_ok,
         }
-        report["sharpe_period_gate"] = g["sharpe_period"]
+        report["sharpe_annual_gate"] = g["sharpe_annual"]
         powered = summary["power"]["mde_sharpe_annual"] <= gate["target_sharpe_annual"]
         if summary["funding_unknown_share"] > gate["max_funding_unknown_share"]:
             report["verdict"] = "FUNDING_UNKNOWN"
@@ -1017,12 +1089,13 @@ def evaluate_development(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledg
             report["verdict"] = "REJECT"
         else:
             report["verdict"] = "INCONCLUSIVE_UNPOWERED"
-        report["power_note"] = (f"{n} periods detect annual Sharpe >= {summary['power']['mde_sharpe_annual']:.2f} "
-                                f"with 80% power; target {gate['target_sharpe_annual']}")
+        report["power_note"] = (f"{summary['years']:.2f} years of steps detect annual Sharpe >= "
+                                f"{summary['power']['mde_sharpe_annual']:.2f} with 80% power; target "
+                                f"{gate['target_sharpe_annual']}; effective observations {g['n_effective']:.0f}")
     append_ledger(ledger_path, {
         "time_utc": now_utc(), "region": "development", "hypothesis_id": hyp["id"], "author": hyp["author"],
         "hypothesis_sha256": hsha, "panel_sha256": panel.sha, "periods": n,
-        "sharpe_period_gate": report["sharpe_period_gate"], "verdict": report["verdict"],
+        "sharpe_annual_gate": report["sharpe_annual_gate"], "verdict": report["verdict"],
     })
     return report
 
@@ -1098,7 +1171,10 @@ def synthesize(out, symbols=30, bars=3000, seed=1, plant=0.0, delist_frac=0.0,
             sd = math.sqrt(sum((v - mu) ** 2 for v in vals) / (len(vals) - 1)) or 1.0
             for s in syms:
                 latent[s] = 1e-4 + 0.98 * (latent[s] - 1e-4) + rng.gauss(0, 4e-5)
-                r = beta[s] * m + rng.gauss(-plant * sig_i * (last_settled[s] - mu) / sd, sig_i)
+                # Log return minus half its variance: zero expected simple return, so
+                # volatility or beta alone carries no premium in the null panel.
+                drag = 0.5 * (beta[s] ** 2 * sig_m ** 2 + sig_i ** 2)
+                r = beta[s] * m + rng.gauss(-plant * sig_i * (last_settled[s] - mu) / sd, sig_i) - drag
                 o = price[s]
                 c = o * math.exp(r)
                 hi = max(o, c) * math.exp(abs(rng.gauss(0, 0.002)))

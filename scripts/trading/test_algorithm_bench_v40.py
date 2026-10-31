@@ -52,6 +52,40 @@ def random_hypothesis(rng: random.Random, i: int) -> dict:
                                       "horizon_bars": rng.choice([1, 4, 8, 24]), "min_symbols": 8})
 
 
+def reference_nonoverlapping(panel, hyp, first_entry, last_exit, costs_bp, penalty_bp=300.0):
+    """Independent plain backtest: one position per period, held h bars, no tranches."""
+    h = hyp["horizon_bars"]
+    score = bench.evaluate_expression(hyp["score"], panel)
+    out, prev = [], {}
+    t = max(first_entry - 1, 0)
+    while t + 1 + h <= last_exit:
+        entry, exit_ = t + 1, t + 1 + h
+        cohort = [(s, score[s][t]) for s in panel.symbols if score[s][t] == score[s][t]
+                  and panel.eligible[s][t] and panel.series["close"][s][t] == panel.series["close"][s][t]]
+        if len(cohort) < hyp["min_symbols"]:
+            t += h
+            continue
+        w = bench.target_weights(cohort, hyp)
+        gross = fund = 0.0
+        held, entered = {}, {}
+        for s, wt in w.items():
+            res = bench._realized(panel, s, entry, exit_)
+            if res is None:
+                continue
+            entered[s] = wt
+            gross += wt * (res[1] / res[0] - 1.0)
+            fund -= wt * math.fsum(f for f in panel.series["funding"][s][entry:exit_] if f == f)
+            if not res[2]:
+                held[s] = wt
+        turnover = math.fsum(abs(entered.get(s, 0.0) - prev.get(s, 0.0)) for s in set(entered) | set(prev))
+        out.append({"t": t, "weights": w, "gross": gross, "funding": fund, "turnover": turnover})
+        prev = held
+        t += h
+    if out:
+        out[-1]["turnover"] += math.fsum(abs(x) for x in prev.values())
+    return out
+
+
 FUNDING_CONTRARIAN = {"id": "funding-contrarian", "author": "claude", "score": ["neg", ["csrank", ["field", "funding"]]],
                       "horizon_bars": 8, "min_symbols": 8}
 
@@ -224,18 +258,24 @@ class TestCausality(BenchTestCase):
 
     def test_future_delisting_does_not_change_decisions(self):
         """Removing a symbol's future rows must not change any earlier cohort or weights."""
+        for horizon in (8, 48):
+            with self.subTest(horizon=horizon):
+                self._delisting_case(dict(FUNDING_CONTRARIAN, horizon_bars=horizon))
+
+    def _delisting_case(self, rule):
         path = self.tmp / "delist-base.csv"
-        bench.synthesize(path, symbols=20, bars=600, seed=21)
+        if not path.exists():
+            bench.synthesize(path, symbols=20, bars=600, seed=21)
         base = bench.load_panel(path)
-        hyp = bench.validate_hypothesis(FUNDING_CONTRARIAN)
+        hyp = bench.validate_hypothesis(rule)
         sim = bench.simulate(base, hyp, 1, base.T - 1, [10])
-        probe = next(p for p in sim["periods"] if p["t"] >= 300)
+        probe = next(p for p in sim["periods"] if p["t"] >= 300 and p["weights"])
         victim = max(probe["weights"], key=probe["weights"].get)
         with open(path) as fh:
             rows = list(csv.reader(fh))
         cut_ts = base.times[probe["t"] + 2]
         kept = [r for r in rows[1:] if not (r[1] == victim and int(r[0]) >= cut_ts)]
-        gone = rows_panel(self.tmp, "delist-gone.csv", kept)
+        gone = rows_panel(self.tmp, f"delist-gone-{hyp['horizon_bars']}.csv", kept)
         sim2 = bench.simulate(gone, hyp, 1, gone.T - 1, [10])
         first = {p["t"]: p for p in sim["periods"]}
         second = {p["t"]: p for p in sim2["periods"]}
@@ -341,6 +381,52 @@ class TestSimulation(BenchTestCase):
         sim = bench.simulate(self.null.truncated(boundary), hyp, 1, boundary - 1, [0, 10])
         for p in sim["periods"]:
             self.assertAlmostEqual(p["net"]["0"] - p["net"]["10"], p["turnover"] * 10 / 1e4)
+
+
+class TestStaggeredTranches(BenchTestCase):
+    def test_single_tranche_matches_reference_engine(self):
+        """With rebalance == horizon the book engine must equal a plain non-overlapping backtest."""
+        for h in (1, 8, 24):
+            hyp = bench.validate_hypothesis({"id": "x", "score": ["csrank", ["sum", ["field", "ret"], 24]],
+                                             "horizon_bars": h, "min_symbols": 8})
+            got = bench.simulate(self.null, hyp, 1, self.null.T - 1, [0, 10])
+            ref = reference_nonoverlapping(self.null, hyp, 1, self.null.T - 1, [0, 10])
+            self.assertEqual(got["tranches"], 1)
+            self.assertEqual(len(got["periods"]), len(ref))
+            for a, b in zip(got["periods"], ref):
+                self.assertEqual((a["t"], a["weights"]), (b["t"], b["weights"]))
+                for key in ("gross", "funding", "turnover"):
+                    self.assertAlmostEqual(a[key], b[key], places=12)
+
+    def test_book_holds_k_tranches_with_full_gross(self):
+        hyp = bench.validate_hypothesis({"id": "x", "score": ["csrank", ["sum", ["field", "ret"], 24]],
+                                         "horizon_bars": 96, "rebalance_bars": 24, "min_symbols": 8})
+        sim = bench.simulate(self.null, hyp, 1, self.null.T - 1, [10])
+        self.assertEqual((sim["tranches"], sim["rebalance_bars"]), (4, 24))
+        steady = sim["periods"][5:-5]
+        self.assertTrue(steady)
+        for p in steady:  # each tranche turns over 1/K of the book per step at most twice
+            self.assertLessEqual(p["turnover"], 2 * 1.0 / 4 + 1e-9)
+
+    def test_default_rebalance_is_daily_for_long_holds(self):
+        self.assertEqual([bench.default_rebalance(h) for h in (1, 8, 24, 48, 168, 2160, 36)], [1, 8, 24, 24, 24, 24, 12])
+        with self.assertRaises(ValueError):
+            bench.validate_hypothesis({"id": "x", "score": ["field", "ret"], "horizon_bars": 48, "rebalance_bars": 20})
+        a = bench.validate_hypothesis({"id": "x", "score": ["field", "ret"], "horizon_bars": 48})
+        b = bench.validate_hypothesis({"id": "x", "score": ["field", "ret"], "horizon_bars": 48, "rebalance_bars": 48})
+        self.assertNotEqual(bench.hypothesis_sha(a), bench.hypothesis_sha(b))
+
+    def test_long_run_variance_discounts_overlap(self):
+        rng = random.Random(4)
+        noise = [rng.gauss(0, 1) for _ in range(4000)]
+        k = 10
+        overlapping = [math.fsum(noise[i:i + k]) for i in range(len(noise) - k)]
+        lrv, g0 = bench.long_run_variance(overlapping, k - 1)
+        n_eff = len(overlapping) * g0 / lrv
+        self.assertLess(n_eff, len(overlapping) / 4)
+        self.assertGreater(n_eff, len(overlapping) / 25)
+        lrv_iid, g0_iid = bench.long_run_variance(noise, 5)
+        self.assertAlmostEqual(lrv_iid / g0_iid, 1.0, delta=0.15)
 
 
 class TestCalibration(BenchTestCase):
