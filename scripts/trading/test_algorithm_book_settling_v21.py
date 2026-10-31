@@ -27,10 +27,14 @@ def sample(folder,*,settled_historical=True,omit_original_s9=True):
     m=json.loads((scratch/"manifest.json").read_text())
     entries=[json.loads(x) for x in (scratch/"messages.jsonl").read_bytes().splitlines()]
     if omit_original_s9:
+        # No taker fills for seconds 9..11 before the late fill arrives.
+        # Individual trades in this fixture remain exchange-timestamp
+        # monotonic; the independent auditor must never be weakened to
+        # tolerate a backwards trade execution timestamp.
         entries=[
             e for e in entries
             if not (e["source"]=="trade" and
-                    T+9_000<e["received_complete_utc_ms"]<T+10_000)
+                    T+9_000<e["received_complete_utc_ms"]<T+12_000)
         ]
     for i in (12,13,14):
         braw=book_event("update",i+2,i+1,T+i*1000+90,
@@ -41,7 +45,7 @@ def sample(folder,*,settled_historical=True,omit_original_s9=True):
     if settled_historical:
         entries.append({
             "source":"trade",
-            "received_complete_utc_ms":T+12_500,
+            "received_complete_utc_ms":T+12_150,
             "raw":trade_event(9999,T+9_280,"buy",1),
         })
     entries.sort(key=lambda e:e["received_complete_utc_ms"])
