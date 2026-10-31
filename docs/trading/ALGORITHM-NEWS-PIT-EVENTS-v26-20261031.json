@@ -1,0 +1,167 @@
+{
+  "schema": "algorithm_news_context_v26_events",
+  "construction_date_utc": "2026-10-31",
+  "scope": "POST_HOC_NEWS_RECONSTRUCTION_NOT_PROSPECTIVE_SIGNAL_OR_CAUSAL_PROOF",
+  "event_time_basis": "UTC",
+  "signals": [
+    {
+      "id": "NEAR-SEP03-1445",
+      "symbol": "NEAR-USDT-SWAP",
+      "signal_utc": "2026-09-03T14:45:00Z"
+    },
+    {
+      "id": "NEAR-SEP04-1915",
+      "symbol": "NEAR-USDT-SWAP",
+      "signal_utc": "2026-09-04T19:15:00Z"
+    }
+  ],
+  "events": [
+    {
+      "id": "sep03-bybit-near-upgrade-announcement",
+      "day": "2026-09-03",
+      "category": "NEAR_EXCHANGE_OPERATION",
+      "event_time_utc": "2026-09-03T10:32:00Z",
+      "first_available_utc": "2026-09-03T10:32:00Z",
+      "timestamp_type": "third_party_archive_first_publication_time_not_independently_confirmed_at_primary",
+      "title": "Bybit public notice of impending NEAR upgrade; withdrawal/deposit pause 14:30 and upgrade 15:00 UTC",
+      "source_url": "https://announcements.bybit.com/en/article/bybit-to-support-near-protocol-near-network-upgrade-sep-03-2026--arta2af86263ada/",
+      "timestamp_source_url": "https://tokenearly.com/announcement/6a994d4b4debada7e0f8669f.html",
+      "causal_source_verified": false,
+      "source_reliability": "primary_notice_secondary_timestamp",
+      "notes": "This was known ahead of 14:45; exact primary publication minute unverified; trading itself expressly unaffected."
+    },
+    {
+      "id": "sep03-waller-comments",
+      "day": "2026-09-03",
+      "category": "FED_SPEECH",
+      "event_time_utc": "2026-09-03T12:30:00Z",
+      "first_available_utc": "2026-09-03T12:35:00Z",
+      "timestamp_type": "scheduled_speech_start_and_dated_Reuters_report",
+      "title": "Waller signals possible Fed rate hold if inflation cools; broad risk assets repricing",
+      "source_url": "https://www.federalreserve.gov/newsevents/2026-september.htm",
+      "timestamp_source_url": "https://www.investing.com/news/economy-news/feds-waller-open-to-september-rate-holdif-disinflation-holds-up-4887866",
+      "causal_source_verified": false,
+      "source_reliability": "official_calendar_reuters_reporting",
+      "notes": "08:30 EDT schedule=12:30 UTC; Reuters item time 08:35 EDT=12:35 UTC. Relevant market background, not proof NEAR-specific response."
+    },
+    {
+      "id": "sep03-ism-services",
+      "day": "2026-09-03",
+      "category": "US_MACRO_RELEASE",
+      "event_time_utc": "2026-09-03T14:00:00Z",
+      "first_available_utc": "2026-09-03T14:00:00Z",
+      "timestamp_type": "official_scheduled_press_release",
+      "title": "August ISM US services PMI 55.4 vs ~54.3 expectation, prices paid 72.6",
+      "source_url": "https://www.ismworld.org/supply-management-news-and-reports/reports/ism-pmi-reports/services/august",
+      "timestamp_source_url": "https://www.newyorkfed.org/research/calendars/i-sep26.html",
+      "causal_source_verified": false,
+      "source_reliability": "official_primary_report",
+      "notes": "Published 10am EDT=14:00 UTC, 45 min BEFORE NEAR 14:45 signal. Report mix of growth acceleration and inflation pressures."
+    },
+    {
+      "id": "sep03-bybit-near-deposit-halt",
+      "day": "2026-09-03",
+      "category": "NEAR_EXCHANGE_OPERATION",
+      "event_time_utc": "2026-09-03T14:30:00Z",
+      "first_available_utc": "2026-09-03T10:32:00Z",
+      "timestamp_type": "scheduled_exchange_halt_announced_beforehand",
+      "title": "Bybit temporarily suspends NEAR deposits and withdrawals for upgrade; trading unaffected",
+      "source_url": "https://announcements.bybit.com/en/article/bybit-to-support-near-protocol-near-network-upgrade-sep-03-2026--arta2af86263ada/",
+      "timestamp_source_url": "https://tokenearly.com/announcement/6a994d4b4debada7e0f8669f.html",
+      "causal_source_verified": false,
+      "source_reliability": "primary_schedule_secondary_publication_timestamp",
+      "notes": "NEAR 14:45 shock occurs 15 minutes after scheduled suspension at Bybit; no evidence this caused OKX swap bids."
+    },
+    {
+      "id": "sep03-near-upgrade-scheduled",
+      "day": "2026-09-03",
+      "category": "NEAR_NETWORK_UPGRADE",
+      "event_time_utc": "2026-09-03T15:00:00Z",
+      "first_available_utc": "2026-09-03T10:32:00Z",
+      "timestamp_type": "future_scheduled_event_publicly_known_before_signal",
+      "title": "Expected NEAR network upgrade, 15 minutes AFTER 14:45 signal, already announced earlier",
+      "source_url": "https://announcements.bybit.com/en/article/bybit-to-support-near-protocol-near-network-upgrade-sep-03-2026--arta2af86263ada/",
+      "timestamp_source_url": "https://tokenearly.com/announcement/6a994d4b4debada7e0f8669f.html",
+      "causal_source_verified": false,
+      "source_reliability": "exchange_planned_time_not_confirmed_network_activation_time",
+      "notes": "Announcement of FUTURE expected event was known at 14:45. Do not treat event as already happened or network activation verified."
+    },
+    {
+      "id": "sep03-market-liquidations-hour-hindsight",
+      "day": "2026-09-03",
+      "category": "DERIVATIVES_LIQUIDATIONS",
+      "event_time_utc": "2026-09-03T14:00:00Z",
+      "first_available_utc": null,
+      "timestamp_type": "retrospective_14to15_hour_bucket_no_proof_availability_at_1445",
+      "title": "Third-party retrospective crypto-wide short liquidation peak in 14:00–15:00 UTC hour",
+      "source_url": "https://marginpad.io/liquidations/recap/2026-09-03/",
+      "timestamp_source_url": null,
+      "causal_source_verified": false,
+      "source_reliability": "third_party_retrospective_not_NEAR_or_OKX_minute_specific",
+      "notes": "A completed 14–15 hour bucket contains data AFTER 14:45; NEVER feed as 14:45 source-known news."
+    },
+    {
+      "id": "sep04-coindesk-general-rally",
+      "day": "2026-09-04",
+      "category": "CRYPTO_MARKET_BACKGROUND",
+      "event_time_utc": "2026-09-04T04:22:00Z",
+      "first_available_utc": "2026-09-04T04:22:00Z",
+      "timestamp_type": "dated_media_publication",
+      "title": "CoinDesk reports broad overnight crypto rally with BTC >$81k after rate-hike odds eased",
+      "source_url": "https://www.coindesk.com/markets/2026/09/04/bitcoin-back-above-usd81-000-as-hike-odds-fade-zcash-leads-with-15-jump",
+      "timestamp_source_url": null,
+      "causal_source_verified": false,
+      "source_reliability": "dated_financial_media",
+      "notes": "Published 00:22 EDT = 04:22 UTC; relevant as background for Sep04 19:15, not immediate event."
+    },
+    {
+      "id": "sep04-near-pre-market-report",
+      "day": "2026-09-04",
+      "category": "NEAR_MEDIA_REPORT",
+      "event_time_utc": "2026-09-04T10:04:00Z",
+      "first_available_utc": "2026-09-04T10:04:00Z",
+      "timestamp_type": "dated_AI_generated_market_commentary",
+      "title": "CMC AI describes earlier NEAR +4.22% move as broad crypto risk-on, no fresh NEAR announcement established",
+      "source_url": "https://coinmarketcap.com/top-stories/6a9a97bb7b7655596150e719/",
+      "timestamp_source_url": null,
+      "causal_source_verified": false,
+      "source_reliability": "AI_generated_low_causal_weight",
+      "notes": "Article published BEFORE Sep04 19:15, but retrospectively interpreted a DIFFERENT earlier ~19h interval."
+    },
+    {
+      "id": "sep04-us-payrolls-release",
+      "day": "2026-09-04",
+      "category": "US_MACRO_RELEASE",
+      "event_time_utc": "2026-09-04T12:30:00Z",
+      "first_available_utc": "2026-09-04T12:30:00Z",
+      "timestamp_type": "official_embargo_lift_time",
+      "title": "US August nonfarm payrolls +162,000 vs market forecast ~56,000; contemporaneous BTC sold off",
+      "source_url": "https://www.bls.gov/news.release/archives/empsit_09042026.htm",
+      "timestamp_source_url": "https://www.coindesk.com/markets/2026/09/04/u-s-added-stronger-than-expected-162-000-jobs-in-august-as-labor-market-bounced-back",
+      "causal_source_verified": false,
+      "source_reliability": "official_primary_release_and_dated_crypto_market_report",
+      "notes": "08:30 EDT=12:30 UTC; 6h45m BEFORE Sep04 19:15 signal. Market-level context and possible secondary effects, NOT evidence of direct timed catalyst at 19:15."
+    },
+    {
+      "id": "sep04-near-hourly-recap-hindsight",
+      "day": "2026-09-04",
+      "category": "HISTORICAL_PRICE_AND_LIQUIDATION_COMMENTARY",
+      "event_time_utc": "2026-09-04T19:00:00Z",
+      "first_available_utc": null,
+      "timestamp_type": "retrospective_completed_19to20_UTC_window_no_verified_news_publication",
+      "title": "Later sources describe NEAR 19–20 UTC ~7% jump and possible hourly short forced closures",
+      "source_url": "https://zipmex.com/blog/near-weekly-2026-09-08/",
+      "timestamp_source_url": "https://coinlobster.com/unusual/near",
+      "causal_source_verified": false,
+      "source_reliability": "later_third_party_market_recap_no_original_OKX_liquidation_proof",
+      "notes": "NOT known as complete hour at 19:15, and no verified precise NEAR trigger or OKX liquidation source. Do not feed as pre-signal news."
+    }
+  ],
+  "excluded_false_catalysts": [
+    {
+      "title": "NEAR Intents integrates Aptos / Shelby official blog",
+      "url": "https://near.org/blog/near-expands-intents-with-aptos-integration-and-shelby-decentralized-storage-partnership",
+      "reason": "Original PRIMARY article is dated September 3, 2025, NOT September 2026; cannot re-label as a fresh September 2026 catalyst."
+    }
+  ]
+}
