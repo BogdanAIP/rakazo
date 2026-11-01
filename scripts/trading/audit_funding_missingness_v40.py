@@ -20,8 +20,10 @@ def reason_for_day(day, symbol, patterns):
         return "adjacent_interval_different"
     return "known"
 
-def summarize(rows, events, known):
-    patterns = a.billing_day_patterns(events)
+def summarize(rows, events, known, unknown_rate_days=None):
+    unknown_rate_days = unknown_rate_days or set()
+    patterns = a.billing_day_patterns(key for key in events
+                                      if a.funding_billing_day_key(*key) not in unknown_rate_days)
     counts = {}
     for row in rows:
         day = dt.datetime.fromtimestamp(int(row["ts"])/1000,dt.timezone.utc).date()
@@ -44,7 +46,8 @@ def summarize(rows, events, known):
             continue
         if key in events:
             raise ValueError("NA hides an observed settlement")
-        reason = reason_for_day(day,row["symbol"],patterns)
+        reason = ("source_unknown_rate" if (day,row["symbol"]) in unknown_rate_days
+                  else reason_for_day(day,row["symbol"],patterns))
         if reason == "known" or (day,row["symbol"]) in known:
             raise ValueError("NA on an inferred-known day")
         counter["unknown_rows"] += 1
@@ -74,9 +77,10 @@ if __name__=="__main__":
         receipt=json.loads((args.root/"receipts"/(str(day)+".json")).read_text())
         if a.sha_file(a.file_at(args.root,"funding",day))!=receipt["funding"]["sha256"]:
             raise ValueError("Funding original differs from receipt")
-    events,known,_=a.load_funding(args.root,dates)
+    unknown_rate_days=set()
+    events,known,_=a.load_funding(args.root,dates,unknown_rate_days=unknown_rate_days)
     with args.panel.open(newline="",encoding="utf-8") as stream:
-        months=summarize(csv.DictReader(stream),events,known)
+        months=summarize(csv.DictReader(stream),events,known,unknown_rate_days)
     result={"schema":"funding_unknown_row_breakdown_v1","panel_sha256":a.sha_file(args.panel),
             "months":months,"strategy_evaluations":0,"unit":"source rows, not simulated position-bars"}
     a.atomic_bytes(args.out,(json.dumps(result,indent=2)+"\n").encode())

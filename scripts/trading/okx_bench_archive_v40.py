@@ -13,6 +13,7 @@ import datetime as dt
 import hashlib
 import io
 import json
+import math
 import os
 import shutil
 import statistics
@@ -241,11 +242,31 @@ def interval_consistent_funding_days(events, audit=None):
     return known
 
 
-def load_funding(root: Path, archive_dates, clock_audit=None):
+def parse_funding_rate(raw):
+    """Only the observed archive sentinel 'None' means unavailable, never zero."""
+    if raw == "None":
+        return None
+    try:
+        value = float(raw)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("Invalid original funding rate") from exc
+    if not math.isfinite(value):
+        raise ValueError("Nonfinite original funding rate")
+    return value
+
+
+def funding_billing_day_key(bar_open, symbol):
+    return (dt.datetime.fromtimestamp(bar_open / 1000, tz=dt.timezone.utc).date(), symbol)
+
+
+def load_funding(root: Path, archive_dates, clock_audit=None, unknown_rate_days=None):
     """Settlement-time rates; events belong to the hour ENDING at settlement T."""
     events = {}
     counters = clock_audit if clock_audit is not None else {}
     counters.update(snapped_events=0, maximum_offset_ms=0, outside_window_events=0)
+    unknown_days = unknown_rate_days if unknown_rate_days is not None else set()
+    unknown_days.clear()
+    unknown_keys = []
     count = 0
     for day in archive_dates:
         for row in read_zip_rows(file_at(root, "funding", day)):
@@ -265,9 +286,19 @@ def load_funding(root: Path, archive_dates, clock_audit=None):
             key = (bar_open, symbol)
             if key in events:
                 raise ValueError(f"Duplicate settlement for {symbol} at {settlement}")
-            events[key] = float(row["funding_rate"])
+            events[key] = parse_funding_rate(row["funding_rate"])
+            if events[key] is None:
+                unknown_keys.append(key)
+                unknown_days.add(funding_billing_day_key(*key))
             count += 1
-    known_days = interval_consistent_funding_days(events, counters)
+    # An explicit unavailable rate must not masquerade as an absent/zero payment
+    # or create a slower complete schedule after dropping every other record.
+    for key in unknown_keys:
+        del events[key]
+    coverage_keys = (key for key in events if funding_billing_day_key(*key) not in unknown_days)
+    known_days = interval_consistent_funding_days(coverage_keys, counters)
+    counters.update(unknown_rate_events=len(unknown_keys), unknown_rate_billing_days=len(unknown_days),
+                    numeric_rate_events=len(events), source_rate_records=count)
     return events, known_days, count
 
 

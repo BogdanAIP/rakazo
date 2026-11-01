@@ -73,6 +73,10 @@ def funding_diagnostics(events, full_days):
         gaps.extend((b - a) / source.HOUR for a, b in zip(ordered, ordered[1:]))
     return {
         "observed_events": len(events),
+        "numeric_rate_events": sum(rate is not None for rate in events.values()),
+        "unknown_rate_events": sum(rate is None for rate in events.values()),
+        "symbols_with_unknown_rate": sorted({symbol for (_, symbol), rate in events.items() if rate is None}),
+        "settlement_count_basis": "timestamped source records including unavailable-rate markers; not certified cash payments",
         "full_observed_hour_contract_days": len(full_days),
         "settlement_count_histogram_full_days": dict(sorted(Counter(counts[p] for p in full_days).items())),
         "zero_observed_settlement_full_days": sum(counts[p] == 0 for p in full_days),
@@ -115,8 +119,8 @@ def audit(root, start, end, manifest_out, out):
             symbol = row["instrument_name"]
             if not symbol.endswith("-USDT-SWAP"):
                 continue
-            t, rate = int(row["funding_time"]), float(row["funding_rate"])
-            if not span_start <= t < span_start + source.DAY or not math.isfinite(rate):
+            t, rate = int(row["funding_time"]), source.parse_funding_rate(row["funding_rate"])
+            if not span_start <= t < span_start + source.DAY:
                 raise ValueError(f"Invalid funding clock/rate: {day} {symbol}")
             # Keep the original event clock. Off-hour settlement records are
             # an audit finding, never silently rounded to satisfy the builder.
