@@ -193,12 +193,14 @@ def _csv_rows(path):
             yield line, row
 
 
-def load_panel(path, tradable_only: bool = False) -> Panel:
+def load_panel(path, tradable_only: bool = False, end_ts: int | None = None) -> Panel:
     """Read the panel CSV in two streaming passes.
 
     tradable_only drops symbols that are never eligible. They can never enter a cohort,
     and cross-sectional operators only use eligible symbols, so evaluation results are
     unchanged; it only saves memory. The audit loads every symbol.
+    end_ts keeps only bars that open before it (the grid and SHA still come from the whole
+    file); development evaluation uses it so holdout bars are never even loaded.
 
     Columns: ts,symbol,open,high,low,close,volume[,eligible][,funding][,oi]
     ts       bar OPEN time, integer ms UTC, on one fixed grid
@@ -233,6 +235,10 @@ def load_panel(path, tradable_only: bool = False) -> Panel:
         raise ValueError("timestamps are not on one fixed grid")
     t0 = ordered[0]
     T = (ordered[-1] - t0) // bar_ms + 1
+    if end_ts is not None:
+        if (end_ts - t0) % bar_ms or not 0 < (end_ts - t0) // bar_ms < T:
+            raise ValueError("end_ts is not inside the panel grid")
+        T = (end_ts - t0) // bar_ms
     times = [t0 + i * bar_ms for i in range(T)]
     symbols = sorted(ever_eligible if tradable_only else symbols)
     keep = set(symbols)
@@ -252,6 +258,8 @@ def load_panel(path, tradable_only: bool = False) -> Panel:
         if sym not in keep:
             continue
         i = (int(row[col["ts"]]) - t0) // bar_ms
+        if i >= T:
+            continue
         if series["close"][sym][i] == series["close"][sym][i]:
             raise ValueError(f"line {line}: duplicate bar {sym} {row[col['ts']]}")
         o, h, l, c, v = (_num(row[k], f, line, allow_empty=False) for k, f in zip(ci, PRICE_FIELDS))
@@ -1039,7 +1047,9 @@ def load_config(path, panel: Panel) -> tuple[dict, int]:
     if cfg["panel_sha256"] != panel.sha:
         raise ValueError("panel SHA differs from the frozen config; refuse to evaluate")
     b = (cfg["holdout_start_ts"] - panel.times[0]) // panel.bar_ms
-    if not 0 < b < panel.T or panel.times[b] != cfg["holdout_start_ts"]:
+    on_grid = 0 < b < panel.T and panel.times[b] == cfg["holdout_start_ts"]
+    loaded_to_boundary = b == panel.T and panel.times[-1] + panel.bar_ms == cfg["holdout_start_ts"]
+    if not (on_grid or loaded_to_boundary):
         raise ValueError("holdout boundary is not on the panel grid")
     return cfg, b
 
@@ -1102,13 +1112,14 @@ def _check_signoff(directory, hsha: str, panel_sha: str, author: str) -> dict:
 
 def evaluate_development(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledger_path) -> dict:
     gate = cfg["gate"]
-    dev = panel.truncated(boundary)  # holdout bars do not exist for this computation
+    # holdout bars do not exist for this computation (the CLI does not even load them)
+    dev = panel if panel.T == boundary else panel.truncated(boundary)
     sim = simulate(dev, hyp, first_entry=1, last_exit=boundary - 1, costs_bp=gate["costs_bp_per_side"],
                    missing_exit_penalty_bp=gate["missing_exit_penalty_bp"])
     summary = summarize(sim, gate["costs_bp_per_side"], gate["gate_cost_bp_per_side"], gate["folds"])
     hsha = hypothesis_sha(hyp)
     report = {"bench": VERSION, "region": "development", "hypothesis": hyp, "hypothesis_sha256": hsha,
-              "panel_sha256": panel.sha, "development_end_utc": utc_iso(panel.times[boundary]),
+              "panel_sha256": panel.sha, "development_end_utc": utc_iso(panel.times[0] + boundary * panel.bar_ms),
               "summary": summary, "sharpe_annual_gate": None}
     n = summary["periods"]
     g = summary.get("by_cost_bp_per_side", {}).get(str(gate["gate_cost_bp_per_side"]))
@@ -1300,7 +1311,10 @@ def main(argv=None):
     if args.cmd == "signoff":
         print(write_signoff(args.signoffs, args.hypothesis_sha, args.panel_sha, args.reviewer, args.note))
         return
-    panel = load_panel(args.panel, tradable_only=args.cmd != "audit")
+    end_ts = None
+    if args.cmd == "evaluate":  # development never loads holdout bars
+        end_ts = json.loads(Path(args.config).read_text())["holdout_start_ts"]
+    panel = load_panel(args.panel, tradable_only=args.cmd != "audit", end_ts=end_ts)
     if args.cmd == "audit":
         print(json.dumps(audit_panel(panel, args.expect_bar_ms, args.eligibility_usd, args.eligibility_days), indent=1))
         return

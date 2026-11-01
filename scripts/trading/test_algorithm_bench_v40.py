@@ -463,6 +463,24 @@ class TestTradableUniverse(BenchTestCase):
             b = bench.simulate(lean, hyp, 1, lean.T - 1, [0, 10])
             self.assertEqual(json.dumps(a, sort_keys=True), json.dumps(b, sort_keys=True), msg=json.dumps(hyp["score"]))
 
+    def test_development_load_stops_at_holdout(self):
+        """Loading only bars before the holdout gives the same development report."""
+        path = self.tmp / "dev-only.csv"
+        bench.synthesize(path, symbols=20, bars=900, seed=33)
+        full = bench.load_panel(path, tradable_only=True)
+        d = self.fresh_dir("dev-only")
+        cfg = bench.freeze_config(full, 0.25, d / "config.json")
+        _, b_full = bench.load_config(d / "config.json", full)
+        dev = bench.load_panel(path, tradable_only=True, end_ts=cfg["holdout_start_ts"])
+        _, b_dev = bench.load_config(d / "config.json", dev)
+        self.assertEqual((dev.T, b_dev, dev.sha), (b_full, b_full, full.sha))
+        hyp = bench.validate_hypothesis(FUNDING_CONTRARIAN)
+        a = bench.evaluate_development(full, cfg, b_full, hyp, d / "a.jsonl")
+        b = bench.evaluate_development(dev, cfg, b_dev, hyp, d / "b.jsonl")
+        self.assertEqual(a["summary"], b["summary"])
+        with self.assertRaises(ValueError):
+            bench.load_panel(path, end_ts=cfg["holdout_start_ts"] + 1)
+
     def test_cross_section_ignores_ineligible_symbols(self):
         rows = []
         for t in range(4):
