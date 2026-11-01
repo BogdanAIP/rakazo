@@ -107,6 +107,15 @@ class TestFundingCoverageDiagnostics(unittest.TestCase):
         self.assertEqual(result["gaps_greater_than_eight_hours"], 1)
         self.assertFalse(result["historical_settlement_schedule_verified"])
 
+    def test_clock_jitter_is_not_a_long_funding_gap(self):
+        t = int(dt.datetime(2023, 10, 1, tzinfo=dt.timezone.utc).timestamp() * 1000)
+        lags = {0: 2000, 8: 9000, 16: 1000, 32: 5000}
+        events = {(t + h * 3_600_000 + lag, "X"): 0.001 for h, lag in lags.items()}
+        result = audit.funding_diagnostics(events, set())
+        self.assertEqual(result["gaps_greater_than_eight_hours"], 2)
+        self.assertEqual(result["gaps_greater_than_eight_nominal_hours"], 1)
+        self.assertEqual(result["nominal_gap_hours_histogram"], {8: 2, 16: 1})
+
 
 if __name__ == "__main__":
     unittest.main()

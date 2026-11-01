@@ -79,6 +79,10 @@ def funding_diagnostics(events, full_days):
         "symbols_with_varying_full_day_counts": sorted(s for s, v in values.items() if len(set(v)) > 1),
         "largest_observed_gap_hours": max(gaps) if gaps else None,
         "gaps_greater_than_eight_hours": sum(g > 8 for g in gaps),
+        # Settlement clocks lag the hour by seconds, so an 8h schedule yields raw gaps of
+        # 8.0003h. Nominal (nearest-hour) gaps separate schedule changes from that jitter.
+        "nominal_gap_hours_histogram": dict(sorted(Counter(round(g) for g in gaps).items())),
+        "gaps_greater_than_eight_nominal_hours": sum(round(g) > 8 for g in gaps),
         "original_event_time_preserved": True,
         "non_hour_aligned_events": sum(t % source.HOUR != 0 for t, _ in events),
         "hour_offset_histogram_ms": dict(sorted(Counter(t % source.HOUR for t, _ in events).items())),
