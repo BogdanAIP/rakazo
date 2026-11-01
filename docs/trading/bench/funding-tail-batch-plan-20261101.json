@@ -1,0 +1,15 @@
+{
+  "schema": "finite_source_batch_plan_v1",
+  "mode": "DATA_QUALITY_DEVELOPMENT",
+  "source": "official OKX all-swap original archives, candles and funding",
+  "archive_start": "2023-11-03",
+  "archive_end": "2023-11-03",
+  "max_new_days": 1,
+  "max_new_bytes": 33554432,
+  "min_free_bytes": 10737418240,
+  "timeout_seconds": 300,
+  "purpose": "Claude identified required second later UTC+8 source day for adjacent billing-day completeness; preserve previous pilot, rebuild separate output with archive_end2023-11-03 and panel_end2023-11-01",
+  "protected_2026_dates_accessed": false,
+  "real_strategy_evaluations": 0,
+  "freeze_allowed": false
+}
