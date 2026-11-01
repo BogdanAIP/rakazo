@@ -1,0 +1,31 @@
+{
+  "schema": "rakazo_okx_archive_restart_resume_v1",
+  "recorded_date_utc": "2026-11-01",
+  "mode": "RESEARCH_DATA_ACQUISITION_ONLY",
+  "context": "Following Rakazo restart, computer/status showed controlHolder=bot despite no active archive downloader or auditor process. GPT obtained the computer lease and independently checked that only the current diagnostic process matched the initial process query.",
+  "branch": "research/algorithm-bench-v40-2026-10-31",
+  "worktree_code_revision": "722ec028",
+  "source": "Official OKX archive modules candles and funding",
+  "archive_exchange_date_start": "2024-01-03",
+  "archive_exchange_date_end": "2024-01-22",
+  "run": {
+    "bounded_command": "okx_bench_archive_v40.py sync --archive-start 2023-10-01 --archive-end 2026-10-30 --max-days 20 --max-new-bytes 1073741824 --min-free-bytes 10737418240",
+    "process_id_at_run": 19040,
+    "completed": true,
+    "source_dates_downloaded": 20,
+    "source_original_zips_downloaded": 40,
+    "new_original_bytes": 101171995,
+    "source_end_state": "114 complete receipt dates / 1126 target exchange dates"
+  },
+  "independent_verification": {
+    "method": "After run, independently SHA-256 hashed all 40 newly downloaded ZIPs and checked against per-day private receipts plus exact byte size.",
+    "files_hashed": 40,
+    "files_failed": 0,
+    "receipts_total": 114,
+    "first_receipt_exchange_date": "2023-10-01",
+    "last_receipt_exchange_date": "2024-01-22",
+    "raw_data_location": "PRIVATE_OUTSIDE_GIT",
+    "note": "ZIP provenance verified, but new dates have not yet undergone full minute-level source audit or panel freeze."
+  },
+  "safety": "No real/PAPER trade, Trader modification, ledger/evaluation/holdout, or account access."
+}
