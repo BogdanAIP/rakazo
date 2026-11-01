@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import datetime as dt
 import json
 import math
 import random
@@ -209,11 +210,14 @@ def complexity(g) -> int:
 class Evaluator:
     """Scores genomes on the search segment only, caching building blocks."""
 
-    def __init__(self, panel, cfg, ledger_path, null_seed=None):
+    def __init__(self, panel, cfg, ledger_path, null_seed=None, folds=2, start_ts=None):
         self.cfg, self.gate = cfg, cfg["gate"]
         sb = bench.search_index(cfg, panel)
         self.panel = panel if panel.T == sb else panel.truncated(sb)
         self.sb = sb
+        self.folds = folds
+        # first decision bar; earlier rows are warm-up for the building blocks only
+        self.first = 1 if start_ts is None else bench._grid_index(self.panel, start_ts, "search start")
         self.ledger_path = ledger_path
         self.cache: dict = {}
         self.leaf_cache: dict = {}
@@ -280,16 +284,16 @@ class Evaluator:
         if key in self.seen:
             return self.seen[key]
         hyp = to_hypothesis(g, "search-candidate")
-        sim = bench.simulate(self.panel, hyp, 1, self.sb - 1, self.gate["costs_bp_per_side"],
+        sim = bench.simulate(self.panel, hyp, self.first, self.sb - 1, self.gate["costs_bp_per_side"],
                              self.gate["missing_exit_penalty_bp"], score=self.score(g))
-        summ = bench.summarize(sim, self.gate["costs_bp_per_side"], self.gate["gate_cost_bp_per_side"], 2)
+        summ = bench.summarize(sim, self.gate["costs_bp_per_side"], self.gate["gate_cost_bp_per_side"], self.folds)
         gate = summ.get("by_cost_bp_per_side", {}).get(str(self.gate["gate_cost_bp_per_side"]))
         if gate is None or summ["funding_unknown_share"] > self.gate["max_funding_unknown_share"]:
             res = {"fitness": -9.0, "sharpe": None, "halves": None, "ic": None}
         else:
             ppy = summ["periods_per_year"]
             halves = []
-            for f in summ["folds"]:  # two halves of the search segment
+            for f in summ["folds"]:  # consecutive calendar folds of the search segment
                 halves.append(f["net_mean_bp"])
             sd = gate["long_run_std_bp"] or 1.0
             half_sr = [h / sd * math.sqrt(ppy) for h in halves]
@@ -309,6 +313,38 @@ class Evaluator:
         return res
 
 
+class Pooled:
+    """One genome judged on several search panels (e.g. two exchanges and years). It must
+    persist: fitness uses the worst calendar fold over all panels. The first panel is the
+    one whose validation segment will judge promotions."""
+
+    def __init__(self, evaluators):
+        self.evs = evaluators
+        self.panel, self.cfg = evaluators[0].panel, evaluators[0].cfg
+        self.seen: dict = {}
+
+    def score(self, g):
+        return self.evs[0].score(g)
+
+    def evaluate(self, g) -> dict:
+        key = genome_key(g)
+        if key in self.seen:
+            return self.seen[key]
+        parts = [ev.evaluate(g) for ev in self.evs]
+        if any(r["sharpe"] is None for r in parts):
+            res = {"fitness": -9.0, "sharpe": None, "halves": None, "ic": None}
+        else:
+            n = [r["periods"] for r in parts]
+            sharpe = sum(r["sharpe"] * k for r, k in zip(parts, n)) / sum(n)
+            folds = [x for r in parts for x in r["halves"]]
+            res = {"fitness": 0.5 * sharpe + 0.5 * min(folds) - 0.1 * (complexity(g) - 1), "sharpe": sharpe,
+                   "halves": folds, "ic": parts[0]["ic"], "turnover": parts[0]["turnover"], "periods": sum(n),
+                   "by_panel": [{"sharpe": r["sharpe"], "folds": r["halves"]} for r in parts]}
+        res["returns"] = [x for r in parts for x in r["returns"]]
+        self.seen[key] = res
+        return res
+
+
 def _corr(a, b):
     n = min(len(a), len(b))
     if n < 10:
@@ -323,7 +359,8 @@ def _corr(a, b):
 
 
 def search(panel, cfg, ledger_path, population=60, generations=20, elite=12, seed=40, seeds=(), log=None,
-           null_seed=None):
+           null_seed=None, extra=()):
+    """extra: (panel, cfg, folds, start_ts) of further search panels; see Pooled."""
     """Only holds the validation segment can judge are searched: about 25 non-overlapping
     holds must fit into it, otherwise promote would return INSUFFICIENT_DATA."""
     global allowed_horizons
@@ -331,6 +368,8 @@ def search(panel, cfg, ledger_path, population=60, generations=20, elite=12, see
     allowed_horizons = [h for h in HORIZONS if h * 25 <= validation_bars] or [HORIZONS[0]]
     rng = random.Random(seed)
     ev = Evaluator(panel, cfg, ledger_path, null_seed)
+    if extra:
+        ev = Pooled([ev] + [Evaluator(p, c, ledger_path, null_seed, folds, start) for p, c, folds, start in extra])
     pop = [copy.deepcopy(s) for s in seeds] + [random_genome(rng) for _ in range(population - len(seeds))]
     history = []
     for gen in range(generations):
@@ -375,11 +414,12 @@ def diverse_top(ev, k=5, max_corr=0.7, min_sharpe=0.0):
     return [(json.loads(p), ev.seen[p]) for p in picks]
 
 
-def null_calibration(panel, cfg, ledger_path, runs, population=60, generations=20, seed=40, log=None, first=0):
+def null_calibration(panel, cfg, ledger_path, runs, population=60, generations=20, seed=40, log=None, first=0,
+                     extra=()):
     """Best fitness and diverse top-5 fitness of the identical search on shuffled scores."""
     out = []
     for k in range(first, first + runs):
-        ev, _ = search(panel, cfg, ledger_path, population, generations, seed=seed, null_seed=k)
+        ev, _ = search(panel, cfg, ledger_path, population, generations, seed=seed, null_seed=k, extra=extra)
         top = diverse_top(ev, 5)
         best = max(r["fitness"] for r in ev.seen.values())
         out.append({"null_seed": k, "evaluated": len(ev.seen), "best_fitness": best,
@@ -472,6 +512,28 @@ def _std(xs):
 
 # ------------------------------------------------------------------- CLI
 
+def extra_args(p):
+    p.add_argument("--extra-panel", action="append", default=[], help="further search-only panel (repeatable)")
+    p.add_argument("--extra-config", action="append", default=[])
+    p.add_argument("--extra-folds", action="append", type=int, default=[])
+    p.add_argument("--extra-start", action="append", default=[], help="first decision date, YYYY-MM-DD")
+
+
+def load_extra(args):
+    n = len(args.extra_panel)
+    if not (len(args.extra_config) == len(args.extra_folds) == len(args.extra_start) == n):
+        raise SystemExit("--extra-panel, --extra-config, --extra-folds and --extra-start come in groups")
+    out = []
+    for path, conf, folds, start in zip(args.extra_panel, args.extra_config, args.extra_folds, args.extra_start):
+        frozen = json.loads(Path(conf).read_text())
+        p = bench.load_panel(path, tradable_only=True, end_ts=frozen["search_end_ts"])
+        c, _ = bench.load_config(conf, p)
+        day = [int(x) for x in start.split("-")]
+        ts = int(dt.datetime(*day, tzinfo=dt.timezone.utc).timestamp() * 1000)
+        out.append((p, c, folds, ts))
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Failure-guided program search on the bench search segment (research only)")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -483,11 +545,13 @@ def main(argv=None):
     p.add_argument("--promote", type=int, default=5)
     p.add_argument("--seed", type=int, default=40)
     p.add_argument("--seeds", help="JSON list of genomes proposed by an agent after reading the last report")
+    extra_args(p)
     p = sub.add_parser("null")
     for a in ("--panel", "--config", "--explore-ledger", "--out"):
         p.add_argument(a, required=True)
     p.add_argument("--runs", type=int, default=19)
     p.add_argument("--first-null", type=int, default=0)
+    extra_args(p)
     p.add_argument("--population", type=int, default=60)
     p.add_argument("--generations", type=int, default=20)
     p.add_argument("--seed", type=int, default=40)
@@ -506,9 +570,10 @@ def main(argv=None):
         raise SystemExit("frozen config has no search/validation split")
     panel = bench.load_panel(args.panel, tradable_only=True, end_ts=frozen["search_end_ts"])
     cfg, _ = bench.load_config(args.config, panel)
+    extra = load_extra(args)
     if args.cmd == "null":
         res = null_calibration(panel, cfg, args.explore_ledger, args.runs, args.population, args.generations,
-                               args.seed, log=print, first=args.first_null)
+                               args.seed, log=print, first=args.first_null, extra=extra)
         bench.write_exclusive(Path(args.out), {"search_end_utc": cfg["search_end_utc"], "seed": args.seed,
                                                "population": args.population, "generations": args.generations,
                                                "runs": res})
@@ -516,7 +581,7 @@ def main(argv=None):
         return
     seeds = json.loads(Path(args.seeds).read_text()) if args.seeds else []
     ev, history = search(panel, cfg, args.explore_ledger, args.population, args.generations, seed=args.seed,
-                         seeds=seeds, log=print)
+                         seeds=seeds, log=print, extra=extra)
     top = diverse_top(ev, args.promote)
     hyps = [to_hypothesis(g, f"search-{args.round}-{i + 1}") for i, (g, _) in enumerate(top)]
     for (g, _), h in zip(top, hyps):  # promoted DSL must reproduce the cached search score exactly
@@ -527,7 +592,8 @@ def main(argv=None):
               "history": history,
               "top": [{"id": h["id"], "genome": g, "describe": describe(g), "search_sharpe_annual": r["sharpe"],
                        "search_halves_sharpe": r["halves"], "ic_mean": r["ic"], "turnover": r["turnover"],
-                       "regimes": regime_breakdown(ev, g)} for (g, r), h in zip(top, hyps)]}
+                       "by_panel": r.get("by_panel"),
+                       "regimes": regime_breakdown(getattr(ev, "evs", [ev])[0], g)} for (g, r), h in zip(top, hyps)]}
     bench.write_exclusive(Path(args.report), report)
     batch = {"schema": bench.SCHEMA_HYP, "hypotheses": [
         {k: v for k, v in h.items() if k in ("id", "author", "rationale", "score", "horizon_bars", "weighting",

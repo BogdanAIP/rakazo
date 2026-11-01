@@ -133,5 +133,34 @@ class TestNullCalibration(SearchCase):
         self.assertEqual(authors, {"claude-null-0", "claude-null-1", "claude-null-2"})
 
 
+class TestPooledPanels(SearchCase):
+    def _panel(self, name, seed, plant):
+        path = self.tmp / f"{name}.csv"
+        search.synthesize_regime_daily(path, symbols=30, days=900, seed=seed, plant=plant)
+        panel = bench.load_panel(path)
+        t0 = panel.times[0]
+        cfg = bench.freeze_config(panel, 0.25, self.tmp / f"{name}-cfg.json", {"prior_trials": 0}, expect_bar_ms=DAY,
+                                  holdout_start_ts=t0 + 675 * DAY, search_end_ts=t0 + 400 * DAY)
+        return panel, cfg, t0
+
+    def test_persistence_across_panels(self):
+        b, bcfg, b0 = self._panel("b", 18, 0.1)
+        c, ccfg, c0 = self._panel("c", 19, 0.0)
+        kw = dict(population=30, generations=6, seed=7)
+        single, _ = search.search(self.panel, self.cfg, self.tmp / "s.jsonl", **kw)
+        both, _ = search.search(self.panel, self.cfg, self.tmp / "ab.jsonl", extra=[(b, bcfg, 3, b0 + 60 * DAY)], **kw)
+        noise, _ = search.search(self.panel, self.cfg, self.tmp / "ac.jsonl", extra=[(c, ccfg, 3, c0 + 60 * DAY)], **kw)
+        best = lambda ev: max(r["fitness"] for r in ev.seen.values())  # noqa: E731
+        self.assertGreater(best(both), best(noise))  # a rule must hold on every panel
+        self.assertGreater(best(single), best(noise))
+        g, r = search.diverse_top(both, 1)[0]
+        self.assertEqual(len(r["halves"]), 2 + 3)
+        self.assertEqual(g.get("regime"), "mvol_high")
+        ev_b = both.evs[1]
+        self.assertEqual(ev_b.first, 60)
+        steps = ev_b.evaluate(g)["steps_t"]
+        self.assertGreaterEqual(min(steps), 60)
+
+
 if __name__ == "__main__":
     unittest.main()
