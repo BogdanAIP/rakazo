@@ -1,0 +1,49 @@
+{
+  "schema": "gpt_static_bench_v406_review_v1",
+  "date_utc": "2026-11-01",
+  "reviewed_head": "0f5b4f9d10684363a3b6490e7a843da865b2c966",
+  "mode": "STATIC_REVIEW_NO_EXECUTION",
+  "review_scope": [
+    "tradable-only loading",
+    "eligible cross-sectional peers",
+    "float32 storage"
+  ],
+  "accepted_by_inspection": [
+    "Never-eligible symbol removal is compatible with cross-sectional operators restricted to eligible peers at each decision; no test execution claimed by GPT in this session.",
+    "Development loader's second pass excludes bar values at or after end_ts. Global SHA/grid metadata still spans the whole file as documented."
+  ],
+  "finding": {
+    "id": "V406-ELIGIBILITY-VOLUME-PRECISION",
+    "severity": "REQUIRES_REGRESSION_BEFORE_FREEZE",
+    "file": "scripts/trading/algorithm_bench_v40.py",
+    "functions": [
+      "load_panel",
+      "recompute_eligibility"
+    ],
+    "mechanism": "PRICE_FIELDS includes volume; load_panel stores all PRICE_FIELDS as array('f'), then recompute_eligibility sums these rounded hourly quote volumes. The original builder uses Python float sums before comparing the strict 5,000,000 threshold. Small relative errors are not harmless at a discontinuous eligibility threshold.",
+    "mathematical_counterexample": {
+      "fixture": "31 complete UTC days, 24 hourly traded bars per day. Each day's first hourly quote-volume cell is 4999999.9 and the other 23 are 0; all prices 1; symbol present throughout. Original eligibility=0.",
+      "float32_spacing_near_5000000": 0.5,
+      "rounded_hourly_volume": 5000000,
+      "builder_prior30_day_median": 4999999.9,
+      "builder_flag": 0,
+      "bench_rounded_prior30_day_median": 5000000,
+      "bench_recomputed_flag": 1,
+      "scope": "Mathematical storage-rounding counterexample; not executed and not evidence that an actual archived contract lies near the threshold."
+    },
+    "requested_resolution": "Keep quote volume in float64, or recompute eligibility from original CSV double-precision values in an independent audit path. Add below/above/exact-threshold deterministic regressions. Do not round the 5M threshold, loosen eligibility checks, alter original eligible flags or drop mismatching bars.",
+    "estimated_extra_dense_memory_bytes": 68800896,
+    "memory_estimate_basis": "654*26300*4 additional bytes for one volume array; estimate only, not a measured peak."
+  },
+  "execution": {
+    "windows_r": "Unavailable: repeated MCP Session terminated; no control lease acquired in this session.",
+    "windows_build": "Last authorized checkpoint runs/full-panel-build-20261101/status.json, originally child23332. Current liveness and completion UNKNOWN; no replacement launched.",
+    "tests_run": 0,
+    "local_or_docker_research_started": false,
+    "raw_data_accessed": false,
+    "panel_frozen": false,
+    "strategy_evaluations": 0,
+    "holdout_accessed": false
+  },
+  "next": "Claude: independently reproduce threshold counterexample and resolve/review precision before freeze. GPT: when R recovers, first verify exact live build and lease; never duplicate source download/audit/build. Then actual eligible funding NA split (194 vs others), 3 off-hour markers and 2 duplicate nominal-hour identities, independent panel audit; freezeprior200 only after gates and review."
+}
