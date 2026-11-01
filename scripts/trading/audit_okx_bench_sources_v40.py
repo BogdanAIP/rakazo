@@ -98,7 +98,7 @@ def audit(root, start, end, manifest_out, out):
         raise ValueError("Invalid date interval")
     if manifest_out.exists() or out.exists():
         raise FileExistsError("Preserve first manifest and audit outputs")
-    manifest, per_day, events, observed_hours, symbols = [], [], {}, defaultdict(set), set()
+    manifest, per_day, events, observed_hours, symbols = [], [], {}, defaultdict(int), set()
     for day in source.days(start, end):
         receipt = json.loads((root / "receipts" / f"{day}.json").read_text())
         span_start = int(dt.datetime.combine(day, dt.time(), dt.timezone.utc).timestamp() * 1000) - 8 * source.HOUR
@@ -129,9 +129,10 @@ def audit(root, start, end, manifest_out, out):
             if not span_start <= hour < span_start + source.DAY:
                 raise ValueError("Original candle outside its full UTC+8 archive span")
             symbols.add(symbol)
-            observed_hours[(utc_day(hour), symbol)].add(hour % source.DAY // source.HOUR)
+            observed_hours[(utc_day(hour), symbol)] |= 1 << (hour % source.DAY // source.HOUR)
         per_day.append({**stats, "original_funding_events": len(events) - events_before_day})
-    full_days = {p for p, hours in observed_hours.items() if len(hours) == 24 and start.isoformat() <= p[0] < end.isoformat()}
+    full_days = {p for p, mask in observed_hours.items()
+                 if mask == (1 << 24) - 1 and start.isoformat() <= p[0] < end.isoformat()}
     manifest_out.parent.mkdir(parents=True, exist_ok=True)
     with manifest_out.open("x", encoding="utf-8") as stream:
         stream.write(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
