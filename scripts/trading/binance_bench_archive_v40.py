@@ -35,7 +35,7 @@ import okx_bench_archive_v40 as okx
 
 HOUR, DAY = okx.HOUR, okx.DAY
 BASE = "https://data.binance.vision/data/futures/um/monthly"
-SYMBOL = re.compile(r"[A-Z0-9]{2,30}USDT")
+SYMBOL = re.compile(r"[A-Z0-9]{1,30}USDT")
 HEADER = ("ts", "symbol", "open", "high", "low", "close", "volume", "eligible", "funding", "oi")
 
 

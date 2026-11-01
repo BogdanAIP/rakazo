@@ -108,6 +108,16 @@ class TestBinanceBuilder(unittest.TestCase):
         keys = [(int(r[0]), r[1]) for r in rows]
         self.assertEqual(keys, sorted(keys))
 
+    def test_single_letter_base_symbol_not_silently_dropped(self):
+        self.assertTrue(bn.SYMBOL.fullmatch("TUSDT"))
+        self.assertFalse(bn.SYMBOL.fullmatch("BTCUSDT_230331"))
+        put(self.root, "klines", "TUSDT", "2020-01", kline_rows("2020-01", 250_000))
+        put(self.root, "fundingRate", "TUSDT", "2020-01", funding_rows("2020-01"),
+            header=["calc_time", "funding_interval_hours", "last_funding_rate"])
+        audit = bn.build(self.root, ["TUSDT"], "2020-01", "2020-01", self.root / "single.csv")
+        self.assertEqual(audit["contracts"], 1)
+        self.assertTrue(any(",TUSDT," in row for row in (self.root / "single.csv").read_text().splitlines()))
+
     def test_checksum_mismatch_stops(self):
         path = bn.archive_path(self.root, "klines", "BIGUSDT", "2020-02")
         path.with_name(path.name + ".CHECKSUM").write_text("0" * 64 + "  x\n")
