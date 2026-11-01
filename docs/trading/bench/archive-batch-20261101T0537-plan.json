@@ -17,5 +17,11 @@
   "panel_freeze_allowed": false,
   "protected_2026_dates_accessed": false,
   "existing_31_hypotheses_unchanged": true,
-  "preflight_free_bytes": 39948148736
+  "preflight_free_bytes": 39948148736,
+  "resource_gates": {
+    "sync_memory_available_min_bytes": 268435456,
+    "audit_memory_available_min_bytes": 1572864000,
+    "if_audit_resource_unavailable": "Keep verified originals and mark audit DEFERRED, never stop other processes or label unaudited sources audited"
+  },
+  "first_preflight": "Initial combined1.5GiB available-memory requirement failed before network; no child or download began. Preserve first attempt, separate sync256MiB from fullaudit1.5GiB gate."
 }
