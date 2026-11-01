@@ -242,9 +242,9 @@ def load_panel(path, tradable_only: bool = False, end_ts: int | None = None) -> 
     t0 = ordered[0]
     T = (ordered[-1] - t0) // bar_ms + 1
     if end_ts is not None:
-        if (end_ts - t0) % bar_ms or not 0 < (end_ts - t0) // bar_ms < T:
+        if (end_ts - t0) % bar_ms or (end_ts - t0) // bar_ms <= 0:
             raise ValueError("end_ts is not inside the panel grid")
-        T = (end_ts - t0) // bar_ms
+        T = min(T, (end_ts - t0) // bar_ms)  # a search-segment export already ends before end_ts
     times = [t0 + i * bar_ms for i in range(T)]
     symbols = sorted(ever_eligible if tradable_only else symbols)
     keep = set(symbols)
@@ -1195,9 +1195,44 @@ def search_index(cfg: dict, panel: Panel) -> int:
     if "search_end_ts" not in cfg:
         raise PermissionError("this frozen config has no search/validation split")
     i = (cfg["search_end_ts"] - panel.times[0]) // panel.bar_ms
-    if not 0 < i <= panel.T:
+    if i <= 0:
         raise ValueError("search end is outside the loaded panel")
-    return i
+    if i > panel.T and not cfg.get("export_scope"):
+        raise ValueError("search end is beyond the loaded panel")
+    return min(i, panel.T)
+
+
+def export_search_segment(panel_path, cfg_path, out_csv, out_cfg) -> dict:
+    """Write only the rows before the frozen search end, plus a derived config, so the
+    searcher physically never holds validation or holdout data. Promotion runs on the
+    full panel with the parent config, by whoever holds it."""
+    parent = json.loads(Path(cfg_path).read_text())
+    if "search_end_ts" not in parent:
+        raise PermissionError("parent config has no search/validation split")
+    if sha256_file(panel_path) != parent["panel_sha256"]:
+        raise ValueError("panel SHA differs from the parent frozen config")
+    cut, last, rows = parent["search_end_ts"], None, 0
+    out_csv, out_cfg = Path(out_csv), Path(out_cfg)
+    if out_csv.exists() or out_cfg.exists():
+        raise FileExistsError("export target exists")
+    with open(panel_path, newline="", encoding="utf-8-sig") as fh, open(out_csv, "x", newline="", encoding="utf-8") as fo:
+        reader, writer = csv.reader(fh), csv.writer(fo, lineterminator="\n")
+        writer.writerow(next(reader))
+        for row in reader:
+            ts = int(row[0])
+            if ts < cut:
+                writer.writerow(row)
+                rows += 1
+                last = ts if last is None or ts > last else last
+    if not rows:
+        raise ValueError("no rows before the search end")
+    derived = dict(parent)
+    derived.update(panel_sha256=sha256_file(out_csv), panel_end_ts=last, export_scope="search segment only",
+                   parent_panel_sha256=parent["panel_sha256"], parent_config_sha256=sha256_file(cfg_path),
+                   exported_at_utc=now_utc())
+    write_exclusive(out_cfg, derived)
+    return {"rows": rows, "export_panel_sha256": derived["panel_sha256"], "last_bar_utc": utc_iso(last),
+            "search_end_utc": parent["search_end_utc"]}
 
 
 def load_config(path, panel: Panel) -> tuple[dict, int]:
@@ -1272,6 +1307,8 @@ def _check_signoff(directory, hsha: str, panel_sha: str, author: str) -> dict:
 # ------------------------------------------------------------- verdicts
 
 def evaluate_development(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledger_path) -> dict:
+    if cfg.get("export_scope"):
+        raise PermissionError("a search-segment export cannot be used for development verdicts")
     gate = cfg["gate"]
     # holdout bars do not exist for this computation (the CLI does not even load them)
     dev = panel if panel.T == boundary else panel.truncated(boundary)
@@ -1347,6 +1384,8 @@ def evaluate_validation(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledge
     rule ever promoted on this panel, every rule in the promotion batch being run (all of
     it counts from the first rule, so promotion order cannot help), plus gate
     validation_prior_trials."""
+    if cfg.get("export_scope"):
+        raise PermissionError("a search-segment export cannot be used for validation")
     gate = cfg["gate"]
     sb = search_index(cfg, panel)
     dev = panel if panel.T == boundary else panel.truncated(boundary)
@@ -1395,6 +1434,8 @@ def evaluate_validation(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledge
 
 
 def evaluate_holdout(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledger_path, claims_dir, signoffs_dir) -> dict:
+    if cfg.get("export_scope"):
+        raise PermissionError("a search-segment export has no holdout")
     gate = cfg["gate"]
     hsha = hypothesis_sha(hyp)
     passed = [e for e in read_ledger(ledger_path) if e.get("hypothesis_sha256") == hsha
@@ -1524,6 +1565,9 @@ def main(argv=None):
         if name == "holdout":
             for arg in ("--claims", "--signoffs", "--id"):
                 p.add_argument(arg, required=True)
+    p = sub.add_parser("export-search")
+    for arg in ("--panel", "--config", "--out", "--out-config"):
+        p.add_argument(arg, required=True)
     p = sub.add_parser("signoff")
     for arg in ("--signoffs", "--hypothesis-sha", "--panel-sha", "--reviewer"):
         p.add_argument(arg, required=True)
@@ -1543,6 +1587,9 @@ def main(argv=None):
                           "years_needed": need / args.periods_per_year,
                           "mde_sharpe_annual_at_n": mde_sharpe(args.n) * math.sqrt(args.periods_per_year) if args.n else None},
                          indent=1))
+        return
+    if args.cmd == "export-search":
+        print(json.dumps(export_search_segment(args.panel, args.config, args.out, args.out_config), indent=1))
         return
     if args.cmd == "signoff":
         print(write_signoff(args.signoffs, args.hypothesis_sha, args.panel_sha, args.reviewer, args.note))

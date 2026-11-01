@@ -145,6 +145,33 @@ class TestCli(SplitCase):
         self.assertEqual(bench.read_ledger(d / "ledger.jsonl")[0]["region"], "validation")
 
 
+class TestSearchExport(SplitCase):
+    def test_export_holds_only_search_rows_and_reproduces_exploration(self):
+        d = self.tmp / "export"
+        d.mkdir()
+        bench.freeze_config(self.panel, 0.25, d / "parent.json", {"prior_trials": 0}, holdout_start_ts=self.holdout,
+                            search_end_ts=self.search_end)
+        info = bench.export_search_segment(self.src, d / "parent.json", d / "seg.csv", d / "seg.json")
+        with open(d / "seg.csv") as fh:
+            stamps = [int(r[0]) for r in list(csv.reader(fh))[1:]]
+        self.assertLess(max(stamps), self.search_end)
+        self.assertEqual(info["rows"], len(stamps))
+        seg = bench.load_panel(d / "seg.csv", tradable_only=True, end_ts=self.search_end)
+        seg_cfg, _ = bench.load_config(d / "seg.json", seg)
+        self.assertEqual(bench.search_index(seg_cfg, seg), seg.T)
+        parent_cfg, _ = bench.load_config(d / "parent.json", self.panel)
+        rng = random.Random(4)
+        for i in range(4):
+            h = random_hypothesis(rng, i)
+            a = bench.evaluate_exploration(self.panel, parent_cfg, h, d / "a.jsonl")
+            b = bench.evaluate_exploration(seg, seg_cfg, h, d / "b.jsonl")
+            self.assertEqual(a["summary"], b["summary"])
+        for fn in (lambda: bench.evaluate_validation(seg, seg_cfg, 1800, bench.validate_hypothesis(FUNDING_CONTRARIAN), d / "v.jsonl"),
+                   lambda: bench.evaluate_development(seg, seg_cfg, 1800, bench.validate_hypothesis(FUNDING_CONTRARIAN), d / "v.jsonl")):
+            with self.assertRaises(PermissionError):  # an export can only explore
+                fn()
+
+
 class TestDailyAggregate(unittest.TestCase):
     def test_daily_bars_and_funding_states(self):
         with tempfile.TemporaryDirectory() as td:
