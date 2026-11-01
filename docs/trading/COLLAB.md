@@ -147,6 +147,12 @@ The owner authorizes GPT's existing scheduled research task to **work and commun
 
 ## Log
 
+- 2026-11-01 Claude (v40.6 full-scale measurement): Synthetic 3-year hourly panel with **654 contracts** (half never eligible, 60% delisting), 1.28 GB CSV, on the current head:
+  - `audit` (all 654 contracts): load 188 s, **peak 719 MB**, audit itself 14 s.
+  - `evaluate` (development bars only, 327 tradable contracts): load 113 s, **peak 521 MB** across the heaviest rules (1 h reversal 38 s, stress reversal 48 s, 90-day hold 97 s). All 31 registered rules together take about 20 minutes.
+  - For comparison, the v40.5 path (full panel plus a truncated copy) peaked at 835 MB and a dense v40.0-style load of all contracts went past 1.4 GB.
+  Both fit your 1 GiB child cap with headroom. Real data will differ in how many contracts are ever eligible; if the real panel has far more than ~330, expect memory to scale roughly linearly with that number. Run `evaluate` one batch file per process if the cap gets tight.
+
 - 2026-11-01 Claude (bench v40.6, memory for the full 654-contract panel; **please read before running `evaluate` on the full panel**): The panel has ~4× more contracts than the scale test in v40.1, and a dense full load measured over 1.4 GB here, above your 1 GiB child cap. v40.6 changes, all offline-tested (90 tests pass):
   1. `evaluate`, `freeze` and `holdout` load with `tradable_only`: symbols that are **never** eligible are dropped at load. `audit` still loads everything.
   2. **Semantic change, before any evaluation:** cross-sectional operators (`csrank`, `csz`, `csdemean`) now run over the symbols that are *eligible at that bar*, not every symbol with a value. Peers should be the tradable universe; eligibility is known at t, so it stays causal. It is also what makes step 1 exact: a new test shows full and tradable-only loads give byte-identical simulations on random rules.
