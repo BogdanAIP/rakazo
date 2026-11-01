@@ -313,7 +313,7 @@ def load_panel(path, tradable_only: bool = False, end_ts: int | None = None, fie
 
 def recompute_eligibility(panel: Panel, usd: float, days: int = 30) -> dict:
     """Eligibility implied by trailing median daily quote volume of strictly earlier
-    UTC days (days without rows count as zero). Returns {symbol: {day_index: 0/1}}."""
+    UTC days (days without rows count as zero). Returns {symbol: bytearray of 0/1 per day}."""
     day0 = panel.times[0] // MS_PER_DAY
     n_days = panel.times[-1] // MS_PER_DAY - day0 + 1
     out = {}
@@ -328,10 +328,9 @@ def recompute_eligibility(panel: Panel, usd: float, days: int = 30) -> dict:
         # global panel has already accumulated 30 days.
         first_traded = next((t // MS_PER_DAY - day0 for i, t in enumerate(panel.times)
                              if close[i] == close[i]), n_days)
-        flags = {}
+        flags = bytearray(n_days)  # compact: one byte per contract-day
         for d in range(n_days):
             if d < days or d < first_traded + days:
-                flags[d] = 0
                 continue
             window = sorted(daily[d - days:d])
             mid = days // 2
@@ -758,17 +757,39 @@ def _binary(op):
     }[op]
 
 
+def _field_uses(node, counts):
+    if node[0] == "field":
+        counts[node[1]] += 1
+        return counts
+    for child in node[1:]:
+        if isinstance(child, list):
+            _field_uses(child, counts)
+    return counts
+
+
 def evaluate_expression(node, panel: Panel, cache=None):
     """Return {symbol: array of values, NaN = unavailable} using only past and current bars.
-    Only leaf fields are cached, which keeps peak memory near tree depth x panel size."""
-    cache = {} if cache is None else cache
+    Only leaf fields are cached. Called without a cache, a derived field (ret, range,
+    funding) is kept only until its last use in the tree, so peak memory stays near tree
+    depth x panel size; a caller-supplied cache (the search engine) keeps everything."""
+    if cache is None:
+        cache = {"__uses__": _field_uses(node, Counter())}
     op = node[0]
     kind = OPS[op][0]
     syms, T = panel.symbols, panel.T
     if op == "field":
-        if node[1] not in cache:
-            cache[node[1]] = _base_feature(panel, node[1])
-        return cache[node[1]]
+        name = node[1]
+        value = cache[name] if name in cache else _base_feature(panel, name)
+        uses = cache.get("__uses__")
+        if uses is None:
+            cache[name] = value
+        else:
+            uses[name] -= 1
+            if uses[name] > 0:
+                cache[name] = value
+            else:
+                cache.pop(name, None)
+        return value
     if op == "const":
         return {s: array("d", [float(node[1])]) * T for s in syms}
     if kind == "unary":
@@ -876,7 +897,7 @@ def default_rebalance(h: int, bars_per_day: int = 24) -> int:
 
 
 def simulate(panel: Panel, hyp: dict, first_entry: int, last_exit: int, costs_bp, missing_exit_penalty_bp=300.0,
-             score=None) -> dict:
+             score=None, keep_weights: bool = True) -> dict:
     """Staggered-tranche book, evaluated one rebalance step (r bars) at a time.
 
     Position convention (self-financing, fixed units): every r bars, after the close of
@@ -979,7 +1000,7 @@ def simulate(panel: Panel, hyp: dict, first_entry: int, last_exit: int, costs_bp
             for sym, (wt, p0, last) in tr["legs"].items():
                 held[sym] += wt * last / p0
         steps.append({"t": t, "gross": gross, "penalty": penalty, "funding": fund, "turnover": turnover,
-                      "ic": ic, "n": n_cohort, "weights": new_weights, "cash": not book})
+                      "ic": ic, "n": n_cohort, "weights": new_weights if keep_weights else None, "cash": not book})
         t += r
     # All-cash steps between trades stay in the calendar as zero returns; only the tail
     # after the last trade (no tranche can still finish inside the window) is dropped.
@@ -1324,7 +1345,7 @@ def evaluate_development(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledg
     # holdout bars do not exist for this computation (the CLI does not even load them)
     dev = panel if panel.T == boundary else panel.truncated(boundary)
     sim = simulate(dev, hyp, first_entry=1, last_exit=boundary - 1, costs_bp=gate["costs_bp_per_side"],
-                   missing_exit_penalty_bp=gate["missing_exit_penalty_bp"])
+                   missing_exit_penalty_bp=gate["missing_exit_penalty_bp"], keep_weights=False)
     summary = summarize(sim, gate["costs_bp_per_side"], gate["gate_cost_bp_per_side"], gate["folds"])
     hsha = hypothesis_sha(hyp)
     report = {"bench": VERSION, "region": "development", "hypothesis": hyp, "hypothesis_sha256": hsha,
@@ -1377,7 +1398,7 @@ def evaluate_exploration(panel: Panel, cfg: dict, hyp: dict, ledger_path) -> dic
     sb = search_index(cfg, panel)
     seg = panel if panel.T == sb else panel.truncated(sb)
     sim = simulate(seg, hyp, first_entry=1, last_exit=sb - 1, costs_bp=gate["costs_bp_per_side"],
-                   missing_exit_penalty_bp=gate["missing_exit_penalty_bp"])
+                   missing_exit_penalty_bp=gate["missing_exit_penalty_bp"], keep_weights=False)
     summary = summarize(sim, gate["costs_bp_per_side"], gate["gate_cost_bp_per_side"], gate["folds"])
     g = summary.get("by_cost_bp_per_side", {}).get(str(gate["gate_cost_bp_per_side"]), {})
     hsha = hypothesis_sha(hyp)
@@ -1401,7 +1422,7 @@ def evaluate_validation(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledge
     sb = search_index(cfg, panel)
     dev = panel if panel.T == boundary else panel.truncated(boundary)
     sim = simulate(dev, hyp, first_entry=sb, last_exit=boundary - 1, costs_bp=gate["costs_bp_per_side"],
-                   missing_exit_penalty_bp=gate["missing_exit_penalty_bp"])
+                   missing_exit_penalty_bp=gate["missing_exit_penalty_bp"], keep_weights=False)
     summary = summarize(sim, gate["costs_bp_per_side"], gate["gate_cost_bp_per_side"], gate["folds"])
     hsha = hypothesis_sha(hyp)
     report = {"bench": VERSION, "region": "validation", "hypothesis": hyp, "hypothesis_sha256": hsha,
@@ -1465,7 +1486,7 @@ def evaluate_holdout(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledger_p
     except FileExistsError as exc:
         raise PermissionError("this hypothesis already used its single holdout claim") from exc
     sim = simulate(panel, hyp, first_entry=boundary, last_exit=panel.T - 1, costs_bp=gate["costs_bp_per_side"],
-                   missing_exit_penalty_bp=gate["missing_exit_penalty_bp"])
+                   missing_exit_penalty_bp=gate["missing_exit_penalty_bp"], keep_weights=False)
     summary = summarize(sim, gate["costs_bp_per_side"], gate["gate_cost_bp_per_side"], gate["folds"])
     report = {"bench": VERSION, "region": "holdout", "hypothesis": hyp, "hypothesis_sha256": hsha,
               "panel_sha256": panel.sha, "reviewer": signoff["reviewer"], "summary": summary}
