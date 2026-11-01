@@ -38,4 +38,25 @@ class TestMissingnessAudit(unittest.TestCase):
         month=summarize([{"ts":str(t+a.DAY),"symbol":SYMBOL,"eligible":"1","funding":""}],events,known)
         self.assertEqual(month["2023-10"]["all_unknown_share"],0)
 
+    def test_wrong_numeric_rate_cannot_bypass_absence_checks(self):
+        events=series([8]*3)
+        known=a.interval_consistent_funding_days(events)
+        settled=min(ts for ts,s in events)
+        for cell in ("0", "-0.001", "NaN", "inf", "not-a-rate"):
+            with self.subTest(cell=cell), self.assertRaises(ValueError):
+                summarize([{"ts":str(settled),"symbol":SYMBOL,"eligible":"1","funding":cell}],events,known)
+
+    def test_numeric_event_requires_original_and_observed_event_cannot_be_NA(self):
+        events=series([8]*3)
+        known=a.interval_consistent_funding_days(events)
+        settled=min(ts for ts,s in events)
+        with self.assertRaises(ValueError):
+            summarize([{"ts":str(settled),"symbol":SYMBOL,"eligible":"1","funding":"NA"}],events,known)
+        with self.assertRaises(ValueError):
+            summarize([{"ts":str(settled+a.HOUR),"symbol":SYMBOL,"eligible":"1","funding":"0"}],events,known)
+        for rate in (0.001, 0.0, -0.001):
+            events[settled,SYMBOL]=rate
+            month=summarize([{"ts":str(settled),"symbol":SYMBOL,"eligible":"1","funding":str(rate)}],events,known)
+            self.assertEqual(month["2023-10"]["all_unknown_share"],0)
+
 if __name__=="__main__":unittest.main()

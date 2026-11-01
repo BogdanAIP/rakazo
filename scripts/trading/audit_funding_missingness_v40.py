@@ -4,6 +4,7 @@ import collections
 import csv
 import datetime as dt
 import json
+import math
 from pathlib import Path
 import okx_bench_archive_v40 as a
 
@@ -29,13 +30,20 @@ def summarize(rows, events, known):
         counter["all_rows"] += 1
         eligible = row["eligible"] == "1"
         counter["eligible_rows"] += int(eligible)
+        key = (int(row["ts"]), row["symbol"])
         if row["funding"] != "NA":
             if row["funding"] == "":
                 if (int(row["ts"]),row["symbol"]) in events:
                     raise ValueError("Blank funding on a bar with an observed settlement")
                 if (day,row["symbol"]) not in known:
                     raise ValueError("Blank funding on a day whose absence is not inferred known")
+            else:
+                value = float(row["funding"])
+                if not math.isfinite(value) or key not in events or value != events[key]:
+                    raise ValueError("Numeric funding differs from original observed settlement")
             continue
+        if key in events:
+            raise ValueError("NA hides an observed settlement")
         reason = reason_for_day(day,row["symbol"],patterns)
         if reason == "known" or (day,row["symbol"]) in known:
             raise ValueError("NA on an inferred-known day")
