@@ -1,0 +1,17 @@
+{
+  "schema": "finite_source_memory_probe_v1",
+  "auditor_head": "8d87e978bf79ad782bd4ef58f6c2f0ac2997b864",
+  "archive_day": "2023-12-18",
+  "selection": "largest uncompressed candle member among the deferred60 dates; 22,650,035 bytes; size is only a proxy for peak working set",
+  "probe_days": 1,
+  "timeout_seconds": 60,
+  "minimum_initial_available_memory_bytes": 536870912,
+  "stop_if_system_available_memory_below_bytes": 268435456,
+  "stop_if_child_RSS_above_bytes": 536870912,
+  "measure": "sample child RSS every0.1seconds and Windows peak_wset; save resource receipt and original-source audit outsideGit",
+  "purpose": "measure actual new canonical-string auditor memory before deciding a distinct full60-date resource policy",
+  "existing1500MiB_full_batch_gate_changed": false,
+  "no_downloads": true,
+  "no_strategy_evaluation": true,
+  "panel_freeze_allowed": false
+}
