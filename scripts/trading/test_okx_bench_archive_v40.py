@@ -26,7 +26,8 @@ class TestArchiveBuilder(unittest.TestCase):
     def test_previous_thirty_calendar_days_only_and_funding(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            start, end = dt.date(2023, 10, 1), dt.date(2023, 11, 2)
+            start, end = dt.date(2023, 10, 1), dt.date(2023, 11, 3)
+            special = dt.date(2023, 11, 2)  # archive day closing the final panel day
             for day in archive.days(start, end):
                 hour = dt.datetime.combine(day - dt.timedelta(days=1), dt.time(hour=16), dt.timezone.utc)
                 ts = int(hour.timestamp() * 1000)
@@ -36,7 +37,7 @@ class TestArchiveBuilder(unittest.TestCase):
                             "vol_ccy", "vol_quote", "open_time", "confirm"))
                 for sym, daily_usdt in (("HIGH-USDT-SWAP", 6_000_000), ("LOW-USDT-SWAP", 4_000_000)):
                     # An extreme same-day volume surge must NOT affect this day's eligibility.
-                    if sym == "LOW-USDT-SWAP" and day == end:
+                    if sym == "LOW-USDT-SWAP" and day == special:
                         daily_usdt = 100_000_000
                     for m in range(60):
                         w.writerow((sym, "1.0", "1.0", "1.0", "1.0", 1, 1, daily_usdt / 60,
@@ -45,7 +46,7 @@ class TestArchiveBuilder(unittest.TestCase):
                 w = csv.writer(funding)
                 w.writerow(("instrument_name", "funding_rate", "funding_time"))
                 for sym in ("HIGH-USDT-SWAP", "LOW-USDT-SWAP"):
-                    if day == end and sym == "LOW-USDT-SWAP":
+                    if day == special and sym == "LOW-USDT-SWAP":
                         continue  # Missing funding coverage for one symbol/UTC day.
                     w.writerow((sym, "0.0001", ts + archive.HOUR))
                 receipt = {}
@@ -58,7 +59,7 @@ class TestArchiveBuilder(unittest.TestCase):
                 file = root / "receipts" / f"{day.isoformat()}.json"
                 file.parent.mkdir(parents=True, exist_ok=True)
                 file.write_text(json.dumps(receipt), encoding="utf-8")
-            hour_rows, stats = archive.aggregate_day(root, end)
+            hour_rows, stats = archive.aggregate_day(root, special)
             self.assertEqual(stats["usable_hours"], 2)
             self.assertEqual(stats["funding_events"], 1)
             self.assertEqual(stats["incomplete_hours"], 0)

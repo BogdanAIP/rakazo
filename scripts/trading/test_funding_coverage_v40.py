@@ -88,5 +88,20 @@ class TestFundingCoverage(unittest.TestCase):
         self.assertEqual(count, 3)
         self.assertFalse(known)
 
+    def test_final_panel_day_needs_two_later_archive_days(self):
+        # UTC+8 archive day D covers [D-1 16:00, D 16:00) UTC.
+        panel_end = FIRST + dt.timedelta(days=5)
+        def covered(archive_end):
+            lo = int(dt.datetime.combine(FIRST - dt.timedelta(days=1), dt.time(16), dt.timezone.utc).timestamp()*1000)
+            hi = int(dt.datetime.combine(archive_end, dt.time(16), dt.timezone.utc).timestamp()*1000)
+            settlements = range(lo - lo % (8*a.HOUR) + 8*a.HOUR, hi, 8*a.HOUR)
+            events = {(t - a.HOUR, SYMBOL): 0.0001 for t in settlements if t >= lo}
+            return (panel_end, SYMBOL) in a.interval_consistent_funding_days(events)
+        self.assertFalse(covered(panel_end + dt.timedelta(days=1)))
+        self.assertTrue(covered(panel_end + dt.timedelta(days=2)))
+        with self.assertRaisesRegex(ValueError, "Two later"):
+            a.build(Path("."), FIRST - dt.timedelta(days=31), panel_end + dt.timedelta(days=1),
+                    FIRST, panel_end, Path("never-written.csv"), 5_000_000)
+
 if __name__ == "__main__":
     unittest.main()

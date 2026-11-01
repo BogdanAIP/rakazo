@@ -333,8 +333,12 @@ def build(root: Path, archive_start: dt.date, archive_end: dt.date, panel_start:
         raise FileExistsError(out)
     if archive_start > panel_start - dt.timedelta(days=31):
         raise ValueError("Need at least 31 days of pre-window archives for a strict prior-30-day median")
-    if archive_end < panel_end + dt.timedelta(days=1):
-        raise ValueError("One later UTC+8 archive day required to close the final UTC calendar day")
+    # Funding absence on a billing day is known only when the following
+    # billing day is also complete, and that day's last settlement (00:00
+    # UTC two days after panel_end) lives in archive day panel_end + 2.
+    if archive_end < panel_end + dt.timedelta(days=2):
+        raise ValueError("Two later UTC+8 archive days required: one closes the final UTC day, "
+                         "one completes its funding-coverage neighbour")
     missing = [(d.isoformat(), name) for d in days(archive_start, archive_end)
                for name in MODULES if not file_at(root, name, d).exists()]
     if missing:
