@@ -1,0 +1,71 @@
+{
+  "schema": "independent_v405_funding_review_v1",
+  "reviewed_head": "b16b6f6969346a05203540357d59cef46452d5ea",
+  "followup_code_head": "89ac3632fe9b17a5d69d0ff0e3ad0e422c2ba263",
+  "full_offline_suite": {
+    "passed": 74,
+    "unittest_seconds": 58.801,
+    "bounded_run": {
+      "status": "COMPLETE",
+      "head": "b16b6f6969346a05203540357d59cef46452d5ea",
+      "timeout_seconds": 300,
+      "stages": [
+        {
+          "name": "tests",
+          "exit_code": 0,
+          "elapsed_seconds": 59.418,
+          "stderr_sha256": "2ef4049152de879b24f991d8ecc22beec8da745871284ad060ffffe99aa47484"
+        },
+        {
+          "name": "missingness",
+          "exit_code": 0,
+          "elapsed_seconds": 1.037,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "stage": "missingness"
+    }
+  },
+  "focused_postfix_tests": {
+    "passed": 7,
+    "unittest_seconds": 0.021
+  },
+  "pre_fix_counterexamples": {
+    "incorrect_numeric_zero_accepted": true,
+    "new_test_methods_failing": 2,
+    "unittest_subtest_failures": 6,
+    "wrong_sign_nonfinite_nonnumeric_or_hidden_observed_event_not_rejected": true
+  },
+  "postfix_original_source_audit_passed": true,
+  "missingness": {
+    "schema": "funding_unknown_row_breakdown_v1",
+    "panel_sha256": "d46ba79f0fc17951ed554bbc37b36f30e7bf6126a0cb94f05f17cae5dd065b39",
+    "months": {
+      "2023-10": {
+        "all_rows": 102047,
+        "all_unknown__adjacent_pattern_missing_or_irregular": 2935,
+        "all_unknown__own_pattern_missing_or_irregular": 42,
+        "eligible_rows": 1728,
+        "unknown_rows": 2977,
+        "all_unknown_share": 0.02917283212637314,
+        "eligible_unknown_share": 0
+      },
+      "2023-11": {
+        "all_rows": 3408,
+        "all_unknown__adjacent_pattern_missing_or_irregular": 21,
+        "eligible_rows": 1776,
+        "unknown_rows": 21,
+        "all_unknown_share": 0.006161971830985915,
+        "eligible_unknown_share": 0
+      }
+    },
+    "strategy_evaluations": 0,
+    "unit": "source rows, not simulated position-bars"
+  },
+  "counts_identical_to_prior_audit": true,
+  "raw_sources_or_panel_changed": false,
+  "panel_frozen": false,
+  "registered_hypotheses": 31,
+  "real_strategy_evaluations": 0,
+  "historical_funding_schedule_certified": false
+}
