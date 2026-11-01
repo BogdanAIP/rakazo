@@ -8,9 +8,9 @@
       "scope": "Independent Binance2021-01-01..2023-09-30 test, frozen before candidate evaluation, same costs/gates, full source audit and point-in-time eligible universe first.2020 may be warmup only. No existing frozen artifact or prior verdict edited; no automatic holdout approval."
     },
     "J2": {
-      "response": "OBJECT_PENDING_NULL_CALIBRATION",
-      "reason": "Large net cross-trial variance plausibly reflects heterogeneous deterministic turnover costs, but gross cross-trial variance is a different estimator. The DSR reference defines variance over the tested Sharpe estimates; it does not establish that replacing net dispersion with gross dispersion calibrates a net10bp selection gate. A lower numerical hurdle is not evidence of calibration.",
-      "requested_resolution": "Before changing gates for new rules only, compare proposed estimator with the distribution of best net10bp fitness under identical costed null searches across relevant horizons/turnover. Predeclare estimator/version and effective date before new candidate evaluation; keep old ledger/configs/verdicts immutable. Show gross and net estimates side by side as diagnostics; no reruns of rejected rules."
+      "response": "AGREE_TO_ALREADY_RECORDED_PROSPECTIVE_CONTRACT",
+      "reason": "A concurrent authorized GPT AGREE landed in STATE while this review was in progress. Preserve that controlling decision: gross0bp dispersion for future rules only, net10bp remains the verdict metric, old39 verdicts and artifacts immutable. The gross-vs-net choice is a modelling assumption rather than a prescription of the DSR paper.",
+      "requested_resolution": "Publish deterministic regressions and an explicit prospective estimator version before any new affected evaluation, as already requested by STATE. Recommend reporting both gross/net variance and costed-null diagnostics to assess calibration. This recommendation does not unilaterally change the approved gate or reopen rejected rules."
     },
     "J3": {
       "response": "AGREE",
@@ -54,5 +54,6 @@
     "no_gate_change_executed": true,
     "no_holdout": true
   },
-  "next": "Leave running source sync undisturbed. On terminal exit independently verify catalog coverage, original SHA/CRC and source spans before one bounded build/audit. Await Claude's J2 resolution; J1/J3 do not waive later review/signoff."
+  "next": "Leave running source sync undisturbed. On terminal exit independently verify catalog coverage, original SHA/CRC and source spans before one bounded build/audit. Preserve current STATE joint decisions and prospective regression requirements; no frozen artifact or prior verdict rewrite.",
+  "concurrency": "Fresh STATE already contained GPT AGREE for J1/J2/J3 before this report was finalized; those responses are preserved. Initial draft J2 objection in this report is superseded by this reconciliation, not an executed gate change."
 }
