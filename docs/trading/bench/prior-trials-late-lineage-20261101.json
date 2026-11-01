@@ -1,0 +1,410 @@
+{
+  "schema": "prior_trial_late_report_lineage_v1",
+  "mode": "READ_ONLY_ARCHIVED_REPORT_INVENTORY",
+  "records": [
+    {
+      "report_file": "stream-v31/first-development-v31.json",
+      "report_sha256": "9f8bb798383a250d0c68c9b7045f0d989dd13f056839d214588ebb274c24162a",
+      "proposal_sha": "88fd18fcb18a325ade7bf7661d68e7a595cdb31e8f6566604329ce94d8772d6f",
+      "prior_result_sha": null,
+      "evaluated_summary_ids": [
+        "absorption-exhaustion-memory",
+        "absorption-exhaustion-no-memory",
+        "absorption-release-memory",
+        "absorption-release-no-memory",
+        "execution-sequence-memory",
+        "execution-sequence-no-memory",
+        "impact-surprise-memory",
+        "impact-surprise-no-memory",
+        "original-v29-trigger",
+        "price-response-baseline",
+        "signed-flow-baseline"
+      ],
+      "summary_id_count": 11,
+      "embedded_definition_count": 10,
+      "summary_ids_without_embedded_definition": [
+        "original-v29-trigger"
+      ],
+      "embedded_programs": [
+        {
+          "id": "absorption-release-memory",
+          "role": "candidate",
+          "reported_semantic_sha": "88ba70e69d9b2bc3bac2fb34e9bd0b44d0a18b4c9aa6b7cb55619211458e82ac",
+          "reported_mechanism_sha256": "5cac2b2627f1334ec996ed67b17a9ed7279983af4b111c7bea6d5c4dd75dcf8a",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "absorption-release-no-memory",
+          "role": "ablation",
+          "reported_semantic_sha": "3c3cf00fcd5e64e85ff29175644e301ddbdcf7a93ce8b940cae901b27a9328a0",
+          "reported_mechanism_sha256": "32205e0e0d45228bf171fb6736c3993dfb7761d09a11dda7434aa5b8fe85ef53",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "absorption-exhaustion-memory",
+          "role": "candidate",
+          "reported_semantic_sha": "8822641c8bbef2a66659a5fe197ff68186ab6f00ee1b52261fe1c612dc15bbdb",
+          "reported_mechanism_sha256": "fd2448cbceff6247509570dddcde794d6c7b7797d00d89b82c48381893ac313b",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "absorption-exhaustion-no-memory",
+          "role": "ablation",
+          "reported_semantic_sha": "0da10ab9b877588e460277718280f28ddbd5d38c4c1ca75d8ab47a0cc9e90c23",
+          "reported_mechanism_sha256": "6c9fdfb2681635c0535d9cd60591e7285e81c4f343adaf2175b893cf2f403994",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "impact-surprise-memory",
+          "role": "candidate",
+          "reported_semantic_sha": "7e6f98308346fa2e4fa8a46657272df9a6ca3fd680a969681219bf02e2efef6c",
+          "reported_mechanism_sha256": "80ca7bb8c433d75e282705922c299aa052d9184324dda3d008d329aa8f0ce9f2",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "impact-surprise-no-memory",
+          "role": "ablation",
+          "reported_semantic_sha": "24def21b37b4e69b213f6d5492d244d4a299362fa0e86c0efb698655c19d0ed8",
+          "reported_mechanism_sha256": "77903979c8c8f79c28c6a45a23aac3fe0bc33c164f5a3148e9f12c3908dbac78",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "execution-sequence-memory",
+          "role": "candidate",
+          "reported_semantic_sha": "1c4ebaaecd5fd704095f543936148f30e25f14370bc9d67325d02aee8e5afa23",
+          "reported_mechanism_sha256": "5a25f99ff8637d9f3378e4b34879df23e61ca697b8f1fb3833bbc7f0a31e32c6",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "execution-sequence-no-memory",
+          "role": "ablation",
+          "reported_semantic_sha": "85fc831beabe7059d35d38b54ae669babcfe77afe431a23d750ceec9d183e638",
+          "reported_mechanism_sha256": "4cf690b5e60781eaacced8f2da556f99575ee48c9ec205b07c1dafb96710430e",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "signed-flow-baseline",
+          "role": "baseline",
+          "reported_semantic_sha": "41f47a7102eec9840e51b59ffd1d85055dc4aebdea13b4937136a0d0ef43c3e8",
+          "reported_mechanism_sha256": "788e2a5706304c0f40dff3d189156ba68887f53b1ab3b1752c248458093d0533",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "price-response-baseline",
+          "role": "baseline",
+          "reported_semantic_sha": "931c1504f5fb2917cefb18b262f434aab93b541d9f847c3429aa951a49fe526f",
+          "reported_mechanism_sha256": "71511d84e25158ae87796fa1e9ac15176c3352735fe376dd8bdb982884e4ce85",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        }
+      ],
+      "admission_protocol": null,
+      "unrestricted_prior_control_ids": [],
+      "trading_efficacy_evaluated_explicit": null,
+      "new_historical_source_cohort": null
+    },
+    {
+      "report_file": "restoration-v32/first-development-v32.json",
+      "report_sha256": "c885f95347c249a010cf8d33427c067379d59a40c8f3518f7b490ab32e1197e7",
+      "proposal_sha": "bf6e07f7e8bccbf72137cc407d85a264cef5fb054fa70cfa277453681c3b9716",
+      "prior_result_sha": null,
+      "evaluated_summary_ids": [
+        "depth-baseline",
+        "flow-baseline",
+        "fragile-flow-memory",
+        "fragile-flow-no-memory",
+        "price-response-baseline",
+        "restoration-flow-memory",
+        "restoration-flow-no-memory",
+        "restoration-transition-memory",
+        "restoration-transition-no-memory"
+      ],
+      "summary_id_count": 9,
+      "embedded_definition_count": 0,
+      "summary_ids_without_embedded_definition": [
+        "depth-baseline",
+        "flow-baseline",
+        "fragile-flow-memory",
+        "fragile-flow-no-memory",
+        "price-response-baseline",
+        "restoration-flow-memory",
+        "restoration-flow-no-memory",
+        "restoration-transition-memory",
+        "restoration-transition-no-memory"
+      ],
+      "embedded_programs": [],
+      "admission_protocol": null,
+      "unrestricted_prior_control_ids": [],
+      "trading_efficacy_evaluated_explicit": null,
+      "new_historical_source_cohort": null
+    },
+    {
+      "report_file": "rank-v33/first-development-v33.json",
+      "report_sha256": "63f5f3574d5a6d4e6065a13c26e3cf83b11a9593ac1fb44e981f102af08c9c2b",
+      "proposal_sha": "bf6e07f7e8bccbf72137cc407d85a264cef5fb054fa70cfa277453681c3b9716",
+      "prior_result_sha": "c885f95347c249a010cf8d33427c067379d59a40c8f3518f7b490ab32e1197e7",
+      "evaluated_summary_ids": [
+        "depth-baseline",
+        "flow-baseline",
+        "fragile-flow-memory",
+        "fragile-flow-no-memory",
+        "price-response-baseline",
+        "restoration-flow-memory",
+        "restoration-flow-no-memory",
+        "restoration-transition-memory",
+        "restoration-transition-no-memory"
+      ],
+      "summary_id_count": 9,
+      "embedded_definition_count": 0,
+      "summary_ids_without_embedded_definition": [
+        "depth-baseline",
+        "flow-baseline",
+        "fragile-flow-memory",
+        "fragile-flow-no-memory",
+        "price-response-baseline",
+        "restoration-flow-memory",
+        "restoration-flow-no-memory",
+        "restoration-transition-memory",
+        "restoration-transition-no-memory"
+      ],
+      "embedded_programs": [],
+      "admission_protocol": {
+        "current_sample_in_calibration": false,
+        "minimum": 60,
+        "rank_hyperparameters_searched": false,
+        "raw_v32_thresholds_used": false,
+        "tail_rank": 0.9,
+        "window": 120
+      },
+      "unrestricted_prior_control_ids": [],
+      "trading_efficacy_evaluated_explicit": null,
+      "new_historical_source_cohort": null
+    },
+    {
+      "report_file": "independent-v34/first-independent-v34.json",
+      "report_sha256": "1fedb2058c5612c5bee5e82d60ce31f7d1eb61fdc899e5890f340bda5c697272",
+      "proposal_sha": "474e31a820c42140ebe6ff207bbf06033119735fd417a1e20b03809195bdaaac",
+      "prior_result_sha": null,
+      "evaluated_summary_ids": [
+        "depth-baseline",
+        "flow-baseline",
+        "restoration-flow-no-memory"
+      ],
+      "summary_id_count": 3,
+      "embedded_definition_count": 0,
+      "summary_ids_without_embedded_definition": [
+        "depth-baseline",
+        "flow-baseline",
+        "restoration-flow-no-memory"
+      ],
+      "embedded_programs": [],
+      "admission_protocol": null,
+      "unrestricted_prior_control_ids": [],
+      "trading_efficacy_evaluated_explicit": null,
+      "new_historical_source_cohort": true
+    },
+    {
+      "report_file": "path-v35/first-development-v35.json",
+      "report_sha256": "c2fd98fc7d153b27faa5c77510f8b56d396509bb4810b3ffd6fee8bf361366f8",
+      "proposal_sha": "a31703309164fff79e338f7c0fe43a69c576afc81c2b2c01af5ea49fef0b33eb",
+      "prior_result_sha": "1fedb2058c5612c5bee5e82d60ce31f7d1eb61fdc899e5890f340bda5c697272",
+      "evaluated_summary_ids": [
+        "canonical-ofi",
+        "depth-baseline",
+        "flow-baseline",
+        "order-blind-area",
+        "price-transport",
+        "queue-follows-price",
+        "queue-leads-price",
+        "return-baseline",
+        "static-queue"
+      ],
+      "summary_id_count": 9,
+      "embedded_definition_count": 9,
+      "summary_ids_without_embedded_definition": [],
+      "embedded_programs": [
+        {
+          "id": "queue-leads-price",
+          "role": "candidate",
+          "reported_semantic_sha": null,
+          "reported_mechanism_sha256": "c8bd4d415b2cfa2f7356f25c7c9e0d51336f513f747f791101ac6c16868e4afd",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "queue-follows-price",
+          "role": "ablation",
+          "reported_semantic_sha": null,
+          "reported_mechanism_sha256": "af61891921d41bd008128bc188db2e4232b6b31c9dc1a09200a30a4f7eee0552",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "order-blind-area",
+          "role": "ablation",
+          "reported_semantic_sha": null,
+          "reported_mechanism_sha256": "7bacf955c618db52711043fe371b3fee0c3a1d490808d728c4746e906ff6f997",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "canonical-ofi",
+          "role": "baseline",
+          "reported_semantic_sha": null,
+          "reported_mechanism_sha256": "6892e686a0aec40c42b1efde7c7b2b7cbc2f4e614ef810ece24e679a7c542d29",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "static-queue",
+          "role": "baseline",
+          "reported_semantic_sha": null,
+          "reported_mechanism_sha256": "b84a1d4f000139f8265e413d730764bf8345b55c8740c998cdf241a0afc65724",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "price-transport",
+          "role": "baseline",
+          "reported_semantic_sha": null,
+          "reported_mechanism_sha256": "907bdb78603b10490a03b41e0b5d21c2b336ade851c1c7a4a7de6552e1239c4e",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "flow-baseline",
+          "role": "baseline",
+          "reported_semantic_sha": null,
+          "reported_mechanism_sha256": "e319c5a123c23c40d649805edf2ff81fd59058c925315d014c5e91bfd6569f6b",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "depth-baseline",
+          "role": "baseline",
+          "reported_semantic_sha": null,
+          "reported_mechanism_sha256": "8f37190cf4a9a77dfabfdd5060ccc4fba0905eb3a14632f263ab587ac63ba8ed",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "return-baseline",
+          "role": "baseline",
+          "reported_semantic_sha": null,
+          "reported_mechanism_sha256": "b1863e2eb63733be8544b7d54a9cc23dbbe2c985bc0bedca3fe0bb807e5d6e22",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        }
+      ],
+      "admission_protocol": null,
+      "unrestricted_prior_control_ids": [],
+      "trading_efficacy_evaluated_explicit": null,
+      "new_historical_source_cohort": null
+    },
+    {
+      "report_file": "band-v36/first-development-v36.json",
+      "report_sha256": "e51d7d6e25c33c5d2a784f8d063e3756cbac93fe80d2712fab3f5d1014f56d5c",
+      "proposal_sha": "aba7ff52141b928f1e1ec2f95f7c87e5fbed44da898530d5f33d54b883a75bfd",
+      "prior_result_sha": null,
+      "evaluated_summary_ids": [
+        "all-visible-point",
+        "band-capacity-state",
+        "canonical-ofi",
+        "depth-baseline",
+        "depth-delta-only",
+        "flow-baseline",
+        "interval-accounting",
+        "return-baseline"
+      ],
+      "summary_id_count": 8,
+      "embedded_definition_count": 8,
+      "summary_ids_without_embedded_definition": [],
+      "embedded_programs": [
+        {
+          "id": "interval-accounting",
+          "role": "candidate",
+          "reported_semantic_sha": null,
+          "reported_mechanism_sha256": "925c8ad85b65616ca97462d2cd887056fb27933b94a20cde9132194a6966030e",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "all-visible-point",
+          "role": "ablation",
+          "reported_semantic_sha": null,
+          "reported_mechanism_sha256": "ad4e35a7240770606bd6a03dc35e9ad64f90606bb41f8e083ec3e6c417eaf63a",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "depth-delta-only",
+          "role": "ablation",
+          "reported_semantic_sha": null,
+          "reported_mechanism_sha256": "c4a1538ddbe23fbe6a98aaea4543421b12ae1667b83f6c16656f4fbd343b9dcf",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "band-capacity-state",
+          "role": "baseline",
+          "reported_semantic_sha": null,
+          "reported_mechanism_sha256": "25fc96e34294ebfc1fdc96e9e0638fe5d5b7026935a156d5ab72f37158324a31",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "canonical-ofi",
+          "role": "baseline",
+          "reported_semantic_sha": null,
+          "reported_mechanism_sha256": "6892e686a0aec40c42b1efde7c7b2b7cbc2f4e614ef810ece24e679a7c542d29",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "flow-baseline",
+          "role": "baseline",
+          "reported_semantic_sha": null,
+          "reported_mechanism_sha256": "e319c5a123c23c40d649805edf2ff81fd59058c925315d014c5e91bfd6569f6b",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "depth-baseline",
+          "role": "baseline",
+          "reported_semantic_sha": null,
+          "reported_mechanism_sha256": "8f37190cf4a9a77dfabfdd5060ccc4fba0905eb3a14632f263ab587ac63ba8ed",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        },
+        {
+          "id": "return-baseline",
+          "role": "baseline",
+          "reported_semantic_sha": null,
+          "reported_mechanism_sha256": "b1863e2eb63733be8544b7d54a9cc23dbbe2c985bc0bedca3fe0bb807e5d6e22",
+          "hash_scope": "report output/state/threshold only; feature interpreter and admission protocol are separate"
+        }
+      ],
+      "admission_protocol": null,
+      "unrestricted_prior_control_ids": [
+        "canonical-ofi",
+        "depth-baseline",
+        "flow-baseline",
+        "return-baseline"
+      ],
+      "trading_efficacy_evaluated_explicit": null,
+      "new_historical_source_cohort": null
+    },
+    {
+      "report_file": "memory-v37/first-causal-readiness-v37.json",
+      "report_sha256": "425c35b51f0ee45e811322af1fb3c230e836757337fd1fecbba1ab78032302fd",
+      "proposal_sha": "19237a0f9f465b71d3963e42c5558d198c2602f8b54656ae7d41b8ec6361b892",
+      "prior_result_sha": null,
+      "evaluated_summary_ids": [],
+      "summary_id_count": 0,
+      "embedded_definition_count": 0,
+      "summary_ids_without_embedded_definition": [],
+      "embedded_programs": [],
+      "admission_protocol": null,
+      "unrestricted_prior_control_ids": [],
+      "trading_efficacy_evaluated_explicit": false,
+      "new_historical_source_cohort": null
+    }
+  ],
+  "final_prior_trials": null,
+  "freeze_usable": false,
+  "identity_warnings": [
+    "same proposal with changed admission/calibration is not automatically one rule attempt",
+    "reused original rule on new instruments/periods is not automatically a new distinct rule",
+    "embedded mechanism hashes omit feature-interpreter semantics and cannot certify cross-version equivalence",
+    "summary labels without embedded definitions need source/protocol reconciliation",
+    "readiness/causality tests are not economic strategy evaluations",
+    "unrestricted controls can reference prior reports; distinguish reuse from a new evaluation"
+  ],
+  "missing_versions": "v0,v5-v30,v38-v39 source/report reconciliation still pending; early v1-v4 inventory remains separate",
+  "old_reports_modified": false,
+  "raw_market_archives_accessed": false,
+  "new_strategy_evaluations": 0
+}
