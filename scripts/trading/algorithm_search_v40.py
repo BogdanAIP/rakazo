@@ -20,6 +20,13 @@ Programs are built from a library of causal building blocks:
            dispersion; a program may switch between two factor blends by regime.
 Each genome compiles to an ordinary bench DSL expression, so a promoted rule is
 validated by exactly the same code path as any hand-written hypothesis.
+
+Null calibration (`null`): the same search, same seed policy and budget, on the same
+search segment, except that every score is shuffled across the eligible contracts at
+each date with a fixed permutation per run. That keeps prices, costs, betas, volatility
+weights and the search's own degrees of freedom, and removes only the cross-sectional
+information in the score. A round promotes only if its best fitness beats every null
+run; otherwise the round is recorded as "no discovery" and validation is not spent.
 """
 from __future__ import annotations
 
@@ -28,6 +35,7 @@ import copy
 import json
 import math
 import random
+from array import array
 from pathlib import Path
 
 import algorithm_bench_v40 as bench
@@ -201,7 +209,7 @@ def complexity(g) -> int:
 class Evaluator:
     """Scores genomes on the search segment only, caching building blocks."""
 
-    def __init__(self, panel, cfg, ledger_path):
+    def __init__(self, panel, cfg, ledger_path, null_seed=None):
         self.cfg, self.gate = cfg, cfg["gate"]
         sb = bench.search_index(cfg, panel)
         self.panel = panel if panel.T == sb else panel.truncated(sb)
@@ -210,6 +218,26 @@ class Evaluator:
         self.cache: dict = {}
         self.leaf_cache: dict = {}
         self.seen: dict = {}
+        self.null_seed = null_seed
+        self.perms = None if null_seed is None else self._permutations(null_seed)
+
+    def _permutations(self, seed):
+        """One fixed shuffle of the eligible contracts per date, shared by every genome."""
+        rng = random.Random(f"null-{seed}")
+        out = []
+        for t in range(self.panel.T):
+            dst = [s for s in self.panel.symbols if self.panel.eligible[s][t]]
+            src = dst[:]
+            rng.shuffle(src)
+            out.append((t, dst, src))
+        return out
+
+    def _null(self, score):
+        out = {s: array("d", a) for s, a in score.items()}
+        for t, dst, src in self.perms:
+            for d, s in zip(dst, src):
+                out[d][t] = score[s][t]
+        return out
 
     def _z(self, name, sign):
         key = ("z", name)
@@ -234,6 +262,10 @@ class Evaluator:
         return out
 
     def score(self, g):
+        sc = self._score(g)
+        return sc if self.perms is None else self._null(sc)
+
+    def _score(self, g):
         if "regime" not in g:
             return self._blend(g["blend"])
         rkey = ("regime", g["regime"])
@@ -269,7 +301,8 @@ class Evaluator:
         res["steps_t"] = [p["t"] for p in sim["periods"]]
         bench.append_ledger(self.ledger_path, {
             "time_utc": bench.now_utc(), "region": "exploration", "hypothesis_id": "search",
-            "author": "claude-search", "hypothesis_sha256": bench.hypothesis_sha(hyp),
+            "author": "claude-search" if self.null_seed is None else f"claude-null-{self.null_seed}",
+            "hypothesis_sha256": bench.hypothesis_sha(hyp),
             "panel_sha256": self.panel.sha, "genome": g, "sharpe_annual_gate": res["sharpe"],
             "fitness": res["fitness"]})
         self.seen[key] = res
@@ -289,14 +322,15 @@ def _corr(a, b):
     return sum((x - ma) * (y - mb) for x, y in zip(a, b)) / math.sqrt(va * vb)
 
 
-def search(panel, cfg, ledger_path, population=60, generations=20, elite=12, seed=40, seeds=(), log=None):
+def search(panel, cfg, ledger_path, population=60, generations=20, elite=12, seed=40, seeds=(), log=None,
+           null_seed=None):
     """Only holds the validation segment can judge are searched: about 25 non-overlapping
     holds must fit into it, otherwise promote would return INSUFFICIENT_DATA."""
     global allowed_horizons
     validation_bars = (cfg["holdout_start_ts"] - cfg["search_end_ts"]) // cfg["bar_ms"]
     allowed_horizons = [h for h in HORIZONS if h * 25 <= validation_bars] or [HORIZONS[0]]
     rng = random.Random(seed)
-    ev = Evaluator(panel, cfg, ledger_path)
+    ev = Evaluator(panel, cfg, ledger_path, null_seed)
     pop = [copy.deepcopy(s) for s in seeds] + [random_genome(rng) for _ in range(population - len(seeds))]
     history = []
     for gen in range(generations):
@@ -339,6 +373,22 @@ def diverse_top(ev, k=5, max_corr=0.7, min_sharpe=0.0):
         if len(picks) == k:
             break
     return [(json.loads(p), ev.seen[p]) for p in picks]
+
+
+def null_calibration(panel, cfg, ledger_path, runs, population=60, generations=20, seed=40, log=None, first=0):
+    """Best fitness and diverse top-5 fitness of the identical search on shuffled scores."""
+    out = []
+    for k in range(first, first + runs):
+        ev, _ = search(panel, cfg, ledger_path, population, generations, seed=seed, null_seed=k)
+        top = diverse_top(ev, 5)
+        best = max(r["fitness"] for r in ev.seen.values())
+        out.append({"null_seed": k, "evaluated": len(ev.seen), "best_fitness": best,
+                    "best_sharpe": max((r["sharpe"] for r in ev.seen.values() if r["sharpe"] is not None),
+                                       default=None),
+                    "top_fitness": [r["fitness"] for _, r in top]})
+        if log:
+            log(f"null {k:2d} best fitness {best:+.2f} top {[round(r['fitness'], 2) for _, r in top]}")
+    return out
 
 
 def regime_breakdown(ev, g) -> dict:
@@ -433,6 +483,14 @@ def main(argv=None):
     p.add_argument("--promote", type=int, default=5)
     p.add_argument("--seed", type=int, default=40)
     p.add_argument("--seeds", help="JSON list of genomes proposed by an agent after reading the last report")
+    p = sub.add_parser("null")
+    for a in ("--panel", "--config", "--explore-ledger", "--out"):
+        p.add_argument(a, required=True)
+    p.add_argument("--runs", type=int, default=19)
+    p.add_argument("--first-null", type=int, default=0)
+    p.add_argument("--population", type=int, default=60)
+    p.add_argument("--generations", type=int, default=20)
+    p.add_argument("--seed", type=int, default=40)
     p = sub.add_parser("synth")
     p.add_argument("--out", required=True)
     p.add_argument("--symbols", type=int, default=40)
@@ -448,6 +506,14 @@ def main(argv=None):
         raise SystemExit("frozen config has no search/validation split")
     panel = bench.load_panel(args.panel, tradable_only=True, end_ts=frozen["search_end_ts"])
     cfg, _ = bench.load_config(args.config, panel)
+    if args.cmd == "null":
+        res = null_calibration(panel, cfg, args.explore_ledger, args.runs, args.population, args.generations,
+                               args.seed, log=print, first=args.first_null)
+        bench.write_exclusive(Path(args.out), {"search_end_utc": cfg["search_end_utc"], "seed": args.seed,
+                                               "population": args.population, "generations": args.generations,
+                                               "runs": res})
+        print(json.dumps({"null_best_fitness": sorted(r["best_fitness"] for r in res)}, indent=1))
+        return
     seeds = json.loads(Path(args.seeds).read_text()) if args.seeds else []
     ev, history = search(panel, cfg, args.explore_ledger, args.population, args.generations, seed=args.seed,
                          seeds=seeds, log=print)

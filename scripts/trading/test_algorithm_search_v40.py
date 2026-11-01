@@ -104,5 +104,34 @@ class TestDiscovery(SearchCase):
         self.assertGreater(len(bench.read_ledger(self.tmp / "explore.jsonl")), 50)
 
 
+class TestNullCalibration(SearchCase):
+    def test_null_shuffles_only_across_eligible_contracts(self):
+        ev = search.Evaluator(self.panel, self.cfg, self.tmp / "n.jsonl", null_seed=3)
+        g = {"blend": [[1, "ret10"]], "h": 5, "w": "equal"}
+        real, null = ev._score(g), ev.score(g)
+        moved = 0
+        for t in range(ev.panel.T):
+            elig = [s for s in ev.panel.symbols if ev.panel.eligible[s][t]]
+            a = sorted(repr(real[s][t]) for s in elig)
+            b = sorted(repr(null[s][t]) for s in elig)
+            self.assertEqual(a, b)
+            moved += sum(1 for s in elig if repr(real[s][t]) != repr(null[s][t]))
+            for s in ev.panel.symbols:
+                if not ev.panel.eligible[s][t]:
+                    self.assertEqual(repr(real[s][t]), repr(null[s][t]))
+        self.assertGreater(moved, 0)
+        again = search.Evaluator(self.panel, self.cfg, self.tmp / "n2.jsonl", null_seed=3).score(g)
+        self.assertTrue(all(again[s].tobytes() == null[s].tobytes() for s in ev.panel.symbols))
+
+    def test_planted_rule_beats_every_null_run(self):
+        ev, _ = search.search(self.panel, self.cfg, self.tmp / "real.jsonl", population=30, generations=6, seed=7)
+        real = max(r["fitness"] for r in ev.seen.values())
+        nulls = search.null_calibration(self.panel, self.cfg, self.tmp / "null.jsonl", 3, population=30,
+                                        generations=6, seed=7)
+        self.assertGreater(real, max(r["best_fitness"] for r in nulls))
+        authors = {e["author"] for e in bench.read_ledger(self.tmp / "null.jsonl")}
+        self.assertEqual(authors, {"claude-null-0", "claude-null-1", "claude-null-2"})
+
+
 if __name__ == "__main__":
     unittest.main()
