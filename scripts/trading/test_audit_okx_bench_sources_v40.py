@@ -31,6 +31,27 @@ class TestFundingCoverageDiagnostics(unittest.TestCase):
             self.assertFalse(result["duplicate_price_selection_performed"])
             self.assertEqual(len(hours), 1)
 
+    def test_canonical_row_string_keeps_exact_duplicate_detection(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, day = Path(td), dt.date(2023, 10, 1)
+            t = int(dt.datetime(2023, 9, 30, 16, tzinfo=dt.timezone.utc).timestamp() * 1000)
+            header = "instrument_name,open,high,low,close,vol,vol_ccy,vol_quote,open_time,confirm\n"
+            # A naive comma join of these two rows is identical; the fingerprint must still differ.
+            text = header + f'X-USDT-SWAP,1,1,1,1,"1,2",3,0,{t},0\n' + f'X-USDT-SWAP,1,1,1,1,1,"2,3",0,{t},0\n'
+            text += f"X-USDT-SWAP,1,1,1,1,1.0,3,0,{t},0\n"
+            p = audit.source.file_at(root, "candles", day)
+            p.parent.mkdir()
+            with zipfile.ZipFile(p, "w", zipfile.ZIP_DEFLATED) as z:
+                z.writestr("source.csv", text)
+            result, _ = audit.inspect_candles(root, day)
+            self.assertEqual(result["duplicate_identical_fields"], 0)
+            self.assertEqual(result["duplicate_nonidentical_fields"], 2)
+            self.assertEqual(result["duplicate_differing_fields"], {"vol": 2, "vol_ccy": 1})
+            with zipfile.ZipFile(p, "w", zipfile.ZIP_DEFLATED) as z:
+                z.writestr("source.csv", header + f"X-USDT-SWAP,1,1,1,1,0,0,0,{t},0,extra\n")
+            with self.assertRaises(ValueError):
+                audit.inspect_candles(root, day)
+
     def test_real_archive_audit_preserves_off_hour_event_and_counts(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

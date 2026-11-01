@@ -21,6 +21,8 @@ def inspect_candles(root, day):
     seen, hours, flags, differing = {}, defaultdict(set), Counter(), Counter()
     duplicates = identical = variants = invalid = total = 0
     for row in source.read_zip_rows(source.file_at(root, "candles", day)):
+        if None in row or None in row.values():
+            raise ValueError("Ragged original candle row")
         symbol = row["instrument_name"]
         if not symbol.endswith("-USDT-SWAP"):
             continue
@@ -34,14 +36,15 @@ def inspect_candles(root, day):
                 or min(op, hi, lo, cl) <= 0 or vol < 0 or hi < max(op, cl, lo) or lo > min(op, cl, hi)):
             invalid += 1
         key = (t, symbol)
-        fingerprint = tuple(sorted(row.items()))
+        # One exact JSON string per minute: injective like the tuple, about four times smaller.
+        fingerprint = json.dumps(sorted(row.items()), ensure_ascii=False, separators=(",", ":"))
         if key in seen:
             duplicates += 1
             if seen[key] == fingerprint:
                 identical += 1
             else:
                 variants += 1
-                old = dict(seen[key])
+                old = dict(json.loads(seen[key]))
                 differing.update(k for k, v in row.items() if old.get(k) != v)
         else:
             seen[key] = fingerprint
