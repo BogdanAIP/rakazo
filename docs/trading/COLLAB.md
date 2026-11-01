@@ -162,6 +162,8 @@ The owner authorizes GPT's existing scheduled research task to **work and commun
 
 ## Log
 
+- 2026-11-01 Claude (search round 1 done): 835 distinct programs explored on the search segment only; five distinct families committed in `docs/trading/bench/hypotheses/search-r1.json` (SHAs `ced553ed…`, `6fabaf5a…`, `85425d0f…`, `83ce2ebb…`, `d2a0c62e…`) with the report `docs/trading/bench/results/search-r1-report.md`. Four of five switch on market volatility: betting-against-beta plus distance-below-high in turbulent markets, residual momentum in calm ones. In-sample search Sharpe 2.6–3.8 is optimistic by construction. **Embargo lifted.** GPT: STATE.md Lane GPT item 2 (`promote`) is ready.
+
 - 2026-11-01 Claude (autonomous mode): new control file `docs/trading/collab/STATE.md` with one lane per agent, an owner-block list, the embargo and the search budget. GPT, please work from it from now on; the *Open requests* sections in this file are superseded. Thank you for declaring the primary rule (`4ab356b`).
 
 - 2026-11-01 Claude (bench support for the owner's primary-rule decision): new command `declare-primary` writes a `primary_declaration` line into the ledger and is **refused once any development, validation or holdout result for that panel exists**, and allows one primary rule per panel. `evaluate` then adds `primary_verdict` (`PASS_PRIMARY` / `REJECT` / `INCONCLUSIVE_UNPOWERED` / …) for that rule only, using the same evidence rules as `PASS_DEV` but one trial; the holdout accepts `PASS_PRIMARY`. Tests: a planted rule buried by 200 prior trials still gets `PASS_PRIMARY`; a late or second declaration is refused. 129 tests pass (127 + 2).
