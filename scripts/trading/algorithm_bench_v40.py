@@ -46,7 +46,7 @@ from statistics import NormalDist
 
 SCHEMA_HYP = "rakazo_bench_hypothesis_v1"
 SCHEMA_CONFIG = "rakazo_bench_config_v1"
-VERSION = "bench-v40.7"
+VERSION = "bench-v40.8"
 
 MAX_DEPTH = 8
 MAX_NODES = 64
@@ -409,7 +409,8 @@ def _count_nodes(node, depth=1):
 
 
 def validate_hypothesis(rec: dict) -> dict:
-    allowed = {"id", "author", "rationale", "score", "mode", "horizon_bars", "rebalance_bars", "quantile", "min_symbols"}
+    allowed = {"id", "author", "rationale", "score", "mode", "horizon_bars", "rebalance_bars", "quantile",
+               "min_symbols", "weighting", "vol_window"}
     if not isinstance(rec, dict) or not set(rec) <= allowed or not {"id", "score", "horizon_bars"} <= set(rec):
         raise ValueError("hypothesis needs id, score, horizon_bars and only known fields")
     if not isinstance(rec["id"], str) or not ID_RE.fullmatch(rec["id"]):
@@ -434,6 +435,17 @@ def validate_hypothesis(rec: dict) -> dict:
         if isinstance(r, bool) or not isinstance(r, int) or not 1 <= r <= h or h % r:
             raise ValueError("rebalance_bars must be an integer that divides horizon_bars")
         out["rebalance_bars"] = r
+    if "weighting" in rec:
+        if rec["weighting"] not in ("equal", "inverse_vol"):
+            raise ValueError("weighting must be equal or inverse_vol")
+        out["weighting"] = rec["weighting"]
+    if "vol_window" in rec:
+        n = rec["vol_window"]
+        if out.get("weighting") != "inverse_vol" or isinstance(n, bool) or not isinstance(n, int) or not 24 <= n <= MAX_WINDOW:
+            raise ValueError("vol_window needs weighting inverse_vol and an integer in 24..MAX_WINDOW")
+        out["vol_window"] = n
+    if out.get("weighting") == "inverse_vol":
+        out.setdefault("vol_window", 720)
     if out["mode"] not in ("cross_section", "time_series"):
         raise ValueError("mode must be cross_section or time_series")
     if not _finite(out["quantile"]) or not 0 < out["quantile"] <= 0.5:
@@ -446,7 +458,8 @@ def validate_hypothesis(rec: dict) -> dict:
 
 def hypothesis_sha(h: dict) -> str:
     """Identity of the testable rule; rationale/author/id do not change it."""
-    core = {k: h[k] for k in ("score", "mode", "horizon_bars", "quantile", "min_symbols", "rebalance_bars") if k in h}
+    core = {k: h[k] for k in ("score", "mode", "horizon_bars", "quantile", "min_symbols", "rebalance_bars",
+                              "weighting", "vol_window") if k in h}
     return sha256_bytes(canonical(core))
 
 
@@ -723,21 +736,25 @@ def _spearman(xs, ys):
     return num / den if den > EPS else None
 
 
-def target_weights(cohort, hyp) -> dict:
-    """cohort: list of (symbol, score) known at the decision bar."""
+def target_weights(cohort, hyp, vol=None) -> dict:
+    """cohort: list of (symbol, score) known at the decision bar.
+    Equal weighting by default. With weighting = inverse_vol (vol: symbol -> trailing
+    return std known at t) each leg is proportional to 1 / vol, so a calm contract and a
+    volatile one carry similar risk; each side still totals 0.5 gross (time series: 1)."""
+    risk = (lambda s: 1.0 / vol[s]) if hyp.get("weighting") == "inverse_vol" else (lambda s: 1.0)
     w = {}
     if hyp["mode"] == "cross_section":
         ranked = sorted(cohort, key=lambda c: (c[1], c[0]))
         k = max(1, int(hyp["quantile"] * len(ranked)))
-        for s, _ in ranked[-k:]:
-            w[s] = 0.5 / k
-        for s, _ in ranked[:k]:
-            w[s] = w.get(s, 0.0) - 0.5 / k
+        for side, picks in ((0.5, ranked[-k:]), (-0.5, ranked[:k])):
+            total = math.fsum(risk(s) for s, _ in picks)
+            for s, _ in picks:
+                w[s] = w.get(s, 0.0) + side * risk(s) / total
     else:
-        m = len(cohort)
-        for s, sc in cohort:
-            if sc:
-                w[s] = (1.0 if sc > 0 else -1.0) / m
+        live = [(s, sc) for s, sc in cohort if sc]
+        total = math.fsum(risk(s) for s, _ in cohort)
+        for s, sc in live:
+            w[s] = (1.0 if sc > 0 else -1.0) * risk(s) / total
     return w
 
 
@@ -768,6 +785,8 @@ def simulate(panel: Panel, hyp: dict, first_entry: int, last_exit: int, costs_bp
     r = hyp.get("rebalance_bars") or default_rebalance(h)
     K = h // r
     score = evaluate_expression(hyp["score"], panel)
+    inv_vol = hyp.get("weighting") == "inverse_vol"
+    vol = evaluate_expression(["std", ["field", "ret"], hyp["vol_window"]], panel) if inv_vol else None
     opens, closes, funding, elig = panel.series["open"], panel.series["close"], panel.series["funding"], panel.eligible
     pen = missing_exit_penalty_bp / 1e4
     steps, tranches = [], []  # tranche: {"legs": {sym: [weight, entry_price, last_price]}, "left": steps remaining}
@@ -780,10 +799,11 @@ def simulate(panel: Panel, hyp: dict, first_entry: int, last_exit: int, costs_bp
         new_weights, ic, n_cohort = None, None, 0
         if s + h <= last_exit:
             cohort = [(sym, score[sym][t]) for sym in panel.symbols
-                      if score[sym][t] == score[sym][t] and elig[sym][t] and closes[sym][t] == closes[sym][t]]
+                      if score[sym][t] == score[sym][t] and elig[sym][t] and closes[sym][t] == closes[sym][t]
+                      and (not inv_vol or vol[sym][t] > EPS)]
             n_cohort = len(cohort)
             if n_cohort >= hyp["min_symbols"]:
-                new_weights = target_weights(cohort, hyp)
+                new_weights = target_weights(cohort, hyp, {sym: vol[sym][t] for sym, _ in cohort} if inv_vol else None)
                 legs = {}
                 for sym, wt in new_weights.items():
                     o = opens[sym][s]

@@ -1,0 +1,491 @@
+{
+ "schema": "rakazo_bench_hypothesis_v1",
+ "hypotheses": [
+  {
+   "id": "claude2-trend-carry-7d",
+   "author": "claude",
+   "rationale": "Two documented crypto premia that are weakly correlated: 30-day momentum excluding the last day, plus funding carry (short the crowded, high-funding side). Combining them should raise the Sharpe ratio over either alone. Inverse-vol legs equalise risk across calm and volatile alts.",
+   "score": [
+    "add",
+    [
+     "clip",
+     [
+      "csz",
+      [
+       "sub",
+       [
+        "sum",
+        [
+         "field",
+         "ret"
+        ],
+        720
+       ],
+       [
+        "sum",
+        [
+         "field",
+         "ret"
+        ],
+        24
+       ]
+      ]
+     ],
+     3.0
+    ],
+    [
+     "clip",
+     [
+      "csz",
+      [
+       "neg",
+       [
+        "mean",
+        [
+         "field",
+         "funding"
+        ],
+        72
+       ]
+      ]
+     ],
+     3.0
+    ]
+   ],
+   "horizon_bars": 168,
+   "weighting": "inverse_vol",
+   "vol_window": 720
+  },
+  {
+   "id": "claude2-trend-carry-lowvol-7d",
+   "author": "claude",
+   "rationale": "Adds the low-volatility anomaly as a third, defensive component to trend plus carry.",
+   "score": [
+    "add",
+    [
+     "add",
+     [
+      "clip",
+      [
+       "csz",
+       [
+        "sub",
+        [
+         "sum",
+         [
+          "field",
+          "ret"
+         ],
+         720
+        ],
+        [
+         "sum",
+         [
+          "field",
+          "ret"
+         ],
+         24
+        ]
+       ]
+      ],
+      3.0
+     ],
+     [
+      "clip",
+      [
+       "csz",
+       [
+        "neg",
+        [
+         "mean",
+         [
+          "field",
+          "funding"
+         ],
+         72
+        ]
+       ]
+      ],
+      3.0
+     ]
+    ],
+    [
+     "clip",
+     [
+      "csz",
+      [
+       "neg",
+       [
+        "std",
+        [
+         "field",
+         "ret"
+        ],
+        720
+       ]
+      ]
+     ],
+     3.0
+    ]
+   ],
+   "horizon_bars": 168,
+   "weighting": "inverse_vol",
+   "vol_window": 720
+  },
+  {
+   "id": "claude2-trend-carry-lowvol-14d",
+   "author": "claude",
+   "rationale": "Same three-factor composite with a two-week hold: lower turnover, tests whether the premia persist.",
+   "score": [
+    "add",
+    [
+     "add",
+     [
+      "clip",
+      [
+       "csz",
+       [
+        "sub",
+        [
+         "sum",
+         [
+          "field",
+          "ret"
+         ],
+         720
+        ],
+        [
+         "sum",
+         [
+          "field",
+          "ret"
+         ],
+         24
+        ]
+       ]
+      ],
+      3.0
+     ],
+     [
+      "clip",
+      [
+       "csz",
+       [
+        "neg",
+        [
+         "mean",
+         [
+          "field",
+          "funding"
+         ],
+         72
+        ]
+       ]
+      ],
+      3.0
+     ]
+    ],
+    [
+     "clip",
+     [
+      "csz",
+      [
+       "neg",
+       [
+        "std",
+        [
+         "field",
+         "ret"
+        ],
+        720
+       ]
+      ]
+     ],
+     3.0
+    ]
+   ],
+   "horizon_bars": 336,
+   "weighting": "inverse_vol",
+   "vol_window": 720
+  },
+  {
+   "id": "claude2-carry-lowvol-7d",
+   "author": "claude",
+   "rationale": "Defensive pair without momentum: crowded, volatile contracts underperform calm, uncrowded ones.",
+   "score": [
+    "add",
+    [
+     "clip",
+     [
+      "csz",
+      [
+       "neg",
+       [
+        "mean",
+        [
+         "field",
+         "funding"
+        ],
+        72
+       ]
+      ]
+     ],
+     3.0
+    ],
+    [
+     "clip",
+     [
+      "csz",
+      [
+       "neg",
+       [
+        "std",
+        [
+         "field",
+         "ret"
+        ],
+        720
+       ]
+      ]
+     ],
+     3.0
+    ]
+   ],
+   "horizon_bars": 168,
+   "weighting": "inverse_vol",
+   "vol_window": 720
+  },
+  {
+   "id": "claude2-trend-carry-lowvol-7d-equal",
+   "author": "claude",
+   "rationale": "Ablation: the three-factor composite with equal weights, to measure what inverse-vol weighting adds.",
+   "score": [
+    "add",
+    [
+     "add",
+     [
+      "clip",
+      [
+       "csz",
+       [
+        "sub",
+        [
+         "sum",
+         [
+          "field",
+          "ret"
+         ],
+         720
+        ],
+        [
+         "sum",
+         [
+          "field",
+          "ret"
+         ],
+         24
+        ]
+       ]
+      ],
+      3.0
+     ],
+     [
+      "clip",
+      [
+       "csz",
+       [
+        "neg",
+        [
+         "mean",
+         [
+          "field",
+          "funding"
+         ],
+         72
+        ]
+       ]
+      ],
+      3.0
+     ]
+    ],
+    [
+     "clip",
+     [
+      "csz",
+      [
+       "neg",
+       [
+        "std",
+        [
+         "field",
+         "ret"
+        ],
+        720
+       ]
+      ]
+     ],
+     3.0
+    ]
+   ],
+   "horizon_bars": 168,
+   "weighting": "equal"
+  },
+  {
+   "id": "claude2-trend-skip-7d",
+   "author": "claude",
+   "rationale": "Control for the composites: 30-day momentum excluding the last day alone, inverse-vol weighted.",
+   "score": [
+    "clip",
+    [
+     "csz",
+     [
+      "sub",
+      [
+       "sum",
+       [
+        "field",
+        "ret"
+       ],
+       720
+      ],
+      [
+       "sum",
+       [
+        "field",
+        "ret"
+       ],
+       24
+      ]
+     ]
+    ],
+    3.0
+   ],
+   "horizon_bars": 168,
+   "weighting": "inverse_vol",
+   "vol_window": 720
+  },
+  {
+   "id": "claude2-carry-smoothed-7d",
+   "author": "claude",
+   "rationale": "Control: three-day average funding carry alone, inverse-vol weighted.",
+   "score": [
+    "clip",
+    [
+     "csz",
+     [
+      "neg",
+      [
+       "mean",
+       [
+        "field",
+        "funding"
+       ],
+       72
+      ]
+     ]
+    ],
+    3.0
+   ],
+   "horizon_bars": 168,
+   "weighting": "inverse_vol",
+   "vol_window": 720
+  },
+  {
+   "id": "claude2-four-factor-2d",
+   "author": "claude",
+   "rationale": "Trend, carry and low-vol plus one-day reversal, held two days: the reversal term targets liquidity overshoots that the slow factors ignore.",
+   "score": [
+    "add",
+    [
+     "add",
+     [
+      "add",
+      [
+       "clip",
+       [
+        "csz",
+        [
+         "sub",
+         [
+          "sum",
+          [
+           "field",
+           "ret"
+          ],
+          720
+         ],
+         [
+          "sum",
+          [
+           "field",
+           "ret"
+          ],
+          24
+         ]
+        ]
+       ],
+       3.0
+      ],
+      [
+       "clip",
+       [
+        "csz",
+        [
+         "neg",
+         [
+          "mean",
+          [
+           "field",
+           "funding"
+          ],
+          72
+         ]
+        ]
+       ],
+       3.0
+      ]
+     ],
+     [
+      "clip",
+      [
+       "csz",
+       [
+        "neg",
+        [
+         "std",
+         [
+          "field",
+          "ret"
+         ],
+         720
+        ]
+       ]
+      ],
+      3.0
+     ]
+    ],
+    [
+     "clip",
+     [
+      "csz",
+      [
+       "neg",
+       [
+        "sum",
+        [
+         "field",
+         "ret"
+        ],
+        24
+       ]
+      ]
+     ],
+     3.0
+    ]
+   ],
+   "horizon_bars": 48,
+   "weighting": "inverse_vol",
+   "vol_window": 720
+  }
+ ]
+}

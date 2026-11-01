@@ -16,7 +16,8 @@ import verify_panel_build_v40 as verify
 from test_okx_bench_archive_v40 import compressed
 
 HYP_DIR = Path(__file__).resolve().parents[2] / "docs" / "trading" / "bench" / "hypotheses"
-REGISTERED = ["claude-2026-10-31.json", "gpt-2026-10-31.json", "gpt-medium-horizon-2026-10-31.json"]
+REGISTERED = ["claude-2026-10-31.json", "gpt-2026-10-31.json", "gpt-medium-horizon-2026-10-31.json",
+              "claude-composites-2026-11-01.json"]
 
 
 def write_archives(root: Path, start: dt.date, end: dt.date, symbols, skip_funding=()):
@@ -106,11 +107,11 @@ class TestVerifier(unittest.TestCase):
 class TestFreezePreflight(unittest.TestCase):
     def test_registered_batches_are_stable_and_in_range(self):
         hyps = [h for f in REGISTERED for h in bench.read_hypotheses(HYP_DIR / f)]
-        self.assertEqual(len(hyps), 31)
-        self.assertEqual(len({bench.hypothesis_sha(h) for h in hyps}), 31)
-        self.assertEqual(len({h["id"] for h in hyps}), 31)
-        medium = bench.read_hypotheses(HYP_DIR / REGISTERED[2])
-        self.assertTrue(all(48 <= h["horizon_bars"] <= 2160 for h in medium))
+        self.assertEqual(len(hyps), 39)
+        self.assertEqual(len({bench.hypothesis_sha(h) for h in hyps}), 39)
+        self.assertEqual(len({h["id"] for h in hyps}), 39)
+        for f in REGISTERED[2:]:
+            self.assertTrue(all(48 <= h["horizon_bars"] <= 2160 for h in bench.read_hypotheses(HYP_DIR / f)))
 
     def test_cli_audit_then_freeze_with_trial_floor(self):
         with tempfile.TemporaryDirectory() as td:
@@ -126,9 +127,9 @@ class TestFreezePreflight(unittest.TestCase):
             cfg = json.loads((td / "cfg.json").read_text())
             gate = cfg["gate"]
             self.assertEqual(gate["prior_trials"], 200)
-            self.assertEqual(len(gate["registered_hypotheses"]), 31)
+            self.assertEqual(len(gate["registered_hypotheses"]), 39)
             self.assertEqual(gate["gate_cost_bp_per_side"], 10)
-            self.assertEqual(bench.count_trials(gate, []), 231)
+            self.assertEqual(bench.count_trials(gate, []), 239)
             self.assertEqual(len(cfg["symbols"]), 9)  # never-eligible contracts are not in the frozen universe
 
 

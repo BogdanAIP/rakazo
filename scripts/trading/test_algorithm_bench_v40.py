@@ -519,6 +519,45 @@ class TestTradableUniverse(BenchTestCase):
         self.assertAlmostEqual(z["C"][0], 1.0)
 
 
+class TestInverseVolWeighting(BenchTestCase):
+    def test_weights_are_inverse_vol_and_sides_balanced(self):
+        hyp = bench.validate_hypothesis({"id": "x", "score": ["field", "ret"], "horizon_bars": 24, "quantile": 0.5,
+                                         "min_symbols": 4, "weighting": "inverse_vol", "vol_window": 48})
+        cohort = [("A", 1.0), ("B", 2.0), ("C", 3.0), ("D", 4.0)]
+        w = bench.target_weights(cohort, hyp, {"A": 0.01, "B": 0.03, "C": 0.02, "D": 0.02})
+        self.assertAlmostEqual(w["C"] + w["D"], 0.5)
+        self.assertAlmostEqual(w["A"] + w["B"], -0.5)
+        self.assertAlmostEqual(w["A"] / w["B"], 3.0)
+        self.assertAlmostEqual(w["C"], w["D"])
+
+    def test_equal_weighting_unchanged_and_identity_distinct(self):
+        base = {"id": "x", "score": ["field", "ret"], "horizon_bars": 24, "min_symbols": 8}
+        plain = bench.validate_hypothesis(base)
+        same = bench.validate_hypothesis(dict(base, weighting="equal"))
+        inv = bench.validate_hypothesis(dict(base, weighting="inverse_vol"))
+        self.assertEqual(inv["vol_window"], 720)
+        self.assertNotEqual(bench.hypothesis_sha(plain), bench.hypothesis_sha(inv))
+        a = bench.simulate(self.null, plain, 1, self.null.T - 1, [10])
+        b = bench.simulate(self.null, same, 1, self.null.T - 1, [10])
+        self.assertEqual([p["net"] for p in a["periods"]], [p["net"] for p in b["periods"]])
+        with self.assertRaises(ValueError):
+            bench.validate_hypothesis(dict(base, vol_window=48))
+        with self.assertRaises(ValueError):
+            bench.validate_hypothesis(dict(base, weighting="inverse_vol", vol_window=10))
+
+    def test_inverse_vol_decisions_are_causal(self):
+        hyp = bench.validate_hypothesis({"id": "x", "score": ["csrank", ["sum", ["field", "ret"], 24]],
+                                         "horizon_bars": 48, "min_symbols": 8, "weighting": "inverse_vol",
+                                         "vol_window": 72})
+        full = bench.simulate(self.null, hyp, 1, self.null.T - 1, [10])
+        cut = 900
+        part = bench.simulate(self.null.truncated(cut), hyp, 1, cut - 1, [10])
+        early = {p["t"]: p["weights"] for p in full["periods"] if p["t"] + 1 + 48 <= cut - 1}
+        for p in part["periods"]:
+            if p["t"] in early:
+                self.assertEqual(p["weights"], early[p["t"]])
+
+
 class TestStaggeredTranches(BenchTestCase):
     def test_single_tranche_matches_reference_engine(self):
         """With rebalance == horizon the book engine must equal a plain non-overlapping backtest."""
