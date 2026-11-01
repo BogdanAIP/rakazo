@@ -1,0 +1,79 @@
+{
+  "schema": "finite_archive_batch_result_v1",
+  "mode": "DATA_ACQUISITION_DEVELOPMENT",
+  "source_code_head": "d55ebddc10c061391364caab6b47481f284169a8",
+  "plan_path": "docs/trading/bench/archive-batch-20261101T0537-plan.json",
+  "run": {
+    "status": "PARTIAL_AUDIT_DEFERRED_MEMORY",
+    "head": "d55ebddc10c061391364caab6b47481f284169a8",
+    "timeout_seconds": 900,
+    "stages": [
+      {
+        "name": "sync",
+        "exit_code": 0,
+        "elapsed_seconds": 345.754,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "memory_available_before": 1565679616,
+    "disk_free_before": 39947673600,
+    "stage": "sync",
+    "audit_memory_available": 1496018944,
+    "disk_free_after": 39666081792
+  },
+  "source_receipt_and_funding_checks": {
+    "schema": "finite_archive_receipt_funding_audit_v1",
+    "archive_start": "2023-11-04",
+    "archive_end": "2024-01-02",
+    "archive_dates": 60,
+    "new_original_files": 120,
+    "new_original_bytes": 281355592,
+    "all_new_original_receipts_reverified": true,
+    "private_manifest_sha256": "d0f17fbc5e7d8e28f320e1933fe56cd7dd72a50f47600105eae27eff7964d934",
+    "raw_funding_events": 26762,
+    "raw_funding_original_clocks_preserved": true,
+    "raw_off_hour_funding_events": 26436,
+    "raw_maximum_hour_offset_ms": 27000,
+    "normalization": {
+      "status": "PASS",
+      "events": 26762,
+      "inferred_known_billing_days": 8454,
+      "clock_and_coverage": {
+        "snapped_events": 26436,
+        "maximum_offset_ms": 27000,
+        "outside_window_events": 0,
+        "coverage_rule": "complete billing-day pattern I in {1,2,4,8}h; same pattern on both adjacent calendar days",
+        "observed_billing_contract_days": 9074,
+        "known_billing_contract_days": 8454,
+        "unknown_observed_billing_contract_days": 620,
+        "unknown_day_reasons": {
+          "adjacent_pattern_missing_or_different": 314,
+          "incomplete_or_irregular_pattern": 306
+        },
+        "known_days_by_interval_hours": {
+          "8": 8454
+        },
+        "schedule_provenance_certified": false,
+        "coverage_inference_uses_adjacent_days": true,
+        "coverage_caveat": "Retrospective integrity inference only; systematic omitted settlements can mimic a slower schedule; historical availability and schedule changes need provenance before freeze"
+      }
+    },
+    "full_candle_quality_audit_completed": false,
+    "reason_full_audit_deferred": "available memory below the declared1500MiB audit gate",
+    "strategy_evaluations": 0,
+    "panel_frozen": false
+  },
+  "cumulative_archive_start": "2023-10-01",
+  "cumulative_archive_end": "2024-01-02",
+  "cumulative_complete_dates": 94,
+  "cumulative_original_files": 188,
+  "cumulative_original_bytes": 418432301,
+  "full_three_year_panel": false,
+  "panel_frozen": false,
+  "candle_quality_for_new60_dates": "DEFERRED_RESOURCE; originals CRC verified by downloader and SHA receipts reverified, not equivalent to candle coverage audit",
+  "new_strategy_evaluations": 0,
+  "registered_hypotheses_unchanged": 31,
+  "initial_preflight_failed_before_network": true,
+  "other_processes_or_projects_modified": false,
+  "light_audit_reproduction": "verify each original against its private receipt; validate raw funding clocks/rates, then okx_bench_archive_v40.load_funding(root,days(2023-11-04,2024-01-02),clock_audit); no market-price panel built"
+}
