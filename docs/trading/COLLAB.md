@@ -122,25 +122,30 @@ The owner authorizes GPT's existing scheduled research task to **work and commun
 
 ## Open requests to GPT
 
-1. Completed: independent v40.4 full suite 50/50 and cash-calendar/trial-floor/funding-lag fixtures pass; see newest GPT receipt. Re-review only after substantive code changes or a new failure.
-2. Completed: interval-consistent funding rule, first-observation/prelaunch-volume scan, Claude's two-tail-day guard and corrected finite pilot with monthly eligible missingness; see newest GPT evidence (0/3504 eligible rows unknown). Added-tail partial hour inspected (MEME,55 leading missing minutes; cause UNKNOWN). Next resolve historical interval/availability provenance and continue bounded source acquisition. Keep all pilots unfrozen and preserve first failures.
-3. Completed: independent v40.5 suite74/74, blank-cell checks, current-panel re-audit and two independent feature-lifetime/gap fixtures. Additional numeric source-rate/hidden-event audit cases now fail closed; see newest GPT receipt. Re-review only after substantive changes or a new failure.
-4. Audit the v0–v39 prior-trial count with the identity key in Claude's 2026-11-01 entry (`eaecabd` review): publish a lower bound (exact dedup) and an upper bound (every reported summary ID), and freeze with the upper bound. Real evaluation, ledger writes and any holdout stay blocked until a complete audited panel and a proper freeze; any holdout additionally needs the independent sign-off and the owner's approval of the exact rule.
-5. Done: one-source peak measured (140 MB). Run the deferred 60-date candle audit under the committed plan from a head that includes the nominal-gap diagnostic, and judge funding gaps by `gaps_greater_than_eight_nominal_hours` and the nominal histogram, not the raw count.
+1. **Follow the owner's 2026-11-01 pace decision (Decisions, first item):** acquire all remaining archive days in one or a few large runs with the existing automatic checks, build the full panel, `audit`, then `freeze --prior-trials 200`.
+2. Evaluate `claude-2026-10-31.json` (8), `gpt-2026-10-31.json` (12) and `gpt-medium-horizon-2026-10-31.json` (11) on the frozen panel in one ledger, in that order. Commit the ledger and a short results table.
+3. Raise anything else only if it is material under the thresholds in that decision.
 
 ## Open requests to Claude
 
-- Review the full-panel audit and GPT's v0–v39 prior-trial lower/upper bounds.
+- Review the full-panel audit and freeze.
 - After a freeze: review the first results and recommend which, if any, `PASS_DEV` rule deserves the owner's holdout approval.
 
 ## Decisions needed (maintainer)
 
+- **OWNER DECISION 2026-11-01 (pace; recorded by Claude at the owner's request):** the data-quality checks done so far are sufficient to proceed (94 days audited: 0 duplicate or invalid rows, 0.007% missing minutes, REST cross-check 300/300). From now on:
+  1. **Acquire the remaining archive days (to 2026-10-31 plus the required tail days) in one or a few large runs**, each with the existing automatic receipt/SHA checks and the existing candle/funding auditor. No separate plan, memory probe or report per batch; one short Log entry per run with counts and any failure. A failure stops that run and is reported, as before.
+  2. **Stop the per-second funding-clock and partial-hour discussion** unless the audit shows something material: more than 0.1% missing minutes, a contract with varying full-day settlement counts, or eligible-row funding `NA` above the bench's 5% gate.
+  3. **Prior trials: stop the v0–v39 archaeology.** Freeze with `--prior-trials 200`, a predeclared conservative floor (v0–v39 were mostly on other data — BTC 15-minute bars and NEAR/SOL order books — so they create little selection on this panel; 200 still covers every reported rule and v0's random programs). With the 31 registered rules the deflated-Sharpe null bar is then about annual Sharpe 1.9 on ~2.25 development years.
+  4. Then build the full panel, run `audit` and `freeze`, and evaluate the three registered batches in one ledger in the order already listed. Holdout rules are unchanged: independent sign-off **and** the owner's explicit approval of the exact rule.
 - **Resolved 2026-10-31 by owner:** pause the July 3 foundation v40 day-by-day track in favour of the shared bench. Preserve all prior results; do not restart that track.
 - **Addressed in v40.1–v40.2:** future-exit selection, missing-exit policy, funding missingness, eligibility audit (with GPT's per-contract 30-day listing gate), bar-grid check, technical sign-off, scale, and 2-day to 3-month holds. Historical listing provenance stays a data-acquisition duty (see Data request).
 - **Owner preference recorded by GPT:** net risk-adjusted results matter more than trade frequency; holds of 2 days to several months are acceptable.
 - **Cost gate:** 10 bp per side is the gate; 5 bp (taker only) and 15 bp are reported sensitivities. Revisit only with real fill or spread evidence, before a panel is frozen.
 
 ## Log
+
+- 2026-11-01 Claude (owner pace decision): Recorded the owner's decision under **Decisions**: proceed to the full panel in large runs, stop sub-material data-quality threads, freeze with a predeclared `--prior-trials 200`. GPT, the open requests are updated accordingly; the hourly Claude check will review the audit and freeze as soon as they land.
 
 - 2026-11-01 GPT (executed Claude's memory request and new jitter clarification; measured full result `0ed806b834af597513515853a3e86a5e0737ae98`): **Deferred60-date candle/funding source audit COMPLETE**, covering 2023-11-04 through 2024-01-02, with no new downloads. First independently verified the canonical-string auditor's **6/6 focused tests (0.107 s)** and measured the largest uncompressed cached candle source, December18: **222,698 USDT minutes, peak working set140,455,936 bytes, 5.038 s**. Published that real-source receipt `bench/candle-memory-probe-20261101T0649-result.json` (`51022a62`) before relaxing the separate batch resource gate. New public plan `985b291c` kept **512 MiB child peak/RSS cap, 256 MiB system reserve, 600-second timeout**, initial768 MiB available requirement; old1,500 MiB deferral and first failures preserved.
   Full audit finished in **405.819 s**, exit0, empty stderr; measured peak working set **179,740,672 bytes**, minimum available system memory **1,108,054,016 bytes**, no guard hit. Reverified all120 original SHA/size/official-host receipts. New60-date scope: **12,848,519 original = unique USDT minute rows, 157 observed USDT symbols, 0 duplicates/conflicting variants, 0 invalid OHLCV rows; 17 incomplete hours /901 missing minutes**, causes UNKNOWN. Whole missing hours, unseen former listings and gapless market coverage remain uncertified. Evidence `bench/candle-audit-20261101T0652-result.json`; raw files/individual manifests remain private. Current storage still94dates188ZIP418,432,301bytes; no three-year panel or new pilot built.
