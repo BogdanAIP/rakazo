@@ -1,0 +1,1089 @@
+{
+ "reports": [
+  {
+   "bench": "bench-v40.9",
+   "development_end_utc": "2026-02-01T00:00:00Z",
+   "hypothesis": {
+    "author": "claude",
+    "horizon_bars": 8,
+    "id": "funding-crowding-contrarian",
+    "min_symbols": 10,
+    "mode": "cross_section",
+    "quantile": 0.2,
+    "rationale": "Persistently high funding marks crowded leveraged longs. Short the highest-funding perps and long the lowest: collects funding carry and bets on crowding unwinding.",
+    "score": [
+     "neg",
+     [
+      "csrank",
+      [
+       "field",
+       "funding"
+      ]
+     ]
+    ]
+   },
+   "hypothesis_sha256": "d77c0b6d6f5c32439ce60540ac2ada334222f3f8d6b9a3d71c043994760644f1",
+   "panel_sha256": "2262134d79daf95240c5cfbaa3ebb4caa9f1c121ce3631a8651332a5b615b5b9",
+   "power_note": "2.26 years of steps detect annual Sharpe >= 1.87 with 80% power; target 2.0; effective observations 2471",
+   "region": "development",
+   "selection": {
+    "deflated_sharpe": 0.0,
+    "expected_max_null_sharpe_annual": 1.8800484730415834,
+    "folds_positive": 0,
+    "ic_positive": false,
+    "trials_counted": 239,
+    "var_annual_sharpe_used": 0.4434439498178875
+   },
+   "sharpe_annual_gate": -5.9183841498982614,
+   "summary": {
+    "by_cost_bp_per_side": {
+     "0": {
+      "hit_rate": 0.5167948199109672,
+      "kurtosis": 5.0467530462214425,
+      "long_run_std_bp": 48.969691828569864,
+      "max_drawdown_bp": 2220.171132826007,
+      "mean_bp": 2.777704492927502,
+      "n_effective": 2471,
+      "sharpe_annual": 1.8776489986841522,
+      "sharpe_period_lr": 0.05672293186266154,
+      "skew": -0.05053517541247983,
+      "std_bp": 50.41950355963799,
+      "t_stat": 2.8196489602017074
+     },
+     "10": {
+      "hit_rate": 0.4010522055847835,
+      "kurtosis": 5.0297806371275575,
+      "long_run_std_bp": 48.92846504584413,
+      "max_drawdown_bp": 22182.99649709339,
+      "mean_bp": -8.748004600764279,
+      "n_effective": 2471,
+      "sharpe_annual": -5.9183841498982614,
+      "sharpe_period_lr": -0.17879172364323567,
+      "skew": -0.05100813566348486,
+      "std_bp": 50.41021257736033,
+      "t_stat": -8.8875853399808
+     },
+     "15": {
+      "hit_rate": 0.3516794819910967,
+      "kurtosis": 5.009224716941824,
+      "long_run_std_bp": 49.44374768850971,
+      "max_drawdown_bp": 36149.185588639266,
+      "mean_bp": -14.51085914761017,
+      "n_effective": 2471,
+      "sharpe_annual": -9.714880988578098,
+      "sharpe_period_lr": -0.29348218583726743,
+      "skew": -0.05106216926503047,
+      "std_bp": 50.479844846426644,
+      "t_stat": -14.588751197441134
+     },
+     "5": {
+      "hit_rate": 0.4573047349251315,
+      "kurtosis": 5.042325533419273,
+      "long_run_std_bp": 48.76928885930593,
+      "max_drawdown_bp": 9364.23308113991,
+      "mean_bp": -2.9851500539183884,
+      "n_effective": 2471,
+      "sharpe_annual": -2.026168145987621,
+      "sharpe_period_lr": -0.06120962851294019,
+      "skew": -0.050800960848126075,
+      "std_bp": 50.390079049236846,
+      "t_stat": -3.04267885533
+     }
+    },
+    "counts": {
+     "entry_missed": 17,
+     "missing_exits": 17,
+     "position_bars": 937352,
+     "position_bars_funding_unknown": 2785,
+     "skipped_small_cohort": 90
+    },
+    "folds": [
+     {
+      "ic_mean": 0.01315946551045936,
+      "net_mean_bp": -8.95942322687777,
+      "periods": 618
+     },
+     {
+      "ic_mean": -0.005072553006697914,
+      "net_mean_bp": -13.331370839922101,
+      "periods": 618
+     },
+     {
+      "ic_mean": -0.009229371909704744,
+      "net_mean_bp": -8.50568436632911,
+      "periods": 618
+     },
+     {
+      "ic_mean": -0.02505416038299989,
+      "net_mean_bp": -4.188161583168271,
+      "periods": 617
+     }
+    ],
+    "funding_mean_bp": 2.2551733362517568,
+    "funding_unknown_share": 0.002971135709957412,
+    "gate_mean_bp_ci95_block_bootstrap": [
+     -10.713215329235915,
+     -6.854273369157766
+    ],
+    "gross_mean_bp": 0.5681860527359814,
+    "hac_lag": 8,
+    "ic_mean": -0.006541666074133505,
+    "ic_t_stat": -2.661369705953085,
+    "penalty_mean_bp": 0.04565489606023585,
+    "periods": 2471,
+    "periods_per_year": 1095.75,
+    "power": {
+     "mde_sharpe_annual": 1.865620066102777
+    },
+    "rebalance_bars": 8,
+    "symbols_per_period_mean": 120.50748684743019,
+    "tranches": 1,
+    "turnover_mean": 1.152570909369178,
+    "years": 2.2550764316678076
+   },
+   "verdict": "REJECT"
+  },
+  {
+   "bench": "bench-v40.9",
+   "development_end_utc": "2026-02-01T00:00:00Z",
+   "hypothesis": {
+    "author": "claude",
+    "horizon_bars": 8,
+    "id": "funding-acceleration-contrarian",
+    "min_symbols": 10,
+    "mode": "cross_section",
+    "quantile": 0.2,
+    "rationale": "A fast rise in funding means leverage is being added quickly; fade it relative to peers.",
+    "score": [
+     "neg",
+     [
+      "csrank",
+      [
+       "delta",
+       [
+        "field",
+        "funding"
+       ],
+       24
+      ]
+     ]
+    ]
+   },
+   "hypothesis_sha256": "8234f750817c79a841bc686083954229d0fa0053964ecd9c4754d9d2747c681a",
+   "panel_sha256": "2262134d79daf95240c5cfbaa3ebb4caa9f1c121ce3631a8651332a5b615b5b9",
+   "power_note": "2.26 years of steps detect annual Sharpe >= 1.87 with 80% power; target 2.0; effective observations 2374",
+   "region": "development",
+   "selection": {
+    "deflated_sharpe": 0.0,
+    "expected_max_null_sharpe_annual": 6.2407748281931275,
+    "folds_positive": 0,
+    "ic_positive": false,
+    "trials_counted": 239,
+    "var_annual_sharpe_used": 4.886272314655086
+   },
+   "sharpe_annual_gate": -9.04449109453566,
+   "summary": {
+    "by_cost_bp_per_side": {
+     "0": {
+      "hit_rate": 0.49453662484823957,
+      "kurtosis": 5.4020417324379375,
+      "long_run_std_bp": 51.64090212442093,
+      "max_drawdown_bp": 3146.7738292710546,
+      "mean_bp": -0.1442823720456289,
+      "n_effective": 2385.8531895093347,
+      "sharpe_annual": -0.09248582881723674,
+      "sharpe_period_lr": -0.002793955297256473,
+      "skew": 0.0210266496553145,
+      "std_bp": 50.75364083324119,
+      "t_stat": -0.1388851543822442
+     },
+     "10": {
+      "hit_rate": 0.3630109267503035,
+      "kurtosis": 5.427253683598319,
+      "long_run_std_bp": 51.79255090259317,
+      "max_drawdown_bp": 35298.88226368309,
+      "mean_bp": -14.151279129346376,
+      "n_effective": 2373.7838550708257,
+      "sharpe_annual": -9.04449109453566,
+      "sharpe_period_lr": -0.27323000861573404,
+      "skew": 0.03662934430212202,
+      "std_bp": 50.773769930953954,
+      "t_stat": -13.582032599347889
+     },
+     "15": {
+      "hit_rate": 0.3002832861189802,
+      "kurtosis": 5.4320278965556135,
+      "long_run_std_bp": 52.142633312809885,
+      "max_drawdown_bp": 52365.51312664376,
+      "mean_bp": -21.15477750799675,
+      "n_effective": 2347.189805340307,
+      "sharpe_annual": -13.429852460361356,
+      "sharpe_period_lr": -0.4057098033596945,
+      "skew": 0.04436002488233397,
+      "std_bp": 50.82982197549001,
+      "t_stat": -20.16749112962944
+     },
+     "5": {
+      "hit_rate": 0.4273573452043707,
+      "kurtosis": 5.417243162698519,
+      "long_run_std_bp": 51.6247148512641,
+      "max_drawdown_bp": 18250.661132176534,
+      "mean_bp": -7.147780750696003,
+      "n_effective": 2386.8529329939097,
+      "sharpe_annual": -4.583205141171335,
+      "sharpe_period_lr": -0.1384565662258758,
+      "skew": 0.02884823980603689,
+      "std_bp": 50.74836087590736,
+      "t_stat": -6.882558784816158
+     }
+    },
+    "counts": {
+     "entry_missed": 12,
+     "missing_exits": 15,
+     "position_bars": 937360,
+     "position_bars_funding_unknown": 3337,
+     "skipped_small_cohort": 90
+    },
+    "folds": [
+     {
+      "ic_mean": -0.0004270415256093579,
+      "net_mean_bp": -14.794197005635905,
+      "periods": 618
+     },
+     {
+      "ic_mean": -0.010281774263436414,
+      "net_mean_bp": -17.248333863875217,
+      "periods": 618
+     },
+     {
+      "ic_mean": -0.006571820715385712,
+      "net_mean_bp": -13.25160458206019,
+      "periods": 618
+     },
+     {
+      "ic_mean": -0.005037254514478445,
+      "net_mean_bp": -11.30637766538708,
+      "periods": 617
+     }
+    ],
+    "funding_mean_bp": 0.7394980633278124,
+    "funding_unknown_share": 0.003559998293078433,
+    "gate_mean_bp_ci95_block_bootstrap": [
+     -16.241160583101784,
+     -12.084144847798754
+    ],
+    "gross_mean_bp": -0.8411929235490337,
+    "hac_lag": 8,
+    "ic_mean": -0.005579692187443083,
+    "ic_t_stat": -2.4565160258534022,
+    "penalty_mean_bp": 0.04258751182440779,
+    "periods": 2471,
+    "periods_per_year": 1095.75,
+    "power": {
+     "mde_sharpe_annual": 1.865620066102777
+    },
+    "rebalance_bars": 8,
+    "symbols_per_period_mean": 120.50627276406313,
+    "tranches": 1,
+    "turnover_mean": 1.400699675730075,
+    "years": 2.2550764316678076
+   },
+   "verdict": "REJECT"
+  },
+  {
+   "bench": "bench-v40.9",
+   "development_end_utc": "2026-02-01T00:00:00Z",
+   "hypothesis": {
+    "author": "claude",
+    "horizon_bars": 24,
+    "id": "xs-momentum-7d",
+    "min_symbols": 10,
+    "mode": "cross_section",
+    "quantile": 0.2,
+    "rationale": "Cross-sectional time-series momentum documented in crypto at weekly horizons.",
+    "score": [
+     "csrank",
+     [
+      "sum",
+      [
+       "field",
+       "ret"
+      ],
+      168
+     ]
+    ]
+   },
+   "hypothesis_sha256": "69216a09694ef090c25947c93a6964588c555bf564317aa0f63cd56ea3db31e6",
+   "panel_sha256": "2262134d79daf95240c5cfbaa3ebb4caa9f1c121ce3631a8651332a5b615b5b9",
+   "power_note": "2.25 years of steps detect annual Sharpe >= 1.87 with 80% power; target 2.0; effective observations 823",
+   "region": "development",
+   "selection": {
+    "deflated_sharpe": 0.0,
+    "expected_max_null_sharpe_annual": 12.378363781165273,
+    "folds_positive": 2,
+    "ic_positive": false,
+    "trials_counted": 239,
+    "var_annual_sharpe_used": 19.22326372006958
+   },
+   "sharpe_annual_gate": -0.38634194363544466,
+   "summary": {
+    "by_cost_bp_per_side": {
+     "0": {
+      "hit_rate": 0.5103280680437424,
+      "kurtosis": 6.2955669305470465,
+      "long_run_std_bp": 134.1988540408255,
+      "max_drawdown_bp": 3504.8878523198327,
+      "mean_bp": 3.7570687970978036,
+      "n_effective": 823,
+      "sharpe_annual": 0.5350513358329394,
+      "sharpe_period_lr": 0.02799628077267218,
+      "skew": 0.3947324802139556,
+      "std_bp": 134.8216874944814,
+      "t_stat": 0.8031566470092792
+     },
+     "10": {
+      "hit_rate": 0.488456865127582,
+      "kurtosis": 6.286081765438204,
+      "long_run_std_bp": 134.59692979929838,
+      "max_drawdown_bp": 6130.80110030299,
+      "mean_bp": -2.7208957460629875,
+      "n_effective": 823,
+      "sharpe_annual": -0.38634194363544466,
+      "sharpe_period_lr": -0.020215139751851685,
+      "skew": 0.39778382279050206,
+      "std_bp": 134.6918724019751,
+      "t_stat": -0.5799314556728354
+     },
+     "15": {
+      "hit_rate": 0.4787363304981774,
+      "kurtosis": 6.280628836264171,
+      "long_run_std_bp": 134.80405426549726,
+      "max_drawdown_bp": 7849.766326463261,
+      "mean_bp": -5.9598780176433825,
+      "n_effective": 819.9277281411307,
+      "sharpe_annual": -0.8449471188425993,
+      "sharpe_period_lr": -0.04421141522869463,
+      "skew": 0.3992746611231508,
+      "std_bp": 134.63402571806634,
+      "t_stat": -1.2683360444532412
+     },
+     "5": {
+      "hit_rate": 0.5006075334143378,
+      "kurtosis": 6.291061027933121,
+      "long_run_std_bp": 134.39518829884673,
+      "max_drawdown_bp": 4792.883015038941,
+      "mean_bp": 0.5180865255174082,
+      "n_effective": 823,
+      "sharpe_annual": 0.0736739049456685,
+      "sharpe_period_lr": 0.0038549484700699955,
+      "skew": 0.3962692355633306,
+      "std_bp": 134.75442851258046,
+      "t_stat": 0.110590671409367
+     }
+    },
+    "counts": {
+     "entry_missed": 1,
+     "missing_exits": 17,
+     "position_bars": 936936,
+     "position_bars_funding_unknown": 3103,
+     "skipped_small_cohort": 30
+    },
+    "folds": [
+     {
+      "ic_mean": -0.06907898897262707,
+      "net_mean_bp": 4.947355275732471,
+      "periods": 206
+     },
+     {
+      "ic_mean": -0.04874565688557516,
+      "net_mean_bp": -17.628824468431088,
+      "periods": 206
+     },
+     {
+      "ic_mean": -0.03149404375238623,
+      "net_mean_bp": -9.55425049916117,
+      "periods": 206
+     },
+     {
+      "ic_mean": -0.007941900378881137,
+      "net_mean_bp": 11.420785646406232,
+      "periods": 205
+     }
+    ],
+    "funding_mean_bp": 1.5046216842905809,
+    "funding_unknown_share": 0.0033118590810898504,
+    "gate_mean_bp_ci95_block_bootstrap": [
+     -11.951683017515109,
+     6.618158627629327
+    ],
+    "gross_mean_bp": 2.3880225883325585,
+    "hac_lag": 6,
+    "ic_mean": -0.03935326808924891,
+    "ic_t_stat": -6.152618897226091,
+    "penalty_mean_bp": 0.135575475525336,
+    "periods": 823,
+    "periods_per_year": 365.25,
+    "power": {
+     "mde_sharpe_annual": 1.8663755308294696
+    },
+    "rebalance_bars": 24,
+    "symbols_per_period_mean": 120.53341433778859,
+    "tranches": 1,
+    "turnover_mean": 0.647796454316079,
+    "years": 2.2532511978097194
+   },
+   "verdict": "REJECT"
+  },
+  {
+   "bench": "bench-v40.9",
+   "development_end_utc": "2026-02-01T00:00:00Z",
+   "hypothesis": {
+    "author": "claude",
+    "horizon_bars": 24,
+    "id": "xs-reversal-1d",
+    "min_symbols": 10,
+    "mode": "cross_section",
+    "quantile": 0.2,
+    "rationale": "Daily cross-sectional overreaction reverses; liquidity providers are paid to absorb it.",
+    "score": [
+     "neg",
+     [
+      "csrank",
+      [
+       "sum",
+       [
+        "field",
+        "ret"
+       ],
+       24
+      ]
+     ]
+    ]
+   },
+   "hypothesis_sha256": "8502435ad6f5a9b5f5e08906abaf2e78a129e5b18b1f8a6b5b9bd9442919543c",
+   "panel_sha256": "2262134d79daf95240c5cfbaa3ebb4caa9f1c121ce3631a8651332a5b615b5b9",
+   "power_note": "2.25 years of steps detect annual Sharpe >= 1.87 with 80% power; target 2.0; effective observations 823",
+   "region": "development",
+   "selection": {
+    "deflated_sharpe": 0.0,
+    "expected_max_null_sharpe_annual": 10.81213486065706,
+    "folds_positive": 0,
+    "ic_positive": true,
+    "trials_counted": 239,
+    "var_annual_sharpe_used": 14.666400778924382
+   },
+   "sharpe_annual_gate": -2.395456165537729,
+   "summary": {
+    "by_cost_bp_per_side": {
+     "0": {
+      "hit_rate": 0.5103280680437424,
+      "kurtosis": 4.560664377917665,
+      "long_run_std_bp": 111.99402364946145,
+      "max_drawdown_bp": 3097.874095568274,
+      "mean_bp": 1.4837494772482145,
+      "n_effective": 823,
+      "sharpe_annual": 0.25319833370957884,
+      "sharpe_period_lr": 0.01324847013169483,
+      "skew": -0.1857448223059096,
+      "std_bp": 123.22857806934319,
+      "t_stat": 0.38007180080009545
+     },
+     "10": {
+      "hit_rate": 0.4422843256379101,
+      "kurtosis": 4.564098634501064,
+      "long_run_std_bp": 111.10147549395064,
+      "max_drawdown_bp": 12336.546722889545,
+      "mean_bp": -13.925568774155161,
+      "n_effective": 823,
+      "sharpe_annual": -2.395456165537729,
+      "sharpe_period_lr": -0.12534098860742307,
+      "skew": -0.18844531568380934,
+      "std_bp": 123.30679643827193,
+      "t_stat": -3.5957793451275495
+     },
+     "15": {
+      "hit_rate": 0.4264884568651276,
+      "kurtosis": 4.565241059390079,
+      "long_run_std_bp": 110.66290179535592,
+      "max_drawdown_bp": 18491.280872766703,
+      "mean_bp": -21.630227899856852,
+      "n_effective": 823,
+      "sharpe_annual": -3.7355465570537754,
+      "sharpe_period_lr": -0.19546051611638277,
+      "skew": -0.1896994936472318,
+      "std_bp": 123.3548293217316,
+      "t_stat": -5.607366707794068
+     },
+     "5": {
+      "hit_rate": 0.4738760631834751,
+      "kurtosis": 4.562573166375801,
+      "long_run_std_bp": 111.5452031991609,
+      "max_drawdown_bp": 6295.254356898624,
+      "mean_bp": -6.220909648453475,
+      "n_effective": 823,
+      "sharpe_annual": -1.0658549515316,
+      "sharpe_period_lr": -0.055770301815186184,
+      "skew": -0.18712688472049846,
+      "std_bp": 123.26471065638505,
+      "t_stat": -1.59993711208609
+     }
+    },
+    "counts": {
+     "missing_exits": 17,
+     "position_bars": 936960,
+     "position_bars_funding_unknown": 2714,
+     "skipped_small_cohort": 30
+    },
+    "folds": [
+     {
+      "ic_mean": 0.05097018732589292,
+      "net_mean_bp": -12.771372394428822,
+      "periods": 206
+     },
+     {
+      "ic_mean": 0.039225226740476384,
+      "net_mean_bp": -7.483029349352687,
+      "periods": 206
+     },
+     {
+      "ic_mean": 0.02826535870171478,
+      "net_mean_bp": -15.639718006644024,
+      "periods": 206
+     },
+     {
+      "ic_mean": 0.04037935943284275,
+      "net_mean_bp": -19.83685089044897,
+      "periods": 205
+     }
+    ],
+    "funding_mean_bp": -0.6676578575200092,
+    "funding_unknown_share": 0.002896601775956284,
+    "gate_mean_bp_ci95_block_bootstrap": [
+     -21.256327598898867,
+     -6.447935017354088
+    ],
+    "gross_mean_bp": 2.2873025193610665,
+    "hac_lag": 6,
+    "ic_mean": 0.03970921977394664,
+    "ic_t_stat": 6.6869369851914735,
+    "penalty_mean_bp": 0.13589518459284303,
+    "periods": 823,
+    "periods_per_year": 365.25,
+    "power": {
+     "mde_sharpe_annual": 1.8663755308294696
+    },
+    "rebalance_bars": 24,
+    "symbols_per_period_mean": 120.54070473876064,
+    "tranches": 1,
+    "turnover_mean": 1.5409318251403377,
+    "years": 2.2532511978097194
+   },
+   "verdict": "REJECT"
+  },
+  {
+   "bench": "bench-v40.9",
+   "development_end_utc": "2026-02-01T00:00:00Z",
+   "hypothesis": {
+    "author": "claude",
+    "horizon_bars": 1,
+    "id": "xs-reversal-1h",
+    "min_symbols": 10,
+    "mode": "cross_section",
+    "quantile": 0.2,
+    "rationale": "Hourly reversal. Expected to have positive IC but fail after costs; a check that the cost model bites.",
+    "score": [
+     "neg",
+     [
+      "csrank",
+      [
+       "field",
+       "ret"
+      ]
+     ]
+    ]
+   },
+   "hypothesis_sha256": "386c4f16052280f1e25fc067584836cd170aeed8152cbc19032e896106b57d7b",
+   "panel_sha256": "2262134d79daf95240c5cfbaa3ebb4caa9f1c121ce3631a8651332a5b615b5b9",
+   "power_note": "2.26 years of steps detect annual Sharpe >= 1.87 with 80% power; target 2.0; effective observations 19774",
+   "region": "development",
+   "selection": {
+    "deflated_sharpe": 0.0,
+    "expected_max_null_sharpe_annual": 67.21298152737808,
+    "folds_positive": 0,
+    "ic_positive": true,
+    "trials_counted": 239,
+    "var_annual_sharpe_used": 566.7701407061792
+   },
+   "sharpe_annual_gate": -57.150983149894095,
+   "summary": {
+    "by_cost_bp_per_side": {
+     "0": {
+      "hit_rate": 0.5097602912915951,
+      "kurtosis": 27.016713532656762,
+      "long_run_std_bp": 25.953187936686597,
+      "max_drawdown_bp": 6792.954662043471,
+      "mean_bp": -0.011769195720611011,
+      "n_effective": 19774,
+      "sharpe_annual": -0.04245773349851899,
+      "sharpe_period_lr": -0.00045347784439130317,
+      "skew": -1.067774326178955,
+      "std_bp": 26.464227310936526,
+      "t_stat": -0.06376807963209889
+     },
+     "10": {
+      "hit_rate": 0.23541013452007686,
+      "kurtosis": 26.38308116335546,
+      "long_run_std_bp": 24.85782270980005,
+      "max_drawdown_bp": 300054.0832773259,
+      "mean_bp": -15.17351012806103,
+      "n_effective": 19774,
+      "sharpe_annual": -57.150983149894095,
+      "sharpe_period_lr": -0.6104118733648769,
+      "skew": -1.0347065634793107,
+      "std_bp": 26.524330521602185,
+      "t_stat": -85.83615149127809
+     },
+     "15": {
+      "hit_rate": 0.14731465560837465,
+      "kurtosis": 25.95167932053864,
+      "long_run_std_bp": 24.342242961950568,
+      "max_drawdown_bp": 449945.1218703254,
+      "mean_bp": -22.754380594231243,
+      "n_effective": 19774,
+      "sharpe_annual": -87.51956657436621,
+      "sharpe_period_lr": -0.9347692663243351,
+      "skew": -1.014008628038413,
+      "std_bp": 26.590761197167968,
+      "t_stat": -131.44730608089665
+     },
+     "5": {
+      "hit_rate": 0.3577930615960352,
+      "kurtosis": 26.739618251587572,
+      "long_run_std_bp": 25.39525691458871,
+      "max_drawdown_bp": 150167.49155741703,
+      "mean_bp": -7.592639661890821,
+      "n_effective": 19774,
+      "sharpe_annual": -27.992450030126353,
+      "sharpe_period_lr": -0.2989786513059101,
+      "skew": -1.0526726126233894,
+      "std_bp": 26.48211393234873,
+      "t_stat": -42.04239453057266
+     }
+    },
+    "counts": {
+     "entry_missed": 7,
+     "missing_exits": 12,
+     "position_bars": 937613,
+     "position_bars_funding_unknown": 2698,
+     "skipped_small_cohort": 720
+    },
+    "folds": [
+     {
+      "ic_mean": 0.025652399730154714,
+      "net_mean_bp": -15.759206503941106,
+      "periods": 4944
+     },
+     {
+      "ic_mean": 0.029499432866454095,
+      "net_mean_bp": -15.251682583397761,
+      "periods": 4944
+     },
+     {
+      "ic_mean": 0.030601038881978813,
+      "net_mean_bp": -14.096675078748445,
+      "periods": 4944
+     },
+     {
+      "ic_mean": 0.029290603104419985,
+      "net_mean_bp": -15.586643471295663,
+      "periods": 4942
+     }
+    ],
+    "funding_mean_bp": -0.03318247579079147,
+    "funding_unknown_share": 0.002877519829609871,
+    "gate_mean_bp_ci95_block_bootstrap": [
+     -15.522379485089898,
+     -14.81833317083096
+    ],
+    "gross_mean_bp": 0.025599598759845403,
+    "hac_lag": 12,
+    "ic_mean": 0.028760815066864606,
+    "ic_t_stat": 22.387931427391965,
+    "penalty_mean_bp": 0.004186318689664938,
+    "periods": 19774,
+    "periods_per_year": 8766.0,
+    "power": {
+     "mde_sharpe_annual": 1.8653370032513155
+    },
+    "rebalance_bars": 1,
+    "symbols_per_period_mean": 120.49069485182562,
+    "tranches": 1,
+    "turnover_mean": 1.5161740932340422,
+    "years": 2.2557608943645904
+   },
+   "verdict": "REJECT"
+  },
+  {
+   "bench": "bench-v40.9",
+   "development_end_utc": "2026-02-01T00:00:00Z",
+   "hypothesis": {
+    "author": "claude",
+    "horizon_bars": 24,
+    "id": "oi-confirmed-trend",
+    "min_symbols": 10,
+    "mode": "cross_section",
+    "quantile": 0.2,
+    "rationale": "Price moves accompanied by rising open interest reflect new positioning and persist; moves on falling OI are covering and fade.",
+    "score": [
+     "csrank",
+     [
+      "mul",
+      [
+       "sum",
+       [
+        "field",
+        "ret"
+       ],
+       24
+      ],
+      [
+       "sign",
+       [
+        "pct",
+        [
+         "field",
+         "oi"
+        ],
+        24
+       ]
+      ]
+     ]
+    ]
+   },
+   "hypothesis_sha256": "a3c9b7879c0a988e632e1bd3e672742ab4552d68f945dccabb05cce163ad56a8",
+   "panel_sha256": "2262134d79daf95240c5cfbaa3ebb4caa9f1c121ce3631a8651332a5b615b5b9",
+   "region": "development",
+   "sharpe_annual_gate": null,
+   "summary": {
+    "counts": {
+     "skipped_small_cohort": 853
+    },
+    "funding_unknown_share": 0.0,
+    "periods": 0,
+    "periods_per_year": 365.25,
+    "rebalance_bars": 24,
+    "tranches": 1,
+    "years": 0.0
+   },
+   "verdict": "INSUFFICIENT_DATA"
+  },
+  {
+   "bench": "bench-v40.9",
+   "development_end_utc": "2026-02-01T00:00:00Z",
+   "hypothesis": {
+    "author": "claude",
+    "horizon_bars": 24,
+    "id": "low-volatility",
+    "min_symbols": 10,
+    "mode": "cross_section",
+    "quantile": 0.2,
+    "rationale": "Low-volatility anomaly: lottery-like high-volatility perps are overpriced relative to calm ones.",
+    "score": [
+     "neg",
+     [
+      "csrank",
+      [
+       "std",
+       [
+        "field",
+        "ret"
+       ],
+       168
+      ]
+     ]
+    ]
+   },
+   "hypothesis_sha256": "315184824f436b55bc66be0c9372d5e54f88d1c2fc6113b5cb0e992c26feef10",
+   "panel_sha256": "2262134d79daf95240c5cfbaa3ebb4caa9f1c121ce3631a8651332a5b615b5b9",
+   "power_note": "2.25 years of steps detect annual Sharpe >= 1.87 with 80% power; target 2.0; effective observations 823",
+   "region": "development",
+   "selection": {
+    "deflated_sharpe": 0.0,
+    "expected_max_null_sharpe_annual": 62.45251917330871,
+    "folds_positive": 2,
+    "ic_positive": true,
+    "trials_counted": 239,
+    "var_annual_sharpe_used": 489.32855860042486
+   },
+   "sharpe_annual_gate": -0.3000756017498261,
+   "summary": {
+    "by_cost_bp_per_side": {
+     "0": {
+      "hit_rate": 0.5261239368165249,
+      "kurtosis": 4.857033328887794,
+      "long_run_std_bp": 158.62621015990615,
+      "max_drawdown_bp": 4551.020122747021,
+      "mean_bp": 0.06288200132598504,
+      "n_effective": 823,
+      "sharpe_annual": 0.007576114320295628,
+      "sharpe_period_lr": 0.0003964162118138967,
+      "skew": -0.5712641340578765,
+      "std_bp": 164.87911517334285,
+      "t_stat": 0.011372378998690133
+     },
+     "10": {
+      "hit_rate": 0.5224787363304981,
+      "kurtosis": 4.861456978758342,
+      "long_run_std_bp": 158.54009428986305,
+      "max_drawdown_bp": 4640.684578055849,
+      "mean_bp": -2.4892853632951333,
+      "n_effective": 823,
+      "sharpe_annual": -0.3000756017498261,
+      "sharpe_period_lr": -0.015701298617521366,
+      "skew": -0.5717730708220825,
+      "std_bp": 164.86039160374224,
+      "t_stat": -0.4504384869453586
+     },
+     "15": {
+      "hit_rate": 0.5176184690157959,
+      "kurtosis": 4.863520434182225,
+      "long_run_std_bp": 158.50088818474575,
+      "max_drawdown_bp": 4969.839291992141,
+      "mean_bp": -3.7653690456056927,
+      "n_effective": 823,
+      "sharpe_annual": -0.4540157930254819,
+      "sharpe_period_lr": -0.023756138459090824,
+      "skew": -0.5719876986790556,
+      "std_bp": 164.85372699463343,
+      "t_stat": -0.6815155436402076
+     },
+     "5": {
+      "hit_rate": 0.5249088699878494,
+      "kurtosis": 4.859294242150292,
+      "long_run_std_bp": 158.5818689580216,
+      "max_drawdown_bp": 4595.852350401435,
+      "mean_bp": -1.2132016809845743,
+      "n_effective": 823,
+      "sharpe_annual": -0.14620916059897546,
+      "sharpe_period_lr": -0.007650317712586186,
+      "skew": -0.5715320488551571,
+      "std_bp": 164.86885442227612,
+      "t_stat": -0.21947213533428034
+     }
+    },
+    "counts": {
+     "entry_missed": 1,
+     "missing_exits": 15,
+     "position_bars": 936936,
+     "position_bars_funding_unknown": 2414,
+     "skipped_small_cohort": 30
+    },
+    "folds": [
+     {
+      "ic_mean": 0.08036827947236276,
+      "net_mean_bp": -12.267329407370816,
+      "periods": 206
+     },
+     {
+      "ic_mean": 0.08655879050750374,
+      "net_mean_bp": 1.2757310716719221,
+      "periods": 206
+     },
+     {
+      "ic_mean": 0.0895549358771135,
+      "net_mean_bp": 2.4920273661002503,
+      "periods": 206
+     },
+     {
+      "ic_mean": 0.1054624383851246,
+      "net_mean_bp": -1.4525377280710934,
+      "periods": 205
+     }
+    ],
+    "funding_mean_bp": -2.852830491796024,
+    "funding_unknown_share": 0.002576483345714115,
+    "gate_mean_bp_ci95_block_bootstrap": [
+     -13.726411827465812,
+     7.44470853102004
+    ],
+    "gross_mean_bp": 3.0362920772932984,
+    "hac_lag": 6,
+    "ic_mean": 0.09046791382197863,
+    "ic_t_stat": 12.832543679215929,
+    "penalty_mean_bp": 0.12057958417128993,
+    "periods": 823,
+    "periods_per_year": 365.25,
+    "power": {
+     "mde_sharpe_annual": 1.8663755308294696
+    },
+    "rebalance_bars": 24,
+    "symbols_per_period_mean": 120.53341433778859,
+    "tranches": 1,
+    "turnover_mean": 0.25521673646211185,
+    "years": 2.2532511978097194
+   },
+   "verdict": "REJECT"
+  },
+  {
+   "bench": "bench-v40.9",
+   "development_end_utc": "2026-02-01T00:00:00Z",
+   "hypothesis": {
+    "author": "claude",
+    "horizon_bars": 24,
+    "id": "volume-shock-reversal",
+    "min_symbols": 10,
+    "mode": "cross_section",
+    "quantile": 0.2,
+    "rationale": "Returns on abnormally high own-volume are more likely liquidity shocks and partially reverse.",
+    "score": [
+     "neg",
+     [
+      "csrank",
+      [
+       "mul",
+       [
+        "sum",
+        [
+         "field",
+         "ret"
+        ],
+        24
+       ],
+       [
+        "z",
+        [
+         "log1p",
+         [
+          "field",
+          "volume"
+         ]
+        ],
+        168
+       ]
+      ]
+     ]
+    ]
+   },
+   "hypothesis_sha256": "07aa6f6fc2905f9538feda7eb10fe663e1273109f1e21633c50520492d847400",
+   "panel_sha256": "2262134d79daf95240c5cfbaa3ebb4caa9f1c121ce3631a8651332a5b615b5b9",
+   "power_note": "2.25 years of steps detect annual Sharpe >= 1.87 with 80% power; target 2.0; effective observations 823",
+   "region": "development",
+   "selection": {
+    "deflated_sharpe": 0.0,
+    "expected_max_null_sharpe_annual": 57.979473542345644,
+    "folds_positive": 0,
+    "ic_positive": true,
+    "trials_counted": 239,
+    "var_annual_sharpe_used": 421.74425526853366
+   },
+   "sharpe_annual_gate": -2.643577824905008,
+   "summary": {
+    "by_cost_bp_per_side": {
+     "0": {
+      "hit_rate": 0.5151883353584447,
+      "kurtosis": 4.930112981300293,
+      "long_run_std_bp": 104.0050183505029,
+      "max_drawdown_bp": 2595.613580736019,
+      "mean_bp": 1.2970736275110948,
+      "n_effective": 823,
+      "sharpe_annual": 0.2383446711664613,
+      "sharpe_period_lr": 0.012471260022664313,
+      "skew": -0.15638750178742472,
+      "std_bp": 105.98912495857152,
+      "t_stat": 0.35777521539793794
+     },
+     "10": {
+      "hit_rate": 0.4459295261239368,
+      "kurtosis": 4.936847994861292,
+      "long_run_std_bp": 103.63528098633256,
+      "max_drawdown_bp": 11863.238177915566,
+      "mean_bp": -14.33522841029143,
+      "n_effective": 823,
+      "sharpe_annual": -2.643577824905008,
+      "sharpe_period_lr": -0.13832382441440924,
+      "skew": -0.15957985224571836,
+      "std_bp": 105.9968033495362,
+      "t_stat": -3.9682306346427376
+     },
+     "15": {
+      "hit_rate": 0.40583232077764275,
+      "kurtosis": 4.9396685144706645,
+      "long_run_std_bp": 103.45865267637143,
+      "max_drawdown_bp": 18230.58527022559,
+      "mean_bp": -22.151379429192694,
+      "n_effective": 823,
+      "sharpe_annual": -4.091938238490084,
+      "sharpe_period_lr": -0.21410852409304354,
+      "skew": -0.1611291070937423,
+      "std_bp": 106.00870173548853,
+      "t_stat": -6.142340323809408
+     },
+     "5": {
+      "hit_rate": 0.479951397326853,
+      "kurtosis": 4.933662594052287,
+      "long_run_std_bp": 103.8174125148357,
+      "max_drawdown_bp": 5760.318733105011,
+      "mean_bp": -6.519077391390167,
+      "n_effective": 823,
+      "sharpe_annual": -1.2000823501512707,
+      "sharpe_period_lr": -0.06279368011082513,
+      "skew": -0.15799899217614358,
+      "std_bp": 105.99027742643922,
+      "t_stat": -1.8014236241126913
+     }
+    },
+    "counts": {
+     "entry_missed": 1,
+     "missing_exits": 13,
+     "position_bars": 936936,
+     "position_bars_funding_unknown": 2897,
+     "skipped_small_cohort": 30
+    },
+    "folds": [
+     {
+      "ic_mean": 0.041939964343484334,
+      "net_mean_bp": -13.444871340853815,
+      "periods": 206
+     },
+     {
+      "ic_mean": 0.016405387080402175,
+      "net_mean_bp": -9.720112795955611,
+      "periods": 206
+     },
+     {
+      "ic_mean": 0.02506310668443106,
+      "net_mean_bp": -17.026720145963413,
+      "periods": 206
+     },
+     {
+      "ic_mean": 0.009930772850657124,
+      "net_mean_bp": -17.16293609472508,
+      "periods": 205
+     }
+    ],
+    "funding_mean_bp": -0.724779269750403,
+    "funding_unknown_share": 0.0030919934766088612,
+    "gate_mean_bp_ci95_block_bootstrap": [
+     -21.21462008346836,
+     -7.435279224801419
+    ],
+    "gross_mean_bp": 2.1258183180883132,
+    "hac_lag": 6,
+    "ic_mean": 0.023351094537907808,
+    "ic_t_stat": 4.883272572636373,
+    "penalty_mean_bp": 0.10396542082681541,
+    "periods": 823,
+    "periods_per_year": 365.25,
+    "power": {
+     "mde_sharpe_annual": 1.8663755308294696
+    },
+    "rebalance_bars": 24,
+    "symbols_per_period_mean": 120.53341433778859,
+    "tranches": 1,
+    "turnover_mean": 1.5632302037802523,
+    "years": 2.2532511978097194
+   },
+   "verdict": "REJECT"
+  }
+ ]
+}
