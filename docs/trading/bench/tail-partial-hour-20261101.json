@@ -1,0 +1,42 @@
+{
+  "schema": "partial_hour_geometry_v1",
+  "mode": "DATA_QUALITY_DEVELOPMENT",
+  "source_quality_sha256": "18b8db9202cf24be375a7d58e622090744f740f39615e8f81a1c63e727f05eb0",
+  "archive_days_inspected": [
+    "2023-11-03"
+  ],
+  "cases": [
+    {
+      "archive_date": "2023-11-03",
+      "symbol": "MEME-USDT-SWAP",
+      "hour_utc": "2023-11-03T08:00:00+00:00",
+      "first_minute": 55,
+      "last_minute": 59,
+      "observed_minutes": 5,
+      "missing_minutes": 55,
+      "leading_missing": 55,
+      "trailing_missing": 0,
+      "internal_missing": 0,
+      "cause": "UNKNOWN",
+      "previous_hour_in_same_archive": false,
+      "next_hour_in_same_archive": true
+    }
+  ],
+  "missing_minutes": 55,
+  "internal_missing": 0,
+  "leading_missing": 55,
+  "trailing_missing": 0,
+  "sources_changed": false,
+  "cause_certified": false,
+  "real_strategy_evaluations": 0,
+  "freeze_approved": false,
+  "run": {
+    "status": "COMPLETE",
+    "head": "89ac3632fe9b17a5d69d0ff0e3ad0e422c2ba263",
+    "timeout_seconds": 60,
+    "exit_code": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "expected_totals_provenance": "derived difference of published34-date versus33-date builder audits:1 incomplete hour,55 missing minutes",
+  "all_history_first_observation_certified": false
+}
