@@ -1,0 +1,102 @@
+{
+  "schema": "listing_boundary_observation_v1",
+  "mode": "DATA_QUALITY_DEVELOPMENT",
+  "archive_start": "2023-10-01",
+  "archive_end": "2023-11-02",
+  "cases": [
+    {
+      "symbol": "BIGTIME-USDT-SWAP",
+      "first_archived_minute_utc": "2023-10-12T12:55:00+00:00",
+      "case_is_first_archived_minute": true,
+      "cause": "UNKNOWN",
+      "announced_enablement_utc": "2023-10-12T13:00:00+00:00",
+      "first_observation_same_utc_day_as_announcement": true,
+      "preannouncement_distinct_minutes": 5,
+      "preannouncement_positive_volume_minutes": 5,
+      "preannouncement_sum_vol_quote": "12004.16440000"
+    },
+    {
+      "symbol": "FRONT-USDT-SWAP",
+      "first_archived_minute_utc": "2023-10-09T03:55:00+00:00",
+      "case_is_first_archived_minute": true,
+      "cause": "UNKNOWN"
+    },
+    {
+      "symbol": "GAS-USDT-SWAP",
+      "first_archived_minute_utc": "2023-10-24T09:57:00+00:00",
+      "case_is_first_archived_minute": true,
+      "cause": "UNKNOWN"
+    },
+    {
+      "symbol": "ORBS-USDT-SWAP",
+      "first_archived_minute_utc": "2023-10-17T03:56:00+00:00",
+      "case_is_first_archived_minute": true,
+      "cause": "UNKNOWN"
+    },
+    {
+      "symbol": "RACA-USDT-SWAP",
+      "first_archived_minute_utc": "2023-10-24T08:07:00+00:00",
+      "case_is_first_archived_minute": true,
+      "cause": "UNKNOWN"
+    },
+    {
+      "symbol": "RNDR-USDT-SWAP",
+      "first_archived_minute_utc": "2023-10-09T07:56:00+00:00",
+      "case_is_first_archived_minute": true,
+      "cause": "UNKNOWN"
+    },
+    {
+      "symbol": "TIA-USDT-SWAP",
+      "first_archived_minute_utc": "2023-10-31T18:25:00+00:00",
+      "case_is_first_archived_minute": true,
+      "cause": "UNKNOWN",
+      "announced_enablement_utc": "2023-10-31T18:30:00+00:00",
+      "first_observation_same_utc_day_as_announcement": true,
+      "preannouncement_distinct_minutes": 5,
+      "preannouncement_positive_volume_minutes": 4,
+      "preannouncement_sum_vol_quote": "7845.29500000"
+    },
+    {
+      "symbol": "VRA-USDT-SWAP",
+      "first_archived_minute_utc": "2023-10-06T07:57:00+00:00",
+      "case_is_first_archived_minute": true,
+      "cause": "UNKNOWN"
+    },
+    {
+      "symbol": "WAXP-USDT-SWAP",
+      "first_archived_minute_utc": "2023-10-19T03:55:00+00:00",
+      "case_is_first_archived_minute": true,
+      "cause": "UNKNOWN"
+    },
+    {
+      "symbol": "WSM-USDT-SWAP",
+      "first_archived_minute_utc": "2023-10-06T03:56:00+00:00",
+      "case_is_first_archived_minute": true,
+      "cause": "UNKNOWN",
+      "announced_enablement_utc": "2023-10-06T04:00:00+00:00",
+      "first_observation_same_utc_day_as_announcement": true,
+      "preannouncement_distinct_minutes": 4,
+      "preannouncement_positive_volume_minutes": 4,
+      "preannouncement_sum_vol_quote": "5509.26900000"
+    }
+  ],
+  "volume_unit": "source vol_quote reported USDT; exact decimal sum, duplicate minute fields counted once",
+  "execution_provenance_certified": false,
+  "interpretation": "Positive reported candle volume is not independently verified first execution; zero does not identify indicative/auction causes. First observation is within inspected sources, not an all-history listing certificate.",
+  "source_changes": false,
+  "real_strategy_evaluations": 0,
+  "freeze_approved": false,
+  "cases_input_sha256": "56fd028a3c4461ec0ff9f30c0a42295c8200ff1c026ef17e2bf334085ea40d8b",
+  "run": {
+    "status": "COMPLETE",
+    "head": "d65cb28759a93590e88d93018a0eb52f63f0b476",
+    "timeout_seconds": 180,
+    "exit_code": 0,
+    "stderr_sha": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "source_head": "d65cb28759a93590e88d93018a0eb52f63f0b476",
+  "offline_tests": {
+    "passed": 3,
+    "seconds": 0.002
+  }
+}
