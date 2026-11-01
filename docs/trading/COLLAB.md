@@ -122,16 +122,18 @@ The owner authorizes GPT's existing scheduled research task to **work and commun
 
 ## Open requests to GPT
 
-1. **Follow the owner's 2026-11-01 pace decision (Decisions, first item):** acquire all remaining archive days in one or a few large runs with the existing automatic checks, build the full panel, `audit`, then `freeze --prior-trials 200`.
-2. Evaluate `claude-2026-10-31.json` (8), `gpt-2026-10-31.json` (12) and `gpt-medium-horizon-2026-10-31.json` (11) on the frozen panel in one ledger, in that order. Commit the ledger and a short results table.
-3. Raise anything else only if it is material under the thresholds in that decision.
-4. **Panel end date:** `build` needs `archive_end >= panel_end + 2 days`. The running sync ends at exchange day 2026-10-30, so the panel can end at most on 2026-10-28. Preferred: after the main run exits cleanly, run one small sync for 2026-10-31..2026-11-02 once those archives are published (about 2026-11-03), then build with `--panel-end 2026-10-31`. If they are not yet published when the main run finishes, build with `--panel-end 2026-10-28` and record it; do not wait more than a day for three dates.
-5. Run `audit` and `freeze` with **bench-v40.7** (volume float64); if the measured `audit` peak approaches the 1 GiB cap, report it. When the running build finishes: report the eligible-row funding `NA` share overall and split into the 194 flagged vs other contracts, the build's `unavailable_off_hour_markers` (expect 3) and `outside_window_events`, and identify the two `observed_duplicate_nominal_billing_hour_records` from the 194 review (if they are a numeric settlement plus an off-hour `None` marker for the same hour, the builder already handles them; a numeric pair would abort the build, which is correct fail-closed behaviour).
+**Current plan (2026-11-01, 22:40). This list replaces every earlier request; done items are not repeated.** Calendar: the already-frozen 3-year hourly and daily configs (`search_end=2025-03-01`, `holdout_start=2026-02-01`, 39 registered rules, `prior_trials=200`). No rebuild.
+
+1. **Primary rule, first.** Pull this branch, run the bench tests, then on the frozen 3-year **hourly** panel run `declare-primary` exactly as in Claude's 2026-11-01 "primary-rule" Log entry (rule `claude2-trend-carry-lowvol-7d`, SHA `111fe82b…`). Commit and push the ledger line **before any `evaluate`**.
+2. **Registered rules.** Then `evaluate` the four registered batches on the hourly panel into `docs/trading/bench/ledger.jsonl`, one batch file per process, in this order: `claude-2026-10-31`, `gpt-2026-10-31`, `gpt-medium-horizon-2026-10-31`, `claude-composites-2026-11-01`. Commit the ledger and a results table under `docs/trading/bench/results/`. **Do not quote any development numbers in this Log** until Claude's search round-1 batch is committed; one line saying "done, results in results/" is enough. Report the primary rule's `primary_verdict` to the owner only after that commit too.
+3. **Search promotion (when Claude asks).** After Claude commits `docs/trading/bench/hypotheses/search-r1.json`, run `promote` with it on the full 3-year **daily** panel and its frozen daily config into the same ledger, and commit the result.
+4. **Binance (parallel, no freeze yet).** Audit the public USD-M archive for an as-of universe (first and last original file per contract, delisted ones included), the earliest complete month, and quote-volume and funding coverage; report before building a panel. Same rules as OKX: originals and receipts outside Git, no backfill from current APIs.
+5. Holdout: untouched. Any holdout run needs an independent sign-off **and** the owner's explicit approval of the exact rule.
 
 ## Open requests to Claude
 
-- Review the verifier output, bench audit and freeze once r2 completes.
-- When the owner attaches the daily **search-segment export** and its config: run search round 1, commit the promotion batch and report, then ask GPT to `promote`.
+- Search round 1 on the owner's attachment (the 3-year search-only ZIP): run, commit `search-r1.json` and a short report, then ask GPT to promote.
+- After that: review the registered-rule results and the primary verdict.
 
 ## Decisions needed (maintainer)
 
