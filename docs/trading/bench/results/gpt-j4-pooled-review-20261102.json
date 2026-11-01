@@ -1,0 +1,54 @@
+{
+  "schema": "gpt_j4_pooled_search_review_v1",
+  "date_moscow": "2026-11-02",
+  "reviewed_head": "d88c5a57feb86b6914948398132acd79bd5694c0",
+  "search_source_blob": "13eaaa9555c61a28a36d846c2768eb0a981bcb07",
+  "joint_decision": {
+    "id": "J4",
+    "response": "AGREE",
+    "recorded_commit": "12c479e0ced2d14bff14f5dec919baa38986e666",
+    "execution_started": false,
+    "scope": "Prospective pooled search only: OKX existing search2folds + Binance2021-01-01..2023-09-30 threefolds;2020warmup. Binance independent-test role underJ1/J3c retired. Original validation and holdout boundaries immutable.",
+    "protocol": [
+      "Publish exact source/panel/config SHAs before any round2 real/null run",
+      "Real seed41, population80, generations30, at most5promotions; null seeds0..18 with identical pooled inputs/budget",
+      "Candidate publication only after best real fitness strictly exceeds all19 completed null maxima; ties fail",
+      "No validation-derived seeds or newfeatures; all previous validation attempts remain counted",
+      "No Binance verdict, no independent-test claim after pooling, no holdout without exact nonauthor review/signoff and joint agreement"
+    ],
+    "J2": "Accept latest STATE closed/not-adopted disposition; no DSR estimator or gate changed."
+  },
+  "static_code_review": {
+    "pooled_fitness": "0.5 * period-count-weighted mean of per-panel Sharpe + 0.5 * minimum of all five fold Sharpes - 0.1 * (complexity-1)",
+    "interpretation": "Uses worst-fold penalty plus aggregate heuristic; not solely min-fold and not an executable pooled portfolio's measured Sharpe.",
+    "warmup": "Each extra evaluator receives explicit start timestamp; search_end truncation remains enforced; actual CLI and pooled regression execution not independently repeated this session.",
+    "null_qualification": "Real round1 best beating10null runs gives minimum rank p1/11, approximately0.091. Diagnostic evidence does not prove a genuine persistent edge or satisfy19-null gate. All5 prior validation failures preserved; future null runs may exceed the observed10."
+  },
+  "source_sync": {
+    "status": "RUNNING",
+    "checkpoint": "runs/binance-monthly-sync-20261101/status.json",
+    "observed_processes_utc": "2026-11-01T22:03:10.819854+00:00",
+    "wrapper_pid_verified": 10228,
+    "child_pid_verified_at_that_snapshot": 5084,
+    "completed_months_later_checkpoint": 21,
+    "total_months": 48,
+    "month_in_progress_later_checkpoint": "2021-10",
+    "child_pid_reported_later_checkpoint": 12088,
+    "downloaded_archives_reported": 3009,
+    "zip_bytes_reported": 48572412,
+    "completed_month_missing_count": 15,
+    "catalog_absent_counterpart_requests": 15,
+    "unexplained_count_mismatch_months": 0,
+    "worker_sha256_unchanged": "25d2a3d52a36cfe96a948f1c9e0e4e0fc2cebe006f48080c2aaa80969288626a",
+    "no_duplicate_or_interruption": true
+  },
+  "next": "Continue lane4 existing source job; on terminal exit independently audit sources then one bounded panel build/audit. Lane5 is queued behind lane4, not blocked on J4 now; all real/null pooled inputs and resource/time guards must be fixed before launch.",
+  "safety": {
+    "tests_or_searches_started": 0,
+    "no_gate_changes": true,
+    "no_source_original_changes": true,
+    "no_real_ledger_or_frozen_config_edits": true,
+    "no_docker_orders_paper_or_trader": true,
+    "no_efficacy_claim": true
+  }
+}
