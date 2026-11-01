@@ -287,6 +287,21 @@ class TestPanel(BenchTestCase):
         self.assertEqual(flags["LATE"][50], 1)
 
 
+class TestLeanAudit(BenchTestCase):
+    def test_audit_with_close_and_volume_only_matches_full_load(self):
+        path = self.tmp / "lean.csv"
+        bench.synthesize(path, symbols=8, bars=24 * 40, seed=6, never_eligible_frac=0.25)
+        full = bench.audit_panel(bench.load_panel(path), 3_600_000, 1000.0, 30)
+        lean_panel = bench.load_panel(path, fields=("close", "volume"))
+        self.assertIs(lean_panel.series["open"]["SYN000-USDT-SWAP"], lean_panel.series["open"]["SYN001-USDT-SWAP"])
+        self.assertEqual(bench.audit_panel(lean_panel, 3_600_000, 1000.0, 30), full)
+
+    def test_empty_oi_column_is_not_allocated(self):
+        rows = [[t * 60000, s, 1, 1, 1, 1, 1, 1, "", ""] for t in range(3) for s in ("A", "B")]
+        p = rows_panel(self.tmp, "no-oi.csv", rows)
+        self.assertIs(p.series["oi"]["A"], p.series["oi"]["B"])
+
+
 class TestOperators(BenchTestCase):
     def test_rolling_windows_match_naive(self):
         rng = random.Random(8)

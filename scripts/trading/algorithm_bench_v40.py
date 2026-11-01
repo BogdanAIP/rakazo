@@ -199,7 +199,7 @@ def _csv_rows(path):
             yield line, row
 
 
-def load_panel(path, tradable_only: bool = False, end_ts: int | None = None) -> Panel:
+def load_panel(path, tradable_only: bool = False, end_ts: int | None = None, fields=PRICE_FIELDS) -> Panel:
     """Read the panel CSV in two streaming passes.
 
     tradable_only drops symbols that are never eligible. They can never enter a cohort,
@@ -207,6 +207,9 @@ def load_panel(path, tradable_only: bool = False, end_ts: int | None = None) -> 
     unchanged; it only saves memory. The audit loads every symbol.
     end_ts keeps only bars that open before it (the grid and SHA still come from the whole
     file); development evaluation uses it so holdout bars are never even loaded.
+    fields: which of open/high/low/close/volume to keep in memory (every row is still
+    validated); the audit keeps only close and volume. An oi column with no value at all
+    is not allocated.
 
     Columns: ts,symbol,open,high,low,close,volume[,eligible][,funding][,oi]
     ts       bar OPEN time, integer ms UTC, on one fixed grid
@@ -219,10 +222,13 @@ def load_panel(path, tradable_only: bool = False, end_ts: int | None = None) -> 
     rows = _csv_rows(path)
     col = next(rows)
     stamps, symbols, ever_eligible = set(), set(), set()
-    c_el = col.get("eligible")
+    c_el, c_oi0 = col.get("eligible"), col.get("oi")
+    has_oi = False
     for line, row in rows:
         if c_el is None or row[c_el] == "1":
             ever_eligible.add(row[col["symbol"]])
+        if c_oi0 is not None and not has_oi and row[c_oi0] != "":
+            has_oi = True
         if not SYMBOL_RE.fullmatch(row[col["symbol"]]):
             raise ValueError(f"line {line}: bad symbol")
         try:
@@ -249,12 +255,16 @@ def load_panel(path, tradable_only: bool = False, end_ts: int | None = None) -> 
     symbols = sorted(ever_eligible if tradable_only else symbols)
     keep = set(symbols)
     del stamps, ordered
-    shared_nan = nan_array(T)
+    shared_nan, shared_nan32 = nan_array(T), nan_array(T, "f")
+    kept = [f for f in PRICE_FIELDS if f in fields]
+    if "close" not in kept:
+        raise ValueError("close must be loaded")
     # Prices as float32; volume stays float64 because the eligibility audit compares
     # its sums against a hard threshold, where any rounding can flip a flag.
-    series = {f: {s: nan_array(T, "d" if f == "volume" else "f") for s in symbols} for f in PRICE_FIELDS}
-    for f in ("oi", "funding"):
-        series[f] = {s: (nan_array(T) if f in col else shared_nan) for s in symbols}
+    series = {f: {s: (nan_array(T, "d" if f == "volume" else "f") if f in kept else shared_nan32) for s in symbols}
+              for f in PRICE_FIELDS}
+    series["oi"] = {s: (nan_array(T) if has_oi else shared_nan) for s in symbols}
+    series["funding"] = {s: (nan_array(T) if "funding" in col else shared_nan) for s in symbols}
     settled = {s: bytearray(T) for s in symbols}
     eligible = {s: bytearray(T) for s in symbols}
     ci = [col[f] for f in PRICE_FIELDS]
@@ -276,7 +286,8 @@ def load_panel(path, tradable_only: bool = False, end_ts: int | None = None) -> 
         if h + EPS < max(o, c, l) or l - EPS > min(o, c, h):
             raise ValueError(f"line {line}: inconsistent high/low")
         for f, x in zip(PRICE_FIELDS, (o, h, l, c, v)):
-            series[f][sym][i] = x
+            if f in kept:
+                series[f][sym][i] = x
         if c_el is None:
             eligible[sym][i] = 1
         else:
@@ -293,7 +304,7 @@ def load_panel(path, tradable_only: bool = False, end_ts: int | None = None) -> 
             else:
                 series["funding"][sym][i] = _num(cell, "funding", line)
                 settled[sym][i] = 1
-        if c_oi is not None and row[c_oi] != "":
+        if has_oi and row[c_oi] != "":
             series["oi"][sym][i] = _num(row[c_oi], "oi", line)
     if sha256_file(path) != sha_before:
         raise ValueError("panel file changed while it was being read")
@@ -1602,7 +1613,8 @@ def main(argv=None):
         if "search_end_ts" not in frozen:
             raise SystemExit("this frozen config has no search/validation split")
         end_ts = frozen["search_end_ts"]
-    panel = load_panel(args.panel, tradable_only=args.cmd != "audit", end_ts=end_ts)
+    panel = load_panel(args.panel, tradable_only=args.cmd != "audit", end_ts=end_ts,
+                       fields=("close", "volume") if args.cmd == "audit" else PRICE_FIELDS)
     if args.cmd == "audit":
         print(json.dumps(audit_panel(panel, args.expect_bar_ms, args.eligibility_usd, args.eligibility_days), indent=1))
         return
