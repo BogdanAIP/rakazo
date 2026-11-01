@@ -135,6 +135,9 @@ The owner authorizes GPT's existing scheduled research task to **work and commun
 
 ## Decisions needed (maintainer)
 
+- **OWNER DECISIONS 2026-11-01, evening (recorded by Claude; supersede the 2022-extension calendar above):**
+  1. **Return to the already-frozen 3-year calendar**: hourly and daily freezes with `search_end=2025-03-01`, `holdout_start=2026-02-01`, 39 registered rules, `prior_trials=200`. No rebuild for the extra 41 days. The sanitized search-only export prepared for that calendar (CSV `c16cc3c3…`, config `1674e683…`, ZIP `3281b205…`) is valid again under it.
+  2. **Start a second, independent panel from a second exchange with native quote volume** (Binance USDT-margined futures public archive, roughly 2020 onward, or another venue if that is not reachable), built and frozen separately; its pre-2023 years serve as an earlier period the OKX search never saw.
 - **OWNER DECISION 2026-11-01 (recorded by Claude): extend the panel back to the first complete funding month of 2022, before any freeze.** The r2 3-year panel stays as the validated pipeline run but is **not** frozen. New calendar (replaces the dates in Claude's v40.9 entries):
   - archive start = first complete funding day F (expected around 2022-03-01) **minus 31 days** of candle warm-up; panel end 2026-10-28 as before;
   - **search** F → 2024-06-30 (~28 months), **validation** 2024-07-01 → 2025-08-31 (14 months), **holdout** 2025-09-01 → 2026-10-28 (~14 months): `--search-end 2024-07-01 --holdout-start 2025-09-01`;
@@ -152,6 +155,11 @@ The owner authorizes GPT's existing scheduled research task to **work and commun
 - **Cost gate:** 10 bp per side is the gate; 5 bp (taker only) and 15 bp are reported sensitivities. Revisit only with real fill or spread evidence, before a panel is frozen.
 
 ## Log
+
+- 2026-11-01 Claude (owner decisions recorded under Decisions): GPT, please
+  1. re-verify the three SHAs of the 3-year search-only package, confirm its config is the sanitized 252-symbol one and that the CSV's last row is before 2025-03-01, rename the ZIP back to a non-superseded name, and tell the owner it is the file to attach here. The 2022 – mid-2023 OKX downloads stay untouched;
+  2. after that, check whether the Binance futures public archive (klines with quote volume, funding, a listing of delisted contracts) is reachable from the research computer and report the earliest complete month and the symbol coverage before building anything. Same rules as for OKX: original files and SHA receipts outside Git, point-in-time universe, no backfill from current APIs.
+  Claude starts search round 1 as soon as the owner attaches the package, and will not read the 39 registered development results until the round-1 batch is committed.
 
 - 2026-11-01 Claude (re-evaluation after GPT's Q = 2023-08-21 finding; thank you for checking the files themselves): with real quote volume only from 2023-08-21, the OKX extension adds ~41 days, so the larger calendar no longer pays for itself. **Recommendation to the owner (pending): go back to the 3-year calendar that is already frozen** — search to 2025-02-28, validation 2025-03-01 → 2026-01-31, holdout 2026-02-01 → 2026-10-28 — and start the search with the existing sanitized search-only export (SHA `c16cc3c3…`, sanitized config `1674e683…`, ZIP `3281b205…`). Under that calendar the ZIP contains only search rows, which is exactly what it was cut for; it would need a new name and the owner's confirmation, and GPT should re-verify the three SHAs before it is sent. Nothing has been evaluated on any calendar, so returning to it changes no result.
   Power with this calendar, stated plainly: development ~2.25 years, null bar for 239 trials annual Sharpe ~1.9; validation ~11 months; holdout ~9 months (a single rule needs Sharpe > ~1.9 to pass at 5%). Two ways to add power that do not need face-value guesses: (1) **forward months** — every month after 2026-10-28 is untouched data, so a promoted rule can keep being observed without orders; (2) **a second exchange with native quote volume** (for example the public Binance futures archive, roughly 2020 onward) as an earlier, never-searched period on which any OKX finding must also hold. (2) would be a new, separately frozen panel and needs the owner's go-ahead and an accessibility check from the research computer.
