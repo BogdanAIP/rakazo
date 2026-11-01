@@ -189,12 +189,59 @@ def nominal_funding_hour(timestamp):
     return hour
 
 
+def interval_consistent_funding_days(events, audit=None):
+    """Conservative archive coverage inference, NOT a historical schedule certificate.
+
+    Group by BILLING bar UTC day: a settlement at 00:00 bills 23:00
+    of the previous day. For interval I its expected billing hours are
+    I-1, 2I-1, ..., 23. Require both adjacent calendar days to have the
+    same complete pattern; do not bridge missing days or recurse through
+    the accepted set. Observed settlements remain usable even on unknown
+    days; only absence-of-settlement cells depend on this inference.
+    """
+    hours = collections.defaultdict(set)
+    for (bar_open, symbol) in events:
+        if bar_open % HOUR:
+            raise ValueError("Funding billing bar is not hourly aligned")
+        day = dt.datetime.fromtimestamp(bar_open / 1000, tz=dt.timezone.utc).date()
+        hours[day, symbol].add((bar_open % DAY) // HOUR)
+    expected = {frozenset(range(i - 1, 24, i)): i for i in (1, 2, 4, 8)}
+    candidates = {key: expected.get(frozenset(observed))
+                  for key, observed in hours.items()}
+    known = set()
+    reasons = collections.Counter()
+    intervals = collections.Counter()
+    for (day, symbol), interval in candidates.items():
+        if interval is None:
+            reasons["incomplete_or_irregular_pattern"] += 1
+            continue
+        before = candidates.get((day - dt.timedelta(days=1), symbol))
+        after = candidates.get((day + dt.timedelta(days=1), symbol))
+        if before != interval or after != interval:
+            reasons["adjacent_pattern_missing_or_different"] += 1
+            continue
+        known.add((day, symbol))
+        intervals[str(interval)] += 1
+    if audit is not None:
+        audit.update(
+            coverage_rule="complete billing-day pattern I in {1,2,4,8}h; same pattern on both adjacent calendar days",
+            observed_billing_contract_days=len(hours),
+            known_billing_contract_days=len(known),
+            unknown_observed_billing_contract_days=len(hours) - len(known),
+            unknown_day_reasons=dict(sorted(reasons.items())),
+            known_days_by_interval_hours=dict(sorted(intervals.items())),
+            schedule_provenance_certified=False,
+            coverage_inference_uses_adjacent_days=True,
+            coverage_caveat="Retrospective integrity inference only; systematic omitted settlements can mimic a slower schedule; historical availability and schedule changes need provenance before freeze",
+        )
+    return known
+
+
 def load_funding(root: Path, archive_dates, clock_audit=None):
     """Settlement-time rates; events belong to the hour ENDING at settlement T."""
     events = {}
     counters = clock_audit if clock_audit is not None else {}
     counters.update(snapped_events=0, maximum_offset_ms=0, outside_window_events=0)
-    known_days = set()
     count = 0
     for day in archive_dates:
         for row in read_zip_rows(file_at(root, "funding", day)):
@@ -215,9 +262,8 @@ def load_funding(root: Path, archive_dates, clock_audit=None):
             if key in events:
                 raise ValueError(f"Duplicate settlement for {symbol} at {settlement}")
             events[key] = float(row["funding_rate"])
-            utc_day = dt.datetime.fromtimestamp(bar_open / 1000, tz=dt.timezone.utc).date()
-            known_days.add((utc_day, symbol))
             count += 1
+    known_days = interval_consistent_funding_days(events, counters)
     return events, known_days, count
 
 
@@ -368,7 +414,7 @@ def build(root: Path, archive_start: dt.date, archive_end: dt.date, panel_start:
                     elif (day, sym) in funding_known_days:
                         funding_cell = ""   # known: no settlement in this bar
                     else:
-                        funding_cell = "NA" # no settlement evidence for this symbol/day
+                        funding_cell = "NA" # absence unverified under the interval-consistency rule
                         audit["funding_unknown_rows"] += 1
                     w.writerow((hour, sym, op, hi, lo, cl, vol, eligible, funding_cell, ""))
                     output_count += 1
