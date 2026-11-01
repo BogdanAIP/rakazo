@@ -64,4 +64,40 @@ class TestMissingFundingRate(unittest.TestCase):
         self.assertEqual(result["unknown_rate_events"],1)
         self.assertEqual(result["numeric_rate_events"],1)
 
+
+    def test_off_hour_unavailable_marker_does_not_widen_numeric_clock_policy(self):
+        rows,expected,day,_=self.rows()
+        marker=rows.pop()
+        marker["funding_time"]=str(int(marker["funding_time"])+120000)
+        rows.append(marker);unknown=set();clock={}
+        with patch.object(a,"read_zip_rows",return_value=iter(rows)):
+            events,known,count=a.load_funding(Path("."),[FIRST],clock,unknown)
+        self.assertEqual(events,expected)
+        self.assertEqual(count,16)
+        self.assertFalse(known)
+        self.assertEqual(unknown,{(day,SYMBOL)})
+        self.assertEqual(clock["unknown_rate_events"],1)
+        self.assertEqual(clock["unavailable_off_hour_markers"],1)
+        self.assertEqual(clock["outside_window_events"],1)
+        for value in ("0","0.001"):
+            with self.subTest(value=value), patch.object(a,"read_zip_rows",return_value=iter([{**marker,"funding_rate":value}])):
+                with self.assertRaisesRegex(ValueError,"outside reviewed"):
+                    a.load_funding(Path("."),[FIRST])
+
+    def test_midnight_unknown_marker_taints_both_days_and_duplicates_abort(self):
+        day=FIRST+dt.timedelta(days=2)
+        t=int(dt.datetime.combine(day,dt.time(0,2),dt.timezone.utc).timestamp()*1000)
+        row={"instrument_name":SYMBOL,"funding_time":str(t),"funding_rate":"None"}
+        unknown=set();clock={}
+        with patch.object(a,"read_zip_rows",return_value=iter([row])):
+            events,known,count=a.load_funding(Path("."),[FIRST],clock,unknown)
+        self.assertEqual(events,{})
+        self.assertFalse(known)
+        self.assertEqual(count,1)
+        self.assertEqual(unknown,{(day,SYMBOL),(day-dt.timedelta(days=1),SYMBOL)})
+        self.assertEqual(clock["unknown_rate_events"],1)
+        with patch.object(a,"read_zip_rows",return_value=iter([row,row.copy()])):
+            with self.assertRaisesRegex(ValueError,"Duplicate settlement marker"):
+                a.load_funding(Path("."),[FIRST])
+
 if __name__=="__main__":unittest.main()

@@ -1,0 +1,69 @@
+{
+  "schema": "funding_pattern_followup_v1",
+  "mode": "DATA_QUALITY_ONLY",
+  "date_utc": "2026-11-01",
+  "source_code_sha": "fdfa03be8c282128fe5b28ec9dabfb2aa1d3e708",
+  "source_quality_sha256": "d799f319fdf53c3c55326a411e95c0bd2a30006da3be06140068f7c1c4a1fabf",
+  "private_run": "runs/funding-patterns-20261101",
+  "scan": {
+    "archive_dates": 1126,
+    "seconds": 6.929,
+    "source_records": 1171431,
+    "numeric_records": 1171298,
+    "unknown_rate_records": 133,
+    "flagged_symbols": 194,
+    "flagged_with_adjacent_complete_pattern_changes": 22,
+    "adjacent_complete_pattern_changes": 25,
+    "billing_contract_days": 279718,
+    "inferred_known_billing_days": 275745,
+    "unknown_observed_billing_days": 3973,
+    "pattern_day_histogram": {
+      "1": 1554,
+      "2": 1101,
+      "4": 95330,
+      "8": 179980,
+      "UNKNOWN": 1753
+    },
+    "outside_reviewed_clock_markers": [
+      {
+        "symbol": "UXLINK-USDT-SWAP",
+        "archive_date": "2025-09-23",
+        "offset_ms": 265000
+      },
+      {
+        "symbol": "KITE-USDT-SWAP",
+        "archive_date": "2025-12-08",
+        "offset_ms": 319000
+      },
+      {
+        "symbol": "TEST02-USDT-SWAP",
+        "archive_date": "2026-01-14",
+        "offset_ms": 1317000
+      }
+    ],
+    "all_outside_clock_values_unavailable": true
+  },
+  "interpretation": "Diagnostic inferred patterns only, not certified historical cash-payment coverage. The 194 flagged contracts are not all explained by the 25 adjacent-complete changes; mixed transition days, boundaries and irregular gaps remain UNKNOWN. Numeric clock policy stays [H,H+60s). Three off-hour None markers cannot be billed or used as features; proposed builder preserves unavailable state on both possible adjacent billing days and retains duplicate-marker rejection. No numeric settlement is dropped, moved beyond the existing policy, or fabricated.",
+  "primary_sources": [
+    {
+      "url": "https://www.okx.com/en-us/help/okx-to-adjust-funding-rate-interval-for-certain-perpetual-futures",
+      "published": "2024-07-12",
+      "evidence": "Announced TRB 8h-to-4h effective July18 08UTC, AUCTION/GAS/MINA/ORBS July25 08UTC. Confirms that varying daily counts can be real; does not certify every archive event."
+    },
+    {
+      "url": "https://www.okx.com/en-sg/help/okx-to-enable-automatic-updates-for-funding-fee-settlement-period",
+      "published": "2026-04-14",
+      "evidence": "Official 8/4/2/1h automatic adjustment levels. Current documentation is context, not first-availability provenance for all historical contract schedules."
+    }
+  ],
+  "validation": {
+    "focused_tests_passed": 43,
+    "seconds": 2.029,
+    "new_off_hour_regressions": 2
+  },
+  "panel_built": false,
+  "panel_frozen": false,
+  "historical_schedule_certified": false,
+  "strategy_evaluations": 0,
+  "holdout_accessed": false
+}

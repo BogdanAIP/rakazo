@@ -267,6 +267,7 @@ def load_funding(root: Path, archive_dates, clock_audit=None, unknown_rate_days=
     unknown_days = unknown_rate_days if unknown_rate_days is not None else set()
     unknown_days.clear()
     unknown_keys = []
+    off_hour_unknown = set()
     count = 0
     for day in archive_dates:
         for row in read_zip_rows(file_at(root, "funding", day)):
@@ -274,11 +275,26 @@ def load_funding(root: Path, archive_dates, clock_audit=None, unknown_rate_days=
             if not symbol.endswith("-USDT-SWAP"):
                 continue
             settlement = int(row["funding_time"])
+            rate = parse_funding_rate(row["funding_rate"])
             try:
                 nominal = nominal_funding_hour(settlement)
             except ValueError:
                 counters["outside_window_events"] += 1
-                raise
+                if rate is not None:
+                    raise
+                # A missing-rate marker is not a billable settlement. Do not
+                # round it into a payment or widen the numeric clock policy.
+                marker = (settlement, symbol)
+                if marker in off_hour_unknown:
+                    raise ValueError("Duplicate settlement marker")
+                off_hour_unknown.add(marker)
+                hour = settlement // HOUR * HOUR
+                # Without a valid settlement clock, neither adjacent billing
+                # interpretation can certify no payment (covers midnight too).
+                for bar in (hour - HOUR, hour):
+                    unknown_days.add(funding_billing_day_key(bar, symbol))
+                count += 1
+                continue
             offset = settlement - nominal
             counters["snapped_events"] += int(offset != 0)
             counters["maximum_offset_ms"] = max(counters["maximum_offset_ms"], offset)
@@ -286,7 +302,7 @@ def load_funding(root: Path, archive_dates, clock_audit=None, unknown_rate_days=
             key = (bar_open, symbol)
             if key in events:
                 raise ValueError(f"Duplicate settlement for {symbol} at {settlement}")
-            events[key] = parse_funding_rate(row["funding_rate"])
+            events[key] = rate
             if events[key] is None:
                 unknown_keys.append(key)
                 unknown_days.add(funding_billing_day_key(*key))
@@ -297,7 +313,8 @@ def load_funding(root: Path, archive_dates, clock_audit=None, unknown_rate_days=
         del events[key]
     coverage_keys = (key for key in events if funding_billing_day_key(*key) not in unknown_days)
     known_days = interval_consistent_funding_days(coverage_keys, counters)
-    counters.update(unknown_rate_events=len(unknown_keys), unknown_rate_billing_days=len(unknown_days),
+    counters.update(unknown_rate_events=len(unknown_keys) + len(off_hour_unknown),
+                    unavailable_off_hour_markers=len(off_hour_unknown), unknown_rate_billing_days=len(unknown_days),
                     numeric_rate_events=len(events), source_rate_records=count)
     return events, known_days, count
 
