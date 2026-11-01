@@ -364,8 +364,9 @@ def aggregate_day(root: Path, day: dt.date, funding=None):
         minutes_seen[key_min] = fingerprint
         key = (minute // HOUR * HOUR, symbol)
         if row["vol_quote"] in ("", "None"):
-            # OKX archives before late 2022 carry no quote volume (vol is a contract count and
-            # face values changed over time). Never guess it: start the archive later.
+            # OKX all-swap archives up to exchange day 2023-08-20 carry no quote volume (vol is a
+            # contract count and face values changed over time); 2023-08-21 is the first day with
+            # it for every USDT swap. Never guess it: start the archive at or after that day.
             raise ValueError(f"Quote volume unavailable for {symbol} on archive day {day}; "
                              "start the build at or after the first day with vol_quote")
         op, hi, lo, cl, vol = map(float, (row["open"], row["high"], row["low"], row["close"], row["vol_quote"]))
