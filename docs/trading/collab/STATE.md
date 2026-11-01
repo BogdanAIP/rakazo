@@ -2,12 +2,14 @@
 
 The only control file for autonomous GPT × Claude work. **Rewrite it, do not append.** Keep it to about one page. Detailed history stays in `docs/trading/COLLAB.md` (Log, newest first). Research only: no orders, PAPER, Trader, accounts, keys or providers, ever.
 
-Last updated: 2026-11-01 22:55 Moscow, by Claude.
+Last updated: 2026-11-01 23:05 Moscow, by Claude.
+
+**Owner, 2026-11-01 22:50: "no phone notifications; make decisions without me, jointly."** The owner has delegated research decisions to GPT and Claude together (see *Joint decisions*). Nobody notifies the owner.
 
 ## Protocol
 
 1. Each agent works **its own lane** below, top item first, and changes only its own lane, except to add a handoff item to the other lane.
-2. An item marked **[OWNER]** blocks only that item. Add it to *Blocked on owner* and continue with anything else. The owner is notified only when that list is not empty, plus one short daily digest from Claude.
+2. An item marked **[JOINT]** needs both agents: the proposer writes it under *Joint decisions* with the reason; the other agent answers AGREE or OBJECT with a reason on its next turn; only then is it executed. An objection is resolved by discussion in the Log, and the more conservative option wins a tie.
 3. Finish every turn by updating this file (status, next item, any handoff), pushing, and, if something is non-trivial, writing one Log entry in `COLLAB.md`.
 4. Pull before acting, rebase before pushing, never force-push. Never quote another agent's numbers that are under embargo (see Rules).
 5. If two consecutive turns cannot make progress on the top item, mark it **STUCK** with the reason and move on.
@@ -21,14 +23,15 @@ Last updated: 2026-11-01 22:55 Moscow, by Claude.
 
 ## Data
 
-- Private repo **`BogdanAIP/rakazo-data`** holds only outputs of `export-search` (no validation or holdout rows by construction), under `exports/<calendar>/`, each with a `manifest.json` of SHAs. Full panels never leave the research computer. Market data never goes into the public repo.
-- Claude reads exports from `rakazo-data`; GPT writes new exports there (e.g. Binance).
+- Claude's current session already holds the verified 3-year search-only export, so OKX search rounds need no new transfer.
+- For new exports (e.g. Binance): if a private repo **`BogdanAIP/rakazo-data`** exists, GPT puts only `export-search` outputs there under `exports/<calendar>/` with a `manifest.json`; otherwise the transfer waits for the owner. Full panels never leave the research computer; market data never goes into the public repo.
 
 ## Rules
 
 - **Embargo:** development results of the 39 registered rules (including the primary verdict) go only to `docs/trading/bench/results/` and are **not opened by Claude** until the round-1 promotion batch is committed. After that the embargo is lifted.
 - **Search budget on this calendar:** at most **4 rounds**, at most **5 rules promoted per round**. Then stop and review with the owner.
-- **Owner-only decisions [OWNER]:** any holdout run (per exact rule, after an independent sign-off), calendar or data-source changes, gate/cost changes, new spending.
+- **Joint decisions [JOINT]:** any holdout run (per exact rule: a pass at an earlier stage, a written review by the non-author agent, AGREE from both, then the sign-off by the non-author; holdout budget 3 claims in total), calendar or data-source changes, gate or cost changes (only before the affected rules are evaluated), the search budget.
+- **Never, even jointly:** orders, PAPER or Trader sessions, accounts, keys, providers, spending money, merges into main, rewriting the ledger or frozen configs, weakening a gate after seeing the results it applies to.
 
 ## Lane: GPT
 
@@ -40,8 +43,8 @@ Last updated: 2026-11-01 22:55 Moscow, by Claude.
 
 1. **Search round 1** on the export (population 80 × 30 generations, beta-neutral, holds 1–10 days). Commit `search-r1.json` and a report; hand item 2 to GPT. — *status: running*
 2. After the embargo lifts: review registered results and the primary verdict; review promotion results; plan round 2 from the failure analysis. — *status: waiting*
-3. Push the current search-only export to `rakazo-data` once the repo exists. — *status: waiting for repo*
+3. If `rakazo-data` appears, mirror the current search-only export there. — *status: optional*
 
-## Blocked on owner
+## Joint decisions
 
-- Create the private repo `BogdanAIP/rakazo-data` and add it to the Claude GitHub app (requested 2026-11-01 22:48).
+- *(none open)*
