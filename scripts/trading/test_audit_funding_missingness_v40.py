@@ -24,4 +24,18 @@ class TestMissingnessAudit(unittest.TestCase):
         patterns={(d,SYMBOL):8,(FIRST,SYMBOL):8,(d+dt.timedelta(days=1),SYMBOL):4}
         self.assertEqual(reason_for_day(d,SYMBOL,patterns),"adjacent_interval_different")
 
+    def test_blank_cell_must_be_known_absence(self):
+        # A blank cell bills zero funding, so it is only legal on an inferred-known
+        # day and on a bar without an observed settlement; anything else fails closed.
+        events=series([8]*3)
+        known=a.interval_consistent_funding_days(events)
+        t=int(dt.datetime.combine(FIRST,dt.time(),dt.timezone.utc).timestamp()*1000)
+        with self.assertRaises(ValueError):  # first day has no earlier neighbour
+            summarize([{"ts":str(t),"symbol":SYMBOL,"eligible":"1","funding":""}],events,known)
+        settled=min(ts for (ts,s) in events if ts>=t+a.DAY)
+        with self.assertRaises(ValueError):  # observed rate dropped
+            summarize([{"ts":str(settled),"symbol":SYMBOL,"eligible":"1","funding":""}],events,known)
+        month=summarize([{"ts":str(t+a.DAY),"symbol":SYMBOL,"eligible":"1","funding":""}],events,known)
+        self.assertEqual(month["2023-10"]["all_unknown_share"],0)
+
 if __name__=="__main__":unittest.main()

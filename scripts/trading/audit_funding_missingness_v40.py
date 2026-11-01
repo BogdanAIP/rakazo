@@ -20,12 +20,7 @@ def reason_for_day(day, symbol, patterns):
     return "known"
 
 def summarize(rows, events, known):
-    hours = collections.defaultdict(set)
-    for (t,s) in events:
-        day = dt.datetime.fromtimestamp(t/1000,dt.timezone.utc).date()
-        hours[day,s].add((t % a.DAY)//a.HOUR)
-    expected = {frozenset(range(i-1,24,i)):i for i in (1,2,4,8)}
-    patterns = {key:expected.get(frozenset(values)) for key,values in hours.items()}
+    patterns = a.billing_day_patterns(events)
     counts = {}
     for row in rows:
         day = dt.datetime.fromtimestamp(int(row["ts"])/1000,dt.timezone.utc).date()
@@ -35,6 +30,11 @@ def summarize(rows, events, known):
         eligible = row["eligible"] == "1"
         counter["eligible_rows"] += int(eligible)
         if row["funding"] != "NA":
+            if row["funding"] == "":
+                if (int(row["ts"]),row["symbol"]) in events:
+                    raise ValueError("Blank funding on a bar with an observed settlement")
+                if (day,row["symbol"]) not in known:
+                    raise ValueError("Blank funding on a day whose absence is not inferred known")
             continue
         reason = reason_for_day(day,row["symbol"],patterns)
         if reason == "known" or (day,row["symbol"]) in known:

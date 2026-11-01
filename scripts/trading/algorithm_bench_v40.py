@@ -46,7 +46,7 @@ from statistics import NormalDist
 
 SCHEMA_HYP = "rakazo_bench_hypothesis_v1"
 SCHEMA_CONFIG = "rakazo_bench_config_v1"
-VERSION = "bench-v40.4"
+VERSION = "bench-v40.5"
 
 MAX_DEPTH = 8
 MAX_NODES = 64
@@ -585,6 +585,7 @@ def _base_feature(panel: Panel, name: str):
     if name in PRICE_FIELDS or name == "oi":
         return s[name]
     out = {}
+    stale = max(1, MS_PER_DAY // panel.bar_ms)  # funding feature lifetime in bars
     for sym in panel.symbols:
         if name == "ret":
             c = s["close"][sym]
@@ -593,17 +594,23 @@ def _base_feature(panel: Panel, name: str):
         elif name == "range":
             h, l = s["high"][sym], s["low"][sym]
             out[sym] = _clean([math.log(a / b) if a == a else NAN for a, b in zip(h, l)])
-        else:  # funding: last settled rate known before bar t's settlements; unknown resets it
+        else:  # funding: last observed settlement before bar t, point in time only
             # A settlement assigned to bar t (the bar ending at T) is billed to positions held
             # through T, but archive clocks can lag T by seconds, so as a feature it becomes
-            # available only at the next decision (t + 1).
-            raw, flag, seq, last = s["funding"][sym], panel.settled[sym], nan_array(panel.T), NAN
+            # available only at the next decision (t + 1). NA cells are NOT used here: the
+            # builder infers them from later settlements (up to two days ahead), so letting
+            # them reset the feature would leak future delistings or schedule changes into
+            # today's cohort. Instead the rate expires once it is older than a day, or after
+            # a bar without market data.
+            raw, flag, close = s["funding"][sym], panel.settled[sym], s["close"][sym]
+            seq, last, age = nan_array(panel.T), NAN, 0
             for t in range(panel.T):
-                seq[t] = last
-                if raw[t] != raw[t]:
+                seq[t] = last if age <= stale else NAN
+                age += 1
+                if close[t] != close[t]:
                     last = NAN
                 elif flag[t]:
-                    last = raw[t]
+                    last, age = raw[t], 1
             out[sym] = seq
     return out
 

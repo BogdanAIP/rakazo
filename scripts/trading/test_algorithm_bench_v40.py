@@ -190,6 +190,19 @@ class TestPanel(BenchTestCase):
         self.assertEqual(last[1], 0.001)
         self.assertTrue(all(math.isnan(x) for x in last[2:]))  # missing rows and NA reset it
 
+    def test_funding_feature_ignores_inferred_na_and_expires_after_a_day(self):
+        # NA cells are inferred from later settlements, so they must not change any feature.
+        hour = 3600000
+        cells = ["0.002"] + [""] * 30
+        rows = lambda c: [[i * hour, "A", 1, 1, 1, 1, 1, 1, f, ""] for i, f in enumerate(c)]
+        known = bench.evaluate_expression(["field", "funding"], rows_panel(self.tmp, "fk.csv", rows(cells)))["A"]
+        inferred = cells[:1] + ["NA"] * 30  # e.g. the contract stops settling two days later
+        unknown = bench.evaluate_expression(["field", "funding"], rows_panel(self.tmp, "fu.csv", rows(inferred)))["A"]
+        self.assertEqual([x for x in known if x == x], [x for x in unknown if x == x])
+        self.assertTrue(math.isnan(known[0]))
+        self.assertTrue(all(x == 0.002 for x in known[1:25]))  # usable for 24 hours
+        self.assertTrue(all(math.isnan(x) for x in known[25:]))  # then stale
+
     def test_eligibility_audit(self):
         path = self.tmp / "elig.csv"
         bench.synthesize(path, symbols=4, bars=24 * 70, seed=4)

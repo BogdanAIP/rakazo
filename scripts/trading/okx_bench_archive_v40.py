@@ -189,6 +189,18 @@ def nominal_funding_hour(timestamp):
     return hour
 
 
+def billing_day_patterns(events):
+    """Map (billing UTC day, symbol) to its complete interval in {1,2,4,8} h, else None."""
+    hours = collections.defaultdict(set)
+    for (bar_open, symbol) in events:
+        if bar_open % HOUR:
+            raise ValueError("Funding billing bar is not hourly aligned")
+        day = dt.datetime.fromtimestamp(bar_open / 1000, tz=dt.timezone.utc).date()
+        hours[day, symbol].add((bar_open % DAY) // HOUR)
+    expected = {frozenset(range(i - 1, 24, i)): i for i in (1, 2, 4, 8)}
+    return {key: expected.get(frozenset(observed)) for key, observed in hours.items()}
+
+
 def interval_consistent_funding_days(events, audit=None):
     """Conservative archive coverage inference, NOT a historical schedule certificate.
 
@@ -199,15 +211,7 @@ def interval_consistent_funding_days(events, audit=None):
     the accepted set. Observed settlements remain usable even on unknown
     days; only absence-of-settlement cells depend on this inference.
     """
-    hours = collections.defaultdict(set)
-    for (bar_open, symbol) in events:
-        if bar_open % HOUR:
-            raise ValueError("Funding billing bar is not hourly aligned")
-        day = dt.datetime.fromtimestamp(bar_open / 1000, tz=dt.timezone.utc).date()
-        hours[day, symbol].add((bar_open % DAY) // HOUR)
-    expected = {frozenset(range(i - 1, 24, i)): i for i in (1, 2, 4, 8)}
-    candidates = {key: expected.get(frozenset(observed))
-                  for key, observed in hours.items()}
+    candidates = billing_day_patterns(events)
     known = set()
     reasons = collections.Counter()
     intervals = collections.Counter()
@@ -225,9 +229,9 @@ def interval_consistent_funding_days(events, audit=None):
     if audit is not None:
         audit.update(
             coverage_rule="complete billing-day pattern I in {1,2,4,8}h; same pattern on both adjacent calendar days",
-            observed_billing_contract_days=len(hours),
+            observed_billing_contract_days=len(candidates),
             known_billing_contract_days=len(known),
-            unknown_observed_billing_contract_days=len(hours) - len(known),
+            unknown_observed_billing_contract_days=len(candidates) - len(known),
             unknown_day_reasons=dict(sorted(reasons.items())),
             known_days_by_interval_hours=dict(sorted(intervals.items())),
             schedule_provenance_certified=False,
