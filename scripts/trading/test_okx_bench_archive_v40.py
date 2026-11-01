@@ -144,6 +144,33 @@ class TestArchiveBuilder(unittest.TestCase):
                 archive.aggregate_day(root, day)
 
 
+    def test_identical_duplicate_collapses_and_symbols_stay_separate(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            day = dt.date(2023, 11, 2)
+            header = "instrument_name,open,high,low,close,vol,vol_ccy,vol_quote,open_time,confirm\n"
+            ts = 1698854400000
+            rows = (f"X-USDT-SWAP,1,1,1,1,0,0,5,{ts},0\n" * 2
+                    + f"Y-USDT-SWAP,2,2,2,2,0,0,7,{ts},0\n"
+                    + f"X-USDT-SWAP,1,1,1,1,0,0,5,{ts + 60000},0\n")
+            target = archive.file_at(root, "candles", day)
+            target.parent.mkdir(parents=True)
+            target.write_bytes(compressed("candles.csv", header + rows))
+            archive.file_at(root, "funding", day).write_bytes(
+                compressed("funding.csv", "instrument_name,funding_rate,funding_time\n"))
+            hour_rows, stats = archive.aggregate_day(root, day)
+            self.assertEqual(stats["identical_duplicate_rows_collapsed"], 1)
+            by_symbol = {r[1]: r for r in hour_rows}
+            self.assertEqual((by_symbol["X-USDT-SWAP"][6], by_symbol["X-USDT-SWAP"][8]), (10.0, 2))
+            self.assertEqual((by_symbol["Y-USDT-SWAP"][6], by_symbol["Y-USDT-SWAP"][8]), (7.0, 1))
+
+    def test_row_digest_is_deterministic_and_discriminating(self):
+        a = archive.row_digest('{"a":"1"}')
+        self.assertEqual(a, archive.row_digest('{"a":"1"}'))
+        self.assertNotEqual(a, archive.row_digest('{"a":"2"}'))
+        self.assertLess(a, 1 << 64)
+
+
 class TestAcquisitionBudgets(unittest.TestCase):
     def test_response_bound_with_and_without_content_length(self):
         for headers in ({"Content-Length": "6"}, {}):

@@ -320,14 +320,28 @@ def load_funding(root: Path, archive_dates, clock_audit=None, unknown_rate_days=
     return events, known_days, count
 
 
+MAX_SYMBOLS_PER_ARCHIVE_DAY = 1 << 13
+
+
+def row_digest(fingerprint: str) -> int:
+    """64-bit digest of a canonical row. Identical rows collide by construction; two
+    different rows for one minute collide with probability about 2**-64."""
+    return int.from_bytes(hashlib.blake2b(fingerprint.encode("utf-8"), digest_size=8).digest(), "big")
+
+
 def aggregate_day(root: Path, day: dt.date, funding=None):
-    """Every observed trading hour is retained; count missing source minutes."""
+    """Every observed trading hour is retained; count missing source minutes.
+
+    Duplicate detection keeps one small integer key (minute index x symbol index) and a
+    64-bit row digest per minute instead of the full canonical row string: about 3x less
+    memory on a 500-contract day, so the per-day peak stays bounded late in the history."""
     if funding is None:
         funding, _, local_funding_events = load_funding(root, [day])
     else:
         local_funding_events = 0
     by_hour = {}
     minutes_seen = {}
+    symbol_index = {}
     identical_duplicates = 0
     confirm = collections.Counter()
     for row in read_zip_rows(file_at(root, "candles", day)):
@@ -337,8 +351,11 @@ def aggregate_day(root: Path, day: dt.date, funding=None):
         minute = int(row["open_time"])
         if minute % 60_000:
             raise ValueError(f"Not minute aligned: {symbol} {minute}")
-        key_min = (minute, symbol)
-        fingerprint = json.dumps(row, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        sid = symbol_index.setdefault(symbol, len(symbol_index))
+        if sid >= MAX_SYMBOLS_PER_ARCHIVE_DAY:
+            raise ValueError("Too many contracts in one archive day for the compact duplicate key")
+        key_min = (minute // 60_000) * MAX_SYMBOLS_PER_ARCHIVE_DAY + sid
+        fingerprint = row_digest(json.dumps(row, sort_keys=True, separators=(",", ":"), ensure_ascii=False))
         if key_min in minutes_seen:
             if minutes_seen[key_min] != fingerprint:
                 raise ValueError(f"Duplicate minute conflicting fields: {symbol} {minute}")
