@@ -1,0 +1,32 @@
+{
+  "schema": "rakazo_funding_cadence_independent_194_review_v1",
+  "as_of_utc": "2026-11-01",
+  "research_only": true,
+  "source": "Private original OKX 1126 daily funding ZIP archives, audit-flagged 194 USDT perpetual symbols",
+  "method": "Independently scanned all 1126 original funding ZIPs; for each flagged symbol, mapped original funding timestamp to prior billing hour, assembled exact 24-hour bitmasks and classified only a day's complete grids in 1/2/4/8-hour cadence. This is diagnostic and does not alter original sources or certify settlement completeness.",
+  "records_read_for_flagged_194": 593188,
+  "symbols_flagged": 194,
+  "distinct_symbol_billing_days": 119416,
+  "fully_regular_billing_days": 118516,
+  "irregular_or_partial_billing_days": 900,
+  "regular_day_distribution": {
+    "1h": 1554,
+    "2h": 1101,
+    "4h": 62589,
+    "8h": 53272
+  },
+  "symbols_with_multiple_regular_daily_cadences": 174,
+  "symbols_with_one_regular_daily_cadence": 20,
+  "symbols_with_at_least_one_irregular_day": 194,
+  "exact_adjacent_record_pattern_changes": 27,
+  "symbols_with_exact_adjacent_pattern_changes": 24,
+  "symbols_with_unavailable_rate_days_in_flagged_cohort": 41,
+  "observed_duplicate_nominal_billing_hour_records": 2,
+  "caveats": [
+    "An irregular billing day may be a real mid-day cadence transition, an instrument listing/delisting boundary, a missing funding record or an explicit unavailable-rate marker. The scan cannot distinguish them or certify first-availability times.",
+    "Recognizing two or more regular interval patterns for a symbol is evidence of observed time-varying cadence, not proof that every record is complete.",
+    "The 194-contract material alert should remain documented. The existing builder already leaves uncertain absent funding as NA and requires identical complete neighbor-day patterns for a known empty cell.",
+    "Freeze remains unapproved pending panel eligible-row funding-NA share and independent full-panel audit."
+  ],
+  "followup": "Inspect full-panel build's eligible-row NA proportion; if >5% fail closed, else give Claude the documented conservative treatment and audit for independent review. No holdout or claim of profitable strategies."
+}
