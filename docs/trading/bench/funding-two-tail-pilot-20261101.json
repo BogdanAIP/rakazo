@@ -1,0 +1,140 @@
+{
+  "schema": "two_tail_day_funding_pilot_v1",
+  "mode": "DATA_QUALITY_DEVELOPMENT",
+  "build_source_head": "8fc3deeef32fce460dad780cca02c78e6bc39d2a",
+  "missingness_code_head": "be8f79db8b248f46bd51586255dd9694db513121",
+  "source_archive_dates": 34,
+  "original_files": 68,
+  "total_original_bytes": 137076709,
+  "new_original_bytes": 4626354,
+  "private_source_manifest_sha256": "9c33eb643abd0dfd87cbabb53c3bf72c9b966375b1cc3c4e5d82b59735c4bee7",
+  "builder_audit": {
+    "eligible_rows": 3504,
+    "first_panel_utc": "2023-10-01",
+    "first_possible_eligible_utc": "2023-10-31",
+    "funding_clock": {
+      "coverage_caveat": "Retrospective integrity inference only; systematic omitted settlements can mimic a slower schedule; historical availability and schedule changes need provenance before freeze",
+      "coverage_inference_uses_adjacent_days": true,
+      "coverage_rule": "complete billing-day pattern I in {1,2,4,8}h; same pattern on both adjacent calendar days",
+      "known_billing_contract_days": 4251,
+      "known_days_by_interval_hours": {
+        "8": 4251
+      },
+      "maximum_offset_ms": 39000,
+      "observed_billing_contract_days": 4813,
+      "outside_window_events": 0,
+      "schedule_provenance_certified": false,
+      "snapped_events": 13838,
+      "unknown_day_reasons": {
+        "adjacent_pattern_missing_or_different": 284,
+        "incomplete_or_irregular_pattern": 278
+      },
+      "unknown_observed_billing_contract_days": 562
+    },
+    "funding_events_observed": 14018,
+    "funding_interval_coverage_certified": false,
+    "funding_unknown_rows": 2998,
+    "historical_oi": "UNKNOWN: CSV oi left empty",
+    "identical_duplicate_rows_collapsed": 1496,
+    "incomplete_hour_caveat": "Source gaps are counted, not classified as zero trades; investigate before freezing if material",
+    "incomplete_source_hours": 11,
+    "last_panel_utc": "2023-11-01",
+    "minute_confirm_flags": {
+      "0": 6731406
+    },
+    "missing_archives": 0,
+    "missing_source_minutes": 534,
+    "panel_bytes": 8518483,
+    "panel_rows": 105455,
+    "panel_sha256": "d46ba79f0fc17951ed554bbc37b36f30e7bf6126a0cb94f05f17cae5dd065b39",
+    "quote_volume_unit": "USDT vol_quote",
+    "requested_main_window_utc": "2023-11-01",
+    "source_archive_days": 34,
+    "source_hourly_rows": 105455,
+    "trailing_liquidity_rule": "median of 30 complete earlier UTC calendar days; zeros for absent days since first archive observation"
+  },
+  "independent_panel_audit": {
+    "bench": "bench-v40.4",
+    "panel_sha256": "d46ba79f0fc17951ed554bbc37b36f30e7bf6126a0cb94f05f17cae5dd065b39",
+    "bar_ms": 3600000,
+    "bar_ms_matches_expected": true,
+    "bars": 768,
+    "start": "2023-10-01T00:00:00Z",
+    "end_bar_open": "2023-11-01T23:00:00Z",
+    "symbols": 142,
+    "rows": 105455,
+    "bars_present_min": 30,
+    "bars_present_max": 768,
+    "fully_empty_bars": 0,
+    "eligible_rows": 3504,
+    "funding_unknown_row_share": 0.02842918780522498,
+    "symbols_without_any_settlement": [],
+    "symbols_with_oi": 0,
+    "eligibility_check": {
+      "rule": "median daily quote volume over 30 earlier UTC days >= 5e+06",
+      "assumes_volume_is_quote_currency": true,
+      "mismatched_rows": 0,
+      "mismatched_symbol_days": 0
+    }
+  },
+  "monthly_funding_unknown": {
+    "schema": "funding_unknown_row_breakdown_v1",
+    "panel_sha256": "d46ba79f0fc17951ed554bbc37b36f30e7bf6126a0cb94f05f17cae5dd065b39",
+    "months": {
+      "2023-10": {
+        "all_rows": 102047,
+        "all_unknown__adjacent_pattern_missing_or_irregular": 2935,
+        "all_unknown__own_pattern_missing_or_irregular": 42,
+        "eligible_rows": 1728,
+        "unknown_rows": 2977,
+        "all_unknown_share": 0.02917283212637314,
+        "eligible_unknown_share": 0
+      },
+      "2023-11": {
+        "all_rows": 3408,
+        "all_unknown__adjacent_pattern_missing_or_irregular": 21,
+        "eligible_rows": 1776,
+        "unknown_rows": 21,
+        "all_unknown_share": 0.006161971830985915,
+        "eligible_unknown_share": 0
+      }
+    },
+    "strategy_evaluations": 0,
+    "unit": "source rows, not simulated position-bars"
+  },
+  "run": {
+    "status": "COMPLETE",
+    "head": "8fc3deeef32fce460dad780cca02c78e6bc39d2a",
+    "timeout_seconds": 1200,
+    "stages": [
+      {
+        "name": "sync",
+        "exit_code": 0,
+        "stderr_sha": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "build",
+        "exit_code": 0,
+        "stderr_sha": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "audit",
+        "exit_code": 0,
+        "stderr_sha": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "stage": "audit"
+  },
+  "focused_offline_tests": {
+    "passed": 25,
+    "seconds": 2.064,
+    "includes_Claude_two_later_archive_day_regression": true,
+    "includes_new_missingness_audit_tests": 2
+  },
+  "raw_sources_or_prior_pilots_replaced": false,
+  "panel_frozen": false,
+  "full_three_year_panel": false,
+  "real_strategy_evaluations": 0,
+  "hypotheses_unchanged": 31,
+  "funding_historical_availability_certified": false
+}
