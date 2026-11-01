@@ -1,0 +1,21 @@
+{
+  "schema": "finite_source_batch_plan_v1",
+  "mode": "DATA_ACQUISITION_DEVELOPMENT",
+  "code_base_head": "14a58eccde646839a92c1d32ed7886fcfa2b1fd8",
+  "source": "anonymous original OKX all-swap candle and funding daily ZIP archives",
+  "archive_start": "2023-11-04",
+  "archive_end": "2024-01-02",
+  "max_new_days": 60,
+  "max_new_bytes": 536870912,
+  "min_free_bytes": 10737418240,
+  "sync_timeout_seconds": 600,
+  "source_audit_timeout_seconds": 300,
+  "total_timeout_seconds": 900,
+  "raw_storage": "outside Git with SHA receipts; existing originals never replaced",
+  "audit_scope": "new60 source days only; original CRC/SHA and source continuity/candle/funding diagnostics; aggregate metadata only in Git",
+  "no_strategy_evaluation": true,
+  "panel_freeze_allowed": false,
+  "protected_2026_dates_accessed": false,
+  "existing_31_hypotheses_unchanged": true,
+  "preflight_free_bytes": 39948148736
+}
