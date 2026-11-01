@@ -1,0 +1,638 @@
+{
+  "schema": "legacy_outcome_source_index_v1",
+  "mode": "READ_ONLY_ARCHIVED_REPORT_INDEX",
+  "records": [
+    {
+      "version": 6,
+      "report_file": "pit-captures/forward-v6-20261029-outcome.json",
+      "report_sha256": "7492866cb57754228aff7fca10c072cb2387da35fa11cb86039d9db5d7d54b71",
+      "report_schema": "algorithm_forward_one_cohort_outcome_v6",
+      "top_level_keys": [
+        "can_start_paper",
+        "can_submit_orders",
+        "candle_capture_manifest_sha256",
+        "decision",
+        "execution_assumptions",
+        "freeze_sha256",
+        "independent_performance_validated",
+        "inferential_p_value",
+        "markets",
+        "schema",
+        "summary"
+      ],
+      "array_shapes_NOT_trial_counts": {
+        "candle_capture_manifest_sha256": {
+          "length": 10,
+          "item_keys": null
+        },
+        "markets": {
+          "length": 50,
+          "item_keys": [
+            "diagnostic_exit_open_price",
+            "entry_open_price",
+            "fees_settled_verified",
+            "funding_cashflow_included",
+            "observation_and_price_temporal_order_verified",
+            "primary_exit_open_price",
+            "primary_included",
+            "primary_return",
+            "rank",
+            "reason",
+            "side",
+            "source_label",
+            "symbol",
+            "unsigned_primary_price_change_fraction"
+          ]
+        }
+      },
+      "declared_candidate_ids": null,
+      "declared_horizons": null,
+      "frozen_definition_sha": "befd9fb6b45c1bda00419f4742f98daa27571b43138e11e2a0fb149d4a36b1a2",
+      "embedded_signal_definition": null,
+      "summary_field_names": [
+        "abstaining_markets",
+        "market_count",
+        "market_time_blocks",
+        "modeled_fixed_notional_equity_fraction_base_sum",
+        "modeled_fixed_notional_equity_fraction_stress_sum",
+        "qualifying_events"
+      ],
+      "control_field_names": [],
+      "full_identity_reconciled": false
+    },
+    {
+      "version": 7,
+      "report_file": "pit-captures/micro-v7-forward-outcome-20261030.json",
+      "report_sha256": "5a2f13ff53a41cfc2e55dcf6843b3d60567f4645b49e64d2b193819661400641",
+      "report_schema": "algorithm_microstructure_forward_outcome_v7",
+      "top_level_keys": [
+        "all_markets",
+        "can_start_paper",
+        "can_trade",
+        "decision",
+        "frozen_hypothesis_sha256",
+        "independent_performance_validated",
+        "inferential_p_value",
+        "raw_candle_batch_manifest_sha256",
+        "real_margin_contract_and_funding_simulator",
+        "schema",
+        "summary"
+      ],
+      "array_shapes_NOT_trial_counts": {
+        "all_markets": {
+          "length": 50,
+          "item_keys": [
+            "entry_open",
+            "exit_open_15m",
+            "exit_open_60m",
+            "future_return_for_all_rows_fraction",
+            "primary_included",
+            "primary_position_hypothetical",
+            "primary_side",
+            "rank",
+            "real_fills_verified",
+            "real_funding_cashflow_included",
+            "source_relation",
+            "symbol"
+          ]
+        },
+        "raw_candle_batch_manifest_sha256": {
+          "length": 10,
+          "item_keys": null
+        }
+      },
+      "declared_candidate_ids": null,
+      "declared_horizons": null,
+      "frozen_definition_sha": "89d5d24f2045f1223df47f862fd3aea8c22245846839ba4e389761294f7118b7",
+      "embedded_signal_definition": null,
+      "summary_field_names": [
+        "abstain",
+        "eligible_positions",
+        "market_count",
+        "net_initial_equity_fraction_base",
+        "net_initial_equity_fraction_stress",
+        "one_correlated_time_block"
+      ],
+      "control_field_names": [],
+      "full_identity_reconciled": false
+    },
+    {
+      "version": 9,
+      "report_file": "pit-captures/ws-v9-queue-recovery-20261030-outcome.json",
+      "report_sha256": "0da5c3d356c597871a291c4d6c7fae90d79c8a5187dfcec148fbe278f80aa250",
+      "report_schema": "algorithm_queue_readdition_next_second_v9",
+      "top_level_keys": [
+        "can_start_paper",
+        "can_trade",
+        "completed_source_captures",
+        "future_execution_or_pnl_scored",
+        "independent_alpha_validation",
+        "model_fee_not_real_execution",
+        "p_value",
+        "planned_source_captures",
+        "predeclared_samples",
+        "primary_and_controls",
+        "primary_failure_count",
+        "primary_success_count",
+        "primary_zero_count",
+        "protocol_git_commit",
+        "qualified_source_seconds",
+        "samples",
+        "schema",
+        "trade_message_gapless_certified",
+        "verdict"
+      ],
+      "array_shapes_NOT_trial_counts": {
+        "predeclared_samples": {
+          "length": 6,
+          "item_keys": [
+            "run",
+            "symbol"
+          ]
+        },
+        "samples": {
+          "length": 6,
+          "item_keys": [
+            "attempted",
+            "end_utc_ms",
+            "raw_messages_sha256",
+            "run",
+            "second_observations",
+            "source_folder",
+            "source_manifest_sha256",
+            "start_utc_ms",
+            "status",
+            "symbol"
+          ]
+        }
+      },
+      "declared_candidate_ids": null,
+      "declared_horizons": null,
+      "frozen_definition_sha": null,
+      "embedded_signal_definition": null,
+      "summary_field_names": [],
+      "control_field_names": [
+        "illustrative_stress_after_14bps_roundtrip_mean_bps",
+        "reverse_taker_mean_signed_mid_bps",
+        "taker_only_mean_signed_mid_bps",
+        "zero_move_null_mean_absolute_error_bps"
+      ],
+      "full_identity_reconciled": false
+    },
+    {
+      "version": 10,
+      "report_file": "pit-captures/ws-v10-depletion-20261030-outcome-v2.json",
+      "report_sha256": "c5b42cda5fbf6d33455b94b863f505f8242e041e3d9c8966515e9a287a2f75a8",
+      "report_schema": "algorithm_depletion_cross_quote_v10",
+      "top_level_keys": [
+        "attempts",
+        "can_start_paper",
+        "can_trade",
+        "flow_only_eligible_n",
+        "initial_equity_pnl_claimed",
+        "market_beta_and_independence_verified",
+        "p_value",
+        "planned_captures",
+        "predeclared_sources",
+        "price_only_eligible_n",
+        "primary_eligible_n",
+        "primary_nonpositive_net_n",
+        "primary_positive_net_n",
+        "protocol_commit_before_sources",
+        "schema",
+        "source_seconds_scored",
+        "summary_means",
+        "trade_feed_gapless_verified",
+        "true_bid_ask_fills_verified",
+        "verdict",
+        "verified_captures"
+      ],
+      "array_shapes_NOT_trial_counts": {
+        "attempts": {
+          "length": 8,
+          "item_keys": [
+            "attempted",
+            "capture_end_ms",
+            "capture_folder",
+            "capture_manifest_sha256",
+            "capture_start_ms",
+            "raw_messages_sha256",
+            "results",
+            "run",
+            "source_status",
+            "symbol"
+          ]
+        },
+        "predeclared_sources": {
+          "length": 8,
+          "item_keys": [
+            "run",
+            "symbol"
+          ]
+        }
+      },
+      "declared_candidate_ids": null,
+      "declared_horizons": null,
+      "frozen_definition_sha": null,
+      "embedded_signal_definition": null,
+      "summary_field_names": [],
+      "control_field_names": [],
+      "full_identity_reconciled": false
+    },
+    {
+      "version": 11,
+      "report_file": "pit-captures/ws-v11-20261030-incomplete-validation.json",
+      "report_sha256": "47c90b030c814265ddb53a7f217a258718d3a64e483c6ec0bec152ba300799a0",
+      "report_schema": "algorithm_minute_marketable_v11",
+      "top_level_keys": [
+        "actual_fills_verified",
+        "attempts",
+        "can_start_paper",
+        "can_trade",
+        "fees_account_verified",
+        "flow_only_control",
+        "flow_only_control_events",
+        "independent_statistical_validation",
+        "planned_captures",
+        "price_only_control",
+        "price_only_control_events",
+        "primary_events",
+        "primary_quote_crossing",
+        "schema",
+        "verdict",
+        "verified_outcomes",
+        "zero_position_cash_bps"
+      ],
+      "array_shapes_NOT_trial_counts": {
+        "attempts": {
+          "length": 4,
+          "item_keys": [
+            "exit_folder",
+            "rejection",
+            "run",
+            "source_folder",
+            "source_freeze",
+            "status",
+            "symbol"
+          ]
+        }
+      },
+      "declared_candidate_ids": null,
+      "declared_horizons": null,
+      "frozen_definition_sha": null,
+      "embedded_signal_definition": null,
+      "summary_field_names": [],
+      "control_field_names": [],
+      "full_identity_reconciled": false
+    },
+    {
+      "version": 24,
+      "report_file": "official-l2-v24/NEAR-2026-09-03_04-postresult-robustness-v24.json",
+      "report_sha256": "aec5a7eba10954a7bcb5257e4b9c1cce48642c4b8b21101071f57f467a3a43d9",
+      "report_schema": "algorithm_replication_postresult_robustness_v24",
+      "top_level_keys": [
+        "all_fixed_horizons_seconds",
+        "all_results_are_historical_quote_proxies",
+        "archived_book_gaplessness_proven",
+        "can_start_paper",
+        "can_trade",
+        "candidate_hypotheses",
+        "counts_toward_validated_alpha",
+        "descriptive_pooled_across_adjacent_days",
+        "independently_venue_signed_original_data",
+        "input_day_integrity",
+        "may_choose_a_profitable_horizon_for_trading",
+        "multiple_comparisons_not_adjusted_for_significance",
+        "original_historical_development_date_utc",
+        "real_execution_funding_slippage_not_established",
+        "schema",
+        "single_best_removal_is_post_hoc_diagnostic_not_predictive_model",
+        "source_observations_per_day",
+        "status",
+        "true_prospective_signal_validation",
+        "v24_replication_days"
+      ],
+      "array_shapes_NOT_trial_counts": {
+        "all_fixed_horizons_seconds": {
+          "length": 8,
+          "item_keys": null
+        },
+        "candidate_hypotheses": {
+          "length": 2,
+          "item_keys": null
+        },
+        "descriptive_pooled_across_adjacent_days": {
+          "length": 16,
+          "item_keys": [
+            "candidate",
+            "days",
+            "descriptive_signal_weighted_posthoc_sensitivity",
+            "horizon_seconds",
+            "overlapping_horizons_and_adjacent_days_not_independent_samples"
+          ]
+        },
+        "v24_replication_days": {
+          "length": 2,
+          "item_keys": null
+        }
+      },
+      "declared_candidate_ids": [
+        "baseline_imbalance",
+        "pressure_shock_without_mid_adaptation"
+      ],
+      "declared_horizons": [
+        10,
+        30,
+        60,
+        120,
+        300,
+        900,
+        1800,
+        3600
+      ],
+      "frozen_definition_sha": null,
+      "embedded_signal_definition": null,
+      "summary_field_names": [],
+      "control_field_names": [],
+      "full_identity_reconciled": false
+    },
+    {
+      "version": 27,
+      "report_file": "crossmarket-v27/NEAR_BTC_ETH_2026-09-03_04-crossmarket-v27.json",
+      "report_sha256": "50a1a663ad07673c54f158db84dcc9afca1d75a4e5c1568e876c6b360a676c6d",
+      "report_schema": "algorithm_official_module2_crossmarket_eval_v27",
+      "top_level_keys": [
+        "OI_not_confirmed_liquidations",
+        "actual_PnL",
+        "can_start_paper",
+        "can_trade",
+        "candles_not_tradable_orderbook_quotes",
+        "cases_with_complete_three_asset_minute_candles",
+        "cases_with_reconstructed_OI",
+        "events",
+        "fourth_crossmarket_case_unavailable_by_original_sept05_holdout_protection",
+        "no_causal_NEAR_news_or_manipulation_proven",
+        "observational_only_selection_after_original_v24_price_returns",
+        "original_module2_UTCplus8_sep05_zip_not_opened",
+        "schema",
+        "scope",
+        "source",
+        "validated_alpha"
+      ],
+      "array_shapes_NOT_trial_counts": {
+        "events": {
+          "length": 4,
+          "item_keys": [
+            "NEAR_hourly_open_interest",
+            "case",
+            "fixed_comparison_horizons",
+            "original_module2_provenance",
+            "post_hoc_not_independent_signal",
+            "signal_utc",
+            "source_close_prices_and_relative_returns"
+          ]
+        }
+      },
+      "declared_candidate_ids": null,
+      "declared_horizons": null,
+      "frozen_definition_sha": null,
+      "embedded_signal_definition": null,
+      "summary_field_names": [],
+      "control_field_names": [],
+      "full_identity_reconciled": false
+    },
+    {
+      "version": 28,
+      "report_file": "controls-v28/NEAR-2026-09-03_04-66anchors-controls-v28.json",
+      "report_sha256": "979c5fe4ba4a2925570349368fd8cfd415e94663c41ae9178dd5d56ed487cbb2",
+      "report_schema": "algorithm_controls_66_v28",
+      "top_level_keys": [
+        "adjacent_anchors_and_days_nonindependent",
+        "all_anchors_full_evidence",
+        "can_start_paper",
+        "can_trade",
+        "fixed_absolute_excess_60m_bps",
+        "fixed_extreme_60m_move_bps",
+        "market_impact_fill_fee_slippage_not_measured",
+        "minute_targets_fixed_before_this_join",
+        "news_registry_partial_and_curated_hindsight",
+        "no_alphas_discovered_or_validated",
+        "no_source_individual_order_ids_spoofing_intent_unproven",
+        "not_tested_on_sep05_or_untouched_market_days",
+        "original_OI_hour_timestamp_publication_latency_unverified",
+        "original_verified_source_provenance",
+        "outcome_groups_descriptive_not_inferential",
+        "realised_PnL",
+        "registered_time_anchor_count",
+        "schema",
+        "source_dates_utc",
+        "source_event_gaplessness_NOT_independently_proven",
+        "status"
+      ],
+      "array_shapes_NOT_trial_counts": {
+        "all_anchors_full_evidence": {
+          "length": 66,
+          "item_keys": [
+            "OUTCOMES_HINDSIGHT_NOT_FEATURES",
+            "counts_as_independent_market_day",
+            "day",
+            "exante_features",
+            "historical_context_not_certified_PIT",
+            "outcome_60m",
+            "signal_exchange_utc_ms",
+            "signal_utc"
+          ]
+        },
+        "minute_targets_fixed_before_this_join": {
+          "length": 3,
+          "item_keys": null
+        },
+        "outcome_groups_descriptive_not_inferential": {
+          "length": 3,
+          "item_keys": [
+            "anchors",
+            "market_days",
+            "median_and_mean_abs_dI",
+            "median_and_mean_oi_change_percent_unverified_point_in_time",
+            "median_and_mean_pre30_buy_share",
+            "median_and_mean_pre30_vs_270s_trade_rate",
+            "news_item_count_last2h_total_NOT_news_density",
+            "original_shock_eligible_count",
+            "outcome_class"
+          ]
+        },
+        "source_dates_utc": {
+          "length": 2,
+          "item_keys": null
+        }
+      },
+      "declared_candidate_ids": null,
+      "declared_horizons": null,
+      "frozen_definition_sha": null,
+      "embedded_signal_definition": null,
+      "summary_field_names": [],
+      "control_field_names": [],
+      "full_identity_reconciled": false
+    },
+    {
+      "version": 29,
+      "report_file": "onset-v29/NEAR-2026-09-03_04-934min-onset-v29.json",
+      "report_sha256": "f9e867360169fc71c17fe94c3aa4649846f98584af6617db71da18c6fc853d86",
+      "report_schema": "algorithm_onset_first_passage_v29",
+      "top_level_keys": [
+        "all_934_precommitted_decision_minutes_including_abstains",
+        "all_outcomes_post_signal_only",
+        "all_selected_onsets",
+        "can_start_paper",
+        "can_trade",
+        "hourly_OI_source_publication_at_exact_timestamp_unverified",
+        "news_registry_partial_and_cherry_picked_after_v24_outcomes",
+        "no_actual_fills_spread_fee_slippage_funding_measured",
+        "no_approved_new_trading_algorithm",
+        "no_book_or_trade_actor_identity_or_cancellation_intent",
+        "no_statistically_independent_holdout_days",
+        "posthoc_descriptive_group_summary",
+        "previously_cached_original_source_sha256",
+        "schema",
+        "sep05_frozen_holdout_untouched",
+        "signal_definition",
+        "status",
+        "totals"
+      ],
+      "array_shapes_NOT_trial_counts": {
+        "all_934_precommitted_decision_minutes_including_abstains": {
+          "length": 934,
+          "item_keys": [
+            "cooldown_suppressed",
+            "decision_ms",
+            "decision_utc",
+            "direction",
+            "event_selected_after_60minute_cooldown",
+            "last_complete_candle_end_utc",
+            "last_completed_1min_price_move_bps",
+            "latest_1min_strictly_before_decision",
+            "no_future_trades_or_candles_in_detector",
+            "onset_kind",
+            "previous_5min_excluding_latest_min",
+            "taker_flow_volume_acceleration_ratio",
+            "taker_signed_flow_fraction",
+            "trigger_qualification"
+          ]
+        },
+        "all_selected_onsets": {
+          "length": 15,
+          "item_keys": [
+            "day",
+            "decision_ms",
+            "decision_utc",
+            "direction",
+            "exante_detector_features",
+            "future_historical_barrier_outcome_HINDSIGHT_ONLY",
+            "historical_hourly_OI_NOT_certified_known_at_signal",
+            "id",
+            "news_known_at_or_before_source_time_incomplete_registry",
+            "onset_kind"
+          ]
+        },
+        "posthoc_descriptive_group_summary": {
+          "length": 2,
+          "item_keys": [
+            "cannot_claim_independence_across_two_days",
+            "classification",
+            "median_signed_market_relative_60m_bps",
+            "onset_events",
+            "outcome_counts",
+            "unique_days"
+          ]
+        }
+      },
+      "declared_candidate_ids": null,
+      "declared_horizons": null,
+      "frozen_definition_sha": null,
+      "embedded_signal_definition": {
+        "decision_grid_minutes": 934,
+        "global_cooldown_minutes": 60,
+        "max_first_passage_censor_minutes": 60,
+        "min_recent_to_prior_perminute_volume_ratio": "3.0",
+        "min_signed_volume_fraction": "0.60",
+        "min_trades_last60s": 5,
+        "muted_if_absolute_last_minute_close_bps_lte": "5.0",
+        "not_tradable_in_true_realtime_without_timestamp_delivery_proof": true,
+        "outcome_first_passage_minute_close_positive_negative_bps": "100"
+      },
+      "summary_field_names": [],
+      "control_field_names": [],
+      "full_identity_reconciled": false
+    },
+    {
+      "version": 30,
+      "report_file": "onset-v30/v30-locked-final-summary.json",
+      "report_sha256": "9fa9c6e92aa89ea587a7a404f64095d5b69669f8928137635b0e35e574069f0f",
+      "report_schema": "algorithm_v30_locked_source_summary",
+      "top_level_keys": [
+        "actual_decisions",
+        "all_original_event_records",
+        "approved_profitable_algorithm",
+        "by_symbol",
+        "cases",
+        "expected_decisions",
+        "groups",
+        "live_clock_arrival_certified",
+        "median_signed_instrument_minus_BTC_ETH_market_bps",
+        "method",
+        "muted",
+        "negative_controls",
+        "news",
+        "original_L2_sequence_identifiers_available",
+        "primary_D_aligned_minus_unaligned",
+        "quote_scenario",
+        "raw_qualified",
+        "real_order_execution",
+        "schema",
+        "selected_onsets",
+        "strict_L2_asof_covered",
+        "suppressed"
+      ],
+      "array_shapes_NOT_trial_counts": {
+        "all_original_event_records": {
+          "length": 21,
+          "item_keys": [
+            "day",
+            "entry_spread_bps",
+            "group",
+            "id",
+            "official_known_pre120",
+            "outcome",
+            "signed_excess_5_15_60",
+            "symbol"
+          ]
+        },
+        "cases": {
+          "length": 4,
+          "item_keys": [
+            "counts",
+            "day",
+            "negative_control_outcomes",
+            "source_join_sha256",
+            "source_tape_sha256",
+            "symbol"
+          ]
+        }
+      },
+      "declared_candidate_ids": null,
+      "declared_horizons": null,
+      "frozen_definition_sha": null,
+      "embedded_signal_definition": null,
+      "summary_field_names": [],
+      "control_field_names": [],
+      "full_identity_reconciled": false
+    }
+  ],
+  "final_prior_trials": null,
+  "freeze_usable": false,
+  "policy": "Count selectable configurations including ablations; do not count event/market rows as trials. Distinguish diagnostics, nonselectable nulls and source-only stages.",
+  "next": "Reconcile frozen definitions, horizons, gates and selectable controls per version; merge with early and late inventories using all six agreed identity components. Publish coverage-complete conservative upper bound before freeze.",
+  "old_reports_modified": false,
+  "raw_market_archives_accessed": false,
+  "new_strategy_evaluations": 0
+}
