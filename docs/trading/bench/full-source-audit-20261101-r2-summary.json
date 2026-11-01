@@ -1,0 +1,40 @@
+{
+  "schema": "rakazo_okx_full_source_audit_r2_public_summary_v1",
+  "report_date_utc": "2026-11-01",
+  "type": "SOURCE_QUALITY_REVIEW_ONLY",
+  "original_archive_window_exchange_date_utc": [
+    "2023-10-01",
+    "2026-10-30"
+  ],
+  "actual_panel_end_planned_utc": "2026-10-28",
+  "private_run": "runs/full-source-audit-20261101-r2",
+  "code_revision": "fdfa03be8c282128fe5b28ec9dabfb2aa1d3e708",
+  "execution": {
+    "status": "SOURCE_AUDIT_COMPLETE_REVIEW_REQUIRED",
+    "exit_code": 0,
+    "audit_finished_utc": "2026-11-01T09:57:30.254541+00:00",
+    "audit_elapsed_seconds": 5994.886,
+    "source_files_sha256_receipts_validated": 2252,
+    "source_exchange_dates": 1126,
+    "total_verified_archive_bytes": 7761969687,
+    "maximum_working_set_bytes": 788688896
+  },
+  "quality": {
+    "historical_usdt_swap_contracts_observed": 654,
+    "unique_source_minute_rows": 402001969,
+    "missing_source_minutes_in_observed_hours": 17651,
+    "missing_minute_fraction": 0.000043905817332994844,
+    "missing_minute_threshold_exceeded": false,
+    "incomplete_source_hours": 708,
+    "identical_duplicate_minute_rows": 10271,
+    "conflicting_duplicate_minute_rows": 0,
+    "invalid_ohlcv_rows": 0,
+    "funding_observed_rate_events": 1171298,
+    "funding_unknown_rate_events": 133,
+    "funding_symbols_with_varying_full_day_record_counts": 194,
+    "coverage_certified": false,
+    "historical_settlement_schedule_verified": false
+  },
+  "decision": "Source acquisition is complete; full original-source audit program completed with exit 0, but materiality review is required because 194 contracts have varying full-day funding record counts. This may be genuine funding cadence changes, listing-boundary artifacts or missing coverage; do not declare funding quality sufficient or freeze until interpreted. Funding eligible-row NA share cannot yet be assessed without building/reviewing panel.",
+  "research_safety": "No strategy evaluation, frozen panel, ledger/holdout, PAPER or orders as part of this check. Raw source data and private receipts remain out of Git."
+}
