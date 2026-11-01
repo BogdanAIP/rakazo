@@ -1,0 +1,84 @@
+{
+  "schema": "full_panel_build_recovery_v1",
+  "date_utc": "2026-11-01",
+  "mode": "RESEARCH_DATA_QUALITY_ONLY",
+  "failed_run": {
+    "private_checkpoint": "runs/full-panel-build-20261101/status.json",
+    "pinned_code": "20ee105d4bacd671f5438b10ac9a56d16782aff2",
+    "status": "FAILED_STOPPED",
+    "finished_utc": "2026-11-01T12:34:30.409305+00:00",
+    "error": "Build memory cap",
+    "peak_working_set_bytes": 1093304320,
+    "rss_cap_bytes": 1073741824,
+    "last_checkpoint_elapsed_seconds": 6246.998,
+    "stderr_empty": true,
+    "owned_processes_confirmed_absent": true,
+    "partial_bytes_preserved": 528410513,
+    "source_files_unchanged": true
+  },
+  "validation": {
+    "pinned_head": "9a78ffbf60df7797de3d7cdc2a0c916414725584",
+    "windows_only": true,
+    "focused_builder_funding_source_tests": {
+      "passed": 43,
+      "seconds": 1.559
+    },
+    "independent_v407_tests": {
+      "passed": 3,
+      "seconds": 4.048,
+      "names": [
+        "TestPanel.test_eligibility_threshold_survives_volume_storage",
+        "TestTradableUniverse.test_cross_section_ignores_ineligible_symbols",
+        "TestTradableUniverse.test_tradable_only_load_gives_identical_results"
+      ]
+    },
+    "volume_precision_finding_resolved": true,
+    "volume_threshold_or_labels_changed": false
+  },
+  "nominal_duplicate_review": {
+    "source": "Read-only inspection of the two original daily funding ZIPs on Windows; no numeric rate copied or modified.",
+    "pairs": [
+      {
+        "symbol": "UXLINK-USDT-SWAP",
+        "archive_date": "2025-09-23",
+        "nominal_hour_utc": "2025-09-23T14:00:00Z",
+        "numeric_record_offset_ms": 0,
+        "unavailable_marker_offset_ms": 265000
+      },
+      {
+        "symbol": "KITE-USDT-SWAP",
+        "archive_date": "2025-12-08",
+        "nominal_hour_utc": "2025-12-08T08:00:00Z",
+        "numeric_record_offset_ms": 0,
+        "unavailable_marker_offset_ms": 319000
+      }
+    ],
+    "finding": "Both are one numeric hour-aligned record plus one off-hour None marker, not two competing numeric settlements. Existing off-hour UNKNOWN policy preserves the numeric payment and keeps uncertain absence NA."
+  },
+  "retry": {
+    "private_checkpoint": "runs/full-panel-build-20261101-r2/status.json",
+    "pinned_head": "9a78ffbf60df7797de3d7cdc2a0c916414725584",
+    "builder_memory_optimization_commit": "1e0a4db0",
+    "wrapper_pid_at_launch": 12172,
+    "child_pid_observed": 12280,
+    "started_utc": "2026-11-01T13:35:59.958182+00:00",
+    "timeout_seconds": 21600,
+    "rss_cap_bytes": 1073741824,
+    "system_reserve_bytes": 268435456,
+    "disk_floor_bytes": 10737418240,
+    "status": "RUNNING",
+    "originals_redownloaded": false,
+    "source_audit_repeated": false,
+    "old_partial_preserved": true,
+    "output_private": "panels/bench-v40-full-20261101-r2.csv",
+    "panel_end": "2026-10-28"
+  },
+  "gates": {
+    "completed_panel": false,
+    "panel_frozen": false,
+    "eligible_funding_na_fraction": "UNKNOWN until build completes",
+    "strategy_evaluations": 0,
+    "holdout_accessed": false
+  },
+  "next": "Inspect exact retry process and terminal JSON before any new action. On success independently split eligible funding NA194/rest against5%, inspect timing/eligibility and bench-v40.7 audit, then Claude review and freezeprior200. No holdout without independent signoff and exact owner authorization."
+}
