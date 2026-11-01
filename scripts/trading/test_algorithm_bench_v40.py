@@ -223,6 +223,32 @@ class TestPanel(BenchTestCase):
         self.assertEqual(bench.audit_panel(bad, None, 24 * 1000 * 0.9, 30)["eligibility_check"]["mismatched_rows"], 1)
 
 
+    def test_eligibility_threshold_survives_volume_storage(self):
+        # GPT v40.6 review: a float32 volume store rounds 4,999,999.9 up to 5,000,000 and
+        # flips a strict 5M threshold. Volume must round-trip exactly from the CSV, and
+        # the recomputed flag must match the builder's double-precision sums.
+        hour = 3_600_000
+        cases = {"BELOW": 4_999_999.9, "EXACT": 5_000_000.0, "ABOVE": 5_000_000.1,
+                 "SPLIT": 4_999_999.9 / 7}  # SPLIT: 7 fractional hours per day
+        rows = []
+        for d in range(32):
+            for sym, v in cases.items():
+                for k in range(24):
+                    vol = v if (k == 0 or (sym == "SPLIT" and k < 7)) else 0.0
+                    rows.append((d * bench.MS_PER_DAY + k * hour, sym, 1, 1, 1, 1, repr(vol), 0, "", ""))
+        panel = rows_panel(self.tmp, "volume-threshold.csv", rows)
+        for sym, v in cases.items():
+            expected = [float(r[6]) for r in rows if r[1] == sym]
+            self.assertTrue(list(panel.series["volume"][sym]) == expected, sym)
+        flags = bench.recompute_eligibility(panel, usd=5_000_000, days=30)
+        split_day = 0.0
+        for _ in range(7):
+            split_day += 4_999_999.9 / 7  # builder order: hourly sums added in time order
+        want = {"BELOW": 0, "EXACT": 1, "ABOVE": 1, "SPLIT": int(split_day >= 5_000_000)}
+        for sym, flag in want.items():
+            self.assertEqual(flags[sym][30], flag, sym)
+            self.assertEqual(flags[sym][31], flag, sym)
+
     def test_recent_listing_requires_its_own_30_prior_days(self):
         rows = []
         for d in range(61):

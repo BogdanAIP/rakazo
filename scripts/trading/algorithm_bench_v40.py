@@ -46,7 +46,7 @@ from statistics import NormalDist
 
 SCHEMA_HYP = "rakazo_bench_hypothesis_v1"
 SCHEMA_CONFIG = "rakazo_bench_config_v1"
-VERSION = "bench-v40.6"
+VERSION = "bench-v40.7"
 
 MAX_DEPTH = 8
 MAX_NODES = 64
@@ -132,10 +132,10 @@ def write_exclusive(path: Path, payload: dict) -> None:
 class Panel:
     """Aligned bar panel.
 
-    series[f][sym]  NaN = no row; f in open/high/low/close/volume/oi/funding. OHLCV are
+    series[f][sym]  NaN = no row; f in open/high/low/close/volume/oi/funding. OHLC are
                     stored as float32 (relative error ~6e-8, far below a basis point; all
-                    arithmetic is float64), funding and oi as float64. Columns absent from
-                    the file share one read-only NaN array.
+                    arithmetic is float64); volume, funding and oi as float64. Columns
+                    absent from the file share one read-only NaN array.
                     funding holds the settled rate, 0.0 for a known non-settlement bar,
                     NaN when the funding state is unknown or the row is missing.
     settled[sym]    bytearray, 1 where a funding settlement happened.
@@ -244,7 +244,9 @@ def load_panel(path, tradable_only: bool = False, end_ts: int | None = None) -> 
     keep = set(symbols)
     del stamps, ordered
     shared_nan = nan_array(T)
-    series = {f: {s: nan_array(T, "f") for s in symbols} for f in PRICE_FIELDS}
+    # Prices as float32; volume stays float64 because the eligibility audit compares
+    # its sums against a hard threshold, where any rounding can flip a flag.
+    series = {f: {s: nan_array(T, "d" if f == "volume" else "f") for s in symbols} for f in PRICE_FIELDS}
     for f in ("oi", "funding"):
         series[f] = {s: (nan_array(T) if f in col else shared_nan) for s in symbols}
     settled = {s: bytearray(T) for s in symbols}
