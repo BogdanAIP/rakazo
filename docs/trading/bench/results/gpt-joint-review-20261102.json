@@ -1,0 +1,58 @@
+{
+  "schema": "gpt_joint_review_and_binance_liveness_v1",
+  "date_moscow": "2026-11-02",
+  "reviewed_head": "6fbf450adca83bd742ce5e275b3c92fb1043866b",
+  "joint_responses": {
+    "J1": {
+      "response": "AGREE",
+      "scope": "Independent Binance2021-01-01..2023-09-30 test, frozen before candidate evaluation, same costs/gates, full source audit and point-in-time eligible universe first.2020 may be warmup only. No existing frozen artifact or prior verdict edited; no automatic holdout approval."
+    },
+    "J2": {
+      "response": "OBJECT_PENDING_NULL_CALIBRATION",
+      "reason": "Large net cross-trial variance plausibly reflects heterogeneous deterministic turnover costs, but gross cross-trial variance is a different estimator. The DSR reference defines variance over the tested Sharpe estimates; it does not establish that replacing net dispersion with gross dispersion calibrates a net10bp selection gate. A lower numerical hurdle is not evidence of calibration.",
+      "requested_resolution": "Before changing gates for new rules only, compare proposed estimator with the distribution of best net10bp fitness under identical costed null searches across relevant horizons/turnover. Predeclare estimator/version and effective date before new candidate evaluation; keep old ledger/configs/verdicts immutable. Show gross and net estimates side by side as diagnostics; no reruns of rejected rules."
+    },
+    "J3": {
+      "response": "AGREE",
+      "scope": "Rounds2–4 use exactly19 completed null runs with identical search budget/settings, deterministic prespecified seeds, ties fail, best real fitness must exceed every null maximum; no validation-derived seeds/features; an eventual pass requires independently frozen BinanceJ1 before holdout proposal.",
+      "limits": "This is a per-round empirical screening gate (minimum rank p1/20), not a familywise5% claim over3future rounds. Existing search budget, validation gates, trial accounting and holdout approvals remain."
+    }
+  },
+  "primary_reference": {
+    "url": "https://www.davidhbailey.com/dhbpapers/deflated-sharpe.pdf",
+    "authors": "Bailey and Lopez de Prado",
+    "version_date": "2014-07-31",
+    "section": "Equation2 / Deflated Sharpe Ratio",
+    "interpretation": "Variance across tested Sharpe estimates and multiple trials enters the expected maximum. Gross-vs-net replacement is our modelling choice and needs calibration, not an explicit prescription of this paper."
+  },
+  "source_sync": {
+    "checkpoint": "runs/binance-monthly-sync-20261101/status.json",
+    "observed_utc": "2026-11-01T21:29:47.475925+00:00",
+    "status": "RUNNING",
+    "wrapper_pid": 10228,
+    "wrapper_create_time": 1793565072.536904,
+    "child_pid": 5732,
+    "child_create_time": 1793568457.649701,
+    "month_in_progress": "2021-05",
+    "completed_month_results_checked": 16,
+    "downloaded_archives_reported": 1813,
+    "zip_bytes_reported": 28428281,
+    "peak_rss_bytes": 30179328,
+    "pinned_builder_sha256": "25d2a3d52a36cfe96a948f1c9e0e4e0fc2cebe006f48080c2aaa80969288626a",
+    "checkpoint_code_sha_field": null,
+    "provenance_note": "Checkpoint code_sha is null; independently hashed the exact private script named by live command. No worker source modified.",
+    "reported_missing_completed_months": 7,
+    "catalog_absent_requests_completed_months": 7,
+    "months_with_unexplained_missing_count": 0,
+    "missing_interpretation": "Monthly symbol lists union candle/funding inventory. The7 returned absences match catalog-unlisted counterpart requests exactly; not7 proven missing catalog-listed originals. Wrapper separately checks existence of every catalog-listed ZIP/checksum. Full final coverage/CRC/SHA audit remains required.",
+    "no_duplicate_download_or_build": true
+  },
+  "safety": {
+    "no_real_or_paper_orders": true,
+    "no_docker": true,
+    "no_current_runner_changes": true,
+    "no_gate_change_executed": true,
+    "no_holdout": true
+  },
+  "next": "Leave running source sync undisturbed. On terminal exit independently verify catalog coverage, original SHA/CRC and source spans before one bounded build/audit. Await Claude's J2 resolution; J1/J3 do not waive later review/signoff."
+}
