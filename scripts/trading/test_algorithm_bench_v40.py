@@ -37,16 +37,37 @@ def same(a, b) -> bool:
     return a.tobytes() == b.tobytes()
 
 
+LEGACY_OPS = list(bench.OPS)[:list(bench.OPS).index("where")]  # pre-v40.9 language, keeps old random draws
+
+
 def random_expression(rng: random.Random, depth: int = 0):
     if depth >= 3 or rng.random() < 0.3:
         return ["field", rng.choice(bench.FEATURE_FIELDS)]
-    op = rng.choice([o for o in bench.OPS if o not in ("field", "const")])
+    op = rng.choice([o for o in LEGACY_OPS if o not in ("field", "const")])
     kind, arity = bench.OPS[op]
     if kind == "window":
         return [op, random_expression(rng, depth + 1), rng.choice([2, 3, 5, 8, 24])]
     if kind == "clip":
         return [op, random_expression(rng, depth + 1), 2.0]
     return [op] + [random_expression(rng, depth + 1) for _ in range(arity)]
+
+
+def random_expression_v2(rng: random.Random, depth: int = 0, symbols=("SYN000-USDT-SWAP",)):
+    """Covers every operator, including the v40.9 search language."""
+    if depth >= 3 or rng.random() < 0.25:
+        return ["field", rng.choice(bench.FEATURE_FIELDS)]
+    op = rng.choice([o for o in bench.OPS if o not in ("field", "const")])
+    kind, arity = bench.OPS[op]
+    sub = lambda: random_expression_v2(rng, depth + 1, symbols)
+    if kind == "window":
+        return [op, sub(), rng.choice([2, 3, 5, 8, 24])]
+    if kind == "window2":
+        return [op, sub(), sub(), rng.choice([2, 5, 24])]
+    if kind == "clip":
+        return [op, sub(), 2.0]
+    if kind == "ref":
+        return [op, rng.choice(symbols), sub()]
+    return [op] + [sub() for _ in range(arity)]
 
 
 def random_hypothesis(rng: random.Random, i: int) -> dict:
@@ -292,6 +313,51 @@ class TestOperators(BenchTestCase):
                     self.assertAlmostEqual(got["tsrank"][t], (below + (equal - 1) / 2) / (n - 1) - 0.5)
 
 
+class TestSearchOperators(BenchTestCase):
+    def test_new_operators_match_naive(self):
+        rng = random.Random(12)
+        ys = [rng.gauss(0, 1) for _ in range(300)]
+        xs = [0.5 * y + rng.gauss(0, 1) for y in ys]
+        ys[40] = math.nan
+        ay, ax = bench.array("d", ys), bench.array("d", xs)
+        n = 20
+        beta, corr = bench._window2("beta", ay, ax, n), bench._window2("corr", ay, ax, n)
+        hi, lo = bench._ts_op("tsmax", ay, 7), bench._ts_op("tsmin", ay, 7)
+        for t in range(len(ys)):
+            w = ys[t - n + 1:t + 1] if t >= n - 1 else None
+            if w is None or any(math.isnan(v) for v in w):
+                self.assertTrue(math.isnan(beta[t]) and math.isnan(corr[t]))
+            else:
+                v = xs[t - n + 1:t + 1]
+                cov = statistics.covariance(w, v)
+                self.assertAlmostEqual(beta[t], cov / statistics.variance(v), places=9)
+                self.assertAlmostEqual(corr[t], statistics.correlation(w, v), places=9)
+            w7 = ys[t - 6:t + 1] if t >= 6 else None
+            if w7 is None or any(math.isnan(v) for v in w7):
+                self.assertTrue(math.isnan(hi[t]) and math.isnan(lo[t]))
+            else:
+                self.assertEqual((hi[t], lo[t]), (max(w7), min(w7)))
+
+    def test_where_csmean_and_ref(self):
+        rows = []
+        for t in range(3):
+            for sym, px, el in (("A", 1 + t, 1), ("B", 3, 1), ("Z", 50, 0)):
+                rows.append([t * 60000, sym, px, px, px, px, 1, el, "", ""])
+        p = rows_panel(self.tmp, "ops.csv", rows)
+        m = bench.evaluate_expression(["csmean", ["field", "close"]], p)
+        self.assertEqual([m["Z"][t] for t in range(3)], [2.0, 2.5, 3.0])  # Z is not eligible: excluded, still broadcast
+        r = bench.evaluate_expression(["ref", "A", ["field", "close"]], p)
+        self.assertEqual(list(r["B"]), [1.0, 2.0, 3.0])
+        w = bench.evaluate_expression(["where", ["sub", ["field", "close"], ["const", 2.5]],
+                                       ["const", 1.0], ["const", -1.0]], p)
+        self.assertEqual(list(w["A"]), [-1.0, -1.0, 1.0])
+        self.assertTrue(all(math.isnan(v) for v in bench.evaluate_expression(["ref", "NONE", ["field", "close"]], p)["A"]))
+        for bad in (["where", ["field", "close"], ["field", "close"]], ["beta", ["field", "ret"], 5],
+                    ["ref", "bad symbol", ["field", "close"]], ["corr", ["field", "ret"], ["field", "ret"], 1]):
+            with self.assertRaises(ValueError):
+                bench.validate_hypothesis({"id": "x", "score": bad, "horizon_bars": 1})
+
+
 class TestCausality(BenchTestCase):
     def test_prefix_invariance_for_random_expressions(self):
         """The score at bar t must not change when later bars are removed."""
@@ -300,6 +366,18 @@ class TestCausality(BenchTestCase):
             expr = ["csrank", random_expression(rng)]
             full = bench.evaluate_expression(expr, self.null)
             for cut in (200, 517, 900):
+                part = bench.evaluate_expression(expr, self.null.truncated(cut))
+                for s in self.null.symbols:
+                    self.assertTrue(same(full[s][:cut], part[s]), msg=json.dumps(expr))
+
+    def test_prefix_invariance_for_search_language(self):
+        """Same causality check over every operator, including where/beta/corr/tsmax/csmean/ref."""
+        rng = random.Random(41)
+        syms = tuple(self.null.symbols[:3]) + ("ABSENT-USDT-SWAP",)
+        for _ in range(80):
+            expr = random_expression_v2(rng, symbols=syms)
+            full = bench.evaluate_expression(expr, self.null)
+            for cut in (300, 777):
                 part = bench.evaluate_expression(expr, self.null.truncated(cut))
                 for s in self.null.symbols:
                     self.assertTrue(same(full[s][:cut], part[s]), msg=json.dumps(expr))

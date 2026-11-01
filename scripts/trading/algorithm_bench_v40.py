@@ -46,10 +46,10 @@ from statistics import NormalDist
 
 SCHEMA_HYP = "rakazo_bench_hypothesis_v1"
 SCHEMA_CONFIG = "rakazo_bench_config_v1"
-VERSION = "bench-v40.8"
+VERSION = "bench-v40.9"
 
-MAX_DEPTH = 8
-MAX_NODES = 64
+MAX_DEPTH = 12  # v40.9: room for regime switches over blended residual factors
+MAX_NODES = 192
 MAX_WINDOW = 2160
 MAX_HYPOTHESES_PER_FILE = 32
 MAX_HYP_FILE_BYTES = 65_536
@@ -75,6 +75,12 @@ OPS = {
     "lag": ("window", 1), "delta": ("window", 1), "pct": ("window", 1), "sum": ("window", 1),
     "mean": ("window", 1), "std": ("window", 1), "z": ("window", 1), "ema": ("window", 1), "tsrank": ("window", 1),
     "csrank": ("cross", 1), "csz": ("cross", 1), "csdemean": ("cross", 1),
+    # v40.9 search language
+    "where": ("ternary", 3),                      # [where, cond, a, b]: a if cond > 0 else b
+    "tsmax": ("window", 1), "tsmin": ("window", 1),
+    "beta": ("window2", 2), "corr": ("window2", 2),  # [beta, y, x, n]: trailing regression slope of y on x
+    "csmean": ("cross", 1),                       # market average over eligible contracts, broadcast
+    "ref": ("ref", 1),                            # [ref, SYMBOL, expr]: that contract's value, broadcast
 }
 
 
@@ -394,15 +400,20 @@ def _count_nodes(node, depth=1):
         if len(node) != 3 or not _finite(node[2]) or node[2] <= 0:
             raise ValueError("clip needs [clip, expr, positive bound]")
         return 1 + _count_nodes(node[1], depth + 1)
-    if kind == "window":
-        if len(node) != 3:
-            raise ValueError(f"{op} needs [op, expr, window]")
-        n = node[2]
+    if kind in ("window", "window2"):
+        width = 3 if kind == "window" else 4
+        if len(node) != width:
+            raise ValueError(f"{op} needs [op, {'expr' if width == 3 else 'expr, expr'}, window]")
+        n = node[-1]
         if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= MAX_WINDOW:
             raise ValueError(f"{op} window must be an integer in 1..{MAX_WINDOW}")
-        if op in ("std", "z", "tsrank") and n < 2:
+        if op in ("std", "z", "tsrank", "beta", "corr") and n < 2:
             raise ValueError(f"{op} window must be at least 2")
-        return 1 + _count_nodes(node[1], depth + 1)
+        return 1 + sum(_count_nodes(child, depth + 1) for child in node[1:-1])
+    if kind == "ref":
+        if len(node) != 3 or not isinstance(node[1], str) or not SYMBOL_RE.fullmatch(node[1]):
+            raise ValueError("ref needs [ref, SYMBOL, expr]")
+        return 1 + _count_nodes(node[2], depth + 1)
     if len(node) != 1 + arity:
         raise ValueError(f"{op} takes {arity} argument(s)")
     return 1 + sum(_count_nodes(child, depth + 1) for child in node[1:])
@@ -410,7 +421,7 @@ def _count_nodes(node, depth=1):
 
 def validate_hypothesis(rec: dict) -> dict:
     allowed = {"id", "author", "rationale", "score", "mode", "horizon_bars", "rebalance_bars", "quantile",
-               "min_symbols", "weighting", "vol_window"}
+               "min_symbols", "weighting", "vol_window", "neutralize", "beta_window"}
     if not isinstance(rec, dict) or not set(rec) <= allowed or not {"id", "score", "horizon_bars"} <= set(rec):
         raise ValueError("hypothesis needs id, score, horizon_bars and only known fields")
     if not isinstance(rec["id"], str) or not ID_RE.fullmatch(rec["id"]):
@@ -446,6 +457,14 @@ def validate_hypothesis(rec: dict) -> dict:
         out["vol_window"] = n
     if out.get("weighting") == "inverse_vol":
         out.setdefault("vol_window", 720)
+    if "neutralize" in rec:
+        n = rec.get("beta_window", 120)
+        if rec["neutralize"] != "beta" or out["mode"] != "cross_section" or isinstance(n, bool) \
+                or not isinstance(n, int) or not 20 <= n <= MAX_WINDOW:
+            raise ValueError("neutralize must be 'beta' (cross_section only) with beta_window in 20..MAX_WINDOW")
+        out["neutralize"], out["beta_window"] = "beta", n
+    elif "beta_window" in rec:
+        raise ValueError("beta_window needs neutralize: beta")
     if out["mode"] not in ("cross_section", "time_series"):
         raise ValueError("mode must be cross_section or time_series")
     if not _finite(out["quantile"]) or not 0 < out["quantile"] <= 0.5:
@@ -459,7 +478,7 @@ def validate_hypothesis(rec: dict) -> dict:
 def hypothesis_sha(h: dict) -> str:
     """Identity of the testable rule; rationale/author/id do not change it."""
     core = {k: h[k] for k in ("score", "mode", "horizon_bars", "quantile", "min_symbols", "rebalance_bars",
-                              "weighting", "vol_window") if k in h}
+                              "weighting", "vol_window", "neutralize", "beta_window") if k in h}
     return sha256_bytes(canonical(core))
 
 
@@ -541,8 +560,55 @@ def _tsrank(xs, n):
     return out
 
 
+def _rolling_extreme(xs, n, take_max):
+    """Trailing max or min over n bars; any NaN in the window gives NaN."""
+    T = len(xs)
+    out = nan_array(T)
+    dq: list = []
+    head = 0
+    start = 0
+    better = (lambda a, b: a >= b) if take_max else (lambda a, b: a <= b)
+    for t in range(T):
+        x = xs[t]
+        if x != x:
+            dq, head, start = [], 0, t + 1
+            continue
+        while len(dq) > head and better(x, xs[dq[-1]]):
+            dq.pop()
+        dq.append(t)
+        if dq[head] <= t - n:
+            head += 1
+        if head > 1024:
+            dq, head = dq[head:], 0
+        if t - start + 1 >= n:
+            out[t] = xs[dq[head]]
+    return out
+
+
+def _window2(op, ys, xs, n):
+    """Trailing regression slope of y on x (beta) or correlation over n bars."""
+    T = len(ys)
+    prod_xy = _clean([a * b if a == a and b == b else NAN for a, b in zip(ys, xs)])
+    _, m_xy, _ = _rolling_stats(prod_xy, n)
+    _, m_y, sd_y = _rolling_stats(_clean([a if b == b else NAN for a, b in zip(ys, xs)]), n)
+    _, m_x, sd_x = _rolling_stats(_clean([b if a == a else NAN for a, b in zip(ys, xs)]), n)
+    out = nan_array(T)
+    k = n / (n - 1)
+    for t in range(T):
+        if m_xy[t] != m_xy[t] or sd_x[t] != sd_x[t] or sd_x[t] < EPS:
+            continue
+        cov = k * (m_xy[t] - m_y[t] * m_x[t])
+        if op == "beta":
+            out[t] = cov / (sd_x[t] * sd_x[t])
+        elif sd_y[t] > EPS:
+            out[t] = max(-1.0, min(1.0, cov / (sd_x[t] * sd_y[t])))
+    return out
+
+
 def _ts_op(op, xs, n):
     T = len(xs)
+    if op in ("tsmax", "tsmin"):
+        return _rolling_extreme(xs, n, op == "tsmax")
     if op == "lag":
         return nan_array(min(n, T)) + array("d", xs[:max(T - n, 0)])
     if op == "delta":
@@ -607,6 +673,10 @@ def _cross_op(op, by_sym, symbols, T, eligible):
                 outs[k][t] = r / (m - 1) - 0.5
             continue
         mu = math.fsum(vals) / m
+        if op == "csmean":
+            for o in outs:
+                o[t] = mu
+            continue
         if op == "csdemean":
             for k, v in zip(live, vals):
                 outs[k][t] = v - mu
@@ -701,6 +771,22 @@ def evaluate_expression(node, panel: Panel, cache=None):
     if kind == "clip":
         x, c = evaluate_expression(node[1], panel, cache), float(node[2])
         return {s: _clean([max(-c, min(c, v)) if v == v else NAN for v in x[s]]) for s in syms}
+    if kind == "ternary":
+        c = evaluate_expression(node[1], panel, cache)
+        a = evaluate_expression(node[2], panel, cache)
+        b = evaluate_expression(node[3], panel, cache)
+        return {s: _clean([(u if k > 0 else v) if k == k else NAN for k, u, v in zip(c[s], a[s], b[s])]) for s in syms}
+    if kind == "window2":
+        y = evaluate_expression(node[1], panel, cache)
+        x = evaluate_expression(node[2], panel, cache)
+        return {s: _window2(op, y[s], x[s], node[3]) for s in syms}
+    if kind == "ref":
+        x = evaluate_expression(node[2], panel, cache)
+        src = x.get(node[1])
+        if src is None:
+            return {s: nan_array(T) for s in syms}
+        shared = array("d", src)
+        return {s: shared for s in syms}
     x = evaluate_expression(node[1], panel, cache)
     if kind == "window":
         return {s: _ts_op(op, x[s], node[2]) for s in syms}
@@ -758,12 +844,28 @@ def target_weights(cohort, hyp, vol=None) -> dict:
     return w
 
 
-def default_rebalance(h: int) -> int:
-    """Daily staggered tranches for holds longer than a day; otherwise one tranche."""
-    return h if h <= 24 else math.gcd(h, 24)
+def beta_neutralize(w: dict, beta: dict) -> dict:
+    """Rescale the long and short sides so the book's ex-ante market beta is zero while the
+    gross stays 1: long x a, short x b with a*B_long = b*B_short and a + b = 2. Scales are
+    capped to [0.5, 1.5]; a side with non-positive beta leaves the book unchanged."""
+    bl = math.fsum(x * beta[s] for s, x in w.items() if x > 0)
+    bs = math.fsum(-x * beta[s] for s, x in w.items() if x < 0)
+    if bl <= EPS or bs <= EPS:
+        return w
+    a = min(1.5, max(0.5, 2 * bs / (bl + bs)))
+    b = 2 - a
+    return {s: x * (a if x > 0 else b) for s, x in w.items()}
 
 
-def simulate(panel: Panel, hyp: dict, first_entry: int, last_exit: int, costs_bp, missing_exit_penalty_bp=300.0) -> dict:
+def default_rebalance(h: int, bars_per_day: int = 24) -> int:
+    """Daily staggered tranches for holds longer than a day; otherwise one tranche.
+    Calendar based: on hourly bars a 48-bar hold rebalances every 24 bars, on daily bars
+    a 5-bar hold rebalances every bar."""
+    return h if h <= bars_per_day else math.gcd(h, bars_per_day)
+
+
+def simulate(panel: Panel, hyp: dict, first_entry: int, last_exit: int, costs_bp, missing_exit_penalty_bp=300.0,
+             score=None) -> dict:
     """Staggered-tranche book, evaluated one rebalance step (r bars) at a time.
 
     Position convention (self-financing, fixed units): every r bars, after the close of
@@ -782,11 +884,15 @@ def simulate(panel: Panel, hyp: dict, first_entry: int, last_exit: int, costs_bp
     Entries >= first_entry, exits <= last_exit.
     """
     h = hyp["horizon_bars"]
-    r = hyp.get("rebalance_bars") or default_rebalance(h)
+    r = hyp.get("rebalance_bars") or default_rebalance(h, max(1, MS_PER_DAY // panel.bar_ms))
     K = h // r
-    score = evaluate_expression(hyp["score"], panel)
+    # score may be passed precomputed by the search engine; it must equal evaluate_expression(hyp["score"])
+    score = evaluate_expression(hyp["score"], panel) if score is None else score
     inv_vol = hyp.get("weighting") == "inverse_vol"
     vol = evaluate_expression(["std", ["field", "ret"], hyp["vol_window"]], panel) if inv_vol else None
+    neutral = hyp.get("neutralize") == "beta"
+    beta = evaluate_expression(["beta", ["field", "ret"], ["csmean", ["field", "ret"]], hyp["beta_window"]], panel) \
+        if neutral else None
     opens, closes, funding, elig = panel.series["open"], panel.series["close"], panel.series["funding"], panel.eligible
     pen = missing_exit_penalty_bp / 1e4
     steps, tranches = [], []  # tranche: {"legs": {sym: [weight, entry_price, last_price]}, "left": steps remaining}
@@ -800,10 +906,12 @@ def simulate(panel: Panel, hyp: dict, first_entry: int, last_exit: int, costs_bp
         if s + h <= last_exit:
             cohort = [(sym, score[sym][t]) for sym in panel.symbols
                       if score[sym][t] == score[sym][t] and elig[sym][t] and closes[sym][t] == closes[sym][t]
-                      and (not inv_vol or vol[sym][t] > EPS)]
+                      and (not inv_vol or vol[sym][t] > EPS) and (not neutral or beta[sym][t] == beta[sym][t])]
             n_cohort = len(cohort)
             if n_cohort >= hyp["min_symbols"]:
                 new_weights = target_weights(cohort, hyp, {sym: vol[sym][t] for sym, _ in cohort} if inv_vol else None)
+                if neutral:
+                    new_weights = beta_neutralize(new_weights, {sym: beta[sym][t] for sym in new_weights})
                 legs = {}
                 for sym, wt in new_weights.items():
                     o = opens[sym][s]
@@ -1041,13 +1149,29 @@ DEFAULT_GATE = {
 }
 
 
+def _grid_index(panel: Panel, ts: int, what: str) -> int:
+    i = (ts - panel.times[0]) // panel.bar_ms
+    if (ts - panel.times[0]) % panel.bar_ms or not 0 < i < panel.T:
+        raise ValueError(f"{what} {utc_iso(ts)} is not on the panel grid")
+    return i
+
+
 def freeze_config(panel: Panel, holdout_frac: float, out, gate_overrides: dict | None = None,
-                  expect_bar_ms: int | None = None) -> dict:
+                  expect_bar_ms: int | None = None, holdout_start_ts: int | None = None,
+                  search_end_ts: int | None = None, derived_from: str | None = None) -> dict:
+    """holdout_start_ts / search_end_ts fix calendar boundaries instead of fractions, so an
+    hourly panel and its daily aggregate share one holdout. search_end_ts splits
+    development into a search segment (explore) and a validation segment (promote)."""
     if not 0.05 <= holdout_frac <= 0.5:
         raise ValueError("holdout fraction must be in [0.05, 0.5]")
     if expect_bar_ms is not None and panel.bar_ms != expect_bar_ms:
         raise ValueError(f"panel bar is {panel.bar_ms} ms, expected {expect_bar_ms}")
-    b = int(panel.T * (1 - holdout_frac))
+    b = int(panel.T * (1 - holdout_frac)) if holdout_start_ts is None else _grid_index(panel, holdout_start_ts, "holdout start")
+    sb = None
+    if search_end_ts is not None:
+        sb = _grid_index(panel, search_end_ts, "search end")
+        if not sb < b:
+            raise ValueError("search end must come before the holdout start")
     gate = dict(DEFAULT_GATE)
     gate.update(gate_overrides or {})
     if gate["gate_cost_bp_per_side"] not in gate["costs_bp_per_side"]:
@@ -1058,8 +1182,22 @@ def freeze_config(panel: Panel, holdout_frac: float, out, gate_overrides: dict |
         "holdout_start_ts": panel.times[b], "holdout_start_utc": utc_iso(panel.times[b]),
         "gate": gate, "frozen_at_utc": now_utc(),
     }
+    if sb is not None:
+        cfg["search_end_ts"] = panel.times[sb]
+        cfg["search_end_utc"] = utc_iso(panel.times[sb])
+    if derived_from:
+        cfg["derived_from_panel_sha256"] = derived_from
     write_exclusive(Path(out), cfg)
     return cfg
+
+
+def search_index(cfg: dict, panel: Panel) -> int:
+    if "search_end_ts" not in cfg:
+        raise PermissionError("this frozen config has no search/validation split")
+    i = (cfg["search_end_ts"] - panel.times[0]) // panel.bar_ms
+    if not 0 < i <= panel.T:
+        raise ValueError("search end is outside the loaded panel")
+    return i
 
 
 def load_config(path, panel: Panel) -> tuple[dict, int]:
@@ -1069,9 +1207,10 @@ def load_config(path, panel: Panel) -> tuple[dict, int]:
     if cfg["panel_sha256"] != panel.sha:
         raise ValueError("panel SHA differs from the frozen config; refuse to evaluate")
     b = (cfg["holdout_start_ts"] - panel.times[0]) // panel.bar_ms
+    aligned = (cfg["holdout_start_ts"] - panel.times[0]) % panel.bar_ms == 0
     on_grid = 0 < b < panel.T and panel.times[b] == cfg["holdout_start_ts"]
-    loaded_to_boundary = b == panel.T and panel.times[-1] + panel.bar_ms == cfg["holdout_start_ts"]
-    if not (on_grid or loaded_to_boundary):
+    loaded_short = aligned and b >= panel.T  # panel loaded only up to the boundary or the search end
+    if not (on_grid or loaded_short):
         raise ValueError("holdout boundary is not on the panel grid")
     return cfg, b
 
@@ -1183,14 +1322,86 @@ def evaluate_development(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledg
     return report
 
 
+def evaluate_exploration(panel: Panel, cfg: dict, hyp: dict, ledger_path) -> dict:
+    """Search segment only, recorded in a separate exploration ledger. Exploration results
+    never enter the confirmatory trial count: what counts is how many rules are promoted."""
+    gate = cfg["gate"]
+    sb = search_index(cfg, panel)
+    seg = panel if panel.T == sb else panel.truncated(sb)
+    sim = simulate(seg, hyp, first_entry=1, last_exit=sb - 1, costs_bp=gate["costs_bp_per_side"],
+                   missing_exit_penalty_bp=gate["missing_exit_penalty_bp"])
+    summary = summarize(sim, gate["costs_bp_per_side"], gate["gate_cost_bp_per_side"], gate["folds"])
+    g = summary.get("by_cost_bp_per_side", {}).get(str(gate["gate_cost_bp_per_side"]), {})
+    hsha = hypothesis_sha(hyp)
+    entry = {"time_utc": now_utc(), "region": "exploration", "hypothesis_id": hyp["id"], "author": hyp["author"],
+             "hypothesis_sha256": hsha, "panel_sha256": panel.sha, "periods": summary["periods"],
+             "sharpe_annual_gate": g.get("sharpe_annual"), "ic_mean": summary.get("ic_mean"),
+             "funding_unknown_share": summary["funding_unknown_share"]}
+    append_ledger(ledger_path, entry)
+    return {"bench": VERSION, "region": "exploration", "hypothesis": hyp, "hypothesis_sha256": hsha,
+            "search_end_utc": cfg["search_end_utc"], "summary": summary}
+
+
+def evaluate_validation(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledger_path, batch_shas=()) -> dict:
+    """Validation segment [search end, holdout start) only. Trials counted: every distinct
+    rule ever promoted on this panel, every rule in the promotion batch being run (all of
+    it counts from the first rule, so promotion order cannot help), plus gate
+    validation_prior_trials."""
+    gate = cfg["gate"]
+    sb = search_index(cfg, panel)
+    dev = panel if panel.T == boundary else panel.truncated(boundary)
+    sim = simulate(dev, hyp, first_entry=sb, last_exit=boundary - 1, costs_bp=gate["costs_bp_per_side"],
+                   missing_exit_penalty_bp=gate["missing_exit_penalty_bp"])
+    summary = summarize(sim, gate["costs_bp_per_side"], gate["gate_cost_bp_per_side"], gate["folds"])
+    hsha = hypothesis_sha(hyp)
+    report = {"bench": VERSION, "region": "validation", "hypothesis": hyp, "hypothesis_sha256": hsha,
+              "panel_sha256": panel.sha, "validation_utc": [cfg["search_end_utc"], cfg["holdout_start_utc"]],
+              "summary": summary, "sharpe_annual_gate": None}
+    n = summary["periods"]
+    g = summary.get("by_cost_bp_per_side", {}).get(str(gate["gate_cost_bp_per_side"]))
+    if n < gate["min_periods"] or g is None or g["n_effective"] < gate["min_effective_periods"]:
+        report["verdict"] = "INSUFFICIENT_DATA"
+    else:
+        ppy = summary["periods_per_year"]
+        by_sha = {e["hypothesis_sha256"]: e["sharpe_annual_gate"] for e in read_ledger(ledger_path)
+                  if e.get("region") == "validation" and e.get("panel_sha256") == panel.sha
+                  and e.get("sharpe_annual_gate") is not None}
+        by_sha[hsha] = g["sharpe_annual"]
+        srs = list(by_sha.values())
+        n_trials = len(set(by_sha) | set(batch_shas)) + int(gate.get("validation_prior_trials", 0))
+        var_annual = max(moments(srs)[1] ** 2 if len(srs) >= 2 else 0.0, ppy / n)
+        dsr = deflated_sharpe(g["sharpe_period_lr"], n, g["skew"], g["kurtosis"], n_trials, var_annual / ppy)
+        folds_pos = sum(1 for f in summary["folds"] if f["net_mean_bp"] > 0)
+        ic_ok = summary.get("ic_mean", 0) > 0
+        report["selection"] = {"trials_counted": n_trials, "var_annual_sharpe_used": var_annual,
+                               "expected_max_null_sharpe_annual": expected_max_sharpe(n_trials, var_annual),
+                               "deflated_sharpe": dsr, "folds_positive": folds_pos, "ic_positive": ic_ok}
+        report["sharpe_annual_gate"] = g["sharpe_annual"]
+        powered = summary["power"]["mde_sharpe_annual"] <= gate["target_sharpe_annual"]
+        if summary["funding_unknown_share"] > gate["max_funding_unknown_share"]:
+            report["verdict"] = "FUNDING_UNKNOWN"
+        elif dsr >= gate["dsr_min"] and folds_pos >= gate["folds_positive_min"] and ic_ok:
+            report["verdict"] = "PASS_VALIDATION"
+        elif g["mean_bp"] <= 0 or powered:
+            report["verdict"] = "REJECT"
+        else:
+            report["verdict"] = "INCONCLUSIVE_UNPOWERED"
+    append_ledger(ledger_path, {
+        "time_utc": now_utc(), "region": "validation", "hypothesis_id": hyp["id"], "author": hyp["author"],
+        "hypothesis_sha256": hsha, "panel_sha256": panel.sha, "periods": n,
+        "sharpe_annual_gate": report["sharpe_annual_gate"], "verdict": report["verdict"],
+    })
+    return report
+
+
 def evaluate_holdout(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledger_path, claims_dir, signoffs_dir) -> dict:
     gate = cfg["gate"]
     hsha = hypothesis_sha(hyp)
     passed = [e for e in read_ledger(ledger_path) if e.get("hypothesis_sha256") == hsha
-              and e.get("panel_sha256") == panel.sha and e.get("region") == "development"
-              and e.get("verdict") == "PASS_DEV"]
+              and e.get("panel_sha256") == panel.sha
+              and (e.get("region"), e.get("verdict")) in (("development", "PASS_DEV"), ("validation", "PASS_VALIDATION"))]
     if not passed:
-        raise PermissionError("holdout requires a recorded PASS_DEV for this exact hypothesis and panel")
+        raise PermissionError("holdout requires a recorded PASS_DEV or PASS_VALIDATION for this exact hypothesis and panel")
     signoff = _check_signoff(signoffs_dir, hsha, panel.sha, passed[-1]["author"])
     claims = Path(claims_dir)
     claims.mkdir(parents=True, exist_ok=True)
@@ -1303,7 +1514,10 @@ def main(argv=None):
                    help="audited count of distinct rules already tried before this bench")
     p.add_argument("--registered-hyp", action="append", required=True,
                    help="every committed hypothesis batch; all count as trials before the first result")
-    for name in ("evaluate", "holdout"):
+    p.add_argument("--holdout-start", help="UTC date YYYY-MM-DD; overrides --holdout-frac")
+    p.add_argument("--search-end", help="UTC date YYYY-MM-DD splitting development into search and validation")
+    p.add_argument("--derived-from", help="SHA of the panel this one was aggregated from")
+    for name in ("evaluate", "explore", "promote", "holdout"):
         p = sub.add_parser(name)
         for arg in ("--panel", "--config", "--hyp", "--ledger", "--out"):
             p.add_argument(arg, required=True)
@@ -1334,22 +1548,35 @@ def main(argv=None):
         print(write_signoff(args.signoffs, args.hypothesis_sha, args.panel_sha, args.reviewer, args.note))
         return
     end_ts = None
-    if args.cmd == "evaluate":  # development never loads holdout bars
+    if args.cmd in ("evaluate", "promote"):  # development never loads holdout bars
         end_ts = json.loads(Path(args.config).read_text())["holdout_start_ts"]
+    elif args.cmd == "explore":  # exploration never loads validation or holdout bars
+        frozen = json.loads(Path(args.config).read_text())
+        if "search_end_ts" not in frozen:
+            raise SystemExit("this frozen config has no search/validation split")
+        end_ts = frozen["search_end_ts"]
     panel = load_panel(args.panel, tradable_only=args.cmd != "audit", end_ts=end_ts)
     if args.cmd == "audit":
         print(json.dumps(audit_panel(panel, args.expect_bar_ms, args.eligibility_usd, args.eligibility_days), indent=1))
         return
     if args.cmd == "freeze":
         registered = sorted({hypothesis_sha(h) for f in args.registered_hyp for h in read_hypotheses(f)})
+        day_ts = lambda d: int(datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp() * 1000)
         cfg = freeze_config(panel, args.holdout_frac, args.out,
-                            {"prior_trials": args.prior_trials, "registered_hypotheses": registered}, args.expect_bar_ms)
-        print(json.dumps({k: cfg[k] for k in ("panel_sha256", "holdout_start_utc")}, indent=1))
+                            {"prior_trials": args.prior_trials, "registered_hypotheses": registered}, args.expect_bar_ms,
+                            holdout_start_ts=day_ts(args.holdout_start) if args.holdout_start else None,
+                            search_end_ts=day_ts(args.search_end) if args.search_end else None,
+                            derived_from=args.derived_from)
+        print(json.dumps({k: cfg[k] for k in ("panel_sha256", "holdout_start_utc", "search_end_utc") if k in cfg}, indent=1))
         return
     cfg, boundary = load_config(args.config, panel)
     hyps = read_hypotheses(args.hyp)
-    if args.cmd == "evaluate":
-        reports = [evaluate_development(panel, cfg, boundary, h, args.ledger) for h in hyps]
+    if args.cmd in ("evaluate", "explore", "promote"):
+        run = {"evaluate": lambda h: evaluate_development(panel, cfg, boundary, h, args.ledger),
+               "explore": lambda h: dict(evaluate_exploration(panel, cfg, h, args.ledger), verdict="EXPLORED"),
+               "promote": lambda h: evaluate_validation(panel, cfg, boundary, h, args.ledger,
+                                                        [hypothesis_sha(x) for x in hyps])}[args.cmd]
+        reports = [run(h) for h in hyps]
         write_exclusive(Path(args.out), {"reports": reports})
         for r in reports:
             print(f"{r['hypothesis']['id']:40s} {r['hypothesis_sha256'][:12]} {r['verdict']}")
