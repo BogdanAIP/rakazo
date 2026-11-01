@@ -1,0 +1,95 @@
+{
+  "schema": "gpt_bench_v408_independent_preflight_v1",
+  "date_utc": "2026-11-01",
+  "reviewed_head": "2187e7b894d33d0cf31b1a13149e17e8df966577",
+  "mode": "OFFLINE_SYNTHETIC_ONLY",
+  "execution": "Authorized Windows host; isolated Git object export under private research run. Running r2 builder files/process untouched; no full market panel loaded.",
+  "private_run": "runs/bench408-independent-review-20261101",
+  "tests": {
+    "selected_inverse_vol_freeze_and_cadence": {
+      "passed": 6,
+      "seconds": 1.74,
+      "covers": [
+        "inverse-vol side balance",
+        "inverse-vol causal decisions",
+        "equal-weight default compatibility",
+        "four preregistration batch validation",
+        "synthetic CLI audit/freeze239",
+        "panel cadence flag classification"
+      ]
+    },
+    "verifier_fixture_checks": {
+      "passed": 3,
+      "seconds": 13.344,
+      "covers": [
+        "clean synthetic build proceeds",
+        "funding gap stops above5%",
+        "panel tamper and wrong clock counters stop"
+      ]
+    },
+    "first_verifier_attempt": {
+      "status": "STOPPED_TIMEOUT",
+      "timeout_seconds": 10,
+      "assertion_failure_observed": false,
+      "child_killed_and_waited_by_subprocess": true
+    },
+    "bounded_retry": {
+      "status": "COMPLETE",
+      "exit_code": 0,
+      "timeout_seconds": 60
+    },
+    "total_passed": 9
+  },
+  "hypothesis_identity": {
+    "original_rule_shas_unchanged_against_v407": 31,
+    "registered_batches": 4,
+    "distinct_registered_ids": 39,
+    "distinct_registered_rule_shas": 39,
+    "prior_trials": 200,
+    "conservative_trial_floor": 239,
+    "real_market_evaluations": 0
+  },
+  "post_build_procedure": {
+    "panel": "panels/bench-v40-full-20261101-r2.csv",
+    "require_atomic_completion_and_builder_audit": true,
+    "flagged_symbols": "runs/bench408-independent-review-20261101/flagged194.txt",
+    "flagged_source": "Exact194-contract list from original full-source audit r2; do not substitute panel-derived flags for this comparison.",
+    "flagged_list_sha256": "8654553adf432d4065b32aee08dbb246189bb14086163545f92f9f753b0f80cb",
+    "eligible_na_limit": 0.05,
+    "missing_minutes_limit": 0.001,
+    "expected_unavailable_off_hour_markers": 3,
+    "expected_outside_window_events": 3,
+    "sequence": [
+      "streaming verifier with explicit flagged194 list",
+      "independent current bench audit: hourly grid and exact volume eligibility",
+      "publish results for Claude review",
+      "freezeprior200 registering allfour committed files only after gates pass",
+      "DEVonly original8,original12,medium11,composites8 in shared ledger"
+    ],
+    "historical_extension": "Metadata probe already completed by another authorized GPT session in COLLAB; no duplicate request or bulk extension. Owner decision required to expand panel."
+  },
+  "build_liveness_observation": {
+    "observed_utc": "2026-11-01T14:27:19.493141+00:00",
+    "status": "RUNNING",
+    "wrapper_pid": 12172,
+    "child_pid": 12280,
+    "child_create_time": 1793540161.0423048,
+    "pinned_code": "9a78ffbf60df7797de3d7cdc2a0c916414725584",
+    "checkpoint": "runs/full-panel-build-20261101-r2/status.json",
+    "elapsed_seconds": 3063.279,
+    "partial_bytes": 215329444,
+    "peak_working_set_bytes": 390074368,
+    "stderr_empty": true,
+    "final_panel_verified": false
+  },
+  "safety": {
+    "no_docker": true,
+    "no_orders": true,
+    "no_paper_or_trader_changes": true,
+    "no_source_download_or_audit_repeat": true,
+    "no_real_freeze": true,
+    "no_real_ledger_changes": true,
+    "no_holdout_access": true,
+    "no_efficacy_claim": true
+  }
+}
