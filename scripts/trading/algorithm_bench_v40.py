@@ -1389,12 +1389,55 @@ def evaluate_development(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledg
         report["power_note"] = (f"{summary['years']:.2f} years of steps detect annual Sharpe >= "
                                 f"{summary['power']['mde_sharpe_annual']:.2f} with 80% power; target "
                                 f"{gate['target_sharpe_annual']}; effective observations {g['n_effective']:.0f}")
-    append_ledger(ledger_path, {
-        "time_utc": now_utc(), "region": "development", "hypothesis_id": hyp["id"], "author": hyp["author"],
-        "hypothesis_sha256": hsha, "panel_sha256": panel.sha, "periods": n,
-        "sharpe_annual_gate": report["sharpe_annual_gate"], "verdict": report["verdict"],
-    })
+    entry = {"time_utc": now_utc(), "region": "development", "hypothesis_id": hyp["id"], "author": hyp["author"],
+             "hypothesis_sha256": hsha, "panel_sha256": panel.sha, "periods": n,
+             "sharpe_annual_gate": report["sharpe_annual_gate"], "verdict": report["verdict"]}
+    if primary_declaration(read_ledger(ledger_path), panel.sha) == hsha:
+        report["primary_verdict"] = _primary_verdict(report, summary, gate, g)
+        entry["primary"], entry["primary_verdict"] = True, report["primary_verdict"]
+    append_ledger(ledger_path, entry)
     return report
+
+
+def primary_declaration(ledger: list[dict], panel_sha: str):
+    """SHA of the rule declared primary on this panel, or None."""
+    for e in ledger:
+        if e.get("region") == "primary_declaration" and e.get("panel_sha256") == panel_sha:
+            return e["hypothesis_sha256"]
+    return None
+
+
+def declare_primary(ledger_path, panel_sha: str, hyp: dict, reason: str = "") -> dict:
+    """Name one rule, before any result on this panel exists, to be judged as a single
+    preregistered test (one trial) next to the usual multiple-testing verdict. Refused once
+    any development, validation or holdout result for the panel is in the ledger, and only
+    one primary rule per panel."""
+    ledger = read_ledger(ledger_path)
+    if any(e.get("panel_sha256") == panel_sha and e.get("region") in ("development", "validation", "holdout")
+           for e in ledger):
+        raise PermissionError("results already exist for this panel; a primary rule can no longer be declared")
+    if primary_declaration(ledger, panel_sha) is not None:
+        raise PermissionError("this panel already has a primary rule")
+    entry = {"time_utc": now_utc(), "region": "primary_declaration", "hypothesis_id": hyp["id"],
+             "author": hyp["author"], "hypothesis_sha256": hypothesis_sha(hyp), "panel_sha256": panel_sha,
+             "reason": reason[:2000]}
+    append_ledger(ledger_path, entry)
+    return entry
+
+
+def _primary_verdict(report: dict, summary: dict, gate: dict, g) -> str:
+    """Same evidence rules as PASS_DEV, but the deflated Sharpe counts one trial."""
+    if report["verdict"] in ("INSUFFICIENT_DATA", "FUNDING_UNKNOWN"):
+        return report["verdict"]
+    n = summary["periods"]
+    psr = deflated_sharpe(g["sharpe_period_lr"], n, g["skew"], g["kurtosis"], 1, summary["periods_per_year"] / n)
+    folds_pos = sum(1 for f in summary["folds"] if f["net_mean_bp"] > 0)
+    report["primary_selection"] = {"trials_counted": 1, "probabilistic_sharpe": psr, "folds_positive": folds_pos}
+    if psr >= gate["dsr_min"] and folds_pos >= gate["folds_positive_min"] and summary.get("ic_mean", 0) > 0:
+        return "PASS_PRIMARY"
+    if g["mean_bp"] <= 0 or summary["power"]["mde_sharpe_annual"] <= gate["target_sharpe_annual"]:
+        return "REJECT"
+    return "INCONCLUSIVE_UNPOWERED"
 
 
 def evaluate_exploration(panel: Panel, cfg: dict, hyp: dict, ledger_path) -> dict:
@@ -1478,9 +1521,11 @@ def evaluate_holdout(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledger_p
     hsha = hypothesis_sha(hyp)
     passed = [e for e in read_ledger(ledger_path) if e.get("hypothesis_sha256") == hsha
               and e.get("panel_sha256") == panel.sha
-              and (e.get("region"), e.get("verdict")) in (("development", "PASS_DEV"), ("validation", "PASS_VALIDATION"))]
+              and ((e.get("region"), e.get("verdict")) in (("development", "PASS_DEV"), ("validation", "PASS_VALIDATION"))
+                   or (e.get("region") == "development" and e.get("primary_verdict") == "PASS_PRIMARY"))]
     if not passed:
-        raise PermissionError("holdout requires a recorded PASS_DEV or PASS_VALIDATION for this exact hypothesis and panel")
+        raise PermissionError("holdout requires a recorded PASS_DEV, PASS_PRIMARY or PASS_VALIDATION for this exact "
+                              "hypothesis and panel")
     signoff = _check_signoff(signoffs_dir, hsha, panel.sha, passed[-1]["author"])
     claims = Path(claims_dir)
     claims.mkdir(parents=True, exist_ok=True)
@@ -1603,6 +1648,10 @@ def main(argv=None):
         if name == "holdout":
             for arg in ("--claims", "--signoffs", "--id"):
                 p.add_argument(arg, required=True)
+    p = sub.add_parser("declare-primary")
+    for arg in ("--panel-sha", "--hyp", "--id", "--ledger"):
+        p.add_argument(arg, required=True)
+    p.add_argument("--reason", default="")
     p = sub.add_parser("export-search")
     for arg in ("--panel", "--config", "--out", "--out-config"):
         p.add_argument(arg, required=True)
@@ -1625,6 +1674,12 @@ def main(argv=None):
                           "years_needed": need / args.periods_per_year,
                           "mde_sharpe_annual_at_n": mde_sharpe(args.n) * math.sqrt(args.periods_per_year) if args.n else None},
                          indent=1))
+        return
+    if args.cmd == "declare-primary":
+        hyp = next((h for h in read_hypotheses(args.hyp) if h["id"] == args.id), None)
+        if hyp is None:
+            raise SystemExit(f"no hypothesis with id {args.id}")
+        print(json.dumps(declare_primary(args.ledger, args.panel_sha, hyp, args.reason), indent=1))
         return
     if args.cmd == "export-search":
         print(json.dumps(export_search_segment(args.panel, args.config, args.out, args.out_config), indent=1))
@@ -1665,7 +1720,8 @@ def main(argv=None):
         reports = [run(h) for h in hyps]
         write_exclusive(Path(args.out), {"reports": reports})
         for r in reports:
-            print(f"{r['hypothesis']['id']:40s} {r['hypothesis_sha256'][:12]} {r['verdict']}")
+            extra = f"  primary: {r['primary_verdict']}" if "primary_verdict" in r else ""
+            print(f"{r['hypothesis']['id']:40s} {r['hypothesis_sha256'][:12]} {r['verdict']}{extra}")
         return
     hyp = next((h for h in hyps if h["id"] == args.id), None)
     if hyp is None:

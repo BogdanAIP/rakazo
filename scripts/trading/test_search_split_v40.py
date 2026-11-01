@@ -192,6 +192,47 @@ class TestExportMetadata(SplitCase):
         self.assertNotIn("LATE-USDT-SWAP", (d / "seg.csv").read_text())
 
 
+class TestPrimaryRule(SplitCase):
+    def weak_panel(self):
+        path = self.tmp / "weak.csv"
+        if not path.exists():
+            bench.synthesize(path, symbols=20, bars=2400, seed=12, plant=0.015)
+        return bench.load_panel(path, tradable_only=True)
+
+    def test_primary_gets_a_one_trial_verdict_and_unlocks_holdout(self):
+        panel = self.weak_panel()
+        d = self.tmp / "primary"
+        d.mkdir()
+        cfg = bench.freeze_config(panel, 0.25, d / "cfg.json", {"prior_trials": 200}, holdout_start_ts=self.holdout)
+        _, b = bench.load_config(d / "cfg.json", panel)
+        hyp = bench.validate_hypothesis(FUNDING_CONTRARIAN)
+        bench.declare_primary(d / "ledger.jsonl", panel.sha, hyp, "fixture")
+        rep = bench.evaluate_development(panel, cfg, b, hyp, d / "ledger.jsonl")
+        self.assertNotEqual(rep["verdict"], "PASS_DEV")          # 200 prior trials bury it
+        self.assertEqual(rep["primary_verdict"], "PASS_PRIMARY")  # one preregistered test does not
+        self.assertEqual(rep["primary_selection"]["trials_counted"], 1)
+        other = bench.validate_hypothesis(dict(FUNDING_CONTRARIAN, id="other", horizon_bars=4))
+        self.assertNotIn("primary_verdict", bench.evaluate_development(panel, cfg, b, other, d / "ledger.jsonl"))
+        bench.write_signoff(d / "signoffs", rep["hypothesis_sha256"], panel.sha, "gpt")
+        out = bench.evaluate_holdout(panel, cfg, b, hyp, d / "ledger.jsonl", d / "claims", d / "signoffs")
+        self.assertIn(out["verdict"], ("PASS_HOLDOUT", "FAIL_HOLDOUT"))
+
+    def test_primary_must_come_before_any_result_and_only_once(self):
+        panel = self.weak_panel()
+        d = self.tmp / "primary-late"
+        d.mkdir()
+        cfg = bench.freeze_config(panel, 0.25, d / "cfg.json", {"prior_trials": 0}, holdout_start_ts=self.holdout)
+        _, b = bench.load_config(d / "cfg.json", panel)
+        hyp = bench.validate_hypothesis(FUNDING_CONTRARIAN)
+        other = bench.validate_hypothesis(dict(FUNDING_CONTRARIAN, id="other", horizon_bars=4))
+        bench.evaluate_development(panel, cfg, b, other, d / "ledger.jsonl")
+        with self.assertRaises(PermissionError):
+            bench.declare_primary(d / "ledger.jsonl", panel.sha, hyp)
+        bench.declare_primary(d / "fresh.jsonl", panel.sha, hyp)
+        with self.assertRaises(PermissionError):
+            bench.declare_primary(d / "fresh.jsonl", panel.sha, other)
+
+
 class TestDailyAggregate(unittest.TestCase):
     def test_daily_bars_and_funding_states(self):
         with tempfile.TemporaryDirectory() as td:
