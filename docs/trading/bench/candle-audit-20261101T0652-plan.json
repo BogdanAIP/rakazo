@@ -1,0 +1,18 @@
+{
+  "schema": "finite_deferred_candle_audit_plan_v1",
+  "auditor_head": "8d87e978bf79ad782bd4ef58f6c2f0ac2997b864",
+  "source_start": "2023-11-04",
+  "source_end": "2024-01-02",
+  "source_dates": 60,
+  "originals_already_downloaded": true,
+  "downloads_allowed": false,
+  "timeout_seconds": 600,
+  "minimum_initial_available_memory_bytes": 805306368,
+  "stop_if_system_available_memory_below_bytes": 268435456,
+  "stop_if_child_peak_or_RSS_above_bytes": 536870912,
+  "resource_policy_basis": "largest uncompressed cached member completed in5.038s; measured peak_wset140455936bytes,222698 unique USDT minutes. New bounded process retains reserve and stops above512MiB; probe is not a universal memory bound",
+  "previous1500MiB_gate_and_deferred_results_preserved": true,
+  "outputs": "new private original manifest and candle/funding quality report; aggregate results only in Git",
+  "no_real_strategy_evaluations": true,
+  "panel_freeze_allowed": false
+}
