@@ -17,6 +17,7 @@ import math
 import os
 import shutil
 import statistics
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -271,7 +272,7 @@ def load_funding(root: Path, archive_dates, clock_audit=None, unknown_rate_days=
     count = 0
     for day in archive_dates:
         for row in read_zip_rows(file_at(root, "funding", day)):
-            symbol = row["instrument_name"]
+            symbol = sys.intern(row["instrument_name"])
             if not symbol.endswith("-USDT-SWAP"):
                 continue
             settlement = int(row["funding_time"])
@@ -330,14 +331,14 @@ def aggregate_day(root: Path, day: dt.date, funding=None):
     identical_duplicates = 0
     confirm = collections.Counter()
     for row in read_zip_rows(file_at(root, "candles", day)):
-        symbol = row["instrument_name"]
+        symbol = sys.intern(row["instrument_name"])
         if not symbol.endswith("-USDT-SWAP"):
             continue
         minute = int(row["open_time"])
         if minute % 60_000:
             raise ValueError(f"Not minute aligned: {symbol} {minute}")
         key_min = (minute, symbol)
-        fingerprint = tuple(sorted(row.items()))
+        fingerprint = json.dumps(row, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         if key_min in minutes_seen:
             if minutes_seen[key_min] != fingerprint:
                 raise ValueError(f"Duplicate minute conflicting fields: {symbol} {minute}")
