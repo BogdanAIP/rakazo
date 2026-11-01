@@ -1,0 +1,335 @@
+{
+  "schema": "prior_trials_early_inventory_v1",
+  "mode": "READ_ONLY_ARCHIVED_REPORT_INVENTORY",
+  "sources": [
+    {
+      "report_file": "algorithm-operator-v1-btc-dev-20261029.json",
+      "report_sha256": "0a05278c5bdc57c0641139cf7d06f7323f2110dc6473fc6070e358588231f446",
+      "hashed_operator_definitions": [
+        "4250a1c0d78880e8cf394afe999adad31268b1dec50974011068766bd8e86182",
+        "58d6667cfd6fc96d195dccceadf2dc290eee1619a43028d334de5de73ac3ff23",
+        "7668cad50f4ec2057fb3ad3fdd8e52a5cf919671f2dba3f3d08aed248e5abdbd"
+      ],
+      "unique_id_embargo_descriptors": [
+        {
+          "id": "regime-change-accumulator",
+          "embargo_bars": null
+        },
+        {
+          "id": "resettable-shock-memory",
+          "embargo_bars": null
+        },
+        {
+          "id": "wick-resilience-state",
+          "embargo_bars": null
+        }
+      ],
+      "descriptor_count": 3,
+      "grammar_ids": [],
+      "identity_limit": "id/embargo descriptors are not canonical executable-rule hashes; controls, nulls and changed protocols need source-lineage reconciliation"
+    },
+    {
+      "report_file": "algorithm-operator-v1-btc-critique-20261029.json",
+      "report_sha256": "46ebb81de265eeec3475a729832fb5d9e421d0a665abfefaaf9131ed0a2ffcc4",
+      "hashed_operator_definitions": [],
+      "unique_id_embargo_descriptors": [],
+      "descriptor_count": 0,
+      "grammar_ids": [],
+      "identity_limit": "id/embargo descriptors are not canonical executable-rule hashes; controls, nulls and changed protocols need source-lineage reconciliation"
+    },
+    {
+      "report_file": "algorithm-event-v2-development-20261029.json",
+      "report_sha256": "66616ef1feac12daba91df1fbe929ce676db9eec1742b0bfcf940fdff8137616",
+      "hashed_operator_definitions": [
+        "3ebbc6e6b5947885c84af33344a18ecfcd0ea81cd14dcc26d8cb429a20afa5fa",
+        "4250a1c0d78880e8cf394afe999adad31268b1dec50974011068766bd8e86182",
+        "58d6667cfd6fc96d195dccceadf2dc290eee1619a43028d334de5de73ac3ff23",
+        "59ff2141f6f5bad7e3f8bf5d3dafdd1b0e7840dab7a55fd2b7f1f96d24495cba",
+        "63d01f7cbc3d0cb5dca47369524c1b9bb358626de57bff5b40ea494c6c86f944",
+        "7535494e993ef24d665b87d7233bdacf6e2cec0b6040c56663d5b55015f9e78f",
+        "7668cad50f4ec2057fb3ad3fdd8e52a5cf919671f2dba3f3d08aed248e5abdbd"
+      ],
+      "unique_id_embargo_descriptors": [
+        {
+          "id": "cash",
+          "embargo_bars": null
+        },
+        {
+          "id": "countershock-release",
+          "embargo_bars": null
+        },
+        {
+          "id": "escrow-confirmation",
+          "embargo_bars": null
+        },
+        {
+          "id": "immediate-event-control",
+          "embargo_bars": null
+        },
+        {
+          "id": "legacy-regime-change-accumulator",
+          "embargo_bars": null
+        },
+        {
+          "id": "legacy-resettable-shock-memory",
+          "embargo_bars": null
+        },
+        {
+          "id": "legacy-wick-resilience-state",
+          "embargo_bars": null
+        },
+        {
+          "id": "no-conflict-control",
+          "embargo_bars": null
+        }
+      ],
+      "descriptor_count": 8,
+      "grammar_ids": [],
+      "identity_limit": "id/embargo descriptors are not canonical executable-rule hashes; controls, nulls and changed protocols need source-lineage reconciliation"
+    },
+    {
+      "report_file": "algorithm-event-v2-sol-doge-development-20261029.json",
+      "report_sha256": "d8f97fe95371185e08cdc177fa02bfac1a2442d9ae066c785ba53b0fe380598c",
+      "hashed_operator_definitions": [
+        "3ebbc6e6b5947885c84af33344a18ecfcd0ea81cd14dcc26d8cb429a20afa5fa",
+        "4250a1c0d78880e8cf394afe999adad31268b1dec50974011068766bd8e86182",
+        "58d6667cfd6fc96d195dccceadf2dc290eee1619a43028d334de5de73ac3ff23",
+        "59ff2141f6f5bad7e3f8bf5d3dafdd1b0e7840dab7a55fd2b7f1f96d24495cba",
+        "63d01f7cbc3d0cb5dca47369524c1b9bb358626de57bff5b40ea494c6c86f944",
+        "7535494e993ef24d665b87d7233bdacf6e2cec0b6040c56663d5b55015f9e78f",
+        "7668cad50f4ec2057fb3ad3fdd8e52a5cf919671f2dba3f3d08aed248e5abdbd"
+      ],
+      "unique_id_embargo_descriptors": [
+        {
+          "id": "cash",
+          "embargo_bars": null
+        },
+        {
+          "id": "countershock-release",
+          "embargo_bars": null
+        },
+        {
+          "id": "escrow-confirmation",
+          "embargo_bars": null
+        },
+        {
+          "id": "immediate-event-control",
+          "embargo_bars": null
+        },
+        {
+          "id": "legacy-regime-change-accumulator",
+          "embargo_bars": null
+        },
+        {
+          "id": "legacy-resettable-shock-memory",
+          "embargo_bars": null
+        },
+        {
+          "id": "legacy-wick-resilience-state",
+          "embargo_bars": null
+        },
+        {
+          "id": "no-conflict-control",
+          "embargo_bars": null
+        }
+      ],
+      "descriptor_count": 8,
+      "grammar_ids": [],
+      "identity_limit": "id/embargo descriptors are not canonical executable-rule hashes; controls, nulls and changed protocols need source-lineage reconciliation"
+    },
+    {
+      "report_file": "algorithm-intrinsic-v3-development-20261029.json",
+      "report_sha256": "1033ae11abb86d970cb26acefc6a2e05ec34ea16d02b3c464eb25cdf2c1637af",
+      "hashed_operator_definitions": [],
+      "unique_id_embargo_descriptors": [
+        {
+          "id": "cash",
+          "embargo_bars": null
+        },
+        {
+          "id": "first-recoil-control",
+          "embargo_bars": null
+        },
+        {
+          "id": "recoil-recovery",
+          "embargo_bars": null
+        },
+        {
+          "id": "recoil-recovery-cyclic-null",
+          "embargo_bars": null
+        },
+        {
+          "id": "recovery-failure",
+          "embargo_bars": null
+        },
+        {
+          "id": "recovery-failure-cyclic-null",
+          "embargo_bars": null
+        },
+        {
+          "id": "slow-event-control",
+          "embargo_bars": null
+        },
+        {
+          "id": "v2-countershock-release",
+          "embargo_bars": null
+        },
+        {
+          "id": "v2-escrow-confirmation",
+          "embargo_bars": null
+        },
+        {
+          "id": "v2-immediate-event-control",
+          "embargo_bars": null
+        },
+        {
+          "id": "v2-no-conflict-control",
+          "embargo_bars": null
+        }
+      ],
+      "descriptor_count": 11,
+      "grammar_ids": [
+        "first-recoil-control",
+        "recoil-recovery",
+        "recovery-failure",
+        "slow-event-control"
+      ],
+      "identity_limit": "id/embargo descriptors are not canonical executable-rule hashes; controls, nulls and changed protocols need source-lineage reconciliation"
+    },
+    {
+      "report_file": "algorithm-funding-v4-development-20261029.json",
+      "report_sha256": "2cdb19da903d061a1e1f4d1fb31f467c4e0f40d6a27d017936f7aa9e20a69ba7",
+      "hashed_operator_definitions": [],
+      "unique_id_embargo_descriptors": [
+        {
+          "id": "recoil-recovery-carry_receive",
+          "embargo_bars": 1
+        },
+        {
+          "id": "recoil-recovery-carry_receive",
+          "embargo_bars": 4
+        },
+        {
+          "id": "recoil-recovery-funding_deceleration",
+          "embargo_bars": 1
+        },
+        {
+          "id": "recoil-recovery-funding_deceleration",
+          "embargo_bars": 4
+        },
+        {
+          "id": "recoil-recovery-price-original",
+          "embargo_bars": null
+        },
+        {
+          "id": "recoil-recovery-price_coverage",
+          "embargo_bars": 1
+        },
+        {
+          "id": "recoil-recovery-price_coverage",
+          "embargo_bars": 4
+        },
+        {
+          "id": "recovery-failure-carry_receive",
+          "embargo_bars": 1
+        },
+        {
+          "id": "recovery-failure-carry_receive",
+          "embargo_bars": 4
+        },
+        {
+          "id": "recovery-failure-funding_deceleration",
+          "embargo_bars": 1
+        },
+        {
+          "id": "recovery-failure-funding_deceleration",
+          "embargo_bars": 4
+        },
+        {
+          "id": "recovery-failure-price-original",
+          "embargo_bars": null
+        },
+        {
+          "id": "recovery-failure-price_coverage",
+          "embargo_bars": 1
+        },
+        {
+          "id": "recovery-failure-price_coverage",
+          "embargo_bars": 4
+        }
+      ],
+      "descriptor_count": 14,
+      "grammar_ids": [],
+      "identity_limit": "id/embargo descriptors are not canonical executable-rule hashes; controls, nulls and changed protocols need source-lineage reconciliation"
+    },
+    {
+      "report_file": "algorithm-funding-v4-matched-null-20261029.json",
+      "report_sha256": "df4ae404bc28e71c9a3e6929fe651ab6dcfccb7d450c91c6162aa4106f475fe5",
+      "hashed_operator_definitions": [],
+      "unique_id_embargo_descriptors": [],
+      "descriptor_count": 0,
+      "grammar_ids": [],
+      "identity_limit": "id/embargo descriptors are not canonical executable-rule hashes; controls, nulls and changed protocols need source-lineage reconciliation"
+    }
+  ],
+  "hashed_operator_identity_count_v1_v2": 7,
+  "hashed_operator_identities": [
+    {
+      "operator_sha256": "3ebbc6e6b5947885c84af33344a18ecfcd0ea81cd14dcc26d8cb429a20afa5fa",
+      "reported_ids": [
+        "no-conflict-control"
+      ]
+    },
+    {
+      "operator_sha256": "4250a1c0d78880e8cf394afe999adad31268b1dec50974011068766bd8e86182",
+      "reported_ids": [
+        "legacy-regime-change-accumulator",
+        "regime-change-accumulator"
+      ]
+    },
+    {
+      "operator_sha256": "58d6667cfd6fc96d195dccceadf2dc290eee1619a43028d334de5de73ac3ff23",
+      "reported_ids": [
+        "legacy-resettable-shock-memory",
+        "resettable-shock-memory"
+      ]
+    },
+    {
+      "operator_sha256": "59ff2141f6f5bad7e3f8bf5d3dafdd1b0e7840dab7a55fd2b7f1f96d24495cba",
+      "reported_ids": [
+        "escrow-confirmation"
+      ]
+    },
+    {
+      "operator_sha256": "63d01f7cbc3d0cb5dca47369524c1b9bb358626de57bff5b40ea494c6c86f944",
+      "reported_ids": [
+        "countershock-release"
+      ]
+    },
+    {
+      "operator_sha256": "7535494e993ef24d665b87d7233bdacf6e2cec0b6040c56663d5b55015f9e78f",
+      "reported_ids": [
+        "immediate-event-control"
+      ]
+    },
+    {
+      "operator_sha256": "7668cad50f4ec2057fb3ad3fdd8e52a5cf919671f2dba3f3d08aed248e5abdbd",
+      "reported_ids": [
+        "legacy-wick-resilience-state",
+        "wick-resilience-state"
+      ]
+    }
+  ],
+  "final_prior_trials": null,
+  "freeze_usable": false,
+  "covered_versions": "partial v1-v4 reports only",
+  "unresolved": [
+    "v0 and v5-v39 not yet inventoried",
+    "source-code/AST and protocol identity reconciliation across versions",
+    "candidate/ablation/control/null trial policy",
+    "distinguish selected rule attempts from robustness resamples"
+  ],
+  "raw_market_data_accessed": false,
+  "new_strategy_evaluations": 0,
+  "old_reports_modified": false
+}
