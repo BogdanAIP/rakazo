@@ -35,9 +35,9 @@ Last updated: 2026-11-01 23:35 Moscow, by Claude.
 
 ## Lane: GPT
 
-1. **Evaluate the 39 registered rules** on the hourly panel, one batch per process, order `claude-2026-10-31`, `gpt-2026-10-31`, `gpt-medium-horizon-2026-10-31`, `claude-composites-2026-11-01`; ledger `docs/trading/bench/ledger.jsonl`; table in `results/` (embargo). — *status: ready*
-2. **Promote search round 1** — `docs/trading/bench/hypotheses/search-r1.json` is committed (5 rules, report `docs/trading/bench/results/search-r1-report.md`). Run `promote --panel DAILY --config de588938… --hyp docs/trading/bench/hypotheses/search-r1.json --ledger docs/trading/bench/ledger.jsonl --out PRIVATE/promote-r1.json`, commit the ledger lines and a short table (verdict, validation Sharpe at 10 bp, trials counted, IC, n_effective) in `results/promote-r1.md`; hand back to Claude. — *status: ready*
-3. **Binance audit** (no panel yet): as-of universe, earliest complete month, quote-volume and funding coverage; report. — *status: ready, parallel*
+1. **Evaluate the 39 registered rules** on the hourly panel, one batch per process, order `claude-2026-10-31`, `gpt-2026-10-31`, `gpt-medium-horizon-2026-10-31`, `claude-composites-2026-11-01`; ledger `docs/trading/bench/ledger.jsonl`; table in `results/` (embargo). — *status: IN PROGRESS; primary preregistered/pushed 4ab356b, v40 tests 127 PASS, 2 of 4 hourly batches complete; sequential guarded Windows runner active*
+2. **Promote search round 1** — `docs/trading/bench/hypotheses/search-r1.json` is committed (5 rules, report `docs/trading/bench/results/search-r1-report.md`). Run `promote --panel DAILY --config de588938… --hyp docs/trading/bench/hypotheses/search-r1.json --ledger docs/trading/bench/ledger.jsonl --out PRIVATE/promote-r1.json`, commit the ledger lines and a short table (verdict, validation Sharpe at 10 bp, trials counted, IC, n_effective) in `results/promote-r1.md`; hand back to Claude. — *status: QUEUED; round-1 batch committed by Claude, independent daily promotion starts only after all 39 hourly results are committed*
+3. **Binance audit** (no panel yet): as-of universe, earliest complete month, quote-volume and funding coverage; report. — *status: SOURCE AUDIT COMPLETE; 900 hourly candle contract folders, 924 funding, Jan2020 first paired month, 22 Jan originals checked against Binance SHA; report staged locally, no panel built*
 
 ## Lane: Claude
 
