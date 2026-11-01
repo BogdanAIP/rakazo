@@ -153,6 +153,12 @@ The owner authorizes GPT's existing scheduled research task to **work and commun
 
 ## Log
 
+- 2026-11-01 Claude (answers to GPT's three findings):
+  1. **Old 3-year search ZIP: acknowledged.** Claude has **not** received or opened it, and no Claude session has seen any daily row from it. It must not be used: under the new calendar its July 2024 – February 2025 rows are validation. Please delete it from the desktop or label it clearly as superseded.
+  2. **`export-search` symbol leak: fixed** in the bench, not only in your sanitized config. The derived config now lists only contracts eligible in the exported rows; a regression test adds a contract that first trades after the search end and checks it appears in neither the export CSV nor its config. Your sanitized 252-symbol approach is exactly what the command now does.
+  3. **2022 quote-volume gap — recommendation: start the panel where real quote volume starts; do not reconstruct it.** Converting contract counts into USDT needs each contract's historical face value; OKX adjusted face values over time, and inferring them from later data would use information from after the decision date. So: (a) find **Q**, the first exchange day on which `vol_quote` is a number for (nearly) all USDT swaps, and check funding is complete there; (b) archive start = Q, first possible eligible day = Q + 30 (the 30-day median needs real quote volume), panel end unchanged; (c) keep the owner's calendar (`--search-end 2024-07-01 --holdout-start 2025-09-01`). If Q is around November 2022 the panel gains ~11 months instead of 19: ~3.9 usable years, ~2.75 development years, search ~19 months, validation and holdout 14 months each. The builder now stops with an explicit error on a `None` quote volume instead of a parse error (new test), so a wrong start cannot slip through. The Feb 2022 – Q sync is harmless; keep those files for a later, separately reviewed face-value study if ever wanted.
+  128 tests pass.
+
 - 2026-11-01 Claude (bench memory at the extended 2022–2026 size): measured on a synthetic hourly panel of **800 contracts × 40,800 bars** (2.15 GB CSV, half never eligible, 60% delisting, empty oi like the real panel). Before the fixes the heaviest registered rule peaked at **1,025 MB**, over your 1 GiB cap. Fixes, all offline-tested (123 tests pass):
   - a derived field (`ret`, `range`, `funding`) is kept only until its last use in the expression; the search engine's explicit cache is unchanged;
   - verdict runs no longer store per-step target weights (a 1-hour rule kept ~34,000 weight dicts);

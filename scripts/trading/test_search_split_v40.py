@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import random
 import shutil
 import tempfile
@@ -170,6 +171,25 @@ class TestSearchExport(SplitCase):
                    lambda: bench.evaluate_development(seg, seg_cfg, 1800, bench.validate_hypothesis(FUNDING_CONTRARIAN), d / "v.jsonl")):
             with self.assertRaises(PermissionError):  # an export can only explore
                 fn()
+
+
+class TestExportMetadata(SplitCase):
+    def test_export_config_names_only_contracts_seen_before_search_end(self):
+        d = self.tmp / "export-meta"
+        d.mkdir()
+        late = [[self.search_end + k * HOUR, "LATE-USDT-SWAP", 1, 1, 1, 1, 1, 1, "", ""] for k in range(5)]
+        with open(self.src) as fh:
+            rows = list(csv.reader(fh))[1:]
+        path = self.tmp / "with-late.csv"
+        rows_panel(self.tmp, "with-late.csv", rows + late)
+        full = bench.load_panel(path, tradable_only=True)
+        bench.freeze_config(full, 0.25, d / "parent.json", {"prior_trials": 0}, holdout_start_ts=self.holdout,
+                            search_end_ts=self.search_end)
+        self.assertIn("LATE-USDT-SWAP", json.loads((d / "parent.json").read_text())["symbols"])
+        bench.export_search_segment(path, d / "parent.json", d / "seg.csv", d / "seg.json")
+        exported = json.loads((d / "seg.json").read_text())
+        self.assertNotIn("LATE-USDT-SWAP", exported["symbols"])
+        self.assertNotIn("LATE-USDT-SWAP", (d / "seg.csv").read_text())
 
 
 class TestDailyAggregate(unittest.TestCase):

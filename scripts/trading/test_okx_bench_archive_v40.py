@@ -171,6 +171,20 @@ class TestArchiveBuilder(unittest.TestCase):
         self.assertLess(a, 1 << 64)
 
 
+    def test_missing_quote_volume_fails_loudly(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            day = dt.date(2022, 3, 1)
+            header = "instrument_name,open,high,low,close,vol,vol_ccy,vol_quote,open_time,confirm\n"
+            target = archive.file_at(root, "candles", day)
+            target.parent.mkdir(parents=True)
+            target.write_bytes(compressed("candles.csv", header + "X-USDT-SWAP,1,1,1,1,5,None,None,1646006400000,0\n"))
+            archive.file_at(root, "funding", day).write_bytes(
+                compressed("funding.csv", "instrument_name,funding_rate,funding_time\n"))
+            with self.assertRaisesRegex(ValueError, "Quote volume unavailable"):
+                archive.aggregate_day(root, day)
+
+
 class TestAcquisitionBudgets(unittest.TestCase):
     def test_response_bound_with_and_without_content_length(self):
         for headers in ({"Content-Length": "6"}, {}):

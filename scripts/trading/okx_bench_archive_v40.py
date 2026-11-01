@@ -363,6 +363,11 @@ def aggregate_day(root: Path, day: dt.date, funding=None):
             continue
         minutes_seen[key_min] = fingerprint
         key = (minute // HOUR * HOUR, symbol)
+        if row["vol_quote"] in ("", "None"):
+            # OKX archives before late 2022 carry no quote volume (vol is a contract count and
+            # face values changed over time). Never guess it: start the archive later.
+            raise ValueError(f"Quote volume unavailable for {symbol} on archive day {day}; "
+                             "start the build at or after the first day with vol_quote")
         op, hi, lo, cl, vol = map(float, (row["open"], row["high"], row["low"], row["close"], row["vol_quote"]))
         if min(op, hi, lo, cl) <= 0 or vol < 0 or hi < max(op, cl, lo) or lo > min(op, cl, hi):
             raise ValueError(f"Bad OHLCV: {symbol} {minute}")

@@ -1244,22 +1244,28 @@ def export_search_segment(panel_path, cfg_path, out_csv, out_cfg) -> dict:
     if sha256_file(panel_path) != parent["panel_sha256"]:
         raise ValueError("panel SHA differs from the parent frozen config")
     cut, last, rows = parent["search_end_ts"], None, 0
+    seen_eligible = set()  # the export must not reveal contracts that only appear later
     out_csv, out_cfg = Path(out_csv), Path(out_cfg)
     if out_csv.exists() or out_cfg.exists():
         raise FileExistsError("export target exists")
     with open(panel_path, newline="", encoding="utf-8-sig") as fh, open(out_csv, "x", newline="", encoding="utf-8") as fo:
         reader, writer = csv.reader(fh), csv.writer(fo, lineterminator="\n")
-        writer.writerow(next(reader))
+        header = next(reader)
+        c_el = header.index("eligible") if "eligible" in header else None
+        writer.writerow(header)
         for row in reader:
             ts = int(row[0])
             if ts < cut:
                 writer.writerow(row)
                 rows += 1
                 last = ts if last is None or ts > last else last
+                if c_el is None or row[c_el] == "1":
+                    seen_eligible.add(row[1])
     if not rows:
         raise ValueError("no rows before the search end")
     derived = dict(parent)
     derived.update(panel_sha256=sha256_file(out_csv), panel_end_ts=last, export_scope="search segment only",
+                   symbols=sorted(seen_eligible),
                    parent_panel_sha256=parent["panel_sha256"], parent_config_sha256=sha256_file(cfg_path),
                    exported_at_utc=now_utc())
     write_exclusive(out_cfg, derived)
