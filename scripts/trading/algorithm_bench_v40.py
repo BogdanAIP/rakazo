@@ -46,7 +46,7 @@ from statistics import NormalDist
 
 SCHEMA_HYP = "rakazo_bench_hypothesis_v1"
 SCHEMA_CONFIG = "rakazo_bench_config_v1"
-VERSION = "bench-v40.5"
+VERSION = "bench-v40.6"
 
 MAX_DEPTH = 8
 MAX_NODES = 64
@@ -108,8 +108,8 @@ def _finite(x) -> bool:
     return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
 
 
-def nan_array(n: int) -> array:
-    return array("d", [NAN]) * n
+def nan_array(n: int, typecode: str = "d") -> array:
+    return array(typecode, [NAN]) * n
 
 
 def _clean(values) -> array:
@@ -132,7 +132,10 @@ def write_exclusive(path: Path, payload: dict) -> None:
 class Panel:
     """Aligned bar panel.
 
-    series[f][sym]  array('d'), NaN = no row; f in open/high/low/close/volume/oi/funding.
+    series[f][sym]  NaN = no row; f in open/high/low/close/volume/oi/funding. OHLCV are
+                    stored as float32 (relative error ~6e-8, far below a basis point; all
+                    arithmetic is float64), funding and oi as float64. Columns absent from
+                    the file share one read-only NaN array.
                     funding holds the settled rate, 0.0 for a known non-settlement bar,
                     NaN when the funding state is unknown or the row is missing.
     settled[sym]    bytearray, 1 where a funding settlement happened.
@@ -154,7 +157,8 @@ class Panel:
 
     def truncated(self, end: int) -> "Panel":
         """Bars [0, end) only. Used to make the holdout physically absent."""
-        series = {f: {s: v[:end] for s, v in d.items()} for f, d in self.series.items()}
+        cut: dict = {}  # keep shared arrays shared
+        series = {f: {s: cut.setdefault(id(v), v[:end]) for s, v in d.items()} for f, d in self.series.items()}
         return Panel(self.times[:end], self.symbols, series,
                      {s: v[:end] for s, v in self.settled.items()},
                      {s: v[:end] for s, v in self.eligible.items()}, self.bar_ms, self.sha)
@@ -189,8 +193,12 @@ def _csv_rows(path):
             yield line, row
 
 
-def load_panel(path) -> Panel:
+def load_panel(path, tradable_only: bool = False) -> Panel:
     """Read the panel CSV in two streaming passes.
+
+    tradable_only drops symbols that are never eligible. They can never enter a cohort,
+    and cross-sectional operators only use eligible symbols, so evaluation results are
+    unchanged; it only saves memory. The audit loads every symbol.
 
     Columns: ts,symbol,open,high,low,close,volume[,eligible][,funding][,oi]
     ts       bar OPEN time, integer ms UTC, on one fixed grid
@@ -202,8 +210,11 @@ def load_panel(path) -> Panel:
     sha_before = sha256_file(path)
     rows = _csv_rows(path)
     col = next(rows)
-    stamps, symbols = set(), set()
+    stamps, symbols, ever_eligible = set(), set(), set()
+    c_el = col.get("eligible")
     for line, row in rows:
+        if c_el is None or row[c_el] == "1":
+            ever_eligible.add(row[col["symbol"]])
         if not SYMBOL_RE.fullmatch(row[col["symbol"]]):
             raise ValueError(f"line {line}: bad symbol")
         try:
@@ -223,17 +234,23 @@ def load_panel(path) -> Panel:
     t0 = ordered[0]
     T = (ordered[-1] - t0) // bar_ms + 1
     times = [t0 + i * bar_ms for i in range(T)]
-    symbols = sorted(symbols)
+    symbols = sorted(ever_eligible if tradable_only else symbols)
+    keep = set(symbols)
     del stamps, ordered
-    series = {f: {s: nan_array(T) for s in symbols} for f in PRICE_FIELDS + ("oi", "funding")}
+    shared_nan = nan_array(T)
+    series = {f: {s: nan_array(T, "f") for s in symbols} for f in PRICE_FIELDS}
+    for f in ("oi", "funding"):
+        series[f] = {s: (nan_array(T) if f in col else shared_nan) for s in symbols}
     settled = {s: bytearray(T) for s in symbols}
     eligible = {s: bytearray(T) for s in symbols}
     ci = [col[f] for f in PRICE_FIELDS]
-    c_el, c_fu, c_oi = col.get("eligible"), col.get("funding"), col.get("oi")
+    c_fu, c_oi = col.get("funding"), col.get("oi")
     rows = _csv_rows(path)
     next(rows)
     for line, row in rows:
         sym = row[col["symbol"]]
+        if sym not in keep:
+            continue
         i = (int(row[col["ts"]]) - t0) // bar_ms
         if series["close"][sym][i] == series["close"][sym][i]:
             raise ValueError(f"line {line}: duplicate bar {sym} {row[col['ts']]}")
@@ -251,9 +268,7 @@ def load_panel(path) -> Panel:
             if flag not in ("0", "1"):
                 raise ValueError(f"line {line}: eligible must be 0 or 1")
             eligible[sym][i] = flag == "1"
-        if c_fu is None:
-            series["funding"][sym][i] = NAN
-        else:
+        if c_fu is not None:
             cell = row[c_fu]
             if cell == "NA":
                 series["funding"][sym][i] = NAN
@@ -506,7 +521,7 @@ def _tsrank(xs, n):
 def _ts_op(op, xs, n):
     T = len(xs)
     if op == "lag":
-        return nan_array(min(n, T)) + xs[:max(T - n, 0)]
+        return nan_array(min(n, T)) + array("d", xs[:max(T - n, 0)])
     if op == "delta":
         return _clean([xs[t] - xs[t - n] if t >= n else NAN for t in range(T)])
     if op == "pct":
@@ -549,12 +564,15 @@ def _avg_ranks(values):
     return ranks
 
 
-def _cross_op(op, by_sym, symbols, T):
+def _cross_op(op, by_sym, symbols, T, eligible):
+    """Cross-sectional transform at each bar over symbols that are eligible at that bar
+    and have a value; everyone else gets NaN. Eligibility is known at t, so this is causal."""
     out = {s: nan_array(T) for s in symbols}
     cols = [by_sym[s] for s in symbols]
+    elig = [eligible[s] for s in symbols]
     outs = [out[s] for s in symbols]
     for t in range(T):
-        live = [k for k, c in enumerate(cols) if c[t] == c[t]]
+        live = [k for k, c in enumerate(cols) if elig[k][t] and c[t] == c[t]]
         m = len(live)
         if m == 0:
             continue
@@ -663,7 +681,7 @@ def evaluate_expression(node, panel: Panel, cache=None):
     x = evaluate_expression(node[1], panel, cache)
     if kind == "window":
         return {s: _ts_op(op, x[s], node[2]) for s in syms}
-    return _cross_op(op, x, syms, T)
+    return _cross_op(op, x, syms, T, panel.eligible)
 
 
 # ------------------------------------------------------------- simulation
@@ -1174,13 +1192,14 @@ def evaluate_holdout(panel: Panel, cfg: dict, boundary: int, hyp: dict, ledger_p
 
 # --------------------------------------------------------- synthetic data
 
-def synthesize(out, symbols=30, bars=3000, seed=1, plant=0.0, delist_frac=0.0,
+def synthesize(out, symbols=30, bars=3000, seed=1, plant=0.0, delist_frac=0.0, never_eligible_frac=0.0,
                bar_ms=3_600_000, start_ms=1_767_225_600_000) -> None:
     """Write a synthetic hourly perp panel to `out`. Funding settles every 8 bars.
 
     plant > 0: the next bar's idiosyncratic return loads on minus the
     cross-sectional z-score of the last settled funding rate (in idio-vol units).
     delist_frac: share of symbols whose rows stop at a random bar after the first quarter.
+    never_eligible_frac: share of symbols written with eligible = 0 on every bar.
     """
     rng = random.Random(seed)
     syms = [f"SYN{i:03d}-USDT-SWAP" for i in range(symbols)]
@@ -1192,6 +1211,7 @@ def synthesize(out, symbols=30, bars=3000, seed=1, plant=0.0, delist_frac=0.0,
     end = {s: bars for s in syms}
     for s in rng.sample(syms, int(delist_frac * symbols)):
         end[s] = rng.randrange(bars // 4, bars)
+    never = set(random.Random(seed + 1).sample(syms, int(never_eligible_frac * symbols)))
     sig_m, sig_i = 0.006, 0.008
     with open(out, "w", newline="") as fh:
         w = csv.writer(fh, lineterminator="\n")
@@ -1220,7 +1240,7 @@ def synthesize(out, symbols=30, bars=3000, seed=1, plant=0.0, delist_frac=0.0,
                     fund = f"{latent[s]:.8f}"
                 if t < end[s]:
                     w.writerow([start_ms + t * bar_ms, s, f"{o:.8g}", f"{hi:.8g}", f"{lo:.8g}", f"{c:.8g}",
-                                f"{vol:.4f}", 1, fund, f"{oi[s]:.2f}"])
+                                f"{vol:.4f}", 0 if s in never else 1, fund, f"{oi[s]:.2f}"])
 
 
 # ------------------------------------------------------------------- CLI
@@ -1235,6 +1255,7 @@ def main(argv=None):
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--plant", type=float, default=0.0)
     p.add_argument("--delist-frac", type=float, default=0.0)
+    p.add_argument("--never-eligible-frac", type=float, default=0.0)
     p = sub.add_parser("audit")
     p.add_argument("--panel", required=True)
     p.add_argument("--expect-bar-ms", type=int, default=3_600_000)
@@ -1267,7 +1288,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     if args.cmd == "synth":
-        synthesize(args.out, args.symbols, args.bars, args.seed, args.plant, args.delist_frac)
+        synthesize(args.out, args.symbols, args.bars, args.seed, args.plant, args.delist_frac, args.never_eligible_frac)
         return
     if args.cmd == "power":
         need = periods_needed(args.target_sharpe_annual / math.sqrt(args.periods_per_year))
@@ -1279,7 +1300,7 @@ def main(argv=None):
     if args.cmd == "signoff":
         print(write_signoff(args.signoffs, args.hypothesis_sha, args.panel_sha, args.reviewer, args.note))
         return
-    panel = load_panel(args.panel)
+    panel = load_panel(args.panel, tradable_only=args.cmd != "audit")
     if args.cmd == "audit":
         print(json.dumps(audit_panel(panel, args.expect_bar_ms, args.eligibility_usd, args.eligibility_days), indent=1))
         return

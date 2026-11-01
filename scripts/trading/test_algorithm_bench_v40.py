@@ -446,6 +446,35 @@ class TestSimulation(BenchTestCase):
             self.assertAlmostEqual(p["net"]["0"] - p["net"]["10"], p["turnover"] * 10 / 1e4)
 
 
+class TestTradableUniverse(BenchTestCase):
+    def test_tradable_only_load_gives_identical_results(self):
+        """Never-eligible symbols are dropped at load; with eligible-only cross-sectional
+        operators every simulated number must stay identical."""
+        path = self.tmp / "mixed.csv"
+        bench.synthesize(path, symbols=24, bars=900, seed=31, delist_frac=0.2, never_eligible_frac=0.4)
+        full = bench.load_panel(path)
+        lean = bench.load_panel(path, tradable_only=True)
+        self.assertLess(len(lean.symbols), len(full.symbols))
+        self.assertEqual(lean.sha, full.sha)
+        rng = random.Random(17)
+        for i in range(10):
+            hyp = random_hypothesis(rng, i)
+            a = bench.simulate(full, hyp, 1, full.T - 1, [0, 10])
+            b = bench.simulate(lean, hyp, 1, lean.T - 1, [0, 10])
+            self.assertEqual(json.dumps(a, sort_keys=True), json.dumps(b, sort_keys=True), msg=json.dumps(hyp["score"]))
+
+    def test_cross_section_ignores_ineligible_symbols(self):
+        rows = []
+        for t in range(4):
+            for sym, px, el in (("A", 1, 1), ("B", 2, 1), ("C", 3, 1), ("Z", 1000, 0)):
+                rows.append([t * 60000, sym, px, px, px, px, 1, el, "", ""])
+        p = rows_panel(self.tmp, "xs-elig.csv", rows)
+        z = bench.evaluate_expression(["csz", ["field", "close"]], p)
+        self.assertTrue(all(math.isnan(v) for v in z["Z"]))
+        self.assertAlmostEqual(z["A"][0], -1.0)
+        self.assertAlmostEqual(z["C"][0], 1.0)
+
+
 class TestStaggeredTranches(BenchTestCase):
     def test_single_tranche_matches_reference_engine(self):
         """With rebalance == horizon the book engine must equal a plain non-overlapping backtest."""
