@@ -1,0 +1,56 @@
+{
+  "date": "2026-11-02",
+  "stage": "J6 daily-source overlay patch, awaiting independent Claude code review",
+  "base_commit": "e4eb37f3d56240e51d068304d4dd69db3ba82614",
+  "code_commit": "4165031fcfedf1343fcd33538c7116c50547c2a9",
+  "test_commit": "ab2a7b89160a0bc83917e681d245df4435325504",
+  "code_sha256": "ea5f0caafca194ca7c309e2b7128b1c3c22b8928862e57cca554fb77d47e8702",
+  "test_sha256": "6c04dfddb61075509665c8aa7a75c912ee8498b3e822511b5a685d3f5ab4d3c5",
+  "tests": {
+    "command": "python -m unittest -v test_binance_daily_overlay_v40 test_binance_bench_archive_v40",
+    "platform": "authorized Windows research host",
+    "count": 16,
+    "exit_code": 0,
+    "seconds": 3.245,
+    "coverage": [
+      "exact missing-hour fill",
+      "monthly precedence and exact overlap",
+      "conflict STOP",
+      "listed missing-file STOP",
+      "outside monthly span STOP",
+      "wrong expected count STOP before publication",
+      "pinned manifest and source SHA STOP",
+      "duplicate manifest/daily-row STOP",
+      "unlisted files ignored, absent404 never retried",
+      "checksum filename and nonfinite value STOP",
+      "prior-30-day eligibility recomputed from recovered volume",
+      "four original builder regressions"
+    ]
+  },
+  "interface": {
+    "arguments": [
+      "--daily-manifest",
+      "--daily-root",
+      "--daily-manifest-sha256"
+    ],
+    "all_required_together": true,
+    "manifest_fields": [
+      "request_list_sha256",
+      "entries (symbol,day,status,sha256 if available)",
+      "expected_counts (daily_source_files,daily_filled_rows,daily_overlap_identical)"
+    ],
+    "layout": "DAILY_ROOT/SYMBOL/SYMBOL-1h-YYYY-MM-DD.zip plus provider .CHECKSUM",
+    "production_expected_counts": {
+      "daily_source_files": 321,
+      "daily_filled_rows": 7632,
+      "daily_overlap_identical": 44
+    },
+    "absent_days": 5
+  },
+  "limits": [
+    "Only synthetic fixtures were built. Production J6 rebuild has NOT run.",
+    "Claude must review exact patch/tests before the one allowed versioned rebuild.",
+    "Production private overlay manifest must be derived from the fixed source-request list and receipts, pinned before execution, and carry exact predeclared counts.",
+    "Original failed panel, monthly originals, frozen OKX configuration and ledger stay untouched; J5 thresholds unchanged."
+  ]
+}
