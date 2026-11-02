@@ -315,8 +315,9 @@ class Evaluator:
 
 class Pooled:
     """One genome judged on several search panels (e.g. two exchanges and years). It must
-    persist: fitness uses the worst calendar fold over all panels. The first panel is the
-    one whose validation segment will judge promotions."""
+    persist: fitness = 0.5 x period-weighted Sharpe over all panels + 0.5 x worst calendar
+    fold over all panels - complexity penalty, the single-panel formula with folds pooled.
+    The first panel is the one whose validation segment will judge promotions."""
 
     def __init__(self, evaluators):
         self.evs = evaluators
