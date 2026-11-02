@@ -1,6 +1,7 @@
 """Offline tests: post-build panel verifier and the audit -> freeze preflight."""
 from __future__ import annotations
 
+import contextlib
 import csv
 import datetime as dt
 import hashlib
@@ -11,8 +12,10 @@ import unittest
 from pathlib import Path
 
 import algorithm_bench_v40 as bench
+import binance_bench_archive_v40 as bn
 import okx_bench_archive_v40 as archive
 import verify_panel_build_v40 as verify
+from test_binance_bench_archive_v40 import funding_rows, kline_rows, month_start, put
 from test_okx_bench_archive_v40 import compressed
 
 HYP_DIR = Path(__file__).resolve().parents[2] / "docs" / "trading" / "bench" / "hypotheses"
@@ -100,8 +103,93 @@ class TestVerifier(unittest.TestCase):
                         for sym in ("FLIP", "STEADY"):
                             step = every if sym == "FLIP" else 8
                             w.writerow((ts, sym, 1, 1, 1, 1, 1, 1, "0.0001" if h % step == step - 1 else "", ""))
-            *_, flagged = verify.scan(path)
+            flagged = verify.scan(path)[4]
             self.assertEqual(flagged, {"FLIP"})
+
+
+class TestBinanceVerifier(unittest.TestCase):
+    FUND_HEADER = ["calc_time", "funding_interval_hours", "last_funding_rate"]
+
+    def build(self, td, drop_hours=0):
+        root = Path(td)
+        for mth in ("2020-01", "2020-02", "2020-03"):
+            rows = kline_rows(mth, 400_000)
+            if mth == "2020-02" and drop_hours:
+                rows = rows[:100] + rows[100 + drop_hours:]  # a gap inside the contract's span
+            put(root, "klines", "BIGUSDT", mth, rows)
+            put(root, "fundingRate", "BIGUSDT", mth, funding_rows(mth), header=self.FUND_HEADER)
+            if mth != "2020-03":  # delisted: its span ends, which is not a gap
+                stop = month_start("2020-02") + 10 * 24 * verify.HOUR if mth == "2020-02" else None
+                put(root, "klines", "GONEUSDT", mth, kline_rows(mth, 500_000, stop))
+                put(root, "fundingRate", "GONEUSDT", mth, funding_rows(mth), header=self.FUND_HEADER)
+        panel = root / "panel.csv"
+        bn.build(root, ["BIGUSDT", "GONEUSDT"], "2020-01", "2020-03", panel)
+        return panel
+
+    def test_clean_binance_build_proceeds_with_minutes_unknown(self):
+        with tempfile.TemporaryDirectory() as td:
+            panel = self.build(td)
+            audit = panel.with_suffix(".audit.json")
+            self.assertNotIn("missing_source_minutes", json.loads(audit.read_text()))
+            out = verify.verify(panel, audit, None, 0.05, 0.001, None, None)
+            self.assertEqual(out["verdict"], "PROCEED", out["reasons"])
+            self.assertEqual(out["source"], "binance")
+            self.assertEqual(out["minute_coverage"], "UNKNOWN")
+            self.assertIsNone(out["missing_minute_share_of_panel"])  # never a silent zero
+            self.assertEqual(out["funding_off_clock_events"], 0)
+            self.assertNotIn("unavailable_off_hour_markers", out)  # no invented OKX counters
+            hourly = out["hourly_coverage"]
+            self.assertEqual(hourly["missing_hours_in_spans"], 0)
+            self.assertEqual(hourly["expected_hours_in_spans"], (31 + 29 + 31) * 24 + (31 + 10) * 24)
+            self.assertGreater(out["eligible_rows"], 0)
+
+    def test_hour_gap_is_counted_and_gated(self):
+        with tempfile.TemporaryDirectory() as td:
+            panel = self.build(td, drop_hours=5)
+            out = verify.verify(panel, panel.with_suffix(".audit.json"), None, 0.05, 0.001, None, None)
+            self.assertEqual(out["hourly_coverage"]["missing_hours_in_spans"], 5)
+            self.assertEqual(out["hourly_coverage"]["worst_contracts_by_missing_hours"], [("BIGUSDT", 5)])
+            self.assertEqual(out["verdict"], "STOP")  # 5 / 3168 hours > 0.1%
+            loose = verify.verify(panel, panel.with_suffix(".audit.json"), None, 0.05, 0.001, None, None,
+                                  max_missing_hours=0.01)
+            self.assertEqual(loose["verdict"], "PROCEED", loose["reasons"])
+
+    def test_okx_counters_cannot_be_applied_to_binance(self):
+        with tempfile.TemporaryDirectory() as td:
+            panel = self.build(td)
+            with self.assertRaises(ValueError):
+                verify.verify(panel, panel.with_suffix(".audit.json"), None, 0.05, 0.001, 3, 3)
+            with self.assertRaises(SystemExit) as done, contextlib.redirect_stdout(io.StringIO()):
+                verify.main(["--panel", str(panel)])  # OKX defaults 3/3 are not applied to Binance
+            self.assertEqual(done.exception.code, 0)
+
+    def test_tampered_binance_panel_stops(self):
+        with tempfile.TemporaryDirectory() as td:
+            panel = self.build(td)
+            text = panel.read_text().splitlines()
+            panel.write_text("\n".join(text[:-1]) + "\n")
+            out = verify.verify(panel, panel.with_suffix(".audit.json"), None, 0.05, 0.001, None, None)
+            self.assertIn("panel SHA differs from the builder audit", out["reasons"])
+            self.assertEqual(out["verdict"], "STOP")
+
+    def test_source_detection(self):
+        self.assertEqual(verify.detect_source({"funding_clock": {}, "missing_source_minutes": 0}), "okx")
+        self.assertEqual(verify.detect_source({"funding_off_clock_events": 0}), "binance")
+        with self.assertRaises(ValueError):
+            verify.detect_source({"panel_rows": 1})
+
+
+class TestOkxAuditFieldsRequired(unittest.TestCase):
+    def test_missing_minute_field_stops_instead_of_zero(self):
+        with tempfile.TemporaryDirectory() as td:
+            panel = TestVerifier().build(td)
+            audit = panel.with_suffix(".audit.json")
+            data = json.loads(audit.read_text())
+            data.pop("missing_source_minutes")
+            audit.write_text(json.dumps(data))
+            out = verify.verify(panel, audit, None, 0.05, 0.001, 0, 0, source="okx")
+            self.assertEqual(out["verdict"], "STOP")
+            self.assertIn("OKX audit has no missing_source_minutes", out["reasons"])
 
 
 class TestFreezePreflight(unittest.TestCase):
