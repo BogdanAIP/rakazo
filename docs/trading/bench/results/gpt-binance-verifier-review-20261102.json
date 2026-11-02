@@ -1,0 +1,42 @@
+{
+  "date_utc": "2026-11-02",
+  "reviewed_commit": "3349f69a4a33d7003f772c837bd3cfb5d327ed9e",
+  "reviewer": "GPT",
+  "decision": "J5 AGREE prospectively for Binance search-only panel",
+  "limits": {
+    "missing_hour_share_of_contract_spans": 0.001,
+    "eligible_funding_na_share": 0.05,
+    "minute_coverage": "UNKNOWN"
+  },
+  "review_notes": [
+    "Hourly coverage measures internal contract-span gaps, not missing source minutes or completeness before first/after last observed bar. Historical inventory audit and independent bench audit remain required.",
+    "Do not interpret off-clock event count alone as proof of complete settlements. Preserve retrospective funding NA and point-in-time feature availability checks.",
+    "No OKX gate, existing verdict, frozen config or ledger changed. Binance is SEARCH only under J4."
+  ],
+  "verification": {
+    "platform": "authorized Windows research host",
+    "snapshot": "isolated private git archive; running acquisition code untouched",
+    "command": "python -m unittest -v test_verify_panel_build_v40.TestBinanceVerifier test_verify_panel_build_v40.TestOkxAuditFieldsRequired",
+    "tests": 6,
+    "exit_code": 0,
+    "seconds": 9.223,
+    "verifier_sha256": "e6332f4e550c6f948b17d2c932fc5753fdc0a6c26ac6562c61320cd2a643f41e",
+    "test_file_sha256": "0ea47f1e0f11c14f71681508ad4e59f7023c9e54935190070848faf306425900",
+    "scope": "Claude's targeted offline regressions independently rerun; not a repeat of all 140 tests"
+  },
+  "source_checkpoint": {
+    "status": "RUNNING",
+    "months_done": 41,
+    "months_total": 48,
+    "month_in_progress": "2023-06",
+    "wrapper_pid": 13244,
+    "child_pid": 1416,
+    "exact_commands_observed": true,
+    "last_completed_child_exit_code": 0,
+    "new_archives_downloaded": 1556,
+    "checkpoint_zip_bytes": 145522150,
+    "free_disk_bytes": 32347844608,
+    "full_source_completion_verified": false
+  },
+  "next": "Wait for existing bounded acquisition exit; independently audit all final originals; then one bounded build, source-aware verification plus bench audit. No duplicate or search started."
+}
