@@ -151,7 +151,82 @@ def read_funding(zip_path: Path):
         yield _ms(row[t_col]), rate
 
 
-def contract_rows(root: Path, sym: str, first: str, last: str, usd: float, audit: dict):
+
+def daily_overlay(manifest: Path, root: Path, digest: str):
+    """SHA-pinned private manifest, never directory discovery.
+
+    entries: symbol, day, status (available|absent404), sha256 for available.
+    expected_counts: daily_source_files, daily_filled_rows, daily_overlap_identical.
+    request_list_sha256 identifies the original fixed source-request list.
+    """
+    if okx.sha_file(manifest) != digest:
+        raise ValueError("daily manifest SHA mismatch")
+    doc = json.loads(manifest.read_text(encoding="utf-8"))
+    if not re.fullmatch(r"[a-f0-9]{64}", doc["request_list_sha256"]):
+        raise ValueError("invalid request-list SHA")
+    keys = ("daily_source_files", "daily_filled_rows", "daily_overlap_identical")
+    expected = doc["expected_counts"]
+    if set(expected) != set(keys) or any(type(expected[k]) is not int or expected[k] < 0 for k in keys):
+        raise ValueError("invalid daily expected counts")
+    grouped, seen, absent = collections.defaultdict(list), set(), 0
+    for item in doc["entries"]:
+        sym, day = item["symbol"], item["day"]
+        if not SYMBOL.fullmatch(sym) or dt.date.fromisoformat(day).isoformat() != day:
+            raise ValueError("invalid daily symbol/date")
+        if (sym, day) in seen:
+            raise ValueError("duplicate daily manifest entry")
+        seen.add((sym, day))
+        if item["status"] == "absent404":
+            absent += 1
+            continue
+        if item["status"] != "available" or not re.fullmatch(r"[a-f0-9]{64}", item["sha256"]):
+            raise ValueError("invalid daily source status/SHA")
+        p = root / sym / f"{sym}-1h-{day}.zip"
+        if verify_checksum(p) != item["sha256"]:
+            raise ValueError("daily source differs from pinned manifest")
+        fields = p.with_name(p.name + ".CHECKSUM").read_text().split()
+        if len(fields) != 2 or fields[1].lstrip("*") != p.name:
+            raise ValueError("daily checksum filename mismatch")
+        with zipfile.ZipFile(p) as z:
+            if z.testzip() is not None:
+                raise ValueError("daily ZIP CRC mismatch")
+        grouped[sym].append((day, p))
+    if sum(map(len, grouped.values())) != expected["daily_source_files"]:
+        raise ValueError("daily manifest source count differs from expected")
+    return grouped, expected, absent
+
+
+def fill_daily(bars: dict, sources, audit: dict, sym: str):
+    """Monthly bars stay canonical; only exact overlaps or strictly internal fills."""
+    if not bars:
+        raise ValueError(f"daily source has no monthly contract span: {sym}")
+    lo, hi = min(bars), max(bars)
+    seen = set()
+    for day, p in sources:
+        start = int(dt.datetime.combine(dt.date.fromisoformat(day), dt.time(),
+                                       tzinfo=dt.timezone.utc).timestamp() * 1000)
+        audit["daily_source_files"] += 1
+        for t, o, h, l, c, qv in read_klines(p):
+            if not start <= t < start + DAY or not lo <= t <= hi:
+                raise ValueError(f"daily row outside declared day/monthly span: {sym} {t}")
+            if t in seen:
+                raise ValueError(f"duplicate daily row: {sym} {t}")
+            seen.add(t)
+            values = (o, h, l, c, qv)
+            if not all(math.isfinite(v) for v in values):
+                raise ValueError("non-finite daily kline")
+            if t in bars:
+                if bars[t] != values:
+                    raise ValueError(f"conflicting duplicate kline {sym} {t}")
+                audit["daily_overlap_identical"] += 1
+            else:
+                if not lo < t < hi:
+                    raise ValueError("daily fill outside strict monthly span")
+                bars[t] = values
+                audit["daily_filled_rows"] += 1
+
+
+def contract_rows(root: Path, sym: str, first: str, last: str, usd: float, audit: dict, daily_sources=()):
     """All hourly rows for one contract, in time order, with eligibility and funding cells."""
     bars = {}
     for month in months(first, last):
@@ -165,6 +240,8 @@ def contract_rows(root: Path, sym: str, first: str, last: str, usd: float, audit
                     audit["identical_duplicate_rows"] += 1
                     continue
                 bars[t] = (o, h, l, c, qv)
+    if daily_sources:
+        fill_daily(bars, daily_sources, audit, sym)
     if not bars:
         return []
     events, off_clock, unsure_days = {}, 0, set()
@@ -211,15 +288,24 @@ def contract_rows(root: Path, sym: str, first: str, last: str, usd: float, audit
     return out
 
 
-def build(root: Path, symbols, first: str, last: str, out: Path, usd: float = 5_000_000) -> dict:
+def build(root: Path, symbols, first: str, last: str, out: Path, usd: float = 5_000_000, *,
+          daily_manifest: Path | None = None, daily_root: Path | None = None,
+          daily_manifest_sha256: str | None = None) -> dict:
     if out.exists():
         raise FileExistsError(out)
+    overlay, expected, absent = {}, {}, 0
+    if any(x is not None for x in (daily_manifest, daily_root, daily_manifest_sha256)):
+        if any(x is None for x in (daily_manifest, daily_root, daily_manifest_sha256)):
+            raise ValueError("daily manifest, root and SHA are all required")
+        overlay, expected, absent = daily_overlay(daily_manifest, daily_root, daily_manifest_sha256)
+        if set(overlay) - set(symbols):
+            raise ValueError("daily manifest contract outside requested universe")
     work = out.with_name(out.name + ".buckets")
     work.mkdir(parents=True, exist_ok=False)
     audit = collections.Counter()
     contracts = 0
     for sym in sorted(s for s in symbols if SYMBOL.fullmatch(s)):
-        rows = contract_rows(root, sym, first, last, usd, audit)
+        rows = contract_rows(root, sym, first, last, usd, audit, overlay.get(sym, ()))
         if not rows:
             continue
         contracts += 1
@@ -247,10 +333,17 @@ def build(root: Path, symbols, first: str, last: str, out: Path, usd: float = 5_
             rows += len(chunk)
             bucket.unlink()
     work.rmdir()
+    if daily_manifest is not None:
+        for key, value in expected.items():
+            if audit[key] != value:
+                raise ValueError(f"daily audit count {key}: {audit[key]} != expected {value}")
     os.replace(part, out)
     result = {"contracts": contracts, "panel_rows": rows, "panel_sha256": okx.sha_file(out),
               "first_month": first, "last_month": last, "eligibility_usd": usd,
               "quote_volume_unit": "USDT quote volume (kline column 8)", **dict(audit)}
+    if daily_manifest is not None:
+        result.update(daily_manifest_sha256=daily_manifest_sha256,
+                      daily_absent404=absent, **{k: audit[k] for k in expected})
     okx.atomic_bytes(out.with_suffix(".audit.json"), (json.dumps(result, indent=2, sort_keys=True) + "\n").encode())
     return result
 
@@ -267,6 +360,9 @@ def main(argv=None):
         if name == "sync":
             p.add_argument("--max-files", type=int, default=10_000)
         else:
+            p.add_argument("--daily-manifest", type=Path)
+            p.add_argument("--daily-root", type=Path)
+            p.add_argument("--daily-manifest-sha256")
             p.add_argument("--out", type=Path, required=True)
             p.add_argument("--min-daily-quote-usd", type=float, default=5_000_000)
     args = ap.parse_args(argv)
@@ -275,7 +371,9 @@ def main(argv=None):
         print(json.dumps(sync(args.root, symbols, args.first_month, args.last_month, max_files=args.max_files), indent=1))
     else:
         print(json.dumps(build(args.root, symbols, args.first_month, args.last_month, args.out,
-                               args.min_daily_quote_usd), indent=1))
+                               args.min_daily_quote_usd, daily_manifest=args.daily_manifest,
+                               daily_root=args.daily_root,
+                               daily_manifest_sha256=args.daily_manifest_sha256), indent=1))
 
 
 if __name__ == "__main__":
