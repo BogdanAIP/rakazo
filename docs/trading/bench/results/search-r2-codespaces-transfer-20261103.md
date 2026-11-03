@@ -1,6 +1,6 @@
 # r2 search-only transfer to GitHub Codespaces — 2026-11-03
 
-At owner's request, transferred 8 immutable SHA-pinned private search-only files (22.45 MiB) via authenticated GitHub CLI SCP, using -O on Windows. Destination: /home/codespace/private-market-r2 on personal 4-core/16-GiB Codespace algorithm-research-pilot-7v4r7gwq7xrxcxgxg, OUTSIDE the public repository. Independently verified all eight SHA-256 in Linux. NEVER git-add or publish CSVs/JSON contents. No full panels, holdout/validation data, keys, accounts or private ledgers transferred.
+At owner's request, transferred 8 immutable SHA-pinned private search-only files (22.45 MiB) via authenticated GitHub CLI SCP, using -O on Windows. Destination: a private directory on a personal 4-core/16-GiB Codespace <codespace>, OUTSIDE the public repository. Independently verified all eight SHA-256 in Linux. NEVER git-add or publish CSVs/JSON contents. No full panels, holdout/validation data, keys, accounts or private ledgers transferred.
 
 | Artifact | SHA-256 |
 |---|---|
