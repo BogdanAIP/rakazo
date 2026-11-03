@@ -161,6 +161,14 @@ class TestPooledPanels(SearchCase):
         steps = ev_b.evaluate(g)["steps_t"]
         self.assertGreaterEqual(min(steps), 60)
 
+    def test_resumed_null_equals_uninterrupted_run(self):
+        """A null control restarted on its own (--first-null k --runs 1) is the same run."""
+        b, bcfg, b0 = self._panel("r", 18, 0.1)
+        kw = dict(population=12, generations=2, seed=41, extra=[(b, bcfg, 3, b0 + 60 * DAY)])
+        whole = search.null_calibration(self.panel, self.cfg, self.tmp / "w.jsonl", 3, first=0, **kw)
+        resumed = search.null_calibration(self.panel, self.cfg, self.tmp / "p.jsonl", 1, first=2, **kw)
+        self.assertEqual(json.dumps(whole[2], sort_keys=True), json.dumps(resumed[0], sort_keys=True))
+
 
 if __name__ == "__main__":
     unittest.main()
