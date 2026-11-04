@@ -1,0 +1,40 @@
+name: Free research CPU proof (synthetic only)
+
+on:
+  push:
+    branches:
+      - research/algorithm-bench-v40-2026-10-31
+    paths:
+      - .github/workflows/research-free-compute-smoke.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: research-free-compute-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  synthetic-bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Confirm standard runner resources
+        run: |
+          python3 --version
+          nproc
+          free -h
+      - name: Run offline synthetic search engine tests
+        working-directory: scripts/trading
+        run: |
+          python3 -m unittest -v test_algorithm_search_v40.TestCompilation.test_mutations_stay_valid
+          python3 -m unittest -v test_algorithm_search_v40.TestCompilation.test_cached_scores_equal_compiled_dsl
+      - name: Generate disposable synthetic market sample
+        working-directory: scripts/trading
+        run: |
+          python3 algorithm_search_v40.py synth --out "$RUNNER_TEMP/synthetic-market.csv" --symbols 25 --days 350 --seed 17 --plant 0.2
+          python3 -c 'import csv,os; f=os.environ["RUNNER_TEMP"]+"/synthetic-market.csv"; print("synthetic_rows=",sum(1 for _ in csv.reader(open(f,encoding="utf-8")))-1)'
