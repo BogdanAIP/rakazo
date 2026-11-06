@@ -42,5 +42,45 @@ class ComparatorContract(unittest.TestCase):
         with self.assertRaises(ValueError):
             probe.compare(self.report, other)
 
+    def test_two_empty_self_consistent_outputs_rejected(self):
+        other = copy.deepcopy(self.report)
+        other["outputs"] = {}
+        other["outputs_sha256"] = probe.digest({})
+        with self.assertRaises(ValueError):
+            probe.compare(other, copy.deepcopy(other))
+
+    def test_truncated_vectors_rejected_after_redigest(self):
+        other = copy.deepcopy(self.report)
+        other["outputs"]["dlog"].pop()
+        other["outputs_sha256"] = probe.digest(other["outputs"])
+        with self.assertRaises(ValueError):
+            probe.compare(other, copy.deepcopy(other))
+
+    def test_nonfinite_or_noncanonical_values_rejected(self):
+        for value in ("nan", "inf", "0x1p+0", 1.0):
+            with self.subTest(value=value):
+                other = copy.deepcopy(self.report)
+                other["outputs"]["mean"] = value
+                other["outputs_sha256"] = probe.digest(other["outputs"])
+                with self.assertRaises(ValueError):
+                    probe.compare(other, copy.deepcopy(other))
+
+    def test_duplicate_selection_rejected(self):
+        other = copy.deepcopy(self.report)
+        other["outputs"]["selection"][0] = other["outputs"]["selection"][1]
+        other["outputs_sha256"] = probe.digest(other["outputs"])
+        with self.assertRaises(ValueError):
+            probe.compare(other, copy.deepcopy(other))
+
+    def test_empty_runtime_rejected(self):
+        other = copy.deepcopy(self.report)
+        other["runtime"] = {}
+        with self.assertRaises(ValueError):
+            probe.compare(other, copy.deepcopy(other))
+
+    def test_nonobject_root_rejected(self):
+        with self.assertRaises(ValueError):
+            probe.compare([], [])
+
 if __name__ == "__main__":
     unittest.main()
