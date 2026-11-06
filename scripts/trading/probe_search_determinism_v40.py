@@ -77,20 +77,58 @@ def make_report():
     }
 
 def validate(report):
+    if not isinstance(report, dict):
+        raise ValueError("report must be an object")
     if report.get("schema") != SCHEMA:
         raise ValueError("unsupported report schema")
     if report.get("scope") != "synthetic-helper-only-not-search-signoff":
         raise ValueError("wrong report scope")
     if report.get("corpus_sha256") != digest(CORPUS):
         raise ValueError("corpus mismatch")
+    output = report.get("outputs")
+    sizes = {"dlog": len(CORPUS["positive"]), "dtanh": len(CORPUS["signed"]),
+             "dlog1p_signed": len(CORPUS["signed"]),
+             "scores12": len(CORPUS["positive"]) + 2 * len(CORPUS["signed"]),
+             "fitness10": len(CORPUS["fitness"])}
+    scalars = ("mean", "corr", "pooled_fitness")
+    if not isinstance(output, dict) or set(output) != set(sizes) | set(scalars) | {"selection"}:
+        raise ValueError("incomplete or unknown output fields")
+    values = []
+    for field, size in sizes.items():
+        xs = output[field]
+        if not isinstance(xs, list) or len(xs) != size:
+            raise ValueError("wrong output vector length")
+        values.extend(xs)
+    values.extend(output[field] for field in scalars)
+    for value in values:
+        if not isinstance(value, str):
+            raise ValueError("output must be canonical finite binary64 hex")
+        try:
+            number = float.fromhex(value)
+        except (ValueError, OverflowError) as exc:
+            raise ValueError("invalid binary64 hex") from exc
+        if not math.isfinite(number) or number.hex() != value:
+            raise ValueError("output must be canonical finite binary64 hex")
+    selection = output["selection"]
+    expected = {f"synthetic-{i:02d}" for i in range(len(CORPUS["fitness"]))}
+    if (not isinstance(selection, list) or len(selection) != len(expected)
+            or any(not isinstance(key, str) for key in selection)
+            or set(selection) != expected):
+        raise ValueError("selection must be a complete genome permutation")
     if report.get("outputs_sha256") != digest(report["outputs"]):
         raise ValueError("output digest mismatch")
     for field in ("module_sha256", "probe_sha256"):
         v = report.get(field, "")
-        if len(v) != 64 or any(c not in "0123456789abcdef" for c in v):
+        if not isinstance(v, str) or len(v) != 64 or any(c not in "0123456789abcdef" for c in v):
             raise ValueError("invalid source digest")
-    if not isinstance(report.get("runtime"), dict):
-        raise ValueError("missing runtime")
+    runtime = report.get("runtime")
+    if (not isinstance(runtime, dict)
+            or any(not isinstance(runtime.get(k), str) or not runtime[k]
+                   for k in ("python", "implementation", "system"))
+            or not isinstance(runtime.get("libc"), list)
+            or len(runtime["libc"]) != 2
+            or any(not isinstance(x, str) for x in runtime["libc"])):
+        raise ValueError("missing or invalid runtime metadata")
     # A locally self-consistent digest is not authenticity or proof of an actual run.
 
 def compare(left, right):
