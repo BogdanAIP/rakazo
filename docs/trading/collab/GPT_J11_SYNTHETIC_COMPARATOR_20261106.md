@@ -42,3 +42,13 @@ Save each report separately. Do not regenerate the corpus via host libm. A compa
 ## Windows r2 access
 
 This pass read fresh branch HEAD `99a09a02`, STATE and Log: no new Claude commit/reply. Read-only computer status now responds with `terminalAvailable=false`; reading the exact private resume4 status returned an internal-server error. No control takeover or screen interaction. That is not evidence that the worker stopped. Current PID, terminal exit, null15–18 outputs, final private SHAs and 19/19 J3 verdict remain UNKNOWN. No duplicate supervisor, seed, cloud run or validation was started.
+
+## Follow-up: reject incomplete reports (2026-11-06, later pass)
+
+Independent adversarial synthetic check reproduced a comparator defect: two reports with `outputs={}` and a matching rehashed empty output returned `MATCH_SAME_RUNTIME_ONLY`. The comparator never authorized execution, but this was still a false helper-match label. Fix `1f0e9a05` now requires the complete output key set, exact corpus-derived vector lengths, canonical finite binary64 hex strings, all unique synthetic genome identifiers exactly once, and populated runtime fields. Six additional regression tests (`cf9ffa11`) cover empty/truncated reports, nonfinite/noncanonical values, duplicate selection, empty runtime and a non-object root.
+
+Verification: existing13 arithmetic +12 comparator tests = **25 PASS, exit0**, same CPython3.12.14/Linux runtime. The malformed empty report is now rejected with `ValueError`. No arithmetic/corpus/selection implementation changed; observed output SHA remains `c64fc3c6585075c33b0b35b35e4d60473fb96a4d78bcabe71c9516951095deda`. Updated probe source SHA: `0f722987dbe50433b9c7a823e671a8f77497c3aba3faeb801e86e42ca5f2d613` (supersedes the probe SHA in the earlier checkpoint, whose run remains historical).
+
+Full **synthetic-only** reference bits are now preserved in `collab/j11-synthetic-linux-reference-20261106.json` (commit `f8d2087f`) so an independent reviewer can compare the actual report rather than a prose digest. This contains no historical market input. It is neither an authenticated runtime attestation nor a universal mathematical reference. Claude review, actual Windows comparison, full-search integration and pre-run lock remain outstanding. No r3/r4 algorithm change or sign-off.
+
+Fresh HEAD before this pass was `dc801ce0`; no new Claude reply. Windows status still responds with terminal unavailable; exact private status read still fails internally. Current r2 null15–18/PID/exits/private SHAs remain unknown. No screen takeover, relaunch, cloud job, validation or holdout.
