@@ -69,3 +69,56 @@ Skips. At 4 h, about 20,600 entries were refused because the asset could not tak
 5. **Buffered 20× is the worst at 4 h.** It accepts more trades (lower effective leverage clears the buffer), so it pays more cost and suffers more liquidations.
 
 Limitations: synthetic paths, a no-edge signal, an illustrative cost schedule, and no ADL, insurance fund, tiered maintenance or exchange-specific rules. The mark proxy is the bar extreme, which is conservative. These numbers are not a forecast for any real market. A next step, if both agents want one, is a predeclared planted-edge sweep: the per-trade edge at which each variant breaks even. That would also need a new scenario SHA, registered before running.
+
+## Update after GPT's review (11-07)
+
+GPT found two defects, both now fixed with regression tests (14 tests in total):
+
+- **Exit-bar gap.** A scheduled exit whose open gapped past liquidation paid out below zero. It is now a liquidation, and every isolated payout is floored at zero.
+- **Zero stake.** A zero stake raised a division error. It is now skipped as `zero_stake`.
+
+Rerun with the same scenario SHA: liquidations rose by about 10 per variant, and medians moved by at most 0.2 points; the tables above stand.
+
+## Leverage sweep for a 1,000 USDT account (owner's request, 11-07)
+
+The owner asked which leverage to use with 1,000 USDT and what return to expect. Setup:
+- **Book:** variant `levL` with margin 3% of equity per position (30 USDT at the start), 3 long and 3 short, held 24 h, then re-picked.
+- **Exposure:** gross ≈ 0.18 × L of equity; 5× already puts about 90% of the deposit to work.
+- **Period:** 180 days, 40 paths.
+- **Planted edge:** the 3 strongest and 3 weakest coins by 7-day return drift up or down by d per day. d = 0 is no edge. The gross column shows the price move per closed trade that the book actually captured, before costs of about 0.2% per round trip.
+
+Scenario SHAs: d = 0 `246b1277e023f57d815242b9b6f208b77171c6a66f5527cc288676057c6a6811`; d = 0.2% `970bf0123905ff60e349dda289cd92d98c41d884db72a84a97134a11c3727ad9`; d = 0.5% `ff6e769abd959899de4d4de47746d6c5f0086f37eae7de8ef4857b3a5fc7de57`; d = 1% `e2ace6fe72633dbe1ac08b0261bc99b4688cc662f67d7f66a04a4d8b48ab7cb0`.
+
+| Planted edge | Leverage | Gross exposure | Median 180 d | P5 | P(lose ≥ 50%) | Median max DD | Entries | Liquidations | Gross move per trade |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| none | 1× | 18% | -9.9% | -18.3% | 0% | 12% | 39,840 | 0 | -0.15% |
+| none | 2× | 36% | -14.9% | -27.9% | 0% | 19% | 33,200 | 0 | -0.11% |
+| none | 3× | 54% | -22.2% | -39.0% | 0% | 27% | 33,200 | 12 | -0.10% |
+| none | 5× | 90% | -34.8% | -56.3% | 18% | 42% | 33,194 | 35 | -0.09% |
+| none | 10× | 180% | -43.2% | -64.5% | 38% | 50% | 20,561 | 79 | -0.08% |
+| none | 20× | 360% | +0.0% | +0.0% | 0% | 0% | 1 | 0 | – |
+| 0.2%/day | 1× | 18% | -5.7% | -14.5% | 0% | 8% | 39,840 | 0 | -0.00% |
+| 0.2%/day | 2× | 36% | -9.0% | -22.0% | 0% | 14% | 33,200 | 0 | +0.03% |
+| 0.2%/day | 3× | 54% | -13.5% | -31.4% | 0% | 21% | 33,200 | 12 | +0.05% |
+| 0.2%/day | 5× | 90% | -22.1% | -47.0% | 2% | 32% | 33,194 | 35 | +0.05% |
+| 0.2%/day | 10× | 180% | -29.2% | -56.3% | 8% | 42% | 20,613 | 73 | +0.06% |
+| 0.2%/day | 20× | 360% | +0.0% | +0.0% | 0% | 0% | 1 | 0 | – |
+| 0.5%/day | 1× | 18% | +0.1% | -9.1% | 0% | 5% | 39,840 | 0 | +0.20% |
+| 0.5%/day | 2× | 36% | +1.8% | -13.5% | 0% | 9% | 33,200 | 0 | +0.28% |
+| 0.5%/day | 3× | 54% | +2.4% | -19.8% | 0% | 13% | 33,200 | 11 | +0.29% |
+| 0.5%/day | 5× | 90% | +3.7% | -31.4% | 0% | 22% | 33,194 | 29 | +0.29% |
+| 0.5%/day | 10× | 180% | -0.2% | -34.1% | 0% | 29% | 20,662 | 77 | +0.30% |
+| 0.5%/day | 20× | 360% | +0.0% | +0.0% | 0% | 0% | 1 | 0 | – |
+| 1%/day | 1× | 18% | +13.2% | +3.9% | 0% | 3% | 39,840 | 0 | +0.62% |
+| 1%/day | 2× | 36% | +26.2% | +7.6% | 0% | 6% | 33,200 | 0 | +0.70% |
+| 1%/day | 3× | 54% | +41.3% | +11.1% | 0% | 9% | 33,200 | 9 | +0.71% |
+| 1%/day | 5× | 90% | +74.8% | +11.3% | 0% | 13% | 33,194 | 28 | +0.70% |
+| 1%/day | 10× | 180% | +75.3% | -7.4% | 0% | 22% | 20,636 | 82 | +0.68% |
+| 1%/day | 20× | 360% | +0.0% | +0.0% | 0% | 0% | 1 | 0 | – |
+
+Reading:
+1. **Without an edge, every leverage loses, and more leverage loses more:** −10% at 1×, −22% at 3×, −35% at 5×, −43% at 10× (a 38% chance of losing half). The no-edge momentum book also eats the planted momentum crashes.
+2. **20× does not trade at a daily hold.** Liquidation sits inside 1.5 × the stop, so entries are refused (one entry in 180 days).
+3. **Leverage only pays once the gross edge clearly exceeds cost.** At about 0.3% captured per trade (d = 0.5%) the result is roughly break-even at any leverage, with a wide P5. At about 0.7% per trade (d = 1%), 3–5× is best (+41% / +75% median) and 10× adds risk without adding return.
+4. **That edge is far above anything this project has measured.** About 0.7% per trade per day is several hundred percent a year. The best registered rule (weekly carry, annual net Sharpe ≈ 1.55, REJECT) is nowhere near it.
+5. **So for a real account the answer today is leverage 0.** Once a rule passes validation and holdout, size it from its measured edge and volatility, probably 3–5× on 3% stakes, never 20×.

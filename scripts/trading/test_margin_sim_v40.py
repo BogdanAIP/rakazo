@@ -70,6 +70,19 @@ class TestMechanics(unittest.TestCase):
         st = sim.simulate_path(path(), replace(P, stress_cap=0.04))
         self.assertEqual((st["entries"], st["skips"]), (1, {"stress_cap": 1}))
 
+    def test_gap_past_liquidation_at_the_exit_open_loses_only_the_margin(self):
+        """GPT review 11-07: the scheduled exit must not pay out below zero (isolated margin)."""
+        at_exit = sim.simulate_path(path({7: (90, 90, 90, 90)}), P)
+        before = sim.simulate_path(path({6: (90, 90, 90, 90)}), P)
+        fee = 600 * 0.0005
+        for st in (at_exit, before):
+            self.assertEqual((st["liquidations"], st["exits"]), (1, 1))
+            self.assertAlmostEqual(st["terminal_equity"], 1000 - 30 - fee - 2 * fee, places=9)
+
+    def test_zero_stake_is_skipped(self):
+        st = sim.simulate_path(path(), replace(P, margin_cap=0.0))
+        self.assertEqual((st["entries"], st["skips"]), (0, {"zero_stake": 2}))
+
     def test_wide_stop_inside_liquidation_is_refused(self):
         st = sim.simulate_path(path(), replace(P, stop_floor=0.035))  # 1.5 x 3.5% > 4.5% to liquidation
         self.assertEqual((st["entries"], st["skips"]), (0, {"liquidation_inside_buffer": 2}))
@@ -77,6 +90,18 @@ class TestMechanics(unittest.TestCase):
 
 class TestScenarios(unittest.TestCase):
     SC = sim.Scenario(paths=3, assets=8, bars=24 * 20, seed=4)
+
+    def test_planted_edge_changes_only_the_drift(self):
+        self.assertEqual(sim.scenario_sha(sim.Scenario()),
+                         "9b5ce69eea458829d1ca26f160d1691667cc8bafc383dfcf86a83f8f967363a1")
+        a = sim.generate(self.SC)[0]
+        b = sim.generate(replace(self.SC, momentum_drift_daily=0.01))[0]
+        self.assertEqual(a["open"][0][:24 * 7 + 1], b["open"][0][:24 * 7 + 1])
+        self.assertNotEqual(a["close"], b["close"])
+        p = sim.Params(variant="lev1", hold=24)
+        flat = sim.run(self.SC, p, ["lev1"])["variants"]["lev1"]["terminal_return_median"]
+        edge = sim.run(replace(self.SC, momentum_drift_daily=0.01), p, ["lev1"])["variants"]["lev1"]
+        self.assertGreater(edge["terminal_return_median"], flat)
 
     def test_paths_are_deterministic_and_shared(self):
         a, b = sim.generate(self.SC), sim.generate(self.SC)

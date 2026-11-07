@@ -26,6 +26,7 @@ sampling noise:
   x1_same_margin  L = 1, margin = notional = cap x E (what the leverage adds)
   x1_same_notional L = 1, notional of fixed20 (mechanics: equal P&L until liquidation)
   x1_matched_risk L = 1, notional of adaptive20 (same planned loss at the stop)
+  levL            any leverage L with margin = cap x E (for leverage sweeps, e.g. lev3)
 The last two are fully funded references: a 1x book of that notional would need more cash
 than the account has, so they skip the cash, book and stress checks.
 
@@ -64,6 +65,7 @@ class Scenario:
     funding_base: float = 0.0001              # per 8 h
     funding_vol: float = 0.0002
     max_leverage: tuple = (50, 50, 25, 20, 20, 20, 20, 20, 10, 10, 10, 5)  # cycled over assets
+    momentum_drift_daily: float = 0.0         # planted edge: top-3 / bottom-3 by 7-day return drift +/- this
 
 
 @dataclass(frozen=True)
@@ -119,9 +121,16 @@ def generate(sc: Scenario):
                 k = rng.randrange(n)
                 gap[k] += math.log(1 + rng.uniform(0.1, sc.squeeze_max))
             m = rng.gauss(0, mvol)
+            drift = [0.0] * n
+            if sc.momentum_drift_daily and t >= 24 * 7:  # no random draws, so paths match otherwise
+                ranked = sorted(range(n), key=lambda a: logp[a][-1] - logp[a][-1 - 24 * 7])
+                for a in ranked[-3:]:
+                    drift[a] = sc.momentum_drift_daily / 24
+                for a in ranked[:3]:
+                    drift[a] = -sc.momentum_drift_daily / 24
             for a in range(n):
                 o = price[a] * math.exp(gap[a])
-                r = beta[a] * m + rng.gauss(0, ivol[a])
+                r = beta[a] * m + rng.gauss(0, ivol[a]) + drift[a]
                 c = o * math.exp(r)
                 wick = ivol[a] + beta[a] * mvol
                 O[a][t], C[a][t] = o, c
@@ -138,7 +147,10 @@ def generate(sc: Scenario):
 
 
 def scenario_sha(sc: Scenario) -> str:
-    return hashlib.sha256(json.dumps(asdict(sc), sort_keys=True).encode()).hexdigest()
+    d = asdict(sc)
+    if not d["momentum_drift_daily"]:  # added later; omitted when off so earlier SHAs still hold
+        del d["momentum_drift_daily"]
+    return hashlib.sha256(json.dumps(d, sort_keys=True).encode()).hexdigest()
 
 
 # ----------------------------------------------------------------- mechanics
@@ -157,6 +169,8 @@ def size(p: Params, equity: float, stop: float) -> tuple:
     cap = p.margin_cap * base
     if p.variant == "fixed20":
         return cap, 20 * cap
+    if p.variant.startswith("lev"):  # levL: margin = cap x E, leverage L (sweeps)
+        return cap, float(p.variant[3:]) * cap
     if p.variant == "adaptive20":
         m = min(cap, p.risk_budget * base / (20 * (stop + cost)))
         return m, 20 * m
@@ -220,7 +234,7 @@ def simulate_path(path, p: Params, log=None) -> dict:
     T = len(C[0])
     free, legs = p.equity0, []
     st = {"entries": 0, "stops": 0, "liquidations": 0, "exits": 0, "skips": {}, "fees": 0.0, "funding": 0.0,
-          "margin_posted": 0.0, "stop_loss_ratio": [], "batches": 0, "batches_with_liq": 0, "max_margin_share": 0.0}
+          "margin_posted": 0.0, "gross": 0.0, "closed": 0, "stop_loss_ratio": [], "batches": 0, "batches_with_liq": 0, "max_margin_share": 0.0}
     curve, peak, mdd = [], p.equity0, 0.0
 
     def equity(t):
@@ -235,10 +249,18 @@ def simulate_path(path, p: Params, log=None) -> dict:
         # 1. existing legs during bar t
         for l in list(legs):
             a = l.asset
-            if t == l.exit_bar:  # exit at this bar's open
+            if t == l.exit_bar:  # exit at this bar's open, unless the open gapped past liquidation
+                if (O[a][t] <= l.liq_price) if l.side > 0 else (O[a][t] >= l.liq_price):
+                    st["liquidations"] += 1
+                    if batch_liq is not None:
+                        batch_liq[0] = True
+                    legs.remove(l)
+                    continue
                 px = O[a][t] * (1 - l.side * p.slippage)
                 fee = p.fee * l.qty * px
-                free += l.margin + l.side * l.qty * (px - l.entry) - fee
+                st["gross"] += l.side * (O[a][t] / (l.entry / (1 + l.side * p.slippage)) - 1)
+                st["closed"] += 1
+                free += max(0.0, l.margin + l.side * l.qty * (px - l.entry) - fee)  # isolated: never below zero
                 st["fees"] += fee
                 st["exits"] += 1
                 legs.remove(l)
@@ -255,6 +277,8 @@ def simulate_path(path, p: Params, log=None) -> dict:
                 o = O[a][t]
                 gap = (o < l.stop_price) if l.side > 0 else (o > l.stop_price)
                 px = (o if gap else l.stop_price) * (1 - l.side * p.slippage)
+                st["gross"] += l.side * ((o if gap else l.stop_price) / (l.entry / (1 + l.side * p.slippage)) - 1)
+                st["closed"] += 1
                 fee = p.fee * l.qty * px
                 pnl = l.side * l.qty * (px - l.entry)
                 free += max(0.0, l.margin + pnl - fee)
@@ -289,14 +313,14 @@ def simulate_path(path, p: Params, log=None) -> dict:
             for a in assets:
                 stop = max(p.stop_floor, p.stop_k * _hold_vol(path, a, t, p.lookback, p.hold))
                 m, n = size(p, e, stop)
-                lev = n / m
                 if log is not None:
                     log.append((t, a, side, e, m, n))
+                if m <= 0 or n <= 0:
+                    skip("zero_stake")
+                    continue
+                lev = n / m
                 if lev > 1 + 1e-12 and lev > path["max_leverage"][a] + 1e-12:
                     skip("leverage_unavailable")
-                    continue
-                if m <= 0:
-                    skip("zero_stake")
                     continue
                 entry = O[a][t + 1] * (1 + side * p.slippage)
                 qty = n / entry
@@ -377,6 +401,8 @@ def run(sc: Scenario, base: Params, variants=VARIANTS) -> dict:
             "fees_over_margin": math.fsum(x["fees"] for x in res) / posted if posted else None,
             "funding_over_margin": math.fsum(x["funding"] for x in res) / posted if posted else None,
             "max_margin_share": max(x["max_margin_share"] for x in res),
+            "gross_move_per_closed_trade": (math.fsum(x["gross"] for x in res) / sum(x["closed"] for x in res)
+                                            if sum(x["closed"] for x in res) else None),
         }
     return out
 
