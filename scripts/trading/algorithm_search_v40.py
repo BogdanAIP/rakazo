@@ -424,6 +424,53 @@ def _corr(a, b):
     return sum((x - ma) * (y - mb) for x, y in zip(a, b)) / math.sqrt(va * vb)
 
 
+J8_MAX_CORR = 0.7
+
+
+def j8_replay(panels, ledger_path, reference, candidate, candidate_library, reference_library="r2") -> dict:
+    """J8 novelty screen across libraries. panels: [(panel, cfg, folds, start_ts)], the first
+    the primary search panel (folds 2, start None). Each genome is compiled under its own
+    library and evaluated by fresh evaluators on the same panels, costs and steps; step
+    returns are matched by decision bar within each panel, then concatenated in panel order
+    for the pooled figure. Fails closed: fewer than 10 matched steps or a constant series
+    gives rho None and verdict UNDEFINED; |rho| >= 0.7 on any panel or pooled is NOT_NEW."""
+    previous = next(k for k, v in LIBRARIES.items() if v is TERMINALS)
+    runs = {}
+    try:
+        for role, genome, lib in (("reference", reference, reference_library),
+                                  ("candidate", candidate, candidate_library)):
+            sha = use_library(lib)
+            if not {n for b in _blends(genome) for _, n in b} <= TERMINALS.keys():
+                raise ValueError(f"{role} uses terms outside library {lib}")
+            evs = [Evaluator(p, c, ledger_path, None, folds, start) for p, c, folds, start in panels]
+            pooled = Pooled(evs).evaluate(genome) if len(evs) > 1 else evs[0].evaluate(genome)
+            runs[role] = {"library": lib, "library_sha256": sha, "fitness": pooled["fitness"],
+                          "steps": [dict(zip(r["steps_t"], r["returns"])) for r in (ev.evaluate(genome) for ev in evs)]}
+    finally:
+        use_library(previous)
+
+    def rho(pairs):
+        a, b = [x for x, _ in pairs], [y for _, y in pairs]
+        if len(pairs) < 10 or len(set(a)) < 2 or len(set(b)) < 2:
+            return None
+        return _corr(a, b)
+
+    out = {"reference": {k: v for k, v in runs["reference"].items() if k != "steps"},
+           "candidate": {k: v for k, v in runs["candidate"].items() if k != "steps"}, "panels": []}
+    pooled_pairs = []
+    for ref, cand in zip(runs["reference"]["steps"], runs["candidate"]["steps"]):
+        common = sorted(ref.keys() & cand.keys())
+        pairs = [(ref[t], cand[t]) for t in common]
+        pooled_pairs += pairs
+        out["panels"].append({"reference_steps": len(ref), "candidate_steps": len(cand), "matched": len(pairs),
+                              "rho": rho(pairs)})
+    out["pooled"] = {"matched": len(pooled_pairs), "rho": rho(pooled_pairs)}
+    rhos = [x["rho"] for x in out["panels"]] + [out["pooled"]["rho"]]
+    out["verdict"] = ("UNDEFINED" if any(r is None for r in rhos)
+                      else "NOT_NEW" if any(abs(r) >= J8_MAX_CORR for r in rhos) else "NEW")
+    return out
+
+
 def search(panel, cfg, ledger_path, population=60, generations=20, elite=12, seed=40, seeds=(), log=None,
            null_seed=None, extra=()):
     """extra: (panel, cfg, folds, start_ts) of further search panels; see Pooled."""
@@ -635,6 +682,11 @@ def main(argv=None):
     p.add_argument("--population", type=int, default=60)
     p.add_argument("--generations", type=int, default=20)
     p.add_argument("--seed", type=int, default=40)
+    p = sub.add_parser("j8", help="J8 novelty replay of a candidate against a reference genome")
+    for a in ("--panel", "--config", "--ledger", "--out", "--reference", "--candidate", "--candidate-library"):
+        p.add_argument(a, required=True)
+    p.add_argument("--reference-library", default="r2")
+    extra_args(p)
     p = sub.add_parser("synth")
     p.add_argument("--out", required=True)
     p.add_argument("--symbols", type=int, default=40)
@@ -653,6 +705,12 @@ def main(argv=None):
     panel = bench.load_panel(args.panel, tradable_only=True, end_ts=frozen["search_end_ts"])
     cfg, _ = bench.load_config(args.config, panel)
     extra = load_extra(args)
+    if args.cmd == "j8":  # genomes as JSON text; the primary panel uses 2 folds from its first bar
+        res = j8_replay([(panel, cfg, 2, None)] + list(extra), args.ledger, json.loads(args.reference),
+                        json.loads(args.candidate), args.candidate_library, args.reference_library)
+        bench.write_exclusive(Path(args.out), {"search_end_utc": cfg["search_end_utc"], **res})
+        print(json.dumps(res, indent=1))
+        return
     if args.cmd == "null":
         res = null_calibration(panel, cfg, args.explore_ledger, args.runs, args.population, args.generations,
                                args.seed, log=print, first=args.first_null, extra=extra)

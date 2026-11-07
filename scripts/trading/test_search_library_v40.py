@@ -96,6 +96,48 @@ class TestF1Terms(LibraryCase):
         self.assertTrue(all(direct[s].tobytes() == cached[s].tobytes() for s in ev.panel.symbols))
 
 
+class TestJ8Replay(LibraryCase):
+    CARRY = {"blend": [[-1, "fund3"]], "h": 7, "w": "inverse_vol"}
+
+    def panels(self):
+        cls = type(self)
+        if not hasattr(cls, "_panels"):
+            src = self.tmp / "second.csv"
+            search.synthesize_regime_daily(src, symbols=25, days=900, seed=29, volume_plant=0.15)
+            second = bench.load_panel(src)
+            t0 = second.times[0]
+            bench.freeze_config(second, 0.25, self.tmp / "cfg2.json", {"prior_trials": 0}, expect_bar_ms=DAY,
+                                holdout_start_ts=t0 + 675 * DAY, search_end_ts=t0 + 400 * DAY)
+            cfg, _ = bench.load_config(self.tmp / "cfg2.json", second)
+            cls._panels = [(self.panel, self.cfg, 2, None), (second, cfg, 3, t0 + 150 * DAY)]
+        return cls._panels
+
+    def test_carry_under_r2_against_f1_candidate_under_r3(self):
+        """GPT 11-07: the carry reference is not in r3-f1, so each genome is compiled under its
+        own library in fresh evaluators; the caller's library is restored afterwards."""
+        search.use_library("r3-f1")
+        cand = {"blend": [[1, "vrev1"]], "h": 1, "w": "inverse_vol"}
+        out = search.j8_replay(self.panels(), self.tmp / "j8.jsonl", self.CARRY, cand, "r3-f1")
+        self.assertIs(search.TERMINALS, search.LIBRARIES["r3-f1"])
+        self.assertEqual(out["reference"]["library_sha256"], R2_SHA)
+        self.assertEqual(out["candidate"]["library_sha256"], R3_F1_SHA)
+        for x in out["panels"]:  # staggered tranches: one step per bar whatever the hold
+            self.assertEqual(x["matched"], x["reference_steps"])
+            self.assertEqual(x["matched"], x["candidate_steps"])
+            self.assertGreater(x["matched"], 100)
+        self.assertEqual(out["pooled"]["matched"], sum(x["matched"] for x in out["panels"]))
+        self.assertEqual(out["verdict"], "NEW")
+        self.assertLess(abs(out["pooled"]["rho"]), 0.7)
+
+    def test_a_copy_is_not_new_and_foreign_terms_fail_closed(self):
+        same = search.j8_replay(self.panels(), self.tmp / "j8b.jsonl", self.CARRY, self.CARRY, "r2")
+        self.assertEqual(same["verdict"], "NOT_NEW")
+        self.assertAlmostEqual(same["pooled"]["rho"], 1.0, places=12)
+        with self.assertRaises(ValueError):
+            search.j8_replay(self.panels(), self.tmp / "j8c.jsonl", self.CARRY, self.CARRY, "r3-f1")
+        self.assertIs(search.TERMINALS, search.LIBRARIES["r2"])
+
+
 class TestF1Discovery(LibraryCase):
     def test_planted_volume_effect_needs_f1(self):
         """Returns continue after heavy and reverse after light abnormal volume; volume is
