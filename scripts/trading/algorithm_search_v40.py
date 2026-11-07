@@ -427,13 +427,22 @@ def _corr(a, b):
 J8_MAX_CORR = 0.7
 
 
+def _j8_steps(result, role) -> dict:
+    """Decision bar -> step return; refuses unequal lengths or a repeated bar (pairing contract)."""
+    t, r = list(result["steps_t"]), list(result["returns"])
+    if len(t) != len(r) or len(set(t)) != len(t):
+        raise ValueError(f"{role}: steps_t and returns do not pair one-to-one")
+    return dict(zip(t, r))
+
+
 def j8_replay(panels, ledger_path, reference, candidate, candidate_library, reference_library="r2") -> dict:
     """J8 novelty screen across libraries. panels: [(panel, cfg, folds, start_ts)], the first
     the primary search panel (folds 2, start None). Each genome is compiled under its own
     library and evaluated by fresh evaluators on the same panels, costs and steps; step
     returns are matched by decision bar within each panel, then concatenated in panel order
     for the pooled figure. Fails closed: fewer than 10 matched steps or a constant series
-    gives rho None and verdict UNDEFINED; |rho| >= 0.7 on any panel or pooled is NOT_NEW."""
+    or any nonfinite return, variance or rho gives rho None and verdict UNDEFINED; unpaired or
+    repeated decision bars raise; |rho| >= 0.7 on any panel or pooled is NOT_NEW."""
     previous = next(k for k, v in LIBRARIES.items() if v is TERMINALS)
     runs = {}
     try:
@@ -445,15 +454,26 @@ def j8_replay(panels, ledger_path, reference, candidate, candidate_library, refe
             evs = [Evaluator(p, c, ledger_path, None, folds, start) for p, c, folds, start in panels]
             pooled = Pooled(evs).evaluate(genome) if len(evs) > 1 else evs[0].evaluate(genome)
             runs[role] = {"library": lib, "library_sha256": sha, "fitness": pooled["fitness"],
-                          "steps": [dict(zip(r["steps_t"], r["returns"])) for r in (ev.evaluate(genome) for ev in evs)]}
+                          "steps": [_j8_steps(ev.evaluate(genome), role) for ev in evs]}
     finally:
         use_library(previous)
 
     def rho(pairs):
+        """J12 (GPT 11-07): any nonfinite return, variance or result is UNDEFINED, never NEW."""
         a, b = [x for x, _ in pairs], [y for _, y in pairs]
-        if len(pairs) < 10 or len(set(a)) < 2 or len(set(b)) < 2:
+        if len(pairs) < 10 or not all(math.isfinite(x) for x in a + b):
             return None
-        return _corr(a, b)
+        n = len(pairs)
+        try:
+            ma, mb = math.fsum(a) / n, math.fsum(b) / n
+            va = math.fsum((x - ma) * (x - ma) for x in a)
+            vb = math.fsum((y - mb) * (y - mb) for y in b)
+            if not (math.isfinite(va) and math.isfinite(vb) and va > 0 and vb > 0):
+                return None
+            r = math.fsum((x - ma) * (y - mb) for x, y in pairs) / (math.sqrt(va) * math.sqrt(vb))
+        except (OverflowError, ValueError, ZeroDivisionError):
+            return None
+        return r if math.isfinite(r) else None
 
     out = {"reference": {k: v for k, v in runs["reference"].items() if k != "steps"},
            "candidate": {k: v for k, v in runs["candidate"].items() if k != "steps"}, "panels": []}

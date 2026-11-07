@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import random
 import shutil
 import tempfile
@@ -135,6 +136,49 @@ class TestJ8Replay(LibraryCase):
         self.assertAlmostEqual(same["pooled"]["rho"], 1.0, places=12)
         with self.assertRaises(ValueError):
             search.j8_replay(self.panels(), self.tmp / "j8c.jsonl", self.CARRY, self.CARRY, "r3-f1")
+        self.assertIs(search.TERMINALS, search.LIBRARIES["r2"])
+
+    def _patched(self, steps_for):
+        """Replaces Evaluator.evaluate with fixed step series (GPT's 11-07 probe)."""
+        from unittest import mock
+
+        def fake(ev, genome):
+            role = "candidate" if genome != self.CARRY else "reference"
+            t, r = steps_for(role)
+            return {"fitness": 0.0, "steps_t": t, "returns": r, "sharpe": 0.0, "halves": [0.0], "ic": 0.0,
+                    "turnover": 0.0, "periods": len(r)}
+        return mock.patch.object(search.Evaluator, "evaluate", fake)
+
+    def test_nonfinite_or_degenerate_series_are_undefined(self):
+        """GPT 11-07: one NaN in 12 matched steps gave rho NaN and verdict NEW; must be UNDEFINED."""
+        cand = {"blend": [[1, "vrev1"]], "h": 1, "w": "inverse_vol"}
+        base = [float(i) for i in range(12)]
+        cases = {"nan": base[:3] + [math.nan] + base[4:], "inf": base[:5] + [math.inf] + base[6:],
+                 "constant": [1.0] * 12, "variance_overflow": [1e300 * (-1) ** i for i in range(12)]}
+        for name, cand_r in cases.items():
+            with self.subTest(name), self._patched(
+                    lambda role, c=cand_r: (list(range(12)), c if role == "candidate" else base)):
+                out = search.j8_replay(self.panels(), self.tmp / f"j8-{name}.jsonl", self.CARRY, cand, "r3-f1")
+                self.assertEqual(out["verdict"], "UNDEFINED")
+                self.assertIsNone(out["pooled"]["rho"])
+                self.assertTrue(all(x["rho"] is None for x in out["panels"]))
+        with self._patched(lambda role: (list(range(12)), base if role == "reference" else base[::-1])):
+            out = search.j8_replay(self.panels(), self.tmp / "j8-finite.jsonl", self.CARRY, cand, "r3-f1")
+            self.assertAlmostEqual(out["pooled"]["rho"], -1.0, places=12)
+            self.assertEqual(out["verdict"], "NOT_NEW")
+        big = [x * 1e150 for x in base]  # va * vb overflows; the correlation is still exactly defined
+        with self._patched(lambda role: (list(range(12)), big)):
+            out = search.j8_replay(self.panels(), self.tmp / "j8-big.jsonl", self.CARRY, cand, "r3-f1")
+            self.assertAlmostEqual(out["pooled"]["rho"], 1.0, places=12)
+            self.assertEqual(out["verdict"], "NOT_NEW")
+        self.assertIs(search.TERMINALS, search.LIBRARIES["r2"])
+
+    def test_unpaired_or_repeated_decision_bars_raise(self):
+        cand = {"blend": [[1, "vrev1"]], "h": 1, "w": "inverse_vol"}
+        base = [float(i) for i in range(12)]
+        for name, steps in {"short": (list(range(11)), base), "repeat": ([0] + list(range(11)), base)}.items():
+            with self.subTest(name), self._patched(lambda role, s=steps: s), self.assertRaises(ValueError):
+                search.j8_replay(self.panels(), self.tmp / f"j8-{name}.jsonl", self.CARRY, cand, "r3-f1")
         self.assertIs(search.TERMINALS, search.LIBRARIES["r2"])
 
 
