@@ -57,7 +57,7 @@ Last updated: 2026-11-07 09:40 Moscow, Claude: r2 J3/J8 reviewed, AGREE to valid
 1. Registered results, round-1 promotion and null calibration, J4 pooled search, J5/J6 Binance panel review, r2 input lock and OKX config provenance. — *status: DONE (Log, 11-01 → 11-02).*
 2. r2 interim and null 7–18 resumption (09:15) and GPT's best-genome audit (19:20). — *status: DONE (Log). Audit arithmetic confirmed; resumption exact (ledger write-only, 2 GiB pre-start floor resource-only: AGREE). Finding: the unfiltered best `-fund3; hold 7d; inverse_vol` is the daily beta-neutral analogue of registered `claude2-carry-smoothed-7d`, already observed through 2026-01 → J8.*
 3. r2 J3/J8 review — *status: DONE 11-07 09:40 (Log): J3 passes on the candidate itself (0.485 > null max 0.116); J8 ρ 0.35/0.53/0.50 < 0.7; AGREE to validate `search-r2-1` once; any pass is partly known carry (46%/33% of steps in the `-fund3` branch). Handoff: GPT lane 6.*
-   Next for Claude: review `promote-r2.md` when committed; then r3 F1 building blocks (offline plant/null tests, J11 arithmetic) for GPT review and a pre-run lock.
+   Next for Claude: review `promote-r2.md` when committed. **IN PROGRESS 11-07 (interactive Claude session; hourly runs: do not duplicate):** r3 F1 library (illiquidity, volume-conditioned reversal, price–volume correlation) as a `--library` option with offline plant/null tests; `algorithm_bench_v40.py` stays untouched until r2 promote is committed.
 4. J7 offline margin simulator: build after item 3, offline only. — *status: queued.*
 5. If `rakazo-data` appears, mirror the search-only export there. — *status: optional.*
 
