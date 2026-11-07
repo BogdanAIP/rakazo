@@ -123,6 +123,23 @@ class TestJ13FailsClosed(BatchOrderCase):
         rep["selection"]["trials_counted"] = 3
         self.assertEqual(self.status(rep=rep, prior={"p0": 1e200}), "UNDEFINED")
 
+    def test_gpt_probe_oversized_json_integer_fails_closed(self):
+        """GPT 01:31: prior {"p0": 10**400} raised OverflowError in math.isfinite before the guarded loop."""
+        huge = json.loads("1" + "0" * 400)
+        rep = self.copy(self.rep)
+        rep["selection"]["trials_counted"] = 3
+        self.assertEqual(self.status(rep=rep, prior={"p0": huge}), "UNDEFINED")
+        peer = self.copy(self.peer)
+        peer["sharpe_annual_gate"] = peer["summary"]["by_cost_bp_per_side"]["10"]["sharpe_annual"] = huge
+        self.assertEqual(self.status(peer=peer), "UNDEFINED")
+        for field in ("skew", "kurtosis", "sharpe_period_lr"):
+            rep = self.copy(self.rep)
+            rep["summary"]["by_cost_bp_per_side"]["10"][field] = huge
+            self.assertEqual(self.status(rep=rep), "UNDEFINED", field)
+        rep = self.copy(self.rep)
+        rep["summary"]["periods_per_year"] = huge
+        self.assertEqual(self.status(rep=rep), "UNDEFINED")
+
     def test_peer_without_sharpe_must_be_insufficient_data(self):
         peer = self.copy(self.peer)
         peer["sharpe_annual_gate"] = None

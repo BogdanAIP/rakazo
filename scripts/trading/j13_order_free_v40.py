@@ -22,7 +22,12 @@ MAX_BATCH = 5  # promote 5 per round: at most 16 predecessor subsets per rule
 
 
 def _finite(x) -> bool:
-    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+    if not isinstance(x, (int, float)) or isinstance(x, bool):
+        return False
+    try:
+        return math.isfinite(x)
+    except OverflowError:  # a JSON integer beyond float range is not a usable finite number
+        return False
 
 
 def prior_sharpes(ledger_rows, panel_sha: str) -> dict:
