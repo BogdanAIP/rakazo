@@ -18,6 +18,8 @@ Programs are built from a library of causal building blocks:
            funding, volume shocks, ranges, betas, and their negatives;
   regimes  market volatility versus its longer average, market trend, cross-sectional
            dispersion; a program may switch between two factor blends by regime.
+`--library` selects a round's set: `r2` (rounds 1-2) or `r3-f1` (no funding; price-volume
+interaction and liquidity terms, at least one per genome).
 Each genome compiles to an ordinary bench DSL expression, so a promoted rule is
 validated by exactly the same code path as any hand-written hypothesis.
 
@@ -80,8 +82,51 @@ def _regimes() -> dict:
     }
 
 
+def _f1_terminals() -> dict:
+    """Round-3 family F1 (J9): price-volume interaction and liquidity. The products are
+    fixed terminals because the search only adds z-scores and never multiplies them."""
+    v = ["field", "volume"]  # quote volume
+    lv = ["log1p", v]
+
+    def amihud(n):  # mean |return| per unit of quote volume; ranked, as it spans decades
+        return ["csrank", ["div", ["mean", ["abs", R], n], ["mean", v, n]]]
+
+    return {
+        "illiq20": amihud(20),
+        "illiq60": amihud(60),
+        "dilliq": ["sub", amihud(5), amihud(60)],
+        "liq60": ["mean", lv, 60],
+        # volume-conditioned return: continuation after high, reversal after low abnormal volume
+        "vrev1": ["mul", ["csz", R], ["csz", ["z", lv, 20]]],
+        "vrev5": ["mul", ["csz", ["sum", R, 5]], ["csz", ["z", lv, 20]]],
+        "irev5": ["mul", ["csz", ["sum", R, 5]], amihud(20)],
+        "pvcorr20": ["corr", R, ["delta", lv, 1], 20],
+    }
+
+
 TERMINALS = _terminals()
 REGIMES = _regimes()
+F1 = _f1_terminals()
+# Building blocks per round. A library with required terms only admits genomes that use
+# at least one of them, so the round tests that family rather than re-finding old ones.
+LIBRARIES = {
+    "r2": TERMINALS,  # rounds 1 and 2
+    "r3-f1": {**{k: v for k, v in TERMINALS.items() if not k.startswith("fund")}, **F1},
+}
+REQUIRED = {"r2": frozenset(), "r3-f1": frozenset(F1)}
+required_terms = REQUIRED["r2"]
+
+
+def use_library(name: str) -> str:
+    """Select a round's building blocks (module state, like allowed_horizons); returns its SHA."""
+    global TERMINALS, required_terms
+    TERMINALS, required_terms = LIBRARIES[name], REQUIRED[name]
+    return library_sha(name)
+
+
+def library_sha(name: str) -> str:
+    return bench.sha256_bytes(bench.canonical({"terminals": LIBRARIES[name], "regimes": REGIMES,
+                                               "required": sorted(REQUIRED[name])}))
 
 
 # ------------------------------------------------------------------ genomes
@@ -199,6 +244,26 @@ def crossover(rng, a, b) -> dict:
     else:
         child["blend"] = copy.deepcopy(give)
     return child
+
+
+def _blends(g) -> list:
+    return [g["on"], g["off"]] if "regime" in g else [g["blend"]]
+
+
+def repair(rng, g) -> dict:
+    """Make a genome use the library: unknown terms are an error, and if the library has
+    required terms but the genome uses none, one random term is swapped for a random
+    required one. Draws nothing when nothing is required, so r1/r2 runs are unchanged."""
+    names = {n for b in _blends(g) for _, n in b}
+    if not names <= TERMINALS.keys():
+        raise ValueError(f"terms outside the library: {sorted(names - TERMINALS.keys())}")
+    if not required_terms or names & required_terms:
+        return g
+    g = copy.deepcopy(g)
+    b = rng.choice(_blends(g))
+    i = rng.randrange(len(b))
+    b[i] = (b[i][0], rng.choice(sorted(required_terms - {n for _, n in b})))
+    return g
 
 
 def complexity(g) -> int:
@@ -371,7 +436,8 @@ def search(panel, cfg, ledger_path, population=60, generations=20, elite=12, see
     ev = Evaluator(panel, cfg, ledger_path, null_seed)
     if extra:
         ev = Pooled([ev] + [Evaluator(p, c, ledger_path, null_seed, folds, start) for p, c, folds, start in extra])
-    pop = [copy.deepcopy(s) for s in seeds] + [random_genome(rng) for _ in range(population - len(seeds))]
+    pop = [repair(rng, copy.deepcopy(s)) for s in seeds] + \
+          [repair(rng, random_genome(rng)) for _ in range(population - len(seeds))]
     history = []
     for gen in range(generations):
         scored = sorted(((ev.evaluate(g)["fitness"], genome_key(g), g) for g in pop), key=lambda x: -x[0])
@@ -388,7 +454,7 @@ def search(panel, cfg, ledger_path, population=60, generations=20, elite=12, see
                 child = mutate(rng, rng.choice(parents))
             else:
                 child = random_genome(rng)
-            nxt.append(child)
+            nxt.append(repair(rng, child))
         pop = nxt
     return ev, history
 
@@ -451,11 +517,15 @@ def regime_breakdown(ev, g) -> dict:
 
 # ------------------------------------------------------------ synthetic data
 
-def synthesize_regime_daily(out, symbols=40, days=1100, seed=1, plant=0.0, start_ms=1_704_067_200_000):
+def synthesize_regime_daily(out, symbols=40, days=1100, seed=1, plant=0.0, start_ms=1_704_067_200_000,
+                            volume_plant=0.0):
     """Daily panel with switching market-volatility regimes. With plant > 0 the next day's
     idiosyncratic return loads on the cross-sectional z of the 5-day return: reversal in
     high-volatility regimes (20-day market vol above its 120-day level), momentum otherwise.
-    Unconditionally the two halves cancel, so plain momentum or reversal rules see nothing."""
+    Unconditionally the two halves cancel, so plain momentum or reversal rules see nothing.
+    With volume_plant > 0 it also loads on yesterday's return z times yesterday's abnormal
+    volume (continuation after heavy, reversal after light trading); volume is independent
+    of returns, so that effect is invisible without the product. Same random draws either way."""
     import csv
     rng = random.Random(seed)
     syms = [f"SYN{i:03d}-USDT-SWAP" for i in range(symbols)]
@@ -464,6 +534,7 @@ def synthesize_regime_daily(out, symbols=40, days=1100, seed=1, plant=0.0, start
     sig_i = {s: 0.025 + 0.03 * rng.random() for s in syms}
     fund = {s: rng.gauss(3e-4, 3e-4) for s in syms}
     hist = {s: [] for s in syms}
+    abnormal = {s: 0.0 for s in syms}
     mkt_hist: list = []
     high = False
     with open(out, "w", newline="") as fh:
@@ -483,11 +554,16 @@ def synthesize_regime_daily(out, symbols=40, days=1100, seed=1, plant=0.0, start
             vals = list(r5.values())
             mu, sd = sum(vals) / len(vals), (_std(vals) or 1.0)
             day_rets = []
+            r1 = {s: hist[s][-1] if hist[s] else 0.0 for s in syms}
+            mu1, sd1 = sum(r1.values()) / len(r1), (_std(list(r1.values())) or 1.0)
             for s in syms:
                 alpha = 0.0
+                if volume_plant and hist[s]:
+                    z1 = max(-3.0, min(3.0, (r1[s] - mu1) / sd1))
+                    alpha += volume_plant * sig_i[s] * z1 * max(-3.0, min(3.0, abnormal[s]))
                 if plant and len(mkt_hist) >= 120:
                     sign = -1.0 if regime > 0 else 1.0
-                    alpha = plant * sig_i[s] * sign * max(-3.0, min(3.0, (r5[s] - mu) / sd))
+                    alpha += plant * sig_i[s] * sign * max(-3.0, min(3.0, (r5[s] - mu) / sd))
                 var = beta[s] ** 2 * sig_m ** 2 + sig_i[s] ** 2
                 r = beta[s] * m + rng.gauss(alpha, sig_i[s]) - 0.5 * var
                 o = price[s]
@@ -496,8 +572,10 @@ def synthesize_regime_daily(out, symbols=40, days=1100, seed=1, plant=0.0, start
                 lo = min(o, c) * math.exp(-abs(rng.gauss(0, 0.01)))
                 price[s] = c
                 fund[s] = 3e-4 + 0.95 * (fund[s] - 3e-4) + rng.gauss(0, 1e-4)
+                vol = abs(rng.gauss(5e6, 2e6))
+                abnormal[s] = (vol - 5e6) / 2e6
                 w.writerow([start_ms + d * 86_400_000, s, f"{o:.8g}", f"{hi:.8g}", f"{lo:.8g}", f"{c:.8g}",
-                            f"{abs(rng.gauss(5e6, 2e6)):.2f}", 1, f"{fund[s]:.8f}", ""])
+                            f"{vol:.2f}", 1, f"{fund[s]:.8f}", ""])
                 hist[s].append(math.log(c / o))
                 day_rets.append(math.log(c / o))
             mkt_hist.append(sum(day_rets) / len(day_rets))
@@ -514,6 +592,7 @@ def _std(xs):
 # ------------------------------------------------------------------- CLI
 
 def extra_args(p):
+    p.add_argument("--library", choices=sorted(LIBRARIES), default="r2", help="building blocks of the round")
     p.add_argument("--extra-panel", action="append", default=[], help="further search-only panel (repeatable)")
     p.add_argument("--extra-config", action="append", default=[])
     p.add_argument("--extra-folds", action="append", type=int, default=[])
@@ -562,10 +641,12 @@ def main(argv=None):
     p.add_argument("--days", type=int, default=1100)
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--plant", type=float, default=0.0)
+    p.add_argument("--volume-plant", type=float, default=0.0)
     args = ap.parse_args(argv)
     if args.cmd == "synth":
-        synthesize_regime_daily(args.out, args.symbols, args.days, args.seed, args.plant)
+        synthesize_regime_daily(args.out, args.symbols, args.days, args.seed, args.plant, volume_plant=args.volume_plant)
         return
+    lib = {"library": args.library, "library_sha256": use_library(args.library)}
     frozen = json.loads(Path(args.config).read_text())
     if "search_end_ts" not in frozen:
         raise SystemExit("frozen config has no search/validation split")
@@ -577,7 +658,7 @@ def main(argv=None):
                                args.seed, log=print, first=args.first_null, extra=extra)
         bench.write_exclusive(Path(args.out), {"search_end_utc": cfg["search_end_utc"], "seed": args.seed,
                                                "population": args.population, "generations": args.generations,
-                                               "runs": res})
+                                               **lib, "runs": res})
         print(json.dumps({"null_best_fitness": sorted(r["best_fitness"] for r in res)}, indent=1))
         return
     seeds = json.loads(Path(args.seeds).read_text()) if args.seeds else []
@@ -589,7 +670,7 @@ def main(argv=None):
         direct = bench.evaluate_expression(h["score"], ev.panel)
         cached = ev.score(g)
         assert all(direct[s].tobytes() == cached[s].tobytes() for s in ev.panel.symbols), describe(g)
-    report = {"round": args.round, "search_end_utc": cfg["search_end_utc"], "evaluated": len(ev.seen),
+    report = {"round": args.round, "search_end_utc": cfg["search_end_utc"], "evaluated": len(ev.seen), **lib,
               "history": history,
               "top": [{"id": h["id"], "genome": g, "describe": describe(g), "search_sharpe_annual": r["sharpe"],
                        "search_halves_sharpe": r["halves"], "ic_mean": r["ic"], "turnover": r["turnover"],
