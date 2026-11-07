@@ -459,9 +459,13 @@ def j8_replay(panels, ledger_path, reference, candidate, candidate_library, refe
         use_library(previous)
 
     def rho(pairs):
-        """J12 (GPT 11-07): any nonfinite return, variance or result is UNDEFINED, never NEW."""
+        """J12 (GPT 11-07): any nonfinite return, constant series, variance or result is
+        UNDEFINED, never NEW. Constancy is checked exactly before centering: a rounded mean
+        (fsum([0.1] * 12) / 12) would otherwise leave a positive variance and rho 0."""
         a, b = [x for x, _ in pairs], [y for _, y in pairs]
         if len(pairs) < 10 or not all(math.isfinite(x) for x in a + b):
+            return None
+        if min(a) == max(a) or min(b) == max(b):
             return None
         n = len(pairs)
         try:

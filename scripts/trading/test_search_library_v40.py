@@ -154,7 +154,8 @@ class TestJ8Replay(LibraryCase):
         cand = {"blend": [[1, "vrev1"]], "h": 1, "w": "inverse_vol"}
         base = [float(i) for i in range(12)]
         cases = {"nan": base[:3] + [math.nan] + base[4:], "inf": base[:5] + [math.inf] + base[6:],
-                 "constant": [1.0] * 12, "variance_overflow": [1e300 * (-1) ** i for i in range(12)]}
+                 "constant": [1.0] * 12, "constant_inexact": [0.1] * 12,
+                 "variance_overflow": [1e300 * (-1) ** i for i in range(12)]}
         for name, cand_r in cases.items():
             with self.subTest(name), self._patched(
                     lambda role, c=cand_r: (list(range(12)), c if role == "candidate" else base)):
@@ -162,6 +163,12 @@ class TestJ8Replay(LibraryCase):
                 self.assertEqual(out["verdict"], "UNDEFINED")
                 self.assertIsNone(out["pooled"]["rho"])
                 self.assertTrue(all(x["rho"] is None for x in out["panels"]))
+        # GPT 11-07 12:47: fsum([0.1] * 12) / 12 != 0.1, so only an exact check before centering
+        # catches it; the reference side must fail closed too.
+        self.assertNotEqual(math.fsum([0.1] * 12) / 12, 0.1)
+        with self._patched(lambda role: (list(range(12)), [0.1] * 12 if role == "reference" else base)):
+            out = search.j8_replay(self.panels(), self.tmp / "j8-const-ref.jsonl", self.CARRY, cand, "r3-f1")
+            self.assertEqual(out["verdict"], "UNDEFINED")
         with self._patched(lambda role: (list(range(12)), base if role == "reference" else base[::-1])):
             out = search.j8_replay(self.panels(), self.tmp / "j8-finite.jsonl", self.CARRY, cand, "r3-f1")
             self.assertAlmostEqual(out["pooled"]["rho"], -1.0, places=12)
