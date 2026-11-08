@@ -14,7 +14,9 @@ ledger rows must follow the pinned order (reference, then candidate, panels in r
 Only NEW makes a candidate J8-eligible. The report and ledger must also bind each other:
 each role's pooled fitness is rebuilt from its own ledger rows (per-panel Sharpe and fitness)
 and the report's per-panel step counts, so a report paired with another replay's ledger is
-INVALID (GPT 05:50). The result carries both file SHA-256s, to be kept with the arguments
+INVALID (GPT 05:50); the rebuilt fitness must be finite (GPT 07:23). This binds the report
+to the ledger's recorded metrics only, not to provenance (scaling every step count leaves the
+weighted Sharpe unchanged): keep the exact invocation, exit code and both SHAs. The result carries both file SHA-256s, to be kept with the arguments
 and exit code of the one replay. Rows from a repeated invocation of the same pair
 are accepted only as exact copies (all fields but time_utc) of a complete first set; any
 other extra, missing or differing row is INVALID. After an interrupted invocation (no
@@ -38,7 +40,13 @@ FIT_TOL = 1e-9     # relative; per-panel folds are rebuilt from rounded fitness,
 
 
 def _num(x) -> bool:
-    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+    """Finite JSON number; an integer too large for a float (10**400) is not one (GPT 07:23)."""
+    if not isinstance(x, (int, float)) or isinstance(x, bool):
+        return False
+    try:
+        return math.isfinite(x)
+    except OverflowError:
+        return False
 
 
 def _count(x) -> bool:
@@ -63,21 +71,24 @@ def preflight(out, ledger) -> None:
 
 
 def _expected_verdict(report) -> str | None:
-    """Recompute the verdict from the report's own figures (pinned rule, 10-step floor)."""
+    """Recompute the verdict from the report's own figures (pinned rule, 10-step floor).
+    Counts, the pooled sum and every non-null rho are checked before UNDEFINED (GPT 07:23)."""
     blocks = list(report["panels"]) + [report["pooled"]]
-    rhos = [b["rho"] for b in blocks]
-    if any(r is None for r in rhos):
-        return "UNDEFINED"
     if any(not _count(b["matched"]) for b in blocks):
         return None
     for b in report["panels"]:
         if not (_count(b["reference_steps"]) and _count(b["candidate_steps"])
                 and b["matched"] <= min(b["reference_steps"], b["candidate_steps"])):
             return None
-    if any(not _num(r) or abs(r) > 1 + RHO_SLACK for r in rhos) or any(b["matched"] < 10 for b in blocks):
-        return None
     if report["pooled"]["matched"] != sum(b["matched"] for b in report["panels"]):
         return None
+    rhos = [b["rho"] for b in blocks]
+    for b in blocks:
+        r = b["rho"]
+        if r is not None and (not _num(r) or abs(r) > 1 + RHO_SLACK or b["matched"] < 10):
+            return None
+    if any(r is None for r in rhos):
+        return "UNDEFINED"
     return "NOT_NEW" if any(abs(r) >= search.J8_MAX_CORR for r in rhos) else "NEW"
 
 
@@ -145,7 +156,7 @@ def check(report_path, ledger_path, panel_shas, reference, candidate, candidate_
             except (KeyError, TypeError, ArithmeticError):
                 want = None
             got = report[role]["fitness"]
-            if want is None or abs(want - got) > FIT_TOL * max(1.0, abs(got)):
+            if want is None or not _num(want) or abs(want - got) > FIT_TOL * max(1.0, abs(got)):
                 problems.append(f"{role} fitness in the report does not follow from its ledger rows")
     return {"verdict": "INVALID" if problems else verdict, "problems": problems,
             "report_sha256": _sha(report_path), "ledger_sha256": _sha(ledger_path),

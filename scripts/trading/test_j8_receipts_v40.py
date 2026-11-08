@@ -171,6 +171,43 @@ class ReceiptCase(unittest.TestCase):
             self.assertEqual(receipts.check(self.edited(bad), self.self_ledger, self.shas, CARRY, CARRY,
                                             "r2")["verdict"], "INVALID", rho)
 
+    def test_overflowing_ledger_metrics_are_invalid(self):
+        """GPT 07:23: Sharpe 1.7e308 and fitness -1.7e308 rebuilt a NaN fitness that compared as equal."""
+        rows = [json.loads(x) for x in self.ledger.read_text().splitlines()]
+        path = self.tmp / "overflow.jsonl"
+        path.write_text("".join(json.dumps({**r, "sharpe_annual_gate": 1.7e308, "fitness": -1.7e308}) + "\n"
+                                for r in rows))
+        res = receipts.check(self.out, path, self.shas, CARRY, VREV, "r3-f1")
+        self.assertEqual((res["verdict"], res["eligible"]), ("INVALID", False), res)
+
+    def test_unrepresentable_report_numbers_are_invalid_not_errors(self):
+        """GPT 07:23: a JSON integer 10**400 raised OverflowError in fitness or rho."""
+        report = json.loads(self.out.read_text())
+        huge = 10 ** 400
+        for bad in ({**report, "candidate": {**report["candidate"], "fitness": huge}},
+                    {**report, "reference": {**report["reference"], "fitness": -huge}},
+                    {**report, "pooled": {**report["pooled"], "rho": huge}},
+                    {**report, "panels": [{**report["panels"][0], "rho": -huge}] + report["panels"][1:]},
+                    {**report, "panels": [{**report["panels"][0], "reference_steps": huge,
+                                           "candidate_steps": huge}] + report["panels"][1:]}):
+            res = receipts.check(self.edited(bad), self.ledger, self.shas, CARRY, VREV, "r3-f1")
+            self.assertEqual((res["verdict"], res["eligible"]), ("INVALID", False))
+
+    def test_undefined_needs_valid_counts_and_rhos(self):
+        """GPT 07:23: UNDEFINED with a negative count or another rho of 1.001 was returned as UNDEFINED."""
+        report = json.loads(self.out.read_text())
+        base = {**report, "verdict": "UNDEFINED", "pooled": {**report["pooled"], "rho": None}}
+        res = receipts.check(self.edited(base), self.ledger, self.shas, CARRY, VREV, "r3-f1")
+        self.assertEqual((res["verdict"], res["eligible"]), ("UNDEFINED", False), res)
+        p0 = base["panels"][0]
+        for edit in ({"panels": [{**p0, "matched": -1}] + base["panels"][1:]},
+                     {"panels": [{**p0, "rho": 1.001}] + base["panels"][1:]},
+                     {"panels": [{**p0, "rho": float("nan")}] + base["panels"][1:]},
+                     {"panels": [{**p0, "matched": 9}] + base["panels"][1:]},
+                     {"pooled": {**base["pooled"], "matched": base["pooled"]["matched"] + 1}}):
+            res = receipts.check(self.edited({**base, **edit}), self.ledger, self.shas, CARRY, VREV, "r3-f1")
+            self.assertEqual(res["verdict"], "INVALID", edit)
+
     def test_cli_exit_codes(self):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(receipts.main(["preflight", "--out", str(self.tmp / "n.json"),
