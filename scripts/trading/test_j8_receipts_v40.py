@@ -1,0 +1,133 @@
+"""Offline tests for the J8 replay receipt check around the pinned `j8` CLI (synthetic data only)."""
+from __future__ import annotations
+
+import contextlib
+import datetime as dt
+import io
+import json
+import shutil
+import tempfile
+import unittest
+from pathlib import Path
+
+import algorithm_bench_v40 as bench
+import algorithm_search_v40 as search
+import j8_receipts_v40 as receipts
+
+DAY = 86_400_000
+CARRY = {"blend": [[-1, "fund3"]], "h": 7, "w": "inverse_vol"}
+VREV = {"blend": [[1, "vrev1"]], "h": 1, "w": "inverse_vol"}
+
+
+class ReceiptCase(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp(prefix="j8-receipts-"))
+        cls.panels = []
+        for name, seed in (("a", 7), ("b", 8)):
+            src = cls.tmp / f"{name}.csv"
+            search.synthesize_regime_daily(src, symbols=24, days=650, seed=seed, volume_plant=0.15)
+            panel = bench.load_panel(src)
+            t0 = panel.times[0]
+            bench.freeze_config(panel, 0.25, cls.tmp / f"{name}.cfg.json", {"prior_trials": 0}, expect_bar_ms=DAY,
+                                holdout_start_ts=t0 + 550 * DAY, search_end_ts=t0 + 400 * DAY)
+            cls.panels.append((src, cls.tmp / f"{name}.cfg.json", t0))
+        cls.shas = [bench.sha256_file(p) for p, _, _ in cls.panels]
+        cls.out, cls.ledger = cls.replay("new", VREV, "r3-f1")
+        cls.self_out, cls.self_ledger = cls.replay("self", CARRY, "r2")
+
+    @classmethod
+    def tearDownClass(cls):
+        search.use_library("r2")
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    @classmethod
+    def argv(cls, name, cand, lib):
+        (a, acfg, _), (b, bcfg, t0) = cls.panels
+        start = dt.datetime.fromtimestamp((t0 + 150 * DAY) / 1000, dt.timezone.utc).strftime("%Y-%m-%d")
+        return ["j8", "--panel", str(a), "--config", str(acfg), "--extra-panel", str(b), "--extra-config", str(bcfg),
+                "--extra-folds", "3", "--extra-start", start, "--ledger", str(cls.tmp / f"{name}.jsonl"),
+                "--out", str(cls.tmp / f"{name}.json"), "--reference", json.dumps(CARRY),
+                "--candidate", json.dumps(cand), "--candidate-library", lib]
+
+    @classmethod
+    def replay(cls, name, cand, lib):
+        receipts.preflight(cls.tmp / f"{name}.json", cls.tmp / f"{name}.jsonl")
+        with contextlib.redirect_stdout(io.StringIO()):
+            search.main(cls.argv(name, cand, lib))
+        return cls.tmp / f"{name}.json", cls.tmp / f"{name}.jsonl"
+
+    def copy(self, src, name):
+        dst = self.tmp / name
+        shutil.copyfile(src, dst)
+        return dst
+
+    def test_new_and_not_new_receipts_bind(self):
+        res = receipts.check(self.out, self.ledger, self.shas, CARRY, VREV, "r3-f1")
+        self.assertEqual((res["verdict"], res["eligible"], res["replays_in_ledger"]), ("NEW", True, 1), res)
+        res = receipts.check(self.self_out, self.self_ledger, self.shas, CARRY, CARRY, "r2")
+        self.assertEqual((res["verdict"], res["eligible"]), ("NOT_NEW", False), res)
+
+    def test_preflight_refuses_existing_paths(self):
+        for out, ledger in ((self.out, self.tmp / "fresh.jsonl"), (self.tmp / "fresh.json", self.ledger)):
+            with self.assertRaises(SystemExit):
+                receipts.preflight(out, ledger)
+        with self.assertRaises(SystemExit):
+            receipts.preflight(self.tmp / "same", self.tmp / "same")
+
+    def test_pinned_cli_appends_before_refusing_report_and_check_reconciles(self):
+        """GPT 04:23 reproduced: an existing --out fails only after rows are appended."""
+        ledger = self.copy(self.ledger, "rep.jsonl")
+        out = self.copy(self.out, "rep.json")
+        argv = self.argv("rep", VREV, "r3-f1")
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(FileExistsError):
+            search.main(argv)
+        self.assertEqual(len(ledger.read_text().splitlines()), 8)
+        self.assertEqual(out.read_bytes(), self.out.read_bytes())
+        res = receipts.check(out, ledger, self.shas, CARRY, VREV, "r3-f1")
+        self.assertEqual((res["verdict"], res["replays_in_ledger"]), ("NEW", 2), res)
+
+    def test_partial_foreign_or_altered_rows_are_invalid(self):
+        lines = self.ledger.read_text().splitlines()
+        altered = json.loads(lines[0])
+        altered["fitness"] += 1e-12
+        foreign = json.loads(lines[0])
+        foreign["genome"] = {"blend": [[1, "vrev5"]], "h": 1, "w": "inverse_vol"}
+        cases = {"partial": lines[:3], "half-repeat": lines + lines[:2], "altered-repeat": lines + [json.dumps(altered)]
+                 + lines[1:], "foreign": lines + [json.dumps(foreign)], "empty": []}
+        for name, body in cases.items():
+            path = self.tmp / f"bad-{name}.jsonl"
+            path.write_text("".join(x + "\n" for x in body))
+            res = receipts.check(self.out, path, self.shas, CARRY, VREV, "r3-f1")
+            self.assertEqual(res["verdict"], "INVALID", name)
+            self.assertFalse(res["eligible"], name)
+
+    def test_wrong_panel_genome_library_or_verdict_is_invalid(self):
+        bad = [(self.out, self.ledger, self.shas[::-1], CARRY, VREV, "r3-f1"),
+               (self.out, self.ledger, self.shas[:1], CARRY, VREV, "r3-f1"),
+               (self.out, self.ledger, self.shas, CARRY, CARRY, "r3-f1"),
+               (self.out, self.ledger, self.shas, CARRY, VREV, "r2"),
+               (self.out, self.self_ledger, self.shas, CARRY, VREV, "r3-f1"),
+               (self.tmp / "missing.json", self.ledger, self.shas, CARRY, VREV, "r3-f1")]
+        for args in bad:
+            self.assertEqual(receipts.check(*args)["verdict"], "INVALID", args[2:])
+        report = json.loads(self.out.read_text())
+        for edit in ({"verdict": "NOT_NEW"}, {"pooled": {**report["pooled"], "matched": 9}}):
+            path = self.tmp / "edited.json"
+            path.write_text(json.dumps({**report, **edit}))
+            self.assertEqual(receipts.check(path, self.ledger, self.shas, CARRY, VREV, "r3-f1")["verdict"], "INVALID")
+            path.unlink()
+
+    def test_cli_exit_codes(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(receipts.main(["preflight", "--out", str(self.tmp / "n.json"),
+                                            "--ledger", str(self.tmp / "n.jsonl")]), 0)
+            base = ["check", "--out", str(self.out), "--ledger", str(self.ledger), "--reference", json.dumps(CARRY),
+                    "--candidate", json.dumps(VREV), "--candidate-library", "r3-f1"]
+            shas = [x for s in self.shas for x in ("--panel-sha", s)]
+            self.assertEqual(receipts.main(base + shas), 0)
+            self.assertEqual(receipts.main(base + shas[:2]), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()
