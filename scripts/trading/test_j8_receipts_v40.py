@@ -35,6 +35,7 @@ class ReceiptCase(unittest.TestCase):
         cls.shas = [bench.sha256_file(p) for p, _, _ in cls.panels]
         cls.out, cls.ledger = cls.replay("new", VREV, "r3-f1")
         cls.self_out, cls.self_ledger = cls.replay("self", CARRY, "r2")
+        cls.late_out, cls.late_ledger = cls.replay("late", VREV, "r3-f1", start_days=270)
 
     @classmethod
     def tearDownClass(cls):
@@ -42,19 +43,19 @@ class ReceiptCase(unittest.TestCase):
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
     @classmethod
-    def argv(cls, name, cand, lib):
+    def argv(cls, name, cand, lib, start_days=150):
         (a, acfg, _), (b, bcfg, t0) = cls.panels
-        start = dt.datetime.fromtimestamp((t0 + 150 * DAY) / 1000, dt.timezone.utc).strftime("%Y-%m-%d")
+        start = dt.datetime.fromtimestamp((t0 + start_days * DAY) / 1000, dt.timezone.utc).strftime("%Y-%m-%d")
         return ["j8", "--panel", str(a), "--config", str(acfg), "--extra-panel", str(b), "--extra-config", str(bcfg),
                 "--extra-folds", "3", "--extra-start", start, "--ledger", str(cls.tmp / f"{name}.jsonl"),
                 "--out", str(cls.tmp / f"{name}.json"), "--reference", json.dumps(CARRY),
                 "--candidate", json.dumps(cand), "--candidate-library", lib]
 
     @classmethod
-    def replay(cls, name, cand, lib):
+    def replay(cls, name, cand, lib, start_days=150):
         receipts.preflight(cls.tmp / f"{name}.json", cls.tmp / f"{name}.jsonl")
         with contextlib.redirect_stdout(io.StringIO()):
-            search.main(cls.argv(name, cand, lib))
+            search.main(cls.argv(name, cand, lib, start_days))
         return cls.tmp / f"{name}.json", cls.tmp / f"{name}.jsonl"
 
     def copy(self, src, name):
@@ -117,6 +118,58 @@ class ReceiptCase(unittest.TestCase):
             path.write_text(json.dumps({**report, **edit}))
             self.assertEqual(receipts.check(path, self.ledger, self.shas, CARRY, VREV, "r3-f1")["verdict"], "INVALID")
             path.unlink()
+
+    def edited(self, report, name="edited.json"):
+        path = self.tmp / name
+        path.write_text(json.dumps(report))
+        return path
+
+    def test_report_from_another_replay_is_invalid(self):
+        """GPT 05:50: same panel and genome keys, different --extra-start."""
+        res = receipts.check(self.late_out, self.late_ledger, self.shas, CARRY, VREV, "r3-f1")
+        self.assertEqual(res["verdict"], "NEW", res)
+        self.assertNotEqual(json.loads(self.late_out.read_text())["candidate"]["fitness"],
+                            json.loads(self.out.read_text())["candidate"]["fitness"])
+        for out, ledger in ((self.out, self.late_ledger), (self.late_out, self.ledger)):
+            res = receipts.check(out, ledger, self.shas, CARRY, VREV, "r3-f1")
+            self.assertEqual(res["verdict"], "INVALID", res)
+            self.assertIn("does not follow from its ledger rows", " ".join(res["problems"]))
+
+    def test_receipt_hashes_are_reported(self):
+        res = receipts.check(self.out, self.ledger, self.shas, CARRY, VREV, "r3-f1")
+        self.assertEqual(res["report_sha256"], bench.sha256_file(self.out))
+        self.assertEqual(res["ledger_sha256"], bench.sha256_file(self.ledger))
+
+    def test_impossible_step_counts_are_invalid(self):
+        report = json.loads(self.out.read_text())
+        m = report["panels"][0]["matched"]
+        for edit in ({"reference_steps": 0, "candidate_steps": 1}, {"candidate_steps": m - 1},
+                     {"reference_steps": True}, {"matched": float(m)}, {"reference_steps": -1}):
+            bad = {**report, "panels": [{**report["panels"][0], **edit}] + report["panels"][1:]}
+            self.assertEqual(receipts.check(self.edited(bad), self.ledger, self.shas, CARRY, VREV, "r3-f1")["verdict"],
+                             "INVALID", edit)
+
+    def test_non_object_rows_or_report_are_invalid_not_errors(self):
+        lines = self.ledger.read_text().splitlines()
+        for body in (["null"] + lines[1:], ["[]"] + lines[1:], ["3"] + lines[1:]):
+            path = self.tmp / "nonobj.jsonl"
+            path.write_text("".join(x + "\n" for x in body))
+            self.assertEqual(receipts.check(self.out, path, self.shas, CARRY, VREV, "r3-f1")["verdict"], "INVALID")
+        for report in (None, [], {"panels": "ab"}):
+            self.assertEqual(receipts.check(self.edited(report), self.ledger, self.shas, CARRY, VREV,
+                                            "r3-f1")["verdict"], "INVALID")
+
+    def test_self_match_rounded_past_one_is_not_new(self):
+        """GPT 05:50: pinned fsum/sqrt returned pooled rho 1.0000000000000002 on a self-match."""
+        report = json.loads(self.self_out.read_text())
+        over = 1.0000000000000002
+        bad = {**report, "pooled": {**report["pooled"], "rho": over}}
+        res = receipts.check(self.edited(bad), self.self_ledger, self.shas, CARRY, CARRY, "r2")
+        self.assertEqual((res["verdict"], res["eligible"]), ("NOT_NEW", False), res)
+        for rho in (1.001, -1.001, float("nan")):
+            bad = {**report, "pooled": {**report["pooled"], "rho": rho}}
+            self.assertEqual(receipts.check(self.edited(bad), self.self_ledger, self.shas, CARRY, CARRY,
+                                            "r2")["verdict"], "INVALID", rho)
 
     def test_cli_exit_codes(self):
         with contextlib.redirect_stdout(io.StringIO()):
