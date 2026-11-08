@@ -42,6 +42,42 @@ class TestPositionalPairing(unittest.TestCase):
         self.assertEqual(len(search.diverse_top(SimpleNamespace(seen=seen), 5)), 2)  # both promoted
 
 
+def _j14_walk(order, verdict):
+    """J14 as clarified: retained-only references in frozen order; every required pair must be NEW."""
+    kept, record = [], {}
+    for c in order:
+        pairs = {r: verdict(r, c) for r in kept}
+        if any(v == "PENDING" for v in pairs.values()):
+            return kept, record, "PENDING"  # invalid or missing receipt: stop, reconcile first
+        bad = [r for r, v in pairs.items() if v != "NEW"]
+        record[c] = "kept" if not bad else ("duplicate of " if pairs[bad[0]] == "NOT_NEW" else "undefined vs ") + bad[0]
+        if not bad:
+            kept.append(c)
+    return kept, record, "DONE"
+
+
+class TestJ14Walk(unittest.TestCase):
+    def test_gpt_chain_keeps_a_and_c(self):
+        x, y = [1.0, 1.0, -1.0, -1.0] * 4, [1.0, -1.0, 1.0, -1.0] * 4
+        s = {"A": [0.8 * p + 0.6 * q for p, q in zip(x, y)], "B": x, "C": [0.8 * p - 0.6 * q for p, q in zip(x, y)]}
+        verdict = lambda r, c: "NOT_NEW" if abs(search._corr(s[r], s[c])) >= 0.7 else "NEW"
+        self.assertAlmostEqual(search._corr(s["A"], s["C"]), 0.28)
+        kept, record, state = _j14_walk("ABC", verdict)
+        self.assertEqual((kept, state), (["A", "C"], "DONE"))  # all-edges dropping would leave A only
+        self.assertEqual(record["B"], "duplicate of A")
+
+    def test_undefined_drops_and_pending_stops(self):
+        kept, record, _ = _j14_walk("ABC", lambda r, c: "UNDEFINED" if c == "B" else "NEW")
+        self.assertEqual((kept, record["B"]), (["A", "C"], "undefined vs A"))
+        kept, _, state = _j14_walk("ABC", lambda r, c: "PENDING" if c == "C" else "NEW")
+        self.assertEqual((kept, state), (["A", "B"], "PENDING"))
+
+    def test_at_most_ten_replays_for_five(self):
+        calls = []
+        _j14_walk("12345", lambda r, c: calls.append((r, c)) or "NEW")
+        self.assertEqual(len(calls), 10)
+
+
 class TestEngineOffsets(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
