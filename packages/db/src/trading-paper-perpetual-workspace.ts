@@ -21,8 +21,7 @@ import {
   PAPER_EXPERIMENT_STRATEGIES,
   paperPerpetualAmount,
 } from "@rakazo/core";
-import type { PrismaClient } from "./client.js";
-import { Prisma } from "./client.js";
+import { isTransientDatabaseConnectionError, Prisma, type PrismaClient } from "./client.js";
 import { readOwnedMarketPreparedResearch } from "./market-research-read.js";
 import {
   createDisabledPerpetualPaperAccount,
@@ -86,6 +85,13 @@ export async function perpetualDatabaseClock(tx: Prisma.TransactionClient): Prom
   if (!row || !Number.isFinite(row.now.getTime()))
     throw new Error("Futures trusted clock unavailable");
   return row.now;
+}
+export function hasPerpetualEntryLease(control: PerpetualControl, clock: number): boolean {
+  return (
+    control.sessionStatus === "active" &&
+    control.expiresAt !== null &&
+    Date.parse(control.expiresAt) > clock
+  );
 }
 export async function lockOwnedPerpetualWorkspace(
   tx: Prisma.TransactionClient,
@@ -307,11 +313,10 @@ export async function commandOwnedPerpetualWorkspace(
         const clock = now.getTime();
         if (input.action === "submit_external_proposal") {
           if (
-            control.sessionStatus !== "active" ||
+            !hasPerpetualEntryLease(control, clock) ||
+            control.runtimeError ||
             control.researchMode !== "external" ||
             !control.source ||
-            !control.expiresAt ||
-            Date.parse(control.expiresAt) <= clock ||
             control.closeAll ||
             control.orders.length
           ) {
@@ -446,7 +451,8 @@ export async function commandOwnedPerpetualWorkspace(
             control.protectionExpiresAt = new Date(clock + 15 * 60000).toISOString();
           }
         }
-        control.runtimeError = null;
+        if (input.action !== "protect" && input.action !== "set_leverage")
+          control.runtimeError = null;
         const revision = row.revision + 1;
         const needsWake =
           control.sessionStatus === "active" ||
@@ -499,10 +505,7 @@ export async function readOwnedPerpetualWorkspace(
         const row = await tx.tradingPaperPerpetualWorkspace.findUnique({ where: { ledgerId } });
         const control = row ? parsePerpetualControl(row) : initialControl();
         const now = await perpetualDatabaseClock(tx);
-        const active =
-          control.sessionStatus === "active" &&
-          control.expiresAt !== null &&
-          Date.parse(control.expiresAt) > now.getTime();
+        const active = hasPerpetualEntryLease(control, now.getTime());
         const protectedPositions =
           recovered.state.openPositions.length > 0 &&
           control.protectionExpiresAt !== null &&
@@ -533,6 +536,7 @@ export async function readOwnedPerpetualWorkspace(
           researchMode: control.researchMode,
           pendingExternalProposal:
             active &&
+            !control.runtimeError &&
             control.pendingExternalProposal &&
             Date.parse(control.pendingExternalProposal.submittedAt) <= now.getTime() &&
             Date.parse(control.pendingExternalProposal.expiresAt) > now.getTime()
@@ -576,7 +580,8 @@ export async function readOwnedPerpetualWorkspace(
           pendingClose: control.closeAll,
           maxLeverage: control.maxLeverage ?? getPaperExperimentPreset(base.strategy).maxLeverage,
         };
-      } catch {
+      } catch (error) {
+        if (isTransientDatabaseConnectionError(error)) throw error;
         return {
           ...base,
           status: "integrity_blocked" as const,
@@ -612,11 +617,6 @@ export async function readPerpetualWake(
     prisma.$transaction(
       async (tx) => {
         const { row, control } = await lockOwnedPerpetualWorkspace(tx, owner, ledgerId);
-        const { state, engineConfig } = await recoverPerpetualPaperInTransaction(
-          tx,
-          owner,
-          ledgerId,
-        );
         const now = await perpetualDatabaseClock(tx);
         if (
           row.revision !== revision ||
@@ -624,19 +624,28 @@ export async function readPerpetualWake(
           Date.parse(scheduledFor) > now.getTime()
         )
           return null;
-        const entries =
-          control.sessionStatus === "active" &&
-          control.expiresAt !== null &&
-          Date.parse(control.expiresAt) > now.getTime();
+        const { state, engineConfig } = await recoverPerpetualPaperInTransaction(
+          tx,
+          owner,
+          ledgerId,
+        );
+        const active = hasPerpetualEntryLease(control, now.getTime());
         const protects =
           state.openPositions.length > 0 &&
           control.protectionExpiresAt !== null &&
           Date.parse(control.protectionExpiresAt) > now.getTime();
-        if (!entries && !protects) {
+        if (!active && !protects) {
           await savePerpetualControl(tx, ledgerId, revision, { ...control, orders: [] }, null);
           return null;
         }
-        return { row, control, state, engineConfig, entries, now };
+        return {
+          row,
+          control,
+          state,
+          engineConfig,
+          entries: active && !control.runtimeError && (!state.openPositions.length || protects),
+          now,
+        };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
@@ -664,6 +673,7 @@ export async function completeIdleExternalPerpetualWake(
         const pending = control.pendingExternalProposal;
         if (
           control.researchMode !== "external" ||
+          control.runtimeError ||
           control.closeAll ||
           control.orders.length ||
           (pending &&
@@ -685,10 +695,7 @@ export async function completeIdleExternalPerpetualWake(
         if (recordedResearch && !recordedResearch.committedAt) return false;
         const { state } = await recoverPerpetualPaperInTransaction(tx, owner, key.ledgerId);
         if (state.openPositions.length) return false;
-        const entries =
-          control.sessionStatus === "active" &&
-          control.expiresAt !== null &&
-          Date.parse(control.expiresAt) > now.getTime();
+        const entries = hasPerpetualEntryLease(control, now.getTime());
         await savePerpetualControl(
           tx,
           key.ledgerId,
@@ -722,10 +729,7 @@ export async function reschedulePerpetualProtectionAfterResearchExpiry(
           Date.parse(key.scheduledFor) > now.getTime()
         )
           return false;
-        const entries =
-          control.sessionStatus === "active" &&
-          control.expiresAt !== null &&
-          Date.parse(control.expiresAt) > now.getTime();
+        const entries = hasPerpetualEntryLease(control, now.getTime());
         if (entries) return false;
         const { state } = await recoverPerpetualPaperInTransaction(tx, owner, key.ledgerId);
         const protects =
@@ -752,25 +756,31 @@ export async function failPerpetualWake(
   ledgerId: string,
   revision: number,
   error: string,
+  wake?: { scheduledFor: string; retry: boolean },
 ) {
   return withTransactionRetry(() =>
     prisma.$transaction(
       async (tx) => {
         const result = await lockOwnedPerpetualWorkspace(tx, owner, ledgerId);
-        if (result.row.revision !== revision) return;
+        if (
+          result.row.revision !== revision ||
+          (wake && result.row.nextScheduledFor?.toISOString() !== wake.scheduledFor)
+        )
+          return null;
         const control = result.control;
-        control.sessionStatus = "paused";
-        control.orders = [];
-        control.runtimeError = error;
         const now = await perpetualDatabaseClock(tx);
-        const { state } = await recoverPerpetualPaperInTransaction(tx, owner, ledgerId);
-        const next =
-          state.openPositions.length &&
-          control.protectionExpiresAt &&
-          Date.parse(control.protectionExpiresAt) > now.getTime()
-            ? new Date(now.getTime() + 60000)
-            : null;
+        const retryEntries = wake?.retry && hasPerpetualEntryLease(control, now.getTime());
+        if (!wake?.retry && control.sessionStatus === "active") control.sessionStatus = "paused";
+        control.orders = [];
+        control.pendingExternalProposal = null;
+        control.runtimeError = error;
+        // The fence must persist even when the journal cannot be reconstructed.
+        // A later wake verifies positions before acting on the protection lease.
+        const protects =
+          control.protectionExpiresAt && Date.parse(control.protectionExpiresAt) > now.getTime();
+        const next = retryEntries || protects ? new Date(now.getTime() + 60000) : null;
         await savePerpetualControl(tx, ledgerId, revision, control, next);
+        return { nextScheduledFor: next?.toISOString() ?? null };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
@@ -879,9 +889,8 @@ export async function recordPerpetualResearchTick(
         if (decision.kind !== "no_trade") {
           const now = await perpetualDatabaseClock(tx);
           if (
-            control.sessionStatus !== "active" ||
-            !control.expiresAt ||
-            Date.parse(control.expiresAt) <= now.getTime() ||
+            !hasPerpetualEntryLease(control, now.getTime()) ||
+            control.runtimeError ||
             !control.source
           )
             return null;

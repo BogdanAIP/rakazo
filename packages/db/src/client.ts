@@ -66,6 +66,55 @@ export function isTooManyDatabaseConnections(error: unknown): boolean {
   return false;
 }
 
+const TRANSIENT_DATABASE_CODES = new Set([
+  "P1001",
+  "P1002",
+  "P1008",
+  "P1017",
+  "08000",
+  "08001",
+  "08003",
+  "08006",
+  "57P01",
+  "57P02",
+  "57P03",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "EPIPE",
+]);
+
+/** Use at database/queue boundaries, never to retry an unverified write. */
+export function isTransientDatabaseConnectionError(error: unknown): boolean {
+  if (isTooManyDatabaseConnections(error)) return true;
+  const seen = new Set<object>();
+  let current: unknown = error;
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    const e = current as {
+      code?: string;
+      originalCode?: string;
+      message?: string;
+      cause?: unknown;
+      meta?: {
+        driverAdapterError?: { cause?: { kind?: string; code?: string; originalCode?: string } };
+      };
+    };
+    const driver = e.meta?.driverAdapterError?.cause;
+    if (
+      [e.code, e.originalCode, driver?.code, driver?.originalCode].some((code) =>
+        code ? TRANSIENT_DATABASE_CODES.has(code) : false,
+      ) ||
+      ["ConnectionClosed", "DatabaseNotReachable", "SocketTimeout"].includes(driver?.kind ?? "") ||
+      (typeof e.message === "string" &&
+        e.message.split("\n").at(-1)?.trim() === "Connection terminated unexpectedly")
+    )
+      return true;
+    current = e.cause;
+  }
+  return false;
+}
+
 export async function retryOnTooManyConnections<T>(
   operation: () => Promise<T>,
   options: {

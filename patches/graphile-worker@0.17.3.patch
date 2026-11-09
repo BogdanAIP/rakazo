@@ -1,0 +1,163 @@
+diff --git a/dist/main.js b/dist/main.js
+index 594a1f4a0cbe580d98222e74a3aa3e77891810d8..3a94f1f329a681f01d28fc1059aaee18b255d4b2 100644
+--- a/dist/main.js
++++ b/dist/main.js
+@@ -22,6 +22,11 @@ const BATCH_RETRY_OPTIONS = {
+     maxDelay: 30000,
+     multiplier: 1.5,
+ };
++// A dropped PostgreSQL socket can leave a job settlement without a receipt.
++const BATCH_CONNECTION_ERRORS = new Set([
++    "08000", "08001", "08003", "08006", "57P01", "57P02",
++    "ECONNREFUSED", "ECONNRESET", "EPIPE",
++]);
+ const ENABLE_DANGEROUS_LOGS = process.env.GRAPHILE_ENABLE_DANGEROUS_LOGS === "1";
+ const NO_LOG_SUCCESS = !!process.env.NO_LOG_SUCCESS;
+ // Wait at most 60 seconds between connection attempts for LISTEN.
+@@ -1035,7 +1040,9 @@ function batch(opName, delay, rawCallback, errorHandler, retryOptions) {
+     }
+     function allgood() {
+         if (backpressure) {
+-            backpressure.resolve();
++            const waiting = backpressure;
++            backpressure = null;
++            waiting.resolve();
+             // Bump a tick to give the things held up by backpressure a chance to register.
+             process.nextTick(decrementPending);
+         }
+@@ -1062,10 +1069,14 @@ function batch(opName, delay, rawCallback, errorHandler, retryOptions) {
+                     return result;
+                 }
+                 catch (e) {
+-                    // Tell other callers to wait until we're successful again (i.e. apply backpressure)
+-                    holdup();
+                     lastError = (0, lib_1.coerceError)(e);
+-                    throw e;
++                    if (!lib_1.RETRYABLE_ERROR_CODES[lastError.code] &&
++                        !BATCH_CONNECTION_ERRORS.has(lastError.code) &&
++                        lastError.message !== "Connection terminated unexpectedly") {
++                        throw lastError;
++                    }
++                    // Retry the settlement on a fresh checkout, never the handler.
++                    holdup();
+                 }
+             }
+             throw (lastError ??
+diff --git a/dist/sql/completeJobs.js b/dist/sql/completeJobs.js
+index 27d7b5542ec61b7e1d6126b14b40dab6585bc294..999f53cc30da0d1f4df0b2e4e2b6f8e263759479 100644
+--- a/dist/sql/completeJobs.js
++++ b/dist/sql/completeJobs.js
+@@ -4,50 +4,51 @@ exports.batchCompleteJobs = void 0;
+ const manualPrepare = false;
+ async function batchCompleteJobs(compiledSharedOptions, withPgClient, poolId, jobs) {
+     const { escapedWorkerSchema, workerSchema, resolvedPreset: { worker: { preparedStatements }, }, } = compiledSharedOptions;
+-    const jobIdsWithoutQueue = [];
+-    const jobIdsWithQueue = [];
++    const jobsWithoutQueue = [];
++    const jobsWithQueue = [];
+     for (const job of jobs) {
+         if (job.job_queue_id != null) {
+-            jobIdsWithQueue.push(job.id);
++            jobsWithQueue.push(job);
+         }
+         else {
+-            jobIdsWithoutQueue.push(job.id);
++            jobsWithoutQueue.push(job);
+         }
+     }
+-    if (jobIdsWithQueue.length > 0) {
++    if (jobsWithQueue.length > 0) {
+         await withPgClient((client) => client.query({
+             text: `\
+ with j as (
+ delete from ${escapedWorkerSchema}._private_jobs as jobs
+-using unnest($1::bigint[]) n(n)
+-where id = n
++using unnest($1::bigint[], $3::integer[]) as completed(id, attempt)
++where jobs.id = completed.id and jobs.attempts = completed.attempt
++  and jobs.locked_by = $2::text
+ returning *
+ )
+ update ${escapedWorkerSchema}._private_job_queues as job_queues
+ set locked_by = null, locked_at = null
+ from j
+ where job_queues.id = j.job_queue_id and job_queues.locked_by = $2::text;`,
+-            values: [jobIdsWithQueue, poolId],
++            values: [jobsWithQueue.map((job) => job.id), poolId, jobsWithQueue.map((job) => job.attempts)],
+             name: !preparedStatements
+                 ? undefined
+                 : `complete_job_q/${workerSchema}`,
+         }));
+     }
+-    if (jobIdsWithoutQueue.length === 1) {
++    if (jobsWithoutQueue.length === 1) {
+         await withPgClient((client) => client.query({
+             text: `\
+ delete from ${escapedWorkerSchema}._private_jobs as jobs
+-where id = $1::bigint`,
+-            values: [jobIdsWithoutQueue[0]],
++where id = $1::bigint and locked_by = $2::text and attempts = $3::integer`,
++            values: [jobsWithoutQueue[0].id, poolId, jobsWithoutQueue[0].attempts],
+             name: !preparedStatements ? undefined : `complete_job/${workerSchema}`,
+         }));
+     }
+-    else if (jobIdsWithoutQueue.length > 1) {
++    else if (jobsWithoutQueue.length > 1) {
+         if (manualPrepare) {
+             await withPgClient((client) => client.query({
+                 text: `\
+ prepare gwcj (bigint) as delete from ${escapedWorkerSchema}._private_jobs where id = $1;
+-${jobIdsWithoutQueue.map((id) => `execute gwcj(${id});`).join("\n")}
++${jobsWithoutQueue.map(({ id }) => `execute gwcj(${id});`).join("\n")}
+ deallocate gwcj;`,
+             }));
+         }
+@@ -55,9 +56,10 @@ deallocate gwcj;`,
+             await withPgClient((client) => client.query({
+                 text: `\
+ delete from ${escapedWorkerSchema}._private_jobs as jobs
+-using unnest($1::bigint[]) n(n)
+-where id = n`,
+-                values: [jobIdsWithoutQueue],
++using unnest($1::bigint[], $3::integer[]) as completed(id, attempt)
++where jobs.id = completed.id and jobs.attempts = completed.attempt
++  and jobs.locked_by = $2::text`,
++                values: [jobsWithoutQueue.map((job) => job.id), poolId, jobsWithoutQueue.map((job) => job.attempts)],
+                 name: !preparedStatements
+                     ? undefined
+                     : `complete_jobs/${workerSchema}`,
+diff --git a/dist/sql/failJobs.js b/dist/sql/failJobs.js
+index 863d970e44f4ebc5a1c0033ebcd79c13d8bf064a..6d69be120b3abd55133032cca6023cd5ff360ba9 100644
+--- a/dist/sql/failJobs.js
++++ b/dist/sql/failJobs.js
+@@ -26,6 +26,7 @@ locked_at = null,
+ payload = coalesce(el->'payload', jobs.payload)
+ from json_array_elements($2::json) as els(el)
+ where id = (el->>'jobId')::bigint and locked_by = $1::text
++  and attempts = (el->>'attempt')::integer
+ returning *
+ )
+ update ${escapedWorkerSchema}._private_job_queues as job_queues
+@@ -36,6 +37,7 @@ where job_queues.id = j.job_queue_id and job_queues.locked_by = $1::text;`,
+                 poolId,
+                 JSON.stringify(specsWithQueues.map(({ job, message, replacementPayload }) => ({
+                     jobId: job.id,
++                    attempt: job.attempts,
+                     message,
+                     payload: replacementPayload,
+                 }))),
+@@ -54,11 +56,13 @@ locked_by = null,
+ locked_at = null,
+ payload = coalesce(el->'payload', jobs.payload)
+ from json_array_elements($2::json) as els(el)
+-where id = (el->>'jobId')::bigint and locked_by = $1::text;`,
++where id = (el->>'jobId')::bigint and locked_by = $1::text
++  and attempts = (el->>'attempt')::integer;`,
+             values: [
+                 poolId,
+                 JSON.stringify(specsWithoutQueues.map(({ job, message, replacementPayload }) => ({
+                     jobId: job.id,
++                    attempt: job.attempts,
+                     message,
+                     payload: replacementPayload,
+                 }))),

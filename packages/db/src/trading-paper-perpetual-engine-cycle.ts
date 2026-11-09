@@ -4,8 +4,10 @@ import type {
   PaperPerpetualEngineConfig,
   PaperPerpetualEngineSnapshot,
   PaperPerpetualSnapshot,
+  PerpetualControl,
 } from "@rakazo/contracts";
 import { PaperPerpetualDecisionSchema, PaperPerpetualSnapshotSchema } from "@rakazo/contracts";
+import type { PerpetualPaperPositionState } from "@rakazo/core";
 import {
   paperPerpetualAmount as amount,
   assessPaperRecoveryStructure,
@@ -28,10 +30,16 @@ import {
   appendPerpetualEngineBatchInTransaction,
   recoverPerpetualEngineInTransaction,
 } from "./trading-paper-perpetual-engine.js";
+import {
+  hasVerifiedPerpetualProfitBasis,
+  perpetualBreakEvenStop,
+  planPerpetualProfitReduction,
+} from "./trading-paper-perpetual-profit.js";
 import { recoverPerpetualPaperInTransaction } from "./trading-paper-perpetual-store.js";
 import type { PerpetualOwner } from "./trading-paper-perpetual-workspace.js";
 import {
   perpetualPaperHash as hash,
+  hasPerpetualEntryLease,
   lockOwnedPerpetualWorkspace,
   perpetualDatabaseClock,
   savePerpetualControl,
@@ -50,6 +58,69 @@ type Key = {
   scheduledFor: string;
   stage: "protection" | "research";
 };
+type PositionPlan = PerpetualControl["plans"][number];
+
+/** Older plans only stored the mutable stop. Use the original, hash-verified
+ * proposal and the first native fill to recover its initial risk. */
+async function recoverPerpetualProfitBasis(
+  tx: Prisma.TransactionClient,
+  ledgerId: string,
+  positionId: string,
+  history: NonNullable<Awaited<ReturnType<typeof recoverPerpetualEngineInTransaction>>>,
+) {
+  const opened = history.transitions.find((transition) =>
+    transition.output.positions.some((position) => position.positionId === positionId),
+  );
+  const first = opened?.output.positions.find((position) => position.positionId === positionId);
+  if (!first || !opened) return undefined;
+  // A pre-upgrade reduction has no profit-rule receipt. Keep the existing
+  // bracket and require reconciliation instead of guessing whether to cut twice.
+  if (
+    history.transitions.some(({ input, output }) =>
+      input.commands.some(
+        (order) =>
+          order.kind === "order" &&
+          order.reduceOnly &&
+          order.positionId === positionId &&
+          output.events.some((event) => event.kind === "fill" && event.orderId === order.orderId),
+      ),
+    )
+  )
+    return undefined;
+
+  // The original proposal can be from an earlier wake if a limit order rested.
+  // Its logical order can live for up to five minutes before the first fill.
+  const fillTime = Number(BigInt(opened.output.clockNs) / 1_000_000n);
+  const ticks = await tx.tradingPaperPerpetualTick.findMany({
+    where: {
+      ledgerId,
+      stage: "research",
+      recordedAt: { gte: new Date(fillTime - 300_000), lte: new Date(fillTime) },
+      committedAt: { not: null },
+    },
+    select: { revision: true, scheduledFor: true, decision: true, decisionSha256: true },
+  });
+  for (const tick of ticks) {
+    const orderId =
+      "paper-order:" +
+      hash([ledgerId, tick.revision, tick.scheduledFor.toISOString(), "research", tick.decision]);
+    if ("paper-position:" + hash(orderId) !== positionId) continue;
+    if (hash(tick.decision) !== tick.decisionSha256) return undefined;
+    const original = PaperPerpetualDecisionSchema.safeParse(tick.decision);
+    if (
+      !original.success ||
+      original.data.kind !== "proposal" ||
+      original.data.instrument !== first.instrument ||
+      original.data.side.toUpperCase() !== first.side
+    )
+      return undefined;
+    return {
+      initialEntryPriceQuote: first.entryPriceQuote,
+      initialStopPriceQuote: original.data.stopPriceQuote,
+    };
+  }
+  return undefined;
+}
 
 /** Finish any cold native replay before requesting a new public market observation.
  * Quotes must be fetched after recovery to avoid expiring during long restarts.
@@ -124,10 +195,7 @@ async function commitPerpetualEngineWakeOnce(
         let now = await perpetualDatabaseClock(tx),
           clock = now.getTime();
         if (Date.parse(key.scheduledFor) > clock) return { status: "fenced" as const };
-        let active =
-          control.sessionStatus === "active" &&
-          control.expiresAt !== null &&
-          Date.parse(control.expiresAt) > clock;
+        let active = hasPerpetualEntryLease(control, clock) && !control.runtimeError;
         const protects =
           control.protectionExpiresAt !== null && Date.parse(control.protectionExpiresAt) > clock;
         let prior = await recoverPerpetualEngineInTransaction(tx, owner, key.ledgerId, {
@@ -170,13 +238,12 @@ async function commitPerpetualEngineWakeOnce(
                 comparison: decision.comparison,
               };
             }
-            control.runtimeError = null;
             await savePerpetualControl(
               tx,
               key.ledgerId,
               key.revision,
               control,
-              active
+              hasPerpetualEntryLease(control, clock)
                 ? new Date(Math.max(Date.parse(key.scheduledFor) + 60000, clock + 1000))
                 : null,
             );
@@ -191,7 +258,7 @@ async function commitPerpetualEngineWakeOnce(
         const ceiling = control.maxLeverage ?? preset.maxLeverage;
         const termsFor = (symbol: string) => {
           const s = snapshots.get(symbol);
-          if (!s || !s.market.priceIncrement) throw new Error("Native contract terms unavailable");
+          if (!s?.market.priceIncrement) throw new Error("Native contract terms unavailable");
           return {
             instrument: symbol,
             priceIncrement: s.market.priceIncrement,
@@ -221,7 +288,9 @@ async function commitPerpetualEngineWakeOnce(
         const priorSnapshot = prior?.snapshot;
         let effectiveConfig = prior?.effectiveConfig ?? config;
         const known = new Set(effectiveConfig.instruments.map((i) => i.instrument));
-        const additions = control.instruments.filter((symbol) => !known.has(symbol)).map(termsFor);
+        const additions = control.instruments
+          .filter((symbol) => !known.has(symbol) && snapshots.has(symbol))
+          .map(termsFor);
         const existing = new Map(
           effectiveConfig.instruments.map((term) => [term.instrument, term]),
         );
@@ -292,6 +361,30 @@ async function commitPerpetualEngineWakeOnce(
           });
         }
         const prefix = "native:" + hash([key.ledgerId, key.revision, key.scheduledFor, key.stage]);
+        const reductionOrder = (
+          p: PerpetualPaperPositionState,
+          quantityBase: string,
+          reason: "stop" | "take-profit" | "exit" | "profit",
+        ) => {
+          const order = {
+            kind: "order",
+            orderId: `${prefix}:${reason}:${batch.commands.length}`,
+            positionId: p.positionId,
+            instrument: p.instrument,
+            action: p.side === "long" ? "sell" : "buy",
+            quantityBase,
+            reduceOnly: true,
+            orderType: "market",
+            limitPriceQuote: null,
+          } as const;
+          batch.commands.push(order);
+          return order;
+        };
+        const profitCandidates: Array<{
+          p: PerpetualPaperPositionState;
+          plan: PositionPlan;
+          snapshot: PaperPerpetualSnapshot;
+        }> = [];
         if (protects)
           for (const p of state.openPositions) {
             const plan = control.plans.find((x) => x.positionId === p.positionId),
@@ -313,13 +406,23 @@ async function commitPerpetualEngineWakeOnce(
                 key.stage === "research" &&
                 decision.kind === "close" &&
                 decision.positionId === p.positionId);
-            const partialExit =
+            if (fullExit) {
+              reductionOrder(p, p.quantityBase, stop ? "stop" : target ? "take-profit" : "exit");
+            } else if (key.stage === "protection") {
+              profitCandidates.push({ p, plan, snapshot: s });
+            } else if (
               active &&
-              key.stage === "research" &&
               decision.kind === "reduce" &&
-              decision.positionId === p.positionId;
-            let exitQuantity: string | null = fullExit ? p.quantityBase : null;
-            if (!fullExit && partialExit && decision.kind === "reduce") {
+              decision.positionId === p.positionId
+            ) {
+              const partial = plan.profitTaking?.partial;
+              if (
+                partial &&
+                amount(partial.filledQuantityBase) < amount(partial.targetQuantityBase)
+              ) {
+                outcome = "denied_reduce_profit_in_progress";
+                continue;
+              }
               const requested = amount(decision.quantityBase);
               const held = amount(p.quantityBase);
               const lot = amount(s.rules.lotIncrementBase);
@@ -334,23 +437,53 @@ async function commitPerpetualEngineWakeOnce(
               ) {
                 outcome = "denied_reduce";
               } else {
-                exitQuantity = decision.quantityBase;
+                reductionOrder(p, decision.quantityBase, "exit");
                 outcome = "reduce_submitted";
               }
             }
-            if (exitQuantity)
-              batch.commands.push({
-                kind: "order",
-                orderId: prefix + ":exit:" + batch.commands.length,
-                positionId: p.positionId,
-                instrument: p.instrument,
-                action: p.side === "long" ? "sell" : "buy",
-                quantityBase: exitQuantity,
-                reduceOnly: true,
-                orderType: "market",
-                limitPriceQuote: null,
-              });
           }
+        const profitOrders: Array<{
+          before: PerpetualPaperPositionState;
+          plan: PositionPlan;
+          order: ReturnType<typeof reductionOrder>;
+        }> = [];
+        for (const { p, plan, snapshot } of profitCandidates) {
+          if (!plan.profitTaking && prior) {
+            const basis = await recoverPerpetualProfitBasis(tx, key.ledgerId, p.positionId, prior);
+            if (basis) plan.profitTaking = basis;
+          }
+          const terms = existing.get(p.instrument);
+          if (!plan.profitTaking || !terms) continue;
+          // Hard exits have first claim on the captured book. All orders on
+          // the same side share depth, even for distinct hedge positions.
+          const action = p.side === "long" ? "sell" : "buy";
+          const depthKey = action === "sell" ? "bidAvailableBase" : "askAvailableBase";
+          const reserved = batch.commands.reduce(
+            (sum, order) =>
+              order.kind === "order" && order.instrument === p.instrument && order.action === action
+                ? sum + amount(order.quantityBase)
+                : sum,
+            0n,
+          );
+          const depth = amount(snapshot.book[depthKey]) - reserved;
+          const reduction = planPerpetualProfitReduction(
+            plan.profitTaking,
+            p,
+            {
+              ...snapshot,
+              book: { ...snapshot.book, [depthKey]: format(depth > 0n ? depth : 0n) },
+            },
+            terms,
+          );
+          if (!reduction) continue;
+          plan.profitTaking.partial = reduction.partial;
+          outcome = "profit_reduction_waiting_depth";
+          if (reduction.quantityBase) {
+            const order = reductionOrder(p, reduction.quantityBase, "profit");
+            profitOrders.push({ before: p, plan, order });
+            outcome = "profit_reduction_requested";
+          }
+        }
         let output: PaperPerpetualEngineSnapshot | null = null;
         // Native marks, funding and exits settle before checking risk for a new entry.
         const applySettlement = async (suffix: string) => {
@@ -408,15 +541,62 @@ async function commitPerpetualEngineWakeOnce(
             batch.commands = [];
             batch.funding = [];
             delete batch.registerInstruments;
+            return output;
           }
         };
-        await applySettlement(":observe");
+        const settlement = await applySettlement(":observe");
+        for (const { before, plan, order } of profitOrders) {
+          const { positionId } = before;
+          const after = state.openPositions.find((p) => p.positionId === positionId);
+          if (!after) {
+            if (
+              settlement?.events.some(
+                (event) =>
+                  event.kind === "fill" &&
+                  event.orderId?.startsWith("LIQUIDATION") &&
+                  event.positionId === positionId,
+              )
+            )
+              continue;
+            throw new Error("Native partial reduction unexpectedly closed the position");
+          }
+          const partial = plan.profitTaking!.partial!;
+          const filled = settlement!.events
+            .filter((event) => event.kind === "fill" && event.orderId === order.orderId)
+            .reduce((sum, event) => {
+              if (event.positionId !== positionId || !event.quantityBase)
+                throw new Error("Native profit fill identity does not match its order");
+              return sum + amount(event.quantityBase);
+            }, 0n);
+          if (
+            filled !== amount(before.quantityBase) - amount(after.quantityBase) ||
+            filled > amount(order.quantityBase)
+          )
+            throw new Error("Native profit fill disagrees with the protected position");
+          if (!filled) continue;
+
+          partial.filledQuantityBase = format(amount(partial.filledQuantityBase) + filled);
+          plan.recoveryReserveQuote = "0";
+          plan.recoveryReservedRiskQuote = "0";
+          plan.recoverySteps = [];
+          const pending = control.pendingExternalProposal?.decision;
+          if (pending?.kind === "reduce" && pending.positionId === positionId)
+            control.pendingExternalProposal = null;
+          outcome = "profit_reduction_partially_filled";
+          if (amount(partial.filledQuantityBase) === amount(partial.targetQuantityBase)) {
+            const stop = perpetualBreakEvenStop(after, existing.get(after.instrument)!);
+            const previous = amount(plan.stopPriceQuote);
+            if (after.side === "long" ? stop > previous : stop < previous)
+              plan.stopPriceQuote = format(stop);
+            outcome = "profit_reduction_break_even";
+          }
+        }
         now = await perpetualDatabaseClock(tx);
         clock = now.getTime();
         active =
-          control.sessionStatus === "active" &&
-          control.expiresAt !== null &&
-          Date.parse(control.expiresAt) > clock;
+          hasPerpetualEntryLease(control, clock) &&
+          !control.runtimeError &&
+          (state.openPositions.length === 0 || protects);
         for (const snapshot of execution)
           if (
             !isFreshPaperObservation(snapshot.book.observedAt, now.toISOString()) ||
@@ -790,6 +970,7 @@ async function commitPerpetualEngineWakeOnce(
               if (!p.addToPositionId && proposedRecoverySteps === null)
                 denied = "denied_recovery_plan_invalid";
               else if (p.addToPositionId && !existingAddition) denied = "denied_add_unknown";
+              else if (additionPlan?.profitTaking?.partial) denied = "denied_add_after_profit";
               else if (
                 p.addToPositionId &&
                 (!additionPlan ||
@@ -1034,6 +1215,10 @@ async function commitPerpetualEngineWakeOnce(
                 stopPriceQuote: order.proposal.stopPriceQuote,
                 takeProfitPriceQuote: order.proposal.takeProfitPriceQuote,
                 stopRiskQuote: format(risk),
+                profitTaking: {
+                  initialEntryPriceQuote: after!.entryPriceQuote,
+                  initialStopPriceQuote: order.proposal.stopPriceQuote,
+                },
                 recoveryReserveQuote: format(
                   ceil(
                     amount(accepted.plannedRecoveryNotionalQuote) * filled,
@@ -1116,8 +1301,21 @@ async function commitPerpetualEngineWakeOnce(
             comparison: decision.comparison,
           };
         }
-        control.runtimeError = null;
-        const needsNext = active || (state.openPositions.length > 0 && protects);
+        if (key.stage === "protection") {
+          const unverified = state.openPositions.some(
+            (position) =>
+              !hasVerifiedPerpetualProfitBasis(
+                control.plans.find((plan) => plan.positionId === position.positionId)?.profitTaking,
+                position.side,
+              ),
+          );
+          if (unverified && !control.runtimeError) control.runtimeError = "profit_basis_unverified";
+          if (!unverified && execution.length && hasPerpetualEntryLease(control, clock))
+            control.runtimeError = null;
+          if (unverified && outcome === "protection_checked") outcome = "profit_basis_unverified";
+        }
+        const needsNext =
+          hasPerpetualEntryLease(control, clock) || (state.openPositions.length > 0 && protects);
         const next =
           key.stage === "protection"
             ? row.nextScheduledFor
@@ -1155,6 +1353,7 @@ async function cancelPerpetualEngineOrdersOnce(
   ledgerId: string,
   engine: PaperPerpetualEngine,
   expectedRevision?: number,
+  expectedScheduledFor?: string | null,
 ) {
   try {
     let preparedHead: string | null = null;
@@ -1171,6 +1370,11 @@ async function cancelPerpetualEngineOrdersOnce(
         // A delayed retry of a previously accepted owner command must never
         // cancel native orders that belong to a later workspace revision.
         if (expectedRevision !== undefined && row.revision !== expectedRevision) return;
+        if (
+          expectedScheduledFor !== undefined &&
+          (row.nextScheduledFor?.toISOString() ?? null) !== expectedScheduledFor
+        )
+          return;
         const recovered = await recoverPerpetualEngineInTransaction(tx, owner, ledgerId, {
           transactionScopedReuse: true,
         });

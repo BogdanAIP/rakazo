@@ -3,6 +3,7 @@ import {
   createDb,
   createPool,
   isTooManyDatabaseConnections,
+  isTransientDatabaseConnectionError,
   parsePositiveInteger,
   retryOnTooManyConnections,
 } from "./client.js";
@@ -94,6 +95,33 @@ describe("retryOnTooManyConnections", () => {
         throw error;
       }),
     ).rejects.toBe(error);
+  });
+});
+
+describe("isTransientDatabaseConnectionError", () => {
+  it("recognises a database disconnect through pg and Prisma wrappers", () => {
+    const reset = Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" });
+    expect(isTransientDatabaseConnectionError(new Error("query failed", { cause: reset }))).toBe(
+      true,
+    );
+    expect(
+      isTransientDatabaseConnectionError(
+        new Error("Query failed\nConnection terminated unexpectedly"),
+      ),
+    ).toBe(true);
+    expect(
+      isTransientDatabaseConnectionError({
+        code: "P2010",
+        meta: { driverAdapterError: { cause: { kind: "postgres", code: "57P01" } } },
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps integrity and permission failures outside database recovery", () => {
+    expect(
+      isTransientDatabaseConnectionError(new Error("PAPER engine journal integrity failed")),
+    ).toBe(false);
+    expect(isTransientDatabaseConnectionError({ code: "42501" })).toBe(false);
   });
 });
 

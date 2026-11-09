@@ -1,7 +1,11 @@
 import { TradingInstrumentSchema } from "@rakazo/contracts";
 import { evaluatePaperLeverage } from "@rakazo/core";
 import { describe, expect, it, vi } from "vitest";
-import { fetchOkxPaperPerpetualSnapshot, fetchOkxPublicPerpContext } from "./trading-okx-perp.js";
+import {
+  fetchOkxPaperPerpetualSnapshot,
+  fetchOkxPublicPerpContext,
+  PaperPerpetualMarketUnavailableError,
+} from "./trading-okx-perp.js";
 
 const now = new Date("2026-10-03T10:15:00.000Z");
 const market = TradingInstrumentSchema.parse({
@@ -215,6 +219,27 @@ describe("PAPER OKX contract units and funding history", () => {
     });
     expect(result.history).toHaveLength(1);
     expect(fake.mock.mock.calls).toHaveLength(8);
+  });
+  it("uses executable quotes and funding without candle history for protection", async () => {
+    const fake = publicFixture((path, rows) => {
+      if (path.endsWith("/history-candles")) throw new Error("history unavailable");
+      return rows;
+    });
+    const result = await fetchOkxPaperPerpetualSnapshot(market.symbol, {
+      now,
+      fetchImpl: fake.fetchImpl,
+      history: "omit",
+    });
+    expect(result.book.askAvailableBase).toBe("0.3");
+    expect(result.funding).toHaveLength(1);
+    expect(result.history).toEqual([]);
+    expect(fake.mock.mock.calls).toHaveLength(7);
+  });
+  it("classifies a public endpoint outage separately from invalid observations", async () => {
+    const fetchImpl = vi.fn(async () => new Response("temporarily unavailable", { status: 503 }));
+    await expect(
+      fetchOkxPaperPerpetualSnapshot(market.symbol, { now, fetchImpl }),
+    ).rejects.toBeInstanceOf(PaperPerpetualMarketUnavailableError);
   });
   it("normalizes inclusive OKX tiers separated by exactly one tradable lot", async () => {
     const fake = publicFixture((path, rows) =>

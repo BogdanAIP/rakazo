@@ -1,4 +1,5 @@
 import type { BackgroundJobHandlers } from "@rakazo/adapter-kit";
+import { createPool } from "@rakazo/db";
 import { Pool } from "pg";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GraphileJobPublisher, GraphileJobWorkerHost } from "./wakeup.js";
@@ -95,22 +96,25 @@ describePostgres("Graphile background jobs (PostgreSQL contract)", () => {
     const key = `contract:replacement:${Date.now()}`;
 
     try {
-      await host.start(target);
       await publisher.enqueue({
         name: "computer.sleep",
         payload: { computerId: "old" },
         availableAt: new Date(Date.now() + 300),
         replaceKey: key,
       });
+      const replacementAt = new Date(Date.now() + 800);
       await publisher.enqueue({
         name: "computer.sleep",
         payload: { computerId: "replacement" },
-        availableAt: new Date(Date.now() + 800),
+        availableAt: replacementAt,
         replaceKey: key,
       });
-
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      expect(received).toEqual([]);
+      const scheduled = await testPool().query(
+        "select run_at from graphile_worker.jobs where key = $1",
+        [key],
+      );
+      expect(scheduled.rows).toEqual([{ run_at: replacementAt }]);
+      await host.start(target);
       await waitFor(() => expect(received).toEqual(["replacement"]));
     } finally {
       await host.stop();
@@ -168,6 +172,67 @@ describePostgres("Graphile background jobs (PostgreSQL contract)", () => {
       await host.stop();
       await publisher.cancel(key).catch(() => undefined);
       await publisher.close();
+    }
+  });
+
+  it.each([
+    { name: "complete_job", failHandler: false, committed: false },
+    { name: "fail_job", failHandler: true, committed: true },
+  ])("retries a lost $name receipt without rerunning that handler attempt", async (fixture) => {
+    const runnerPool = createPool(databaseUrl!);
+    const publisher = new GraphileJobPublisher(testPool());
+    const host = new GraphileJobWorkerHost(runnerPool, { concurrency: 1, pollInterval: 25 });
+    const key = `contract:settlement:${fixture.name}`;
+    let settlements = 0;
+    let executions = 0;
+    runnerPool.on("connect", (client) => {
+      const query = client.query;
+      client.query = ((...args: unknown[]) => {
+        const statement = args[0] as { name?: string } | undefined;
+        if (statement?.name !== `${fixture.name}/graphile_worker` || ++settlements !== 1)
+          return Reflect.apply(query, client, args);
+        const lost = Object.assign(new Error("Fixture lost PostgreSQL settlement receipt"), {
+          code: "ECONNRESET",
+        });
+        // A lost receipt can follow either a rollback or a commit.
+        return fixture.committed
+          ? Promise.resolve(Reflect.apply(query, client, args)).then(() => {
+              throw lost;
+            })
+          : Promise.reject(lost);
+      }) as typeof client.query;
+    });
+    const target = handlers({
+      "run.continue": async () => {
+        executions++;
+        if (fixture.failHandler && executions === 1) throw new Error("Fixture handler retry");
+      },
+    });
+
+    try {
+      await host.start(target);
+      await publisher.enqueue({ name: "run.continue", payload: { runId: key }, replaceKey: key });
+      await vi.waitFor(
+        async () => {
+          const result = await testPool().query(
+            "select id from graphile_worker._private_jobs where key = $1",
+            [key],
+          );
+          expect(result.rowCount).toBe(0);
+          expect(settlements).toBe(2);
+          expect(executions).toBe(fixture.failHandler ? 2 : 1);
+        },
+        { timeout: 15_000, interval: 50 },
+      );
+      await host.stop();
+    } finally {
+      try {
+        await host.stop();
+      } finally {
+        await publisher.cancel(key).catch(() => undefined);
+        await publisher.close();
+        await runnerPool.end();
+      }
     }
   });
 });

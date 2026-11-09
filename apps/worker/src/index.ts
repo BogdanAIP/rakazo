@@ -56,6 +56,7 @@ import {
   createDb,
   createThreadEvents,
   isTooManyDatabaseConnections,
+  isTransientDatabaseConnectionError,
   parsePositiveInteger,
   pushSessionExpiresAt,
 } from "@rakazo/db";
@@ -185,6 +186,7 @@ async function main() {
     inMemoryJobs ??
     new GraphileJobWorkerHost(pool, {
       concurrency: parsePositiveInteger(process.env.GRAPHILE_WORKER_CONCURRENCY, 4),
+      noHandleSignals: true,
     });
   // One provider instance so emulator launches and polls share the same Map.
   const cloudAgent = createCloudAgentConnection();
@@ -233,7 +235,6 @@ async function main() {
     cloudAgent,
   });
 
-  await reconcileTradingPaperWorkspaces({ prisma, jobs, engine: perpetualPaperEngine }, true);
   const jobHandlers = createBackgroundJobHandlers({
     executor,
     prisma,
@@ -250,22 +251,20 @@ async function main() {
     messaging,
     cloudAgent,
   });
-  // graphile-worker run() connects through the shared pool. createPool already
-  // retries connect() on 53300 a finite number of times. Keep retrying start
-  // until Postgres has capacity: exhausting then returning from main().catch
-  // left a live process that held connections but never ran jobs or registered
-  // signal handlers, even after capacity returned. Do not exit(1) here; that
-  // crash-loops into the same saturated Postgres. GraphileJobWorkerHost also
-  // observes runner.promise after start and restarts with the same backoff if
-  // the runner dies later on 53300 (unhandledRejection still swallows that
-  // code so we do not Docker crash-loop on transient completeJob failures).
+  // Complete restart fencing before any queued work. Retry connection failures
+  // with backoff so a short PostgreSQL outage cannot strand the job runner.
+  let reconciled = false;
   for (let attempt = 0; ; attempt += 1) {
     try {
+      if (!reconciled) {
+        await reconcileTradingPaperWorkspaces({ prisma, jobs, engine: perpetualPaperEngine }, true);
+        reconciled = true;
+      }
       await jobHost.start(jobHandlers);
       break;
     } catch (error) {
-      if (!isTooManyDatabaseConnections(error)) throw error;
-      logger.error("worker job host start waiting on database capacity", error);
+      if (!isTransientDatabaseConnectionError(error)) throw error;
+      logger.error("worker startup waiting for database connection", error);
       await new Promise((resolve) => setTimeout(resolve, databaseCapacityBackoffMs(attempt)));
     }
   }
@@ -314,12 +313,8 @@ async function main() {
   }
   process.once("SIGTERM", () => void stop());
   process.once("SIGINT", () => void stop());
-  // graphile-worker fires completeJob() without awaiting it. When pool.connect()
-  // then hits Postgres 53300, that rejection is unhandled. Exiting here is the
-  // crash loop: Docker restarts the process before Postgres has reaped the old
-  // backends, so the next boot cannot connect either. Stay up on that rejection
-  // only — do not resume after uncaughtException (Node leaves the process in an
-  // undefined state).
+  // Queue connection failures are handled by the job host. Keep the existing
+  // database-capacity exception narrow for other asynchronous callers.
   process.on("uncaughtException", (error) => {
     logger.error("uncaughtException", error);
     void stop().finally(() => process.exit(1));
@@ -336,7 +331,6 @@ async function main() {
 main().catch(async (error) => {
   logger.error("worker startup failed", error);
   await logger.flush({ timeoutMs: 2_000 });
-  // jobHost.start retries 53300 without bound above, so a saturated Postgres at
-  // that step does not reach here. Other startup failures still exit.
+  // Unclassified startup failures must surface to the worker supervisor.
   process.exit(1);
 });
