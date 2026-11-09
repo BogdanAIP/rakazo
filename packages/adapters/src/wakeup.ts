@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import {
   type BackgroundJob,
   type BackgroundJobHandlers,
@@ -5,9 +6,15 @@ import {
   type JobPublisher,
   type JobWorkerHost,
 } from "@rakazo/adapter-kit";
-import { isTooManyDatabaseConnections } from "@rakazo/db";
-import { runCorrelatedJob, unwrapJobPayload, wrapJobPayload } from "@rakazo/logging";
-import { makeWorkerUtils, type Runner, run, type WorkerUtils } from "graphile-worker";
+import { isTransientDatabaseConnectionError } from "@rakazo/db";
+import { getLogger, runCorrelatedJob, unwrapJobPayload, wrapJobPayload } from "@rakazo/logging";
+import {
+  makeWorkerUtils,
+  type Runner,
+  run,
+  type WorkerEvents,
+  type WorkerUtils,
+} from "graphile-worker";
 import type { Pool } from "pg";
 import { recordHistoryCompactAttemptsExhausted } from "./history-compaction.js";
 
@@ -45,18 +52,24 @@ export class GraphileJobPublisher implements JobPublisher {
 
   private getUtils(): Promise<WorkerUtils> {
     if (this.closed) throw new Error("Background job publisher is closed");
-    this.utils ??= makeWorkerUtils({ pgPool: this.pgPool });
+    if (!this.utils) {
+      const pending = makeWorkerUtils({ pgPool: this.pgPool });
+      this.utils = pending;
+      void pending.catch(() => {
+        if (this.utils === pending) this.utils = undefined;
+      });
+    }
     return this.utils;
   }
 }
 
-/** Same bounded backoff the worker uses around jobHost.start for 53300. */
+/** Same bounded backoff the worker uses during database reconnection. */
 export function databaseCapacityBackoffMs(attempt: number): number {
   return Math.min(30_000, 200 * 2 ** Math.min(attempt, 8));
 }
 
 export class GraphileJobWorkerHost implements JobWorkerHost {
-  private runner: Runner | undefined;
+  private runner: { instance: Runner; failure: () => unknown } | undefined;
   private handlers: BackgroundJobHandlers | undefined;
   private stopping = false;
   private superviseTask: Promise<void> | undefined;
@@ -68,7 +81,7 @@ export class GraphileJobWorkerHost implements JobWorkerHost {
       concurrency?: number;
       pollInterval?: number;
       noHandleSignals?: boolean;
-      /** Test seam: delay between 53300 restart attempts. */
+      /** Test seam: delay between database reconnect attempts. */
       sleep?: (ms: number) => Promise<void>;
     } = {},
   ) {}
@@ -78,9 +91,6 @@ export class GraphileJobWorkerHost implements JobWorkerHost {
     this.stopping = false;
     this.handlers = handlers;
     await this.launchRunner();
-    // run() resolves once the runner is up; runner.promise can still reject later
-    // (e.g. Postgres 53300). Observe it so a dead runner cannot leave the worker
-    // process idle forever while unhandledRejection swallows that same error.
     this.superviseTask = this.supervise();
   }
 
@@ -88,7 +98,7 @@ export class GraphileJobWorkerHost implements JobWorkerHost {
     this.stopping = true;
     this.wakeSleep?.();
     try {
-      await this.runner?.stop();
+      await this.runner?.instance.stop();
     } finally {
       await this.superviseTask?.catch(() => undefined);
       this.runner = undefined;
@@ -114,11 +124,21 @@ export class GraphileJobWorkerHost implements JobWorkerHost {
         },
       ]),
     );
+    // In 0.17, the unbatched acknowledgement is fire-and-forget. The batch
+    // path handles SQL failures and emits the cause before the runner stops.
+    // runner.promise can resolve on that shutdown, even for a fatal pool error.
+    const events = new EventEmitter() as WorkerEvents;
+    let failure: unknown;
+    events.on("pool:fatalError", ({ error }) => {
+      if (failure === undefined || isTransientDatabaseConnectionError(failure)) failure = error;
+    });
     const runner = await run({
       pgPool: this.pgPool,
       concurrency: this.options.concurrency ?? 4,
       pollInterval: this.options.pollInterval ?? 500,
       noHandleSignals: this.options.noHandleSignals,
+      events,
+      preset: { worker: { completeJobBatchDelay: 0, failJobBatchDelay: 0 } },
       taskList,
     });
     runner.events.on("job:failed", ({ job, error }) => {
@@ -128,7 +148,7 @@ export class GraphileJobWorkerHost implements JobWorkerHost {
       await runner.stop().catch(() => undefined);
       return;
     }
-    this.runner = runner;
+    this.runner = { instance: runner, failure: () => failure };
   }
 
   private delay(ms: number): Promise<void> {
@@ -154,13 +174,15 @@ export class GraphileJobWorkerHost implements JobWorkerHost {
       const runner = this.runner;
       if (!runner || this.stopping) return;
       try {
-        await runner.promise;
-        return;
+        await runner.instance.promise;
+        if (this.stopping) return;
+        throw runner.failure() ?? new Error("Background job runner stopped unexpectedly");
       } catch (error) {
         if (this.stopping) return;
         if (this.runner === runner) this.runner = undefined;
-        if (!isTooManyDatabaseConnections(error)) throw error;
-        // Back off after every lifecycle 53300 (runner death or failed relaunch),
+        if (!isTransientDatabaseConnectionError(error)) throw error;
+        getLogger().error("job runner reconnecting to database", error);
+        // Back off after every connection failure (runner death or failed relaunch),
         // not only when launchRunner rejects — otherwise a runner that starts then
         // dies again under saturation reconnects with no delay.
         for (let attempt = 0; ; attempt += 1) {
@@ -172,7 +194,7 @@ export class GraphileJobWorkerHost implements JobWorkerHost {
             if (this.stopping || !this.runner) return;
             break;
           } catch (startError) {
-            if (!isTooManyDatabaseConnections(startError)) throw startError;
+            if (!isTransientDatabaseConnectionError(startError)) throw startError;
           }
         }
       }

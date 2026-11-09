@@ -27,19 +27,22 @@ import {
 } from "@rakazo/core";
 import { fetchOkxClosedOneHourHistory } from "./trading-okx-history.js";
 
+export class PaperPerpetualMarketUnavailableError extends Error {}
+
 /** Public observations only. Contract lots are converted to BASE units exactly.
  * Fee/slippage are simulator assumptions; risk-tier limits are public venue data.
  */
 export async function fetchOkxPaperPerpetualSnapshot(
   instrument: string,
-  options: { fetchImpl?: typeof fetch; now?: Date } = {},
+  options: { fetchImpl?: typeof fetch; now?: Date; history?: "omit" } = {},
 ): Promise<PaperPerpetualSnapshot> {
   if (!/^[A-Z0-9]{1,20}-USDT-SWAP$/.test(instrument))
     throw new Error("Unsupported linear USDT perpetual");
   const publicFetch = options.fetchImpl ?? fetch;
   const fetchImpl: typeof fetch = async (input, init) => {
+    let response: Response;
     try {
-      return await publicFetch(input, init);
+      response = await publicFetch(input, init);
     } catch (error) {
       // Retry one failed keyless GET with a fresh timeout signal. Malformed
       // responses and stale observations still fail the existing validators.
@@ -49,8 +52,13 @@ export async function fetchOkxPaperPerpetualSnapshot(
         init?.method !== "GET"
       )
         throw error;
-      return publicFetch(input, { ...init, signal: AbortSignal.timeout(10_000) });
+      response = await publicFetch(input, { ...init, signal: AbortSignal.timeout(10_000) });
     }
+    if (response.status === 429 || response.status >= 500)
+      throw new PaperPerpetualMarketUnavailableError(
+        "OKX public perpetual HTTP error: " + response.status,
+      );
+    return response;
   };
   const get = async (path: string) => {
     const response = await fetchImpl(ORIGIN + path, {
@@ -172,7 +180,9 @@ export async function fetchOkxPaperPerpetualSnapshot(
   if (mmr < 1n || mmr > 1000n) throw new Error("Unsupported maintenance tier");
   const [context, history] = await Promise.all([
     fetchOkxPublicPerpContext(market, { ...options, fetchImpl }),
-    fetchOkxClosedOneHourHistory(market, { ...options, fetchImpl }),
+    options.history === "omit"
+      ? { candles: [] }
+      : fetchOkxClosedOneHourHistory(market, { ...options, fetchImpl }),
   ]);
   const now = options.now ?? new Date();
   const bookAt = new Date(Number(book.ts)).toISOString();

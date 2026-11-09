@@ -70,6 +70,7 @@ function mockRunner() {
 }
 
 const tooMany = Object.assign(new Error("sorry, too many clients already"), { code: "53300" });
+const reset = Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" });
 
 describe("databaseCapacityBackoffMs", () => {
   it("matches the worker startup backoff curve", () => {
@@ -109,6 +110,16 @@ describe("GraphileJobPublisher.enqueue", () => {
     expect(options?.maxAttempts).toBeUndefined();
     await publisher.close();
   });
+
+  it("recreates publisher utilities after a rejected database connection", async () => {
+    const addJob = vi.fn(async () => undefined);
+    const publisher = publisherWith(addJob);
+    vi.mocked(makeWorkerUtils).mockRejectedValueOnce(reset);
+    await expect(publisher.enqueue(messagingDeliverJob("run-1"))).rejects.toBe(reset);
+    await publisher.enqueue(messagingDeliverJob("run-1"));
+    expect(addJob).toHaveBeenCalledTimes(1);
+    await publisher.close();
+  });
 });
 
 describe("GraphileJobWorkerHost runner lifecycle", () => {
@@ -136,6 +147,21 @@ describe("GraphileJobWorkerHost runner lifecycle", () => {
 
     await host.stop();
     expect(second.runner.stop).toHaveBeenCalled();
+  });
+
+  it("reconnects after a failed acknowledgement even when Graphile resolves its runner promise", async () => {
+    const first = mockRunner();
+    const second = mockRunner();
+    run.mockResolvedValueOnce(first.runner).mockResolvedValueOnce(second.runner);
+    const host = new GraphileJobWorkerHost({} as Pool, { sleep: async () => undefined });
+    await host.start(handlers());
+    const options = run.mock.calls[0]![0];
+    expect(options.preset.worker).toEqual({ completeJobBatchDelay: 0, failJobBatchDelay: 0 });
+    options.events.emit("pool:fatalError", { error: reset, action: "completeJob" });
+    await first.runner.stop();
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(2));
+    await host.stop();
+    expect(second.runner.stop).toHaveBeenCalledOnce();
   });
 
   it("retries launch with escalating backoff when restart start hits 53300", async () => {

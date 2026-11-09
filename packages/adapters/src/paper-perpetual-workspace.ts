@@ -26,6 +26,7 @@ import {
   commitPerpetualPaperWake,
   completeIdleExternalPerpetualWake,
   failPerpetualWake,
+  isTransientDatabaseConnectionError,
   pausePerpetualAfterRestart,
   perpetualMarketSource,
   preparePerpetualEngineBeforeMarketFetch,
@@ -37,18 +38,20 @@ import {
 import { getLogger } from "@rakazo/logging";
 import { z } from "zod";
 import { invokePaperSkillDecision } from "./paper-skill-decision.js";
-import { fetchOkxPaperPerpetualSnapshot } from "./trading-okx-perp.js";
+import {
+  fetchOkxPaperPerpetualSnapshot,
+  PaperPerpetualMarketUnavailableError,
+} from "./trading-okx-perp.js";
 
 type Deps = {
   engine?: PaperPerpetualEngine;
   prisma: PrismaClient;
   jobs: Pick<JobPublisher, "enqueue">;
-  fetchSnapshot?: (instrument: string) => Promise<PaperPerpetualSnapshot>;
+  fetchSnapshot?: typeof fetchOkxPaperPerpetualSnapshot;
 };
 type WorkerDeps = Deps & {
   runtime: AgentRuntime;
   resolveModel: (scope: PerpetualOwner & { botId?: string }) => Promise<AgentRunModel>;
-  fetchSnapshot?: (instrument: string) => Promise<PaperPerpetualSnapshot>;
 };
 async function enqueueNext(
   deps: Deps,
@@ -76,7 +79,8 @@ async function enqueueNext(
   );
 }
 
-/** Only a human command may grant an entry session. Queue failure pauses it. */
+/** Only a human command may grant an entry session. The persisted wake can
+ * be re-enqueued if the publisher temporarily cannot reach PostgreSQL. */
 export async function controlPerpetualPaperWorkspace(
   deps: Deps,
   owner: PerpetualOwner,
@@ -116,17 +120,18 @@ export async function controlPerpetualPaperWorkspace(
         deps.engine,
         receipt.revision,
       );
-    await enqueueNext(deps, owner, command.ledgerId, receipt.revision);
   } catch (error) {
-    await failPerpetualWake(
-      deps.prisma,
-      owner,
-      command.ledgerId,
-      receipt.revision,
-      "queue_unavailable",
-    );
+    if (!isTransientDatabaseConnectionError(error))
+      await failPerpetualWake(
+        deps.prisma,
+        owner,
+        command.ledgerId,
+        receipt.revision,
+        "state_unavailable",
+      );
     throw error;
   }
+  await enqueueNext(deps, owner, command.ledgerId, receipt.revision);
 }
 
 /** Reuses the existing PAPER queue and provider-neutral model runtime. Protection
@@ -142,7 +147,11 @@ export async function handlePerpetualPaperWake(
     revision: payload.sessionRevision,
     scheduledFor: payload.scheduledFor,
   };
-  let failure = "market_data_unavailable";
+  let failure = "state_unavailable";
+  const enqueue = () => {
+    failure = "queue_unavailable";
+    return enqueueNext(deps, owner, key.ledgerId, key.revision);
+  };
   try {
     const first = await readPerpetualWake(
       deps.prisma,
@@ -156,31 +165,34 @@ export async function handlePerpetualPaperWake(
       first.control.researchMode === "external" &&
       (await completeIdleExternalPerpetualWake(deps.prisma, owner, key))
     ) {
-      await enqueueNext(deps, owner, key.ledgerId, key.revision);
+      await enqueue();
       return;
     }
     if (deps.engine)
       await preparePerpetualEngineBeforeMarketFetch(deps.prisma, owner, key.ledgerId, deps.engine);
     const fetchSnapshot = deps.fetchSnapshot ?? fetchOkxPaperPerpetualSnapshot;
-    const read = async (symbols: string[]) =>
-      Promise.all([...new Set(symbols)].map((symbol) => fetchSnapshot(symbol)));
+    const read = async (symbols: string[], history?: "omit") =>
+      Promise.all(
+        [...new Set(symbols)].map((symbol) =>
+          history ? fetchSnapshot(symbol, { history }) : fetchSnapshot(symbol),
+        ),
+      );
     // An unavailable selected-but-unused market must not prevent protection
     // of live positions or pending orders in other instruments.
-    const activeProtectionSymbols = [
-      ...first.state.openPositions.map((p) => p.instrument),
-      ...(deps.engine ? first.control.orders.map((o) => o.proposal.instrument) : []),
-    ];
+    const activeProtectionSymbols = first.state.openPositions.map((p) => p.instrument);
     // Flat-account bootstrap still registers selected markets. With exposure,
     // only instruments needing protection can block the protective stage.
     const flatExternalNoTrade =
       first.control.researchMode === "external" &&
       first.control.pendingExternalProposal?.decision.kind === "no_trade";
+    failure = "market_data_unavailable";
     const protection = await read(
       activeProtectionSymbols.length
         ? activeProtectionSymbols
         : flatExternalNoTrade
           ? []
           : first.control.instruments,
+      activeProtectionSymbols.length ? "omit" : undefined,
     );
     const commit = (
       stage: {
@@ -197,13 +209,14 @@ export async function handlePerpetualPaperWake(
           ? commitPerpetualPaperWake(deps.prisma, owner, stage, observations)
           : Promise.reject(new Error("PAPER futures engine not configured"));
     const protectionKey = { ...key, stage: "protection" as const };
+    failure = "protection_unavailable";
     await recordPerpetualResearchTick(deps.prisma, owner, protectionKey, protection, {
       kind: "no_trade",
       reason: "Protect existing positions before research",
     });
-    failure = "protection_unavailable";
     await commit(protectionKey, protection);
 
+    failure = "state_unavailable";
     const current = await readPerpetualWake(
       deps.prisma,
       owner,
@@ -399,7 +412,7 @@ export async function handlePerpetualPaperWake(
       // Entry permission may expire after protection but before research commit.
       // A held position still needs its next independently authorized wake.
       if (await reschedulePerpetualProtectionAfterResearchExpiry(deps.prisma, owner, key))
-        await enqueueNext(deps, owner, key.ledgerId, key.revision);
+        await enqueue();
       return;
     }
     decision = PaperPerpetualDecisionSchema.parse(recorded.decision);
@@ -432,16 +445,40 @@ export async function handlePerpetualPaperWake(
         ]);
     failure = "execution_unavailable";
     await commit(researchKey, execution);
-    failure = "queue_unavailable";
-    await enqueueNext(deps, owner, key.ledgerId, key.revision);
+    await enqueue();
   } catch (error) {
     getLogger().error("paper perpetual wake failed", error, { "paper.failure": failure });
+    // A queue publish can fail after commit. Do not rewind a committed wake
+    // or fence a later one. The durable schedule remains authoritative.
+    if (failure === "queue_unavailable") throw error;
+    const retry =
+      isTransientDatabaseConnectionError(error) ||
+      ((failure === "market_data_unavailable" || failure === "model_unavailable") &&
+        (error instanceof PaperPerpetualMarketUnavailableError ||
+          (error instanceof Error && error.name === "TimeoutError") ||
+          (error instanceof TypeError && error.message === "fetch failed")));
+    const failed = await failPerpetualWake(
+      deps.prisma,
+      owner,
+      key.ledgerId,
+      key.revision,
+      failure,
+      {
+        scheduledFor: key.scheduledFor,
+        retry,
+      },
+    );
+    if (!failed) return;
     if (deps.engine)
-      await cancelPerpetualEngineOrders(deps.prisma, owner, key.ledgerId, deps.engine).catch(
-        () => undefined,
+      await cancelPerpetualEngineOrders(
+        deps.prisma,
+        owner,
+        key.ledgerId,
+        deps.engine,
+        key.revision,
+        failed.nextScheduledFor,
       );
-    await failPerpetualWake(deps.prisma, owner, key.ledgerId, key.revision, failure);
-    await enqueueNext(deps, owner, key.ledgerId, key.revision);
+    await enqueue();
   }
 }
 
@@ -464,8 +501,9 @@ export async function reconcilePerpetualPaperWorkspaces(deps: Deps, restarting =
             await cancelPerpetualEngineOrders(deps.prisma, owner, row.ledgerId, deps.engine);
         }
         await enqueueNext(deps, owner, row.ledgerId);
-      } catch {
-        /* A corrupt/unavailable workspace cannot grant new authority. Retry the next reconciliation pass. */
+      } catch (error) {
+        if (restarting && isTransientDatabaseConnectionError(error)) throw error;
+        getLogger().error("paper perpetual workspace reconciliation failed", error);
       }
     }
     if (rows.length < 100) return;

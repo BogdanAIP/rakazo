@@ -330,6 +330,17 @@ const Plan = z.object({
   recoveryReservedRiskQuote: Decimal.default("0"),
   /** Immutable trigger prices; fills consume stage sizes, never create orders. */
   recoverySteps: z.array(RecoveryPlannedStep).max(2).default([]),
+  profitTaking: z
+    .object({
+      initialEntryPriceQuote: Positive,
+      initialStopPriceQuote: Positive,
+      partial: z
+        .object({ targetQuantityBase: Positive, filledQuantityBase: Decimal })
+        .strict()
+        .optional(),
+    })
+    .strict()
+    .optional(),
   fundingThrough: IsoDate,
 });
 export const PerpetualControlSchema = z
