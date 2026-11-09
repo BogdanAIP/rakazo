@@ -42,6 +42,17 @@ class TestLedgerPrefix(unittest.TestCase):
         self.assertEqual(check(b"[1]\n", ledger(ROWS))["verdict"], "UNDEFINED")
         self.assertEqual(check(b"{bad\n", ledger(ROWS))["verdict"], "UNDEFINED")
 
+    def test_rerun_rows_after_prefix_must_parse(self):
+        # GPT 11-09 02:15: a matching prefix followed by a malformed newline-terminated row passed.
+        res = check(ledger(ROWS[:2]), ledger(ROWS[:4]) + b"{bad\n" + ledger(ROWS[4:]))
+        self.assertEqual(res["verdict"], "UNDEFINED")
+        self.assertIn("rerun row 5", res["reason"])
+        self.assertEqual(check(ledger(ROWS[:2]), ledger(ROWS) + b"[1]\n")["verdict"], "UNDEFINED")
+
+    def test_rerun_cut_fragment_fails_closed(self):
+        res = check(ledger(ROWS[:2]), ledger(ROWS, cut=b'{"time_utc":"20'))
+        self.assertEqual(res["verdict"], "UNDEFINED")
+
 
 if __name__ == "__main__":
     unittest.main()
