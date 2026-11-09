@@ -12,9 +12,10 @@ from pathlib import Path
 
 import algorithm_bench_v40 as bench
 import algorithm_search_v40 as search
-from null_ledger_receipt_v40 import check
+import null_ledger_receipt_v40 as receipt
 
 DAY = 86_400_000
+EXPECT = {"seed": 301, "population": 10, "generations": 2, "first_null": 6, "runs": 2}
 
 
 class NullReceipt(unittest.TestCase):
@@ -47,6 +48,9 @@ class NullReceipt(unittest.TestCase):
         search.use_library("r2")
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
+    def check(self, ledger, report, shas, **kw):
+        return receipt.check(ledger, report, shas, dict(EXPECT, **kw))
+
     def lines(self):
         return self.L.split(b"\n")[:-1]
 
@@ -54,25 +58,25 @@ class NullReceipt(unittest.TestCase):
         return b"\n".join(lines) + b"\n"
 
     def test_pinned_null_output_passes(self):
-        res = check(self.L, self.R, self.shas)
+        res = self.check(self.L, self.R, self.shas)
         self.assertEqual(res["verdict"], "RECEIPT_OK", res)
         runs = json.loads(self.R)["runs"]
         self.assertEqual(res["rows"], 2 * sum(r["evaluated"] for r in runs))
         self.assertEqual([s for s, _ in res["runs"]], [6, 7])
 
     def test_wrong_panel_order_or_sha(self):
-        self.assertEqual(check(self.L, self.R, self.shas[::-1])["verdict"], "INVALID")
-        self.assertEqual(check(self.L, self.R, [self.shas[0], "0" * 64])["verdict"], "INVALID")
+        self.assertEqual(self.check(self.L, self.R, self.shas[::-1])["verdict"], "INVALID")
+        self.assertEqual(self.check(self.L, self.R, [self.shas[0], "0" * 64])["verdict"], "INVALID")
 
     def test_deleted_complete_pair(self):
         ls = self.lines()
-        self.assertEqual(check(self.join(ls[:4] + ls[6:]), self.R, self.shas)["verdict"], "INVALID")
-        self.assertEqual(check(self.join(ls[:-2]), self.R, self.shas)["verdict"], "INVALID")
+        self.assertEqual(self.check(self.join(ls[:4] + ls[6:]), self.R, self.shas)["verdict"], "INVALID")
+        self.assertEqual(self.check(self.join(ls[:-2]), self.R, self.shas)["verdict"], "INVALID")
 
     def test_duplicate_genome_replacing_a_pair(self):
         # same row count: a repeated genome pair stands in for a different one
         ls = self.lines()
-        res = check(self.join(ls[:4] + ls[2:4] + ls[6:]), self.R, self.shas)
+        res = self.check(self.join(ls[:4] + ls[2:4] + ls[6:]), self.R, self.shas)
         self.assertEqual(res["verdict"], "INVALID")
         self.assertIn("repeated", res["reason"])
 
@@ -80,42 +84,104 @@ class NullReceipt(unittest.TestCase):
         ls = self.lines()
         row = json.loads(ls[-1])
         row["author"] = "claude-null-71"
-        res = check(self.join(ls[:-1] + [bench.canonical(row)]), self.R, self.shas)
+        res = self.check(self.join(ls[:-1] + [bench.canonical(row)]), self.R, self.shas)
         self.assertEqual(res["verdict"], "INVALID")
-        extra = check(self.L + bench.canonical(row) + b"\n", self.R, self.shas)
+        extra = self.check(self.L + bench.canonical(row) + b"\n", self.R, self.shas)
         self.assertEqual(extra["verdict"], "INVALID")
 
     def test_genome_and_hypothesis_sha_bound(self):
         ls = self.lines()
         row = json.loads(ls[1])
         row["genome"] = dict(row["genome"], h=row["genome"]["h"] + 1)
-        self.assertEqual(check(self.join(ls[:1] + [bench.canonical(row)] + ls[2:]), self.R, self.shas)["verdict"],
+        self.assertEqual(self.check(self.join(ls[:1] + [bench.canonical(row)] + ls[2:]), self.R, self.shas)["verdict"],
                          "INVALID")
         row = json.loads(ls[0])
         row["hypothesis_sha256"] = "0" * 64
-        self.assertEqual(check(self.join([bench.canonical(row)] + ls[1:]), self.R, self.shas)["verdict"], "INVALID")
+        self.assertEqual(self.check(self.join([bench.canonical(row)] + ls[1:]), self.R, self.shas)["verdict"], "INVALID")
 
     def test_report_binds_library_and_counts(self):
         rep = json.loads(self.R)
         rep["library_sha256"] = "0" * 64
-        self.assertEqual(check(self.L, json.dumps(rep).encode(), self.shas)["verdict"], "INVALID")
+        self.assertEqual(self.check(self.L, json.dumps(rep).encode(), self.shas)["verdict"], "INVALID")
         rep = json.loads(self.R)
         rep["runs"][0]["evaluated"] -= 1
         rep["runs"][1]["evaluated"] += 1
-        self.assertEqual(check(self.L, json.dumps(rep).encode(), self.shas)["verdict"], "INVALID")
+        self.assertEqual(self.check(self.L, json.dumps(rep).encode(), self.shas)["verdict"], "INVALID")
 
     def test_fails_closed_on_bytes(self):
-        self.assertEqual(check(self.L[:-1], self.R, self.shas)["verdict"], "INVALID")
+        self.assertEqual(self.check(self.L[:-1], self.R, self.shas)["verdict"], "INVALID")
         ls = self.lines()
-        self.assertEqual(check(self.join(ls[:3] + [b"{bad"] + ls[4:]), self.R, self.shas)["verdict"], "INVALID")
-        self.assertEqual(check(self.L, b"{", self.shas)["verdict"], "INVALID")
-        self.assertEqual(check(self.L, self.R, [self.shas[0]] * 2)["verdict"], "INVALID")
+        self.assertEqual(self.check(self.join(ls[:3] + [b"{bad"] + ls[4:]), self.R, self.shas)["verdict"], "INVALID")
+        self.assertEqual(self.check(self.L, b"{", self.shas)["verdict"], "INVALID")
+        self.assertEqual(self.check(self.L, self.R, [self.shas[0]] * 2)["verdict"], "INVALID")
 
     def test_library_state_restored(self):
         search.use_library("r2")
         before = search.TERMINALS
-        check(self.L, self.R, self.shas)
+        self.check(self.L, self.R, self.shas)
         self.assertIs(search.TERMINALS, before)
+
+    # GPT 2026-11-09 21:35 Moscow counterexamples, and the pooled-fitness bound
+    def test_counterexamples_are_rejected(self):  # each returned RECEIPT_OK before
+        ls = self.lines()
+        dup = ls[0].replace(b'"fitness":', b'"fitness":0.0,"fitness":', 1)
+        self.assertNotEqual(dup, ls[0])
+        res = self.check(self.join([dup] + ls[1:]), self.R, self.shas)
+        self.assertEqual(res["verdict"], "INVALID")
+        self.assertIn("repeated key", res["reason"])
+        row = json.loads(ls[0])
+        for field, val in (("fitness", "1.5"), ("fitness", True), ("sharpe_annual_gate", "x"),
+                           ("genome", []), ("panel_sha256", self.shas[0].upper())):
+            bad = bench.canonical(dict(row, **{field: val}))
+            self.assertEqual(self.check(self.join([bad] + ls[1:]), self.R, self.shas)["verdict"], "INVALID", field)
+        nan = ls[0].replace(b'"fitness":', b'"fitness":NaN,"x":', 1)
+        self.assertEqual(self.check(self.join([nan] + ls[1:]), self.R, self.shas)["verdict"], "INVALID")
+        for key, val in (("seed", 302), ("population", 11), ("generations", 3), ("seed", 301.0)):
+            rep = dict(json.loads(self.R), **{key: val})
+            res = self.check(self.L, json.dumps(rep).encode(), self.shas)
+            self.assertEqual(res["verdict"], "INVALID", key)
+        rep = dict(json.loads(self.R), library=["r3-f1"])
+        self.assertEqual(self.check(self.L, json.dumps(rep).encode(), self.shas)["verdict"], "INVALID")
+        rep = dict(json.loads(self.R), extra=1)
+        self.assertEqual(self.check(self.L, json.dumps(rep).encode(), self.shas)["verdict"], "INVALID")
+        dup = self.R.replace(b'"seed":', b'"seed": 999, "seed":', 1)
+        self.assertNotEqual(dup, self.R)
+        self.assertEqual(self.check(self.L, dup, self.shas)["verdict"], "INVALID")
+
+    def test_report_must_match_intended_invocation(self):
+        for kw in ({"seed": 300}, {"population": 9}, {"generations": 1}, {"first_null": 5}, {"runs": 1}):
+            self.assertEqual(self.check(self.L, self.R, self.shas, **kw)["verdict"], "INVALID", kw)
+
+    def test_genuine_maxima_inside_bound_and_edits_outside_rejected(self):
+        rows = [json.loads(x) for x in self.lines()]
+        rep = json.loads(self.R)
+        i = 0
+        for run in rep["runs"]:
+            bounds = []
+            for _ in range(run["evaluated"]):
+                bounds.append(receipt._interval(rows[i:i + 2]))
+                i += 2
+            hi = max(b[1] for b in bounds)
+            lo = max(b[0] for b in bounds)
+            self.assertTrue(lo - 1e-9 <= run["best_fitness"] <= hi + 1e-9)
+            for name, val in (("best_fitness", hi + 0.01), ("best_fitness", lo - 0.01),
+                              ("best_sharpe", 99.0), ("top_fitness", [hi + 0.01])):
+                bad = json.loads(self.R)
+                bad["runs"][rep["runs"].index(run)][name] = val
+                res = self.check(self.L, json.dumps(bad).encode(), self.shas)
+                self.assertEqual(res["verdict"], "INVALID", (name, val))
+
+    def test_cli(self):
+        d = self.tmp
+        (d / "L.jsonl").write_bytes(self.L)
+        (d / "R.json").write_bytes(self.R)
+        argv = ["--ledger", str(d / "L.jsonl"), "--report", str(d / "R.json"), "--panel-sha", self.shas[0],
+                "--panel-sha", self.shas[1]] + [x for k, v in EXPECT.items() for x in (f"--{k.replace('_', '-')}", str(v))]
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(receipt.main(argv), 0)
+        self.assertIn("RECEIPT_OK", out.getvalue())
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(receipt.main(argv[:-1] + ["3"]), 1)
 
 
 if __name__ == "__main__":
