@@ -26,12 +26,19 @@ Added after GPT 2026-11-09 21:35 Moscow (schema counterexamples):
     (null only if no genome has all Sharpes), and each top_fitness value within some genome's
     interval (among genomes with every Sharpe), non-increasing and not above best_fitness. An edit inside the bounds still passes.
 
+Added after GPT 2026-11-09 22:21 Moscow (overflow and unbound cutoff):
+  - every fitness, Sharpe and report fitness value must satisfy |x| <= 1e9 (MAX_ABS) before any
+    arithmetic, so no derived bound can overflow and a huge integer is INVALID instead of raising;
+    a genuine annual Sharpe or fitness is many orders of magnitude smaller;
+  - the report's library and search_end_utc must equal the required --library and --search-end
+    (the frozen run plan), not merely be self-consistent.
+
 It does not rebuild pooled fitness exactly (the ledger lacks the step counts). Keep the exact null
 invocation, its exit code and the two SHA-256s printed here with the receipt.
 Stdlib only, plus the pinned module for the library. Reads, writes nothing.
 
     python null_ledger_receipt_v40.py --ledger L.jsonl --report R.json --panel-sha A --panel-sha B \
-        --seed S --population P --generations G --first-null K --runs N
+        --library LIB --search-end YYYY-MM-DDTHH:MM:SSZ --seed S --population P --generations G --first-null K --runs N
 Exit 0 = RECEIPT_OK, 1 = INVALID.
 """
 from __future__ import annotations
@@ -39,7 +46,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import re
 import sys
 from pathlib import Path
@@ -53,6 +59,8 @@ REPORT_KEYS = {"search_end_utc", "seed", "population", "generations", "library",
 RUN_KEYS = {"null_seed", "evaluated", "best_fitness", "best_sharpe", "top_fitness"}
 SHA = re.compile(r"[0-9a-f]{64}")
 TOL = 1e-9
+MAX_ABS = 1e9
+UTC = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 
 
 class _Malformed(ValueError):
@@ -77,7 +85,8 @@ def _loads(b):
 
 
 def _num(x) -> bool:
-    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+    # abs(x) <= MAX_ABS is False for NaN and +-inf and compares huge ints exactly, without overflow
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and abs(x) <= MAX_ABS
 
 
 def _le(a, b) -> bool:
@@ -127,7 +136,8 @@ def _count(x) -> bool:
 
 
 def check(ledger_bytes: bytes, report_bytes: bytes, panel_shas, expect: dict) -> dict:
-    """expect: the intended null invocation, keys seed, population, generations, first_null, runs."""
+    """expect: the intended null invocation, keys library, search_end, seed, population, generations,
+    first_null, runs."""
     out = {"ledger_sha256": hashlib.sha256(ledger_bytes).hexdigest(),
            "report_sha256": hashlib.sha256(report_bytes).hexdigest()}
     k = len(panel_shas)
@@ -145,8 +155,11 @@ def check(ledger_bytes: bytes, report_bytes: bytes, panel_shas, expect: dict) ->
     lib = report["library"]
     if not isinstance(lib, str) or lib not in search.LIBRARIES or search.library_sha(lib) != report["library_sha256"]:
         return _bad("report library unknown or its SHA differs from the pinned code", **out)
-    if not isinstance(report["search_end_utc"], str):
-        return _bad("report search_end_utc malformed", **out)
+    if not isinstance(expect["search_end"], str) or not UTC.fullmatch(expect["search_end"]):
+        return _bad("--search-end must be YYYY-MM-DDTHH:MM:SSZ", **out)
+    if lib != expect["library"] or report["search_end_utc"] != expect["search_end"]:
+        return _bad("report library or search_end_utc differs from the run plan",
+                    got=[lib, report["search_end_utc"]], expected=[expect["library"], expect["search_end"]], **out)
     first, n = expect["first_null"], expect["runs"]
     got = [report[k] for k in ("seed", "population", "generations")] + [[r["null_seed"] for r in runs]]
     want = [expect[k] for k in ("seed", "population", "generations")] + [list(range(first, first + n))]
@@ -213,10 +226,13 @@ def main(argv=None) -> int:
     ap.add_argument("--ledger", required=True)
     ap.add_argument("--report", required=True)
     ap.add_argument("--panel-sha", action="append", required=True, help="search export SHA-256, in panel order")
+    ap.add_argument("--library", required=True, help="library of the frozen run plan, e.g. r3-f1")
+    ap.add_argument("--search-end", required=True, help="search_end_utc of the frozen search export config")
     for flag in ("--seed", "--population", "--generations", "--first-null", "--runs"):
         ap.add_argument(flag, type=int, required=True, help="as given to the null invocation")
     args = ap.parse_args(argv)
-    expect = {k: getattr(args, k) for k in ("seed", "population", "generations", "first_null", "runs")}
+    expect = {k: getattr(args, k) for k in ("library", "search_end", "seed", "population", "generations",
+                                            "first_null", "runs")}
     res = check(Path(args.ledger).read_bytes(), Path(args.report).read_bytes(), args.panel_sha, expect)
     print(json.dumps(res, sort_keys=True))
     return 0 if res["verdict"] == "RECEIPT_OK" else 1

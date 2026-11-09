@@ -15,7 +15,7 @@ import algorithm_search_v40 as search
 import null_ledger_receipt_v40 as receipt
 
 DAY = 86_400_000
-EXPECT = {"seed": 301, "population": 10, "generations": 2, "first_null": 6, "runs": 2}
+EXPECT = {"library": "r3-f1", "search_end": None, "seed": 301, "population": 10, "generations": 2, "first_null": 6, "runs": 2}
 
 
 class NullReceipt(unittest.TestCase):
@@ -42,6 +42,7 @@ class NullReceipt(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             search.main(argv)
         cls.L, cls.R = cls.ledger.read_bytes(), cls.report.read_bytes()
+        EXPECT["search_end"] = json.loads(acfg.read_text())["search_end_utc"]
 
     @classmethod
     def tearDownClass(cls):
@@ -170,6 +171,39 @@ class NullReceipt(unittest.TestCase):
                 bad["runs"][rep["runs"].index(run)][name] = val
                 res = self.check(self.L, json.dumps(bad).encode(), self.shas)
                 self.assertEqual(res["verdict"], "INVALID", (name, val))
+
+    # GPT 2026-11-09 22:21 Moscow: overflow in derived bounds, huge integers, unbound cutoff
+    def test_oversized_numbers_rejected_before_arithmetic(self):
+        ls = self.lines()
+        a, b = json.loads(ls[0]), json.loads(ls[1])
+        huge = [bench.canonical(dict(a, fitness=1.7e308, sharpe_annual_gate=-1.7e308)),
+                bench.canonical(dict(b, fitness=1.7e308, sharpe_annual_gate=-1.7e308))]
+        rep = json.loads(self.R)
+        rep["runs"][0]["best_fitness"], rep["runs"][0]["top_fitness"] = 100.0, []
+        res = self.check(self.join(huge + ls[2:]), json.dumps(rep).encode(), self.shas)
+        self.assertEqual(res["verdict"], "INVALID")  # was RECEIPT_OK (bounds overflowed to +-inf)
+        self.assertIn("row 1", res["reason"])
+        big = ls[0].replace(b'"fitness":', b'"fitness":' + str(10 ** 400).encode() + b',"x":', 1)
+        res = self.check(self.join([big] + ls[1:]), self.R, self.shas)  # raised OverflowError before
+        self.assertEqual(res["verdict"], "INVALID")
+        for val in (2e9, -2e9, 10 ** 400):
+            bad = bench.canonical(dict(a, sharpe_annual_gate=val))
+            self.assertEqual(self.check(self.join([bad] + ls[1:]), self.R, self.shas)["verdict"], "INVALID", val)
+            rep = json.loads(self.R)
+            rep["runs"][0]["best_fitness"] = val
+            self.assertEqual(self.check(self.L, json.dumps(rep).encode(), self.shas)["verdict"], "INVALID", val)
+        self.assertTrue(receipt._num(-9.0) and receipt._num(1e9) and not receipt._num(float("nan")))
+
+    def test_library_and_cutoff_bound_to_run_plan(self):
+        rep = dict(json.loads(self.R), search_end_utc="arbitrary")
+        self.assertEqual(self.check(self.L, json.dumps(rep).encode(), self.shas)["verdict"], "INVALID")
+        rep = dict(json.loads(self.R), search_end_utc="2000-01-01T00:00:00Z")
+        self.assertEqual(self.check(self.L, json.dumps(rep).encode(), self.shas)["verdict"], "INVALID")
+        for kw in ({"search_end": "2000-01-01T00:00:00Z"}, {"search_end": "arbitrary"}, {"search_end": None},
+                   {"library": "r2"}):
+            self.assertEqual(self.check(self.L, self.R, self.shas, **kw)["verdict"], "INVALID", kw)
+        rep = dict(json.loads(self.R), library="r2", library_sha256=search.library_sha("r2"))
+        self.assertEqual(self.check(self.L, json.dumps(rep).encode(), self.shas)["verdict"], "INVALID")
 
     def test_cli(self):
         d = self.tmp
