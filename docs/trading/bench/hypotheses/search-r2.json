@@ -1,0 +1,76 @@
+{
+ "hypotheses": [
+  {
+   "author": "claude-search",
+   "beta_window": 120,
+   "horizon_bars": 7,
+   "id": "search-r2-1",
+   "neutralize": "beta",
+   "rationale": "if mvol_high: -fund3 else maxret20; hold 7d; inverse_vol weights; beta-neutral",
+   "score": [
+    "where",
+    [
+     "sub",
+     [
+      "std",
+      [
+       "csmean",
+       [
+        "field",
+        "ret"
+       ]
+      ],
+      20
+     ],
+     [
+      "std",
+      [
+       "csmean",
+       [
+        "field",
+        "ret"
+       ]
+      ],
+      120
+     ]
+    ],
+    [
+     "neg",
+     [
+      "clip",
+      [
+       "csz",
+       [
+        "mean",
+        [
+         "field",
+         "funding"
+        ],
+        3
+       ]
+      ],
+      3.0
+     ]
+    ],
+    [
+     "clip",
+     [
+      "csz",
+      [
+       "tsmax",
+       [
+        "field",
+        "ret"
+       ],
+       20
+      ]
+     ],
+     3.0
+    ]
+   ],
+   "vol_window": 60,
+   "weighting": "inverse_vol"
+  }
+ ],
+ "schema": "rakazo_bench_hypothesis_v1"
+}
