@@ -1,4 +1,4 @@
-"""Data-free generation-0 receipt: binds --seed, --population and the absence of --seeds to outputs.
+"""Data-free generation-0 receipt: binds generation 0 of the outputs to --seed, --population and --library.
 
 Why (GPT 2026-11-10 05:49 Moscow): the pinned `run` report records neither the numeric seed nor
 an optional `--seeds` genome file, and `null_ledger_receipt_v40.py` cannot see them either, so the
@@ -19,9 +19,13 @@ This helper rebuilds that list and requires:
           and the report's `evaluated` equals the last history total;
   - null: for each k in first-null .. first-null+runs-1 the `claude-null-<k>` rows begin with the
           same genomes, and the report's library, seed and population are the given ones.
-A `--seeds` file, another seed or another library changes generation 0 and fails. It does not
-bind fold counts, extra-start, paths or config hashes (those still need the preserved invocation),
-and a larger population whose extra draws are all repeats would pass this check.
+Another seed or library, or a `--seeds` file that differs from the seeded draw, changes
+generation 0 and fails. It does NOT bind the absence of `--seeds`: a file holding exactly the
+seeded draw gives the same generation 0 and passes, while later generations can differ because
+those draws were skipped (GPT 2026-11-10 07:27 Moscow; test_seeds_file_reproducing_the_draw_...).
+Nor does it bind later RNG state, fold counts, extra-start, paths or config hashes, and a larger
+population whose extra draws are all repeats would pass. All of those still need the preserved
+original invocation; GEN0_OK is an additional consistency receipt, never a substitute.
 
     python gen0_receipt_v40.py --kind run|null --ledger L.jsonl --report R.json --library r3-f1 \
         --config FROZEN_OKX_SEARCH_CONFIG.json --bar-ms 86400000 --panels 2 --seed S --population P \

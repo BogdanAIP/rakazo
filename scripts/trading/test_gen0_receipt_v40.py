@@ -5,6 +5,7 @@ import contextlib
 import datetime as dt
 import io
 import json
+import random
 import shutil
 import tempfile
 import unittest
@@ -53,6 +54,15 @@ class Gen0Receipt(unittest.TestCase):
         seeds = cls.tmp / "seeds.json"
         seeds.write_text(json.dumps([{"blend": [[1, "pvcorr20"]], "h": 1, "w": "equal"}]))
         run("seeded", "--seed", "301", "--seeds", str(seeds))
+        # GPT 11-10 07:27 counterexample: a --seeds file holding exactly the seeded draw.
+        search.use_library("r3-f1")
+        c0 = json.loads(acfg.read_text())
+        bars0 = (c0["holdout_start_ts"] - c0["search_end_ts"]) // DAY
+        search.allowed_horizons = [h for h in search.HORIZONS if h * 25 <= bars0] or [search.HORIZONS[0]]
+        rng = random.Random(301)
+        mimic = cls.tmp / "mimic.json"
+        mimic.write_text(json.dumps([search.repair(rng, search.random_genome(rng)) for _ in range(POP)]))
+        run("mimic", "--seed", "301", "--seeds", str(mimic))
         d = cls.tmp / "null"
         d.mkdir()
         with contextlib.redirect_stdout(io.StringIO()):
@@ -83,6 +93,15 @@ class Gen0Receipt(unittest.TestCase):
 
     def test_seeds_file_rejected(self):
         self.assertEqual(self.run_check("seeded")["verdict"], "INVALID")
+
+    def test_seeds_file_reproducing_the_draw_is_not_detected(self):
+        """Scope limit (GPT 07:27): GEN0_OK binds generation 0, not the absence of --seeds."""
+        self.assertEqual(self.run_check("mimic")["verdict"], "GEN0_OK")
+        real_rows = self.out["real"][0].splitlines()
+        mimic_rows = self.out["mimic"][0].splitlines()
+        n0 = 2 * self.run_check("real")["gen0_distinct"]
+        self.assertEqual([json.loads(r)["genome"] for r in real_rows[:n0]],
+                         [json.loads(r)["genome"] for r in mimic_rows[:n0]])
 
     def test_other_seed_rejected_both_ways(self):
         self.assertEqual(self.run_check("other_seed")["verdict"], "INVALID")
