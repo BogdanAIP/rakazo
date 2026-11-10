@@ -39,6 +39,14 @@ function fakePrisma(
   } as unknown as PrismaClient;
 }
 
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 describe("createJobReconciler", () => {
   it("continues the main scans when an auxiliary reconciler fails", async () => {
     const prisma = fakePrisma();
@@ -61,6 +69,63 @@ describe("createJobReconciler", () => {
     expect(prisma.routine.findMany).toHaveBeenCalled();
     expect(prisma.computer.findMany).toHaveBeenCalled();
     expect(prisma.messagingOutbound.findFirst).toHaveBeenCalled();
+  });
+
+  it("keeps recovering due work while an auxiliary reconciler hangs", async () => {
+    const prisma = fakePrisma([], [{ id: "routine-due", nextRunAt: new Date() }]);
+    const { jobs, enqueue } = publisher();
+    const pending = deferred();
+    const reconcileCloudAgents = vi.fn(() => pending.promise);
+    const reconciler = createJobReconciler({ prisma, jobs, reconcileCloudAgents });
+
+    await reconciler.reconcileOnce();
+    await reconciler.reconcileOnce();
+    expect(enqueue.mock.calls.filter(([job]) => job.name === "routine.wakeup")).toHaveLength(2);
+    expect(reconcileCloudAgents).toHaveBeenCalledOnce();
+
+    let stopped = false;
+    const stopping = reconciler.stop().then(() => {
+      stopped = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(stopped).toBe(false);
+    pending.resolve();
+    await stopping;
+  });
+
+  it("waits for auxiliary work started after stop begins before releasing leadership", async () => {
+    const { jobs } = publisher();
+    const acquired = deferred();
+    const pending = deferred();
+    const leadership: ReconciliationLeadership = {
+      tryAcquire: vi.fn(async () => {
+        await acquired.promise;
+        return true;
+      }),
+      release: vi.fn(async () => undefined),
+    };
+    const reconcileComputerUpdates = vi.fn(() => pending.promise);
+    const reconciler = createJobReconciler({
+      prisma: fakePrisma(),
+      jobs,
+      leadership,
+      reconcileComputerUpdates,
+    });
+
+    const pass = reconciler.reconcileOnce();
+    let stopped = false;
+    const stopping = reconciler.stop().then(() => {
+      stopped = true;
+    });
+    acquired.resolve();
+    await pass;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(reconcileComputerUpdates).toHaveBeenCalledOnce();
+    expect(stopped).toBe(false);
+    expect(leadership.release).not.toHaveBeenCalled();
+    pending.resolve();
+    await stopping;
+    expect(leadership.release).toHaveBeenCalledOnce();
   });
 
   it("restores a due pending messaging outbox drain", async () => {

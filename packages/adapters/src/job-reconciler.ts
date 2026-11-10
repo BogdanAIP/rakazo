@@ -117,21 +117,27 @@ export function createJobReconciler(
   let routineCursor: Cursor | undefined;
   let controlCursor: ControlCursor | undefined;
   let controlScanDeadline: Date | undefined;
+  // Auxiliary tasks may wait on external services; don't let them block recovery scans.
+  const housekeeping = [deps.reconcileCloudAgents, deps.reconcileComputerUpdates].filter(
+    (reconcile) => reconcile !== undefined,
+  );
+  const housekeepingRunning = new Map<() => Promise<void>, Promise<void>>();
+  const startHousekeeping = () => {
+    for (const reconcile of housekeeping) {
+      if (housekeepingRunning.has(reconcile)) continue;
+      const pass = (async () => reconcile())()
+        .catch((error) => getLogger().error("auxiliary reconciliation", error))
+        .finally(() => housekeepingRunning.delete(reconcile));
+      housekeepingRunning.set(reconcile, pass);
+    }
+  };
 
   const reconcileOnce = async () => {
     if (reconciling) return reconciling;
     reconciling = (async () => {
       if (deps.leadership && !(await deps.leadership.tryAcquire())) return;
 
-      const auxiliary = await Promise.allSettled(
-        [deps.reconcileCloudAgents, deps.reconcileComputerUpdates].map(async (reconcile) =>
-          reconcile?.(),
-        ),
-      );
-      for (const result of auxiliary) {
-        if (result.status === "rejected")
-          getLogger().error("auxiliary reconciliation", result.reason);
-      }
+      startHousekeeping();
 
       const now = new Date();
       controlScanDeadline ??= new Date(now.getTime() + CONTROL_LOOKAHEAD_MS);
@@ -362,6 +368,8 @@ export function createJobReconciler(
       if (timer) clearInterval(timer);
       timer = undefined;
       await reconciling?.catch(() => undefined);
+      // A pass waiting for leadership can start auxiliary work after stop begins.
+      await Promise.all(housekeepingRunning.values());
       await deps.leadership?.release();
     },
   };
