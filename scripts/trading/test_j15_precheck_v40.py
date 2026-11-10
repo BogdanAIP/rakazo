@@ -135,6 +135,17 @@ class J15Precheck(unittest.TestCase):
         self.assertEqual(self.check(run=nan)["verdict"], "INVALID")
         self.assertEqual(self.check(run=b'{"round": 1, "round": 2}')["verdict"], "INVALID")
 
+    def test_strict_generation_index_and_positive_plan(self):
+        # GPT review 11-10 18:50: generation 0.0 compared equal to 0; --generations 0 raised IndexError
+        for g in (0.0, True):
+            r = json.loads(self.R); r["history"][0]["generation"] = g
+            self.assertEqual(self.check(run=json.dumps(r).encode())["verdict"], "INVALID", g)
+        r = json.loads(self.R); r["history"] = []
+        for key, val in (("generations", 0), ("population", 0), ("nulls", 0), ("generations", -1), ("seed", -1),
+                         ("population", 10.0), ("generations", True)):
+            for run in (self.R, json.dumps(r).encode()):
+                self.assertEqual(j15.check(run, self.N, dict(EXPECT, **{key: val}))["verdict"], "INVALID", key)
+
     def test_malformed_null_report(self):
         r = json.loads(self.N[0]); r["runs"][0]["evaluated"] = 31
         self.assertEqual(self.check(nulls=[json.dumps(r).encode(), self.N[1]])["verdict"], "INVALID")

@@ -69,7 +69,7 @@ def real_best(rep, expect) -> tuple[float | None, str | None]:
         return None, "run report history length differs from --generations"
     prev_f = prev_n = None
     for i, h in enumerate(hist):
-        if not isinstance(h, dict) or set(h) != HIST_KEYS or h["generation"] != i or isinstance(h["generation"], bool):
+        if not isinstance(h, dict) or set(h) != HIST_KEYS or not _count(h["generation"]) or h["generation"] != i:
             return None, f"history entry {i} malformed or out of order"
         f, n = h["best_fitness"], h["evaluated_total"]
         if not _num(f) or not _count(n) or n == 0:
@@ -89,8 +89,10 @@ def check(run_bytes: bytes, null_bytes: list[bytes], expect: dict) -> dict:
            "null_report_sha256": [hashlib.sha256(b).hexdigest() for b in null_bytes]}
     if not isinstance(expect["search_end"], str) or not UTC.fullmatch(expect["search_end"]):
         return _bad("--search-end must be YYYY-MM-DDTHH:MM:SSZ", **out)
-    if not null_bytes or not _count(expect["nulls"]) or expect["nulls"] < 1:
-        return _bad("need at least one null report and --nulls >= 1", **out)
+    if not null_bytes or not all(_count(expect[k]) and expect[k] >= 1 for k in ("nulls", "population", "generations")):
+        return _bad("need at least one null report and --nulls, --population, --generations >= 1", **out)
+    if not _count(expect["seed"]):
+        return _bad("--seed must be a non-negative integer", **out)
     try:
         rep = _loads(run_bytes)
         nulls = [_loads(b) for b in null_bytes]
