@@ -1,734 +1,634 @@
 import { describe, expect, it } from "vitest";
 import type { PaperPerpetualProposalInput } from "./trading-paper-perpetual-preview.js";
 import {
-	getPaperPerpetualRiskLimits,
-	previewPaperPerpetualProposal,
+  getPaperPerpetualRiskLimits,
+  previewPaperPerpetualProposal,
 } from "./trading-paper-perpetual-preview.js";
 
 const fixture: PaperPerpetualProposalInput = {
-	strategy: "moderate",
-	ledgerId: "paper.moderate.1",
-	venue: "okx",
-	instrument: "BTC-USDT-SWAP",
-	side: "long",
-	leverage: 2,
-	quantityBase: "0.1",
-	entryPriceQuote: "100",
-	stopPriceQuote: "95",
-	takeProfitPriceQuote: "110",
-	availableQuote: "1000",
-	portfolio: {
-		openPositions: 0,
-		openNotionalQuote: "0",
-		openLongNotionalQuote: "0",
-		openShortNotionalQuote: "0",
-		markedEquityQuote: "1000",
-		peakEquityQuote: "1000",
-		openStopRiskQuote: "0",
-		sameIdeaStopRiskQuote: "0",
-		realizedLossTodayQuote: "0",
-	},
-	assumedFeeBpsPerSide: 10,
-	assumedSlippageBpsPerSide: 10,
-	maintenanceMarginBps: 50,
+  strategy: "moderate",
+  ledgerId: "paper.moderate.1",
+  venue: "okx",
+  instrument: "BTC-USDT-SWAP",
+  side: "long",
+  leverage: 2,
+  quantityBase: "0.1",
+  entryPriceQuote: "100",
+  stopPriceQuote: "95",
+  takeProfitPriceQuote: "110",
+  availableQuote: "1000",
+  portfolio: {
+    openPositions: 0,
+    openNotionalQuote: "0",
+    openLongNotionalQuote: "0",
+    openShortNotionalQuote: "0",
+    markedEquityQuote: "1000",
+    peakEquityQuote: "1000",
+    openStopRiskQuote: "0",
+    sameIdeaStopRiskQuote: "0",
+    realizedLossTodayQuote: "0",
+  },
+  assumedFeeBpsPerSide: 10,
+  assumedSlippageBpsPerSide: 10,
+  maintenanceMarginBps: 50,
 };
 
-function expectDenial(
-	overrides: Partial<PaperPerpetualProposalInput>,
-	reason: string,
-) {
-	expect(
-		previewPaperPerpetualProposal({ ...fixture, ...overrides }),
-	).toMatchObject({
-		status: "deny",
-		mode: "paper_only",
-		reason,
-	});
+function expectDenial(overrides: Partial<PaperPerpetualProposalInput>, reason: string) {
+  expect(previewPaperPerpetualProposal({ ...fixture, ...overrides })).toMatchObject({
+    status: "deny",
+    mode: "paper_only",
+    reason,
+  });
 }
 
 describe("inert, risk-bounded PAPER perpetual proposals", () => {
-	it("scales aggressive TOTAL open stop risk to 10% equity, retaining 2% per idea", () => {
-		const limits = getPaperPerpetualRiskLimits("aggressive", "994.6036993");
-		expect(Number(limits.maxOpenRiskQuote)).toBeCloseTo(99.46036993, 5);
-		expect(Number(limits.maxPerIdeaRiskQuote)).toBeCloseTo(19.892073986, 5);
-		expect(
-			Number(getPaperPerpetualRiskLimits("moderate", "1000").maxOpenRiskQuote),
-		).toBe(20);
-		expect(
-			Number(
-				getPaperPerpetualRiskLimits("conservative", "1000").maxOpenRiskQuote,
-			),
-		).toBe(10);
-	});
-	it("enforces 3% minimum cross initial collateral, not maximum", () => {
-		const proposed = {
-			...fixture,
-			strategy: "aggressive" as const,
-			leverage: 5,
-			ownerMaxLeverage: 5,
-			entryPriceQuote: "100",
-			stopPriceQuote: "96",
-			takeProfitPriceQuote: "110",
-			firstEntryMarginFloorBps: 300,
-		};
-		const accepted = previewPaperPerpetualProposal({
-			...proposed,
-			quantityBase: "1.51",
-		});
-		expect(accepted.status).toBe("inert_preview");
-		expect(
-			previewPaperPerpetualProposal({
-				...proposed,
-				leverage: 4,
-				quantityBase: "1.51",
-			}),
-		).toMatchObject({ status: "deny", reason: "leverage_exceeded" });
-		if (accepted.status === "inert_preview") {
-			expect(accepted.initialMarginFloorQuote).toBe("30");
-			expect(Number(accepted.initialMarginQuote)).toBeGreaterThan(30);
-			expect(Number(accepted.worstCaseStopLossQuote)).toBeLessThan(20);
-		}
-		expect(
-			previewPaperPerpetualProposal({ ...proposed, quantityBase: "1.49" }),
-		).toMatchObject({
-			status: "deny",
-			reason: "initial_entry_margin_below_minimum",
-		});
-		expect(
-			previewPaperPerpetualProposal({
-				...proposed,
-				quantityBase: "1.50",
-				firstEntryMarginFloorBps: undefined,
-			}).status,
-		).toBe("inert_preview");
-	});
-	it("subtracts gross CROSS exposure before computing the 3% entry floor", () => {
-		const result = previewPaperPerpetualProposal({
-			...fixture,
-			strategy: "aggressive",
-			leverage: 5,
-			ownerMaxLeverage: 5,
-			firstEntryMarginFloorBps: 300,
-			quantityBase: "1.30",
-			portfolio: {
-				...fixture.portfolio,
-				openNotionalQuote: "500",
-				openLongNotionalQuote: "250",
-				openShortNotionalQuote: "250",
-				maintenanceLegs: [
-					{ grossNotionalQuote: "500", maintenanceMarginBps: 50 },
-				],
-			},
-		});
-		expect(result).toMatchObject({
-			status: "deny",
-			reason: "initial_entry_margin_below_minimum",
-		});
-	});
+  it("scales aggressive TOTAL open stop risk to 10% equity, retaining 2% per idea", () => {
+    const limits = getPaperPerpetualRiskLimits("aggressive", "994.6036993");
+    expect(Number(limits.maxOpenRiskQuote)).toBeCloseTo(99.46036993, 5);
+    expect(Number(limits.maxPerIdeaRiskQuote)).toBeCloseTo(19.892073986, 5);
+    expect(Number(getPaperPerpetualRiskLimits("moderate", "1000").maxOpenRiskQuote)).toBe(20);
+    expect(Number(getPaperPerpetualRiskLimits("conservative", "1000").maxOpenRiskQuote)).toBe(10);
+  });
+  it("enforces 3% minimum cross initial collateral, not maximum", () => {
+    const proposed = {
+      ...fixture,
+      strategy: "aggressive" as const,
+      leverage: 5,
+      ownerMaxLeverage: 5,
+      entryPriceQuote: "100",
+      stopPriceQuote: "96",
+      takeProfitPriceQuote: "110",
+      firstEntryMarginFloorBps: 300,
+    };
+    const accepted = previewPaperPerpetualProposal({ ...proposed, quantityBase: "1.51" });
+    expect(accepted.status).toBe("inert_preview");
+    expect(
+      previewPaperPerpetualProposal({ ...proposed, leverage: 4, quantityBase: "1.51" }),
+    ).toMatchObject({ status: "deny", reason: "leverage_exceeded" });
+    if (accepted.status === "inert_preview") {
+      expect(accepted.initialMarginFloorQuote).toBe("30");
+      expect(Number(accepted.initialMarginQuote)).toBeGreaterThan(30);
+      expect(Number(accepted.worstCaseStopLossQuote)).toBeLessThan(20);
+    }
+    expect(previewPaperPerpetualProposal({ ...proposed, quantityBase: "1.49" })).toMatchObject({
+      status: "deny",
+      reason: "initial_entry_margin_below_minimum",
+    });
+    expect(
+      previewPaperPerpetualProposal({
+        ...proposed,
+        quantityBase: "1.50",
+        firstEntryMarginFloorBps: undefined,
+      }).status,
+    ).toBe("inert_preview");
+  });
+  it("subtracts gross CROSS exposure before computing the 3% entry floor", () => {
+    const result = previewPaperPerpetualProposal({
+      ...fixture,
+      strategy: "aggressive",
+      leverage: 5,
+      ownerMaxLeverage: 5,
+      firstEntryMarginFloorBps: 300,
+      quantityBase: "1.30",
+      portfolio: {
+        ...fixture.portfolio,
+        openNotionalQuote: "500",
+        openLongNotionalQuote: "250",
+        openShortNotionalQuote: "250",
+        maintenanceLegs: [{ grossNotionalQuote: "500", maintenanceMarginBps: 50 }],
+      },
+    });
+    expect(result).toMatchObject({ status: "deny", reason: "initial_entry_margin_below_minimum" });
+  });
 
-	it("previews a long without exposing order authority", () => {
-		const result = previewPaperPerpetualProposal(fixture);
-		expect(result.status).toBe("inert_preview");
-		if (result.status !== "inert_preview") return;
-		expect(result.mode).toBe("paper_only");
-		expect(result.side).toBe("long");
-		expect(result.notionalQuote).toBe("10.01");
-		expect(Number(result.initialMarginQuote)).toBeLessThan(6);
-		expect(Number(result.worstCaseStopLossQuote)).toBeLessThanOrEqual(10);
-		expect(Number(result.collateralRemainingAtStopQuote)).toBeGreaterThan(
-			Number(result.maintenanceMarginQuote),
-		);
-		expect(
-			"orderId" in result || "execute" in result || "approval" in result,
-		).toBe(false);
-	});
+  it("previews a long without exposing order authority", () => {
+    const result = previewPaperPerpetualProposal(fixture);
+    expect(result.status).toBe("inert_preview");
+    if (result.status !== "inert_preview") return;
+    expect(result.mode).toBe("paper_only");
+    expect(result.side).toBe("long");
+    expect(result.notionalQuote).toBe("10.01");
+    expect(Number(result.initialMarginQuote)).toBeLessThan(6);
+    expect(Number(result.worstCaseStopLossQuote)).toBeLessThanOrEqual(10);
+    expect(Number(result.collateralRemainingAtStopQuote)).toBeGreaterThan(
+      Number(result.maintenanceMarginQuote),
+    );
+    expect("orderId" in result || "execute" in result || "approval" in result).toBe(false);
+  });
 
-	it("separates hedged long and short legs and multiple markets", () => {
-		const long = previewPaperPerpetualProposal(fixture);
-		const short = previewPaperPerpetualProposal({
-			...fixture,
-			side: "short",
-			stopPriceQuote: "105",
-			takeProfitPriceQuote: "90",
-		});
-		expect(long.status).toBe("inert_preview");
-		expect(short.status).toBe("inert_preview");
-		if (long.status !== "inert_preview" || short.status !== "inert_preview")
-			return;
-		expect(long.positionBucket).not.toBe(short.positionBucket);
-		expect(short.side).toBe("short");
-		expect(Number(short.worstCaseStopLossQuote)).toBeGreaterThan(0);
-		const ether = previewPaperPerpetualProposal({
-			...fixture,
-			instrument: "ETH-USDT-SWAP",
-		});
-		expect(ether.status).toBe("inert_preview");
-		if (ether.status === "inert_preview") {
-			expect(ether.positionBucket).not.toBe(long.positionBucket);
-		}
-	});
+  it("separates hedged long and short legs and multiple markets", () => {
+    const long = previewPaperPerpetualProposal(fixture);
+    const short = previewPaperPerpetualProposal({
+      ...fixture,
+      side: "short",
+      stopPriceQuote: "105",
+      takeProfitPriceQuote: "90",
+    });
+    expect(long.status).toBe("inert_preview");
+    expect(short.status).toBe("inert_preview");
+    if (long.status !== "inert_preview" || short.status !== "inert_preview") return;
+    expect(long.positionBucket).not.toBe(short.positionBucket);
+    expect(short.side).toBe("short");
+    expect(Number(short.worstCaseStopLossQuote)).toBeGreaterThan(0);
+    const ether = previewPaperPerpetualProposal({
+      ...fixture,
+      instrument: "ETH-USDT-SWAP",
+    });
+    expect(ether.status).toBe("inert_preview");
+    if (ether.status === "inert_preview") {
+      expect(ether.positionBucket).not.toBe(long.positionBucket);
+    }
+  });
 
-	it("rejects leverage above each preset", () => {
-		expectDenial(
-			{ strategy: "conservative", leverage: 6 },
-			"leverage_exceeded",
-		);
-		expectDenial({ strategy: "moderate", leverage: 11 }, "leverage_exceeded");
-		const allowed = previewPaperPerpetualProposal({
-			...fixture,
-			strategy: "aggressive",
-			leverage: 3,
-		});
-		expect(allowed.status).toBe("inert_preview");
-	});
+  it("rejects leverage above each preset", () => {
+    expectDenial({ strategy: "conservative", leverage: 6 }, "leverage_exceeded");
+    expectDenial({ strategy: "moderate", leverage: 11 }, "leverage_exceeded");
+    const allowed = previewPaperPerpetualProposal({
+      ...fixture,
+      strategy: "aggressive",
+      leverage: 3,
+    });
+    expect(allowed.status).toBe("inert_preview");
+  });
 
-	it("rejects invalid exits and unsupported spot symbols", () => {
-		expectDenial({ stopPriceQuote: "101" }, "invalid_exit_prices");
-		expectDenial({ takeProfitPriceQuote: "98" }, "invalid_exit_prices");
-		expectDenial(
-			{ side: "short", stopPriceQuote: "95" },
-			"invalid_exit_prices",
-		);
-		expectDenial({ instrument: "BTC-USDT" }, "unsupported_market");
-	});
+  it("rejects invalid exits and unsupported spot symbols", () => {
+    expectDenial({ stopPriceQuote: "101" }, "invalid_exit_prices");
+    expectDenial({ takeProfitPriceQuote: "98" }, "invalid_exit_prices");
+    expectDenial({ side: "short", stopPriceQuote: "95" }, "invalid_exit_prices");
+    expectDenial({ instrument: "BTC-USDT" }, "unsupported_market");
+  });
 
-	it("evaluates cross margin from account equity, not isolated order margin", () => {
-		const result = previewPaperPerpetualProposal({
-			...fixture,
-			strategy: "aggressive",
-			leverage: 3,
-			quantityBase: "0.3",
-			stopPriceQuote: "65",
-			takeProfitPriceQuote: "120",
-		});
-		expect(result.status).toBe("inert_preview");
-		if (result.status !== "inert_preview") return;
-		expect(Number(result.collateralRemainingAtStopQuote)).toBeGreaterThan(980);
-		expect(Number(result.equityRemainingAfterStressQuote)).toBeGreaterThan(500);
-		expect(result.peakDrawdownPercent).toBe("0.00");
-	});
+  it("evaluates cross margin from account equity, not isolated order margin", () => {
+    const result = previewPaperPerpetualProposal({
+      ...fixture,
+      strategy: "aggressive",
+      leverage: 3,
+      quantityBase: "0.3",
+      stopPriceQuote: "65",
+      takeProfitPriceQuote: "120",
+    });
+    expect(result.status).toBe("inert_preview");
+    if (result.status !== "inert_preview") return;
+    expect(Number(result.collateralRemainingAtStopQuote)).toBeGreaterThan(980);
+    expect(Number(result.equityRemainingAfterStressQuote)).toBeGreaterThan(500);
+    expect(result.peakDrawdownPercent).toBe("0.00");
+  });
 
-	it("checks cash, exposure, risk, daily loss and position slots", () => {
-		expectDenial({ availableQuote: "1" }, "insufficient_margin");
-		expectDenial(
-			{
-				portfolio: {
-					...fixture.portfolio,
-					openNotionalQuote: "4000",
-					maintenanceLegs: [
-						{ grossNotionalQuote: "4000", maintenanceMarginBps: 50 },
-					],
-					openLongNotionalQuote: "4000",
-				},
-			},
-			"portfolio_stress_exceeded",
-		);
-		expectDenial(
-			{ portfolio: { ...fixture.portfolio, openStopRiskQuote: "19.9" } },
-			"risk_budget_exceeded",
-		);
-		expectDenial(
-			{ portfolio: { ...fixture.portfolio, realizedLossTodayQuote: "30" } },
-			"risk_budget_exceeded",
-		);
-		expectDenial(
-			{ portfolio: { ...fixture.portfolio, openPositions: 3 } },
-			"position_count_exceeded",
-		);
-	});
+  it("checks cash, exposure, risk, daily loss and position slots", () => {
+    expectDenial({ availableQuote: "1" }, "insufficient_margin");
+    expectDenial(
+      {
+        portfolio: {
+          ...fixture.portfolio,
+          openNotionalQuote: "4000",
+          maintenanceLegs: [{ grossNotionalQuote: "4000", maintenanceMarginBps: 50 }],
+          openLongNotionalQuote: "4000",
+        },
+      },
+      "portfolio_stress_exceeded",
+    );
+    expectDenial(
+      { portfolio: { ...fixture.portfolio, openStopRiskQuote: "19.9" } },
+      "risk_budget_exceeded",
+    );
+    expectDenial(
+      { portfolio: { ...fixture.portfolio, realizedLossTodayQuote: "30" } },
+      "risk_budget_exceeded",
+    );
+    expectDenial(
+      { portfolio: { ...fixture.portfolio, openPositions: 3 } },
+      "position_count_exceeded",
+    );
+  });
 
-	it("permits independently risk-bounded exposure with high leverage, not automatic full leverage", () => {
-		const cases = [
-			{ strategy: "conservative", leverage: 5, quantityBase: "3" },
-			{ strategy: "moderate", leverage: 10, quantityBase: "4" },
-			{ strategy: "aggressive", leverage: 20, quantityBase: "5" },
-		] as const;
-		for (const candidate of cases) {
-			const result = previewPaperPerpetualProposal({
-				...fixture,
-				...candidate,
-				stopPriceQuote: "99.95",
-				takeProfitPriceQuote: "105",
-			});
-			expect(result, candidate.strategy).toMatchObject({
-				status: "inert_preview",
-			});
-		}
-	});
+  it("permits independently risk-bounded exposure with high leverage, not automatic full leverage", () => {
+    const cases = [
+      { strategy: "conservative", leverage: 5, quantityBase: "3" },
+      { strategy: "moderate", leverage: 10, quantityBase: "4" },
+      { strategy: "aggressive", leverage: 20, quantityBase: "5" },
+    ] as const;
+    for (const candidate of cases) {
+      const result = previewPaperPerpetualProposal({
+        ...fixture,
+        ...candidate,
+        stopPriceQuote: "99.95",
+        takeProfitPriceQuote: "105",
+      });
+      expect(result, candidate.strategy).toMatchObject({ status: "inert_preview" });
+    }
+  });
 
-	it("rejects proposals that exhaust post-shock equity despite a nearby stop", () => {
-		expectDenial(
-			{
-				strategy: "aggressive",
-				leverage: 20,
-				quantityBase: "35",
-				stopPriceQuote: "99.95",
-				takeProfitPriceQuote: "105",
-			},
-			"portfolio_stress_exceeded",
-		);
-	});
+  it("rejects proposals that exhaust post-shock equity despite a nearby stop", () => {
+    expectDenial(
+      {
+        strategy: "aggressive",
+        leverage: 20,
+        quantityBase: "35",
+        stopPriceQuote: "99.95",
+        takeProfitPriceQuote: "105",
+      },
+      "portfolio_stress_exceeded",
+    );
+  });
 
-	it("does not net opposite hedge exposure away when stress testing", () => {
-		expectDenial(
-			{
-				strategy: "aggressive",
-				side: "short",
-				leverage: 20,
-				quantityBase: "10",
-				stopPriceQuote: "100.05",
-				takeProfitPriceQuote: "95",
-				portfolio: {
-					...fixture.portfolio,
-					openNotionalQuote: "3000",
-					maintenanceLegs: [
-						{ grossNotionalQuote: "3000", maintenanceMarginBps: 50 },
-					],
-					openLongNotionalQuote: "3000",
-				},
-			},
-			"portfolio_stress_exceeded",
-		);
-	});
+  it("does not net opposite hedge exposure away when stress testing", () => {
+    expectDenial(
+      {
+        strategy: "aggressive",
+        side: "short",
+        leverage: 20,
+        quantityBase: "10",
+        stopPriceQuote: "100.05",
+        takeProfitPriceQuote: "95",
+        portfolio: {
+          ...fixture.portfolio,
+          openNotionalQuote: "3000",
+          maintenanceLegs: [{ grossNotionalQuote: "3000", maintenanceMarginBps: 50 }],
+          openLongNotionalQuote: "3000",
+        },
+      },
+      "portfolio_stress_exceeded",
+    );
+  });
 
-	it("requires 50-percent adverse survival independently of leverage", () => {
-		const bigLong = previewPaperPerpetualProposal({
-			...fixture,
-			strategy: "aggressive",
-			leverage: 20,
-			quantityBase: "15",
-			stopPriceQuote: "99.99",
-			takeProfitPriceQuote: "110",
-		});
-		expect(bigLong).toMatchObject({
-			status: "deny",
-			reason: "portfolio_stress_exceeded",
-		});
-		const smallLong = previewPaperPerpetualProposal({
-			...fixture,
-			strategy: "aggressive",
-			leverage: 20,
-			quantityBase: "4",
-			stopPriceQuote: "99.99",
-			takeProfitPriceQuote: "110",
-		});
-		expect(smallLong).toMatchObject({ status: "inert_preview" });
-		if (smallLong.status === "inert_preview") {
-			expect(
-				Number(smallLong.equityRemainingAfterCatastropheQuote),
-			).toBeGreaterThan(200);
-		}
-	});
+  it("requires 50-percent adverse survival independently of leverage", () => {
+    const bigLong = previewPaperPerpetualProposal({
+      ...fixture,
+      strategy: "aggressive",
+      leverage: 20,
+      quantityBase: "15",
+      stopPriceQuote: "99.99",
+      takeProfitPriceQuote: "110",
+    });
+    expect(bigLong).toMatchObject({
+      status: "deny",
+      reason: "portfolio_stress_exceeded",
+    });
+    const smallLong = previewPaperPerpetualProposal({
+      ...fixture,
+      strategy: "aggressive",
+      leverage: 20,
+      quantityBase: "4",
+      stopPriceQuote: "99.99",
+      takeProfitPriceQuote: "110",
+    });
+    expect(smallLong).toMatchObject({ status: "inert_preview" });
+    if (smallLong.status === "inert_preview") {
+      expect(Number(smallLong.equityRemainingAfterCatastropheQuote)).toBeGreaterThan(200);
+    }
+  });
 
-	it("reports catastrophic loss without blocking a short that passes the mandatory stress", () => {
-		const result = previewPaperPerpetualProposal({
-			...fixture,
-			side: "short",
-			strategy: "aggressive",
-			leverage: 20,
-			quantityBase: "8",
-			stopPriceQuote: "100.01",
-			takeProfitPriceQuote: "90",
-		});
-		expect(result.status).toBe("inert_preview");
-		if (result.status !== "inert_preview") return;
-		expect(result.riskPolicyVersion).toBe("paper-risk-v3");
-		expect(Number(result.equityRemainingAfterStressQuote)).toBeGreaterThan(250);
-		expect(Number(result.equityRemainingAfterCatastropheQuote)).toBeLessThan(0);
-		expect(Number(result.equityRemainingAfterExtremeQuote)).toBeLessThan(
-			Number(result.equityRemainingAfterStressQuote),
-		);
-	});
+  it("reports catastrophic loss without blocking a short that passes the mandatory stress", () => {
+    const result = previewPaperPerpetualProposal({
+      ...fixture,
+      side: "short",
+      strategy: "aggressive",
+      leverage: 20,
+      quantityBase: "8",
+      stopPriceQuote: "100.01",
+      takeProfitPriceQuote: "90",
+    });
+    expect(result.status).toBe("inert_preview");
+    if (result.status !== "inert_preview") return;
+    expect(result.riskPolicyVersion).toBe("paper-risk-v3");
+    expect(Number(result.equityRemainingAfterStressQuote)).toBeGreaterThan(250);
+    expect(Number(result.equityRemainingAfterCatastropheQuote)).toBeLessThan(0);
+    expect(Number(result.equityRemainingAfterExtremeQuote)).toBeLessThan(
+      Number(result.equityRemainingAfterStressQuote),
+    );
+  });
 
-	it("scales stop and daily budgets with verified current equity", () => {
-		const candidate = { ...fixture, quantityBase: "3" };
-		expect(previewPaperPerpetualProposal(candidate)).toMatchObject({
-			status: "deny",
-			reason: "risk_budget_exceeded",
-		});
-		const grown = previewPaperPerpetualProposal({
-			...candidate,
-			portfolio: {
-				...fixture.portfolio,
-				markedEquityQuote: "2000",
-				peakEquityQuote: "2000",
-			},
-		});
-		expect(grown).toMatchObject({
-			status: "inert_preview",
-			maxPerIdeaRiskQuote: "20",
-		});
-		const reduced = {
-			...fixture,
-			quantityBase: "1.82",
-			portfolio: {
-				...fixture.portfolio,
-				markedEquityQuote: "975",
-				peakEquityQuote: "975",
-			},
-		};
-		expect(previewPaperPerpetualProposal(reduced)).toMatchObject({
-			status: "deny",
-			reason: "risk_budget_exceeded",
-		});
-		expect(
-			previewPaperPerpetualProposal({
-				...fixture,
-				portfolio: { ...fixture.portfolio, realizedLossTodayQuote: "29.3" },
-			}).status,
-		).toBe("inert_preview");
-		expect(
-			previewPaperPerpetualProposal({
-				...fixture,
-				portfolio: { ...reduced.portfolio, realizedLossTodayQuote: "29.3" },
-			}),
-		).toMatchObject({ status: "deny", reason: "risk_budget_exceeded" });
-	});
+  it("scales stop and daily budgets with verified current equity", () => {
+    const candidate = { ...fixture, quantityBase: "3" };
+    expect(previewPaperPerpetualProposal(candidate)).toMatchObject({
+      status: "deny",
+      reason: "risk_budget_exceeded",
+    });
+    const grown = previewPaperPerpetualProposal({
+      ...candidate,
+      portfolio: { ...fixture.portfolio, markedEquityQuote: "2000", peakEquityQuote: "2000" },
+    });
+    expect(grown).toMatchObject({ status: "inert_preview", maxPerIdeaRiskQuote: "20" });
+    const reduced = {
+      ...fixture,
+      quantityBase: "1.82",
+      portfolio: { ...fixture.portfolio, markedEquityQuote: "975", peakEquityQuote: "975" },
+    };
+    expect(previewPaperPerpetualProposal(reduced)).toMatchObject({
+      status: "deny",
+      reason: "risk_budget_exceeded",
+    });
+    expect(
+      previewPaperPerpetualProposal({
+        ...fixture,
+        portfolio: { ...fixture.portfolio, realizedLossTodayQuote: "29.3" },
+      }).status,
+    ).toBe("inert_preview");
+    expect(
+      previewPaperPerpetualProposal({
+        ...fixture,
+        portfolio: { ...reduced.portfolio, realizedLossTodayQuote: "29.3" },
+      }),
+    ).toMatchObject({ status: "deny", reason: "risk_budget_exceeded" });
+  });
 
-	it("rejects conflicting long and short gross evidence", () => {
-		expectDenial(
-			{
-				portfolio: {
-					...fixture.portfolio,
-					openNotionalQuote: "100",
-					maintenanceLegs: [
-						{ grossNotionalQuote: "100", maintenanceMarginBps: 50 },
-					],
-					openLongNotionalQuote: "0",
-					openShortNotionalQuote: "0",
-				},
-			},
-			"invalid_input",
-		);
-	});
+  it("rejects conflicting long and short gross evidence", () => {
+    expectDenial(
+      {
+        portfolio: {
+          ...fixture.portfolio,
+          openNotionalQuote: "100",
+          maintenanceLegs: [{ grossNotionalQuote: "100", maintenanceMarginBps: 50 }],
+          openLongNotionalQuote: "0",
+          openShortNotionalQuote: "0",
+        },
+      },
+      "invalid_input",
+    );
+  });
 
-	it("reserves capital and worst-case stop risk for future adds BEFORE first fill", () => {
-		for (const strategy of [
-			"conservative",
-			"moderate",
-			"aggressive",
-		] as const) {
-			const first = previewPaperPerpetualProposal({
-				...fixture,
-				strategy,
-				additionalRecoveryNotionalQuote: "5",
-			});
-			expect(first.status, strategy).toBe("inert_preview");
-			if (first.status !== "inert_preview") continue;
-			expect(first.plannedRecoveryNotionalQuote).toBe("5");
-			expect(Number(first.plannedRecoveryRiskQuote)).toBeGreaterThan(0);
-			expect(Number(first.equityRemainingAfterCatastropheQuote)).toBeLessThan(
-				1000,
-			);
-		}
-	});
+  it("reserves capital and worst-case stop risk for future adds BEFORE first fill", () => {
+    for (const strategy of ["conservative", "moderate", "aggressive"] as const) {
+      const first = previewPaperPerpetualProposal({
+        ...fixture,
+        strategy,
+        additionalRecoveryNotionalQuote: "5",
+      });
+      expect(first.status, strategy).toBe("inert_preview");
+      if (first.status !== "inert_preview") continue;
+      expect(first.plannedRecoveryNotionalQuote).toBe("5");
+      expect(Number(first.plannedRecoveryRiskQuote)).toBeGreaterThan(0);
+      expect(Number(first.equityRemainingAfterCatastropheQuote)).toBeLessThan(1000);
+    }
+  });
 
-	it("prevents an unrelated entry from spending committed recovery capacity", () => {
-		const withoutReservation = previewPaperPerpetualProposal({
-			...fixture,
-			strategy: "aggressive",
-			leverage: 20,
-			quantityBase: "3",
-			stopPriceQuote: "99.9",
-			takeProfitPriceQuote: "120",
-			portfolio: {
-				...fixture.portfolio,
-				openPositions: 1,
-				openNotionalQuote: "100",
-				maintenanceLegs: [
-					{ grossNotionalQuote: "100", maintenanceMarginBps: 50 },
-				],
-				openLongNotionalQuote: "100",
-				openStopRiskQuote: "1",
-			},
-		});
-		expect(withoutReservation.status).toBe("inert_preview");
-		const withReservation = previewPaperPerpetualProposal({
-			...fixture,
-			strategy: "aggressive",
-			leverage: 20,
-			quantityBase: "3",
-			stopPriceQuote: "99.9",
-			takeProfitPriceQuote: "120",
-			portfolio: {
-				...fixture.portfolio,
-				openPositions: 1,
-				openNotionalQuote: "100",
-				maintenanceLegs: [
-					{ grossNotionalQuote: "1300", maintenanceMarginBps: 50 },
-				],
-				openLongNotionalQuote: "100",
-				recoveryLongNotionalQuote: "1200",
-				recoveryReservedRiskQuote: "1",
-				openStopRiskQuote: "1",
-			},
-		});
-		expect(withReservation).toMatchObject({
-			status: "deny",
-			reason: "portfolio_stress_exceeded",
-		});
-	});
+  it("prevents an unrelated entry from spending committed recovery capacity", () => {
+    const withoutReservation = previewPaperPerpetualProposal({
+      ...fixture,
+      strategy: "aggressive",
+      leverage: 20,
+      quantityBase: "3",
+      stopPriceQuote: "99.9",
+      takeProfitPriceQuote: "120",
+      portfolio: {
+        ...fixture.portfolio,
+        openPositions: 1,
+        openNotionalQuote: "100",
+        maintenanceLegs: [{ grossNotionalQuote: "100", maintenanceMarginBps: 50 }],
+        openLongNotionalQuote: "100",
+        openStopRiskQuote: "1",
+      },
+    });
+    expect(withoutReservation.status).toBe("inert_preview");
+    const withReservation = previewPaperPerpetualProposal({
+      ...fixture,
+      strategy: "aggressive",
+      leverage: 20,
+      quantityBase: "3",
+      stopPriceQuote: "99.9",
+      takeProfitPriceQuote: "120",
+      portfolio: {
+        ...fixture.portfolio,
+        openPositions: 1,
+        openNotionalQuote: "100",
+        maintenanceLegs: [{ grossNotionalQuote: "1300", maintenanceMarginBps: 50 }],
+        openLongNotionalQuote: "100",
+        recoveryLongNotionalQuote: "1200",
+        recoveryReservedRiskQuote: "1",
+        openStopRiskQuote: "1",
+      },
+    });
+    expect(withReservation).toMatchObject({
+      status: "deny",
+      reason: "portfolio_stress_exceeded",
+    });
+  });
 
-	it("reserves risk capacity as well as gross notional for future buys", () => {
-		const decision = previewPaperPerpetualProposal({
-			...fixture,
-			strategy: "moderate",
-			portfolio: {
-				...fixture.portfolio,
-				openPositions: 1,
-				openNotionalQuote: "100",
-				maintenanceLegs: [
-					{ grossNotionalQuote: "110", maintenanceMarginBps: 50 },
-				],
-				openLongNotionalQuote: "100",
-				openStopRiskQuote: "1",
-				sameIdeaStopRiskQuote: "1",
-				recoveryLongNotionalQuote: "10",
-				recoveryReservedRiskQuote: "8.7",
-				sameIdeaReservedRiskQuote: "8.7",
-			},
-		});
-		expect(decision).toMatchObject({
-			status: "deny",
-			reason: "risk_budget_exceeded",
-		});
-	});
+  it("reserves risk capacity as well as gross notional for future buys", () => {
+    const decision = previewPaperPerpetualProposal({
+      ...fixture,
+      strategy: "moderate",
+      portfolio: {
+        ...fixture.portfolio,
+        openPositions: 1,
+        openNotionalQuote: "100",
+        maintenanceLegs: [{ grossNotionalQuote: "110", maintenanceMarginBps: 50 }],
+        openLongNotionalQuote: "100",
+        openStopRiskQuote: "1",
+        sameIdeaStopRiskQuote: "1",
+        recoveryLongNotionalQuote: "10",
+        recoveryReservedRiskQuote: "8.7",
+        sameIdeaReservedRiskQuote: "8.7",
+      },
+    });
+    expect(decision).toMatchObject({ status: "deny", reason: "risk_budget_exceeded" });
+  });
 
-	it("fails closed if marked account equity is missing", () => {
-		expectDenial(
-			{ portfolio: { ...fixture.portfolio, markedEquityQuote: "0" } },
-			"invalid_input",
-		);
-	});
+  it("fails closed if marked account equity is missing", () => {
+    expectDenial({ portfolio: { ...fixture.portfolio, markedEquityQuote: "0" } }, "invalid_input");
+  });
 
-	it("combines all same-direction entries under the per-idea risk budget", () => {
-		expectDenial(
-			{
-				portfolio: {
-					...fixture.portfolio,
-					openPositions: 1,
-					openNotionalQuote: "100",
-					maintenanceLegs: [
-						{ grossNotionalQuote: "100", maintenanceMarginBps: 50 },
-					],
-					openLongNotionalQuote: "100",
-					openStopRiskQuote: "9.8",
-					sameIdeaStopRiskQuote: "9.8",
-				},
-			},
-			"risk_budget_exceeded",
-		);
-	});
+  it("combines all same-direction entries under the per-idea risk budget", () => {
+    expectDenial(
+      {
+        portfolio: {
+          ...fixture.portfolio,
+          openPositions: 1,
+          openNotionalQuote: "100",
+          maintenanceLegs: [{ grossNotionalQuote: "100", maintenanceMarginBps: 50 }],
+          openLongNotionalQuote: "100",
+          openStopRiskQuote: "9.8",
+          sameIdeaStopRiskQuote: "9.8",
+        },
+      },
+      "risk_budget_exceeded",
+    );
+  });
 
-	it("a distinct opposing hedge has its own idea risk, but shares gross portfolio limits", () => {
-		const proposedHedge = previewPaperPerpetualProposal({
-			...fixture,
-			side: "short",
-			stopPriceQuote: "105",
-			takeProfitPriceQuote: "90",
-			portfolio: {
-				...fixture.portfolio,
-				openPositions: 1,
-				openNotionalQuote: "100",
-				maintenanceLegs: [
-					{ grossNotionalQuote: "100", maintenanceMarginBps: 50 },
-				],
-				openLongNotionalQuote: "100",
-				openStopRiskQuote: "9.8",
-				sameIdeaStopRiskQuote: "0",
-			},
-		});
-		expect(proposedHedge.status).toBe("inert_preview");
-	});
+  it("a distinct opposing hedge has its own idea risk, but shares gross portfolio limits", () => {
+    const proposedHedge = previewPaperPerpetualProposal({
+      ...fixture,
+      side: "short",
+      stopPriceQuote: "105",
+      takeProfitPriceQuote: "90",
+      portfolio: {
+        ...fixture.portfolio,
+        openPositions: 1,
+        openNotionalQuote: "100",
+        maintenanceLegs: [{ grossNotionalQuote: "100", maintenanceMarginBps: 50 }],
+        openLongNotionalQuote: "100",
+        openStopRiskQuote: "9.8",
+        sameIdeaStopRiskQuote: "0",
+      },
+    });
+    expect(proposedHedge.status).toBe("inert_preview");
+  });
 
-	it("rejects inconsistent same-idea risk greater than aggregate committed risk", () => {
-		expectDenial(
-			{
-				portfolio: {
-					...fixture.portfolio,
-					openStopRiskQuote: "1",
-					sameIdeaStopRiskQuote: "2",
-				},
-			},
-			"invalid_input",
-		);
-	});
+  it("rejects inconsistent same-idea risk greater than aggregate committed risk", () => {
+    expectDenial(
+      {
+        portfolio: {
+          ...fixture.portfolio,
+          openStopRiskQuote: "1",
+          sameIdeaStopRiskQuote: "2",
+        },
+      },
+      "invalid_input",
+    );
+  });
 
-	it("reduces fresh position risk after high-watermark drawdown in all strategies", () => {
-		for (const c of [
-			{
-				strategy: "conservative",
-				marked: "974",
-				normal: "1000",
-				largeQty: "0.5",
-			},
-			{ strategy: "moderate", marked: "949", normal: "1000", largeQty: "1.5" },
-			{ strategy: "aggressive", marked: "919", normal: "1000", largeQty: "3" },
-		] as const) {
-			const proposal = {
-				...fixture,
-				strategy: c.strategy,
-				stopPriceQuote: "95",
-				takeProfitPriceQuote: "110",
-				quantityBase: c.largeQty,
-				portfolio: {
-					...fixture.portfolio,
-					markedEquityQuote: c.marked,
-					peakEquityQuote: c.normal,
-				},
-			};
-			expect(previewPaperPerpetualProposal(proposal), c.strategy).toMatchObject(
-				{
-					status: "deny",
-					reason: "risk_budget_exceeded",
-				},
-			);
-			const unrestricted = previewPaperPerpetualProposal({
-				...proposal,
-				portfolio: { ...fixture.portfolio },
-			});
-			expect(unrestricted.status, c.strategy).toBe("inert_preview");
-		}
-	});
+  it("reduces fresh position risk after high-watermark drawdown in all strategies", () => {
+    for (const c of [
+      { strategy: "conservative", marked: "974", normal: "1000", largeQty: "0.5" },
+      { strategy: "moderate", marked: "949", normal: "1000", largeQty: "1.5" },
+      { strategy: "aggressive", marked: "919", normal: "1000", largeQty: "3" },
+    ] as const) {
+      const proposal = {
+        ...fixture,
+        strategy: c.strategy,
+        stopPriceQuote: "95",
+        takeProfitPriceQuote: "110",
+        quantityBase: c.largeQty,
+        portfolio: {
+          ...fixture.portfolio,
+          markedEquityQuote: c.marked,
+          peakEquityQuote: c.normal,
+        },
+      };
+      expect(previewPaperPerpetualProposal(proposal), c.strategy).toMatchObject({
+        status: "deny",
+        reason: "risk_budget_exceeded",
+      });
+      const unrestricted = previewPaperPerpetualProposal({
+        ...proposal,
+        portfolio: { ...fixture.portfolio },
+      });
+      expect(unrestricted.status, c.strategy).toBe("inert_preview");
+    }
+  });
 
-	it("freezes fresh entries at each profile high-watermark breaker", () => {
-		for (const c of [
-			{ strategy: "conservative", marked: "950" },
-			{ strategy: "moderate", marked: "900" },
-			{ strategy: "aggressive", marked: "850" },
-		] as const) {
-			const result = previewPaperPerpetualProposal({
-				...fixture,
-				strategy: c.strategy,
-				portfolio: {
-					...fixture.portfolio,
-					markedEquityQuote: c.marked,
-				},
-			});
-			expect(result, c.strategy).toMatchObject({
-				status: "deny",
-				reason: "drawdown_circuit_breaker",
-			});
-		}
-	});
+  it("freezes fresh entries at each profile high-watermark breaker", () => {
+    for (const c of [
+      { strategy: "conservative", marked: "950" },
+      { strategy: "moderate", marked: "900" },
+      { strategy: "aggressive", marked: "850" },
+    ] as const) {
+      const result = previewPaperPerpetualProposal({
+        ...fixture,
+        strategy: c.strategy,
+        portfolio: {
+          ...fixture.portfolio,
+          markedEquityQuote: c.marked,
+        },
+      });
+      expect(result, c.strategy).toMatchObject({
+        status: "deny",
+        reason: "drawdown_circuit_breaker",
+      });
+    }
+  });
 
-	it("uses the verified historical peak rather than only the initial 1000 USDT", () => {
-		expectDenial(
-			{
-				portfolio: {
-					...fixture.portfolio,
-					markedEquityQuote: "1050",
-					peakEquityQuote: "1200",
-				},
-			},
-			"drawdown_circuit_breaker",
-		);
-		expectDenial(
-			{
-				portfolio: {
-					...fixture.portfolio,
-					markedEquityQuote: "1100",
-					peakEquityQuote: "1050",
-				},
-			},
-			"invalid_input",
-		);
-	});
+  it("uses the verified historical peak rather than only the initial 1000 USDT", () => {
+    expectDenial(
+      {
+        portfolio: { ...fixture.portfolio, markedEquityQuote: "1050", peakEquityQuote: "1200" },
+      },
+      "drawdown_circuit_breaker",
+    );
+    expectDenial(
+      {
+        portfolio: { ...fixture.portfolio, markedEquityQuote: "1100", peakEquityQuote: "1050" },
+      },
+      "invalid_input",
+    );
+  });
 
-	it("fails closed on malformed prices and fee/maintenance inputs", () => {
-		for (const value of ["-1", "1e3", "0.000000001", "NaN", ""]) {
-			expectDenial({ entryPriceQuote: value }, "invalid_input");
-		}
-		expectDenial({ assumedFeeBpsPerSide: Number.NaN }, "invalid_input");
-		expectDenial({ maintenanceMarginBps: 0 }, "invalid_input");
-	});
+  it("fails closed on malformed prices and fee/maintenance inputs", () => {
+    for (const value of ["-1", "1e3", "0.000000001", "NaN", ""]) {
+      expectDenial({ entryPriceQuote: value }, "invalid_input");
+    }
+    expectDenial({ assumedFeeBpsPerSide: Number.NaN }, "invalid_input");
+    expectDenial({ maintenanceMarginBps: 0 }, "invalid_input");
+  });
 
-	it("uses verified maintenance per held market, not the proposed market rate", () => {
-		const portfolio = {
-			...fixture.portfolio,
-			openPositions: 2,
-			openNotionalQuote: "1390",
-			openLongNotionalQuote: "1390",
-			maintenanceLegs: [
-				{ grossNotionalQuote: "300", maintenanceMarginBps: 50 },
-				{ grossNotionalQuote: "1090", maintenanceMarginBps: 50 },
-			],
-		};
-		const proposal = {
-			...fixture,
-			strategy: "aggressive" as const,
-			leverage: 20,
-			stopPriceQuote: "99.9",
-			portfolio,
-		};
-		expect(previewPaperPerpetualProposal(proposal).status).toBe(
-			"inert_preview",
-		);
-		expect(
-			previewPaperPerpetualProposal({
-				...proposal,
-				portfolio: {
-					...portfolio,
-					maintenanceLegs: [
-						{ grossNotionalQuote: "300", maintenanceMarginBps: 1000 },
-						{ grossNotionalQuote: "1090", maintenanceMarginBps: 50 },
-					],
-				},
-			}),
-		).toMatchObject({ status: "deny", reason: "portfolio_stress_exceeded" });
-	});
+  it("uses verified maintenance per held market, not the proposed market rate", () => {
+    const portfolio = {
+      ...fixture.portfolio,
+      openPositions: 2,
+      openNotionalQuote: "1390",
+      openLongNotionalQuote: "1390",
+      maintenanceLegs: [
+        { grossNotionalQuote: "300", maintenanceMarginBps: 50 },
+        { grossNotionalQuote: "1090", maintenanceMarginBps: 50 },
+      ],
+    };
+    const proposal = {
+      ...fixture,
+      strategy: "aggressive" as const,
+      leverage: 20,
+      stopPriceQuote: "99.9",
+      portfolio,
+    };
+    expect(previewPaperPerpetualProposal(proposal).status).toBe("inert_preview");
+    expect(
+      previewPaperPerpetualProposal({
+        ...proposal,
+        portfolio: {
+          ...portfolio,
+          maintenanceLegs: [
+            { grossNotionalQuote: "300", maintenanceMarginBps: 1000 },
+            { grossNotionalQuote: "1090", maintenanceMarginBps: 50 },
+          ],
+        },
+      }),
+    ).toMatchObject({ status: "deny", reason: "portfolio_stress_exceeded" });
+  });
 
-	it("accounts for held-market unspent recovery reserves and fails closed on absent or mismatched terms", () => {
-		const portfolio = {
-			...fixture.portfolio,
-			openPositions: 1,
-			openNotionalQuote: "1200",
-			openLongNotionalQuote: "1200",
-			recoveryLongNotionalQuote: "200",
-		};
-		const proposal = {
-			...fixture,
-			strategy: "aggressive" as const,
-			leverage: 20,
-			stopPriceQuote: "99.9",
-			portfolio,
-		};
-		expect(previewPaperPerpetualProposal(proposal)).toMatchObject({
-			status: "deny",
-			reason: "invalid_input",
-		});
-		expect(
-			previewPaperPerpetualProposal({
-				...proposal,
-				portfolio: {
-					...portfolio,
-					maintenanceLegs: [
-						{ grossNotionalQuote: "1200", maintenanceMarginBps: 50 },
-					],
-				},
-			}),
-		).toMatchObject({ status: "deny", reason: "invalid_input" });
-		expect(
-			previewPaperPerpetualProposal({
-				...proposal,
-				portfolio: {
-					...portfolio,
-					maintenanceLegs: [
-						{ grossNotionalQuote: "1400", maintenanceMarginBps: 50 },
-					],
-				},
-			}).status,
-		).toBe("inert_preview");
-		expect(
-			previewPaperPerpetualProposal({
-				...proposal,
-				portfolio: {
-					...portfolio,
-					maintenanceLegs: [
-						{ grossNotionalQuote: "1400", maintenanceMarginBps: 1000 },
-					],
-				},
-			}),
-		).toMatchObject({ status: "deny", reason: "portfolio_stress_exceeded" });
-	});
+  it("accounts for held-market unspent recovery reserves and fails closed on absent or mismatched terms", () => {
+    const portfolio = {
+      ...fixture.portfolio,
+      openPositions: 1,
+      openNotionalQuote: "1200",
+      openLongNotionalQuote: "1200",
+      recoveryLongNotionalQuote: "200",
+    };
+    const proposal = {
+      ...fixture,
+      strategy: "aggressive" as const,
+      leverage: 20,
+      stopPriceQuote: "99.9",
+      portfolio,
+    };
+    expect(previewPaperPerpetualProposal(proposal)).toMatchObject({
+      status: "deny",
+      reason: "invalid_input",
+    });
+    expect(
+      previewPaperPerpetualProposal({
+        ...proposal,
+        portfolio: {
+          ...portfolio,
+          maintenanceLegs: [{ grossNotionalQuote: "1200", maintenanceMarginBps: 50 }],
+        },
+      }),
+    ).toMatchObject({ status: "deny", reason: "invalid_input" });
+    expect(
+      previewPaperPerpetualProposal({
+        ...proposal,
+        portfolio: {
+          ...portfolio,
+          maintenanceLegs: [{ grossNotionalQuote: "1400", maintenanceMarginBps: 50 }],
+        },
+      }).status,
+    ).toBe("inert_preview");
+    expect(
+      previewPaperPerpetualProposal({
+        ...proposal,
+        portfolio: {
+          ...portfolio,
+          maintenanceLegs: [{ grossNotionalQuote: "1400", maintenanceMarginBps: 1000 }],
+        },
+      }),
+    ).toMatchObject({ status: "deny", reason: "portfolio_stress_exceeded" });
+  });
 });
