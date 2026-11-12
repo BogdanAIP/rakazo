@@ -93,7 +93,7 @@ describe("safe PAPER futures pre-session crypto shortlist", () => {
     );
     expect(out.eligibleCount).toBe(12);
     expect(out.researchSymbols).toHaveLength(12);
-    expect(out.symbols).toHaveLength(8);
+    expect(out.symbols).toHaveLength(12);
     expect(out.researchSymbols[0]).toBe("ALT11-USDT-SWAP");
     expect(out.researchSymbols.at(-1)).toBe("ALT0-USDT-SWAP");
     expect(out.unclassifiedCount).toBe(2);
@@ -156,7 +156,7 @@ describe("safe PAPER futures pre-session crypto shortlist", () => {
     expect(out.qualityExcludedCount).toBe(4);
   });
 
-  it("caps an ample universe at eight and ties are stable by symbol", () => {
+  it("retains a broad execution universe and ties are stable by symbol", () => {
     const bases = ["BTC", "ETH", "SOL", "XRP", "BNB", "ADA", "LTC", "LINK", "AVAX", "DOT"];
     const markets = bases.reverse().map((base) => candidate(base, "50000000"));
     const out = suggestPaperPerpetualCryptoUniverse(scan(markets), "conservative", NOW);
@@ -169,6 +169,8 @@ describe("safe PAPER futures pre-session crypto shortlist", () => {
       "ETH-USDT-SWAP",
       "LINK-USDT-SWAP",
       "LTC-USDT-SWAP",
+      "SOL-USDT-SWAP",
+      "XRP-USDT-SWAP",
     ]);
     expect(out.eligibleCount).toBe(10);
   });

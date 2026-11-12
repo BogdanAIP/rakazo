@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createDb } from "./index.js";
+import { PAPER_RPC_ACCESS_PROCEDURES } from "@rakazo/contracts";
 import {
   createOwnedRpcAccessGrant,
   listOwnedRpcAccessGrants,
@@ -101,9 +102,27 @@ suite("finite owner-scoped RPC access against PostgreSQL", () => {
     ).toBeNull();
     expect(await db.prisma.session.findFirst({ where: { token: grant.token } })).toBeNull();
   });
+  it("accepts the full PAPER journal scope up to six calendar months, but denies overlong and partial-scope grants", async () => {
+    const today = new Date();
+    const sixMonths = new Date(today);
+    sixMonths.setUTCMonth(sixMonths.getUTCMonth() + 6);
+    const allowed = Math.floor((sixMonths.getTime() - today.getTime()) / 60000) - 2;
+    const longInput = {
+      label: "PAPER journal - owner renewed",
+      durationMinutes: allowed,
+      procedures: [...PAPER_RPC_ACCESS_PROCEDURES],
+    };
+    const grant = await createOwnedRpcAccessGrant(db.prisma, owner, longInput);
+    expect(new Date(grant.expiresAt).getTime() - Date.now()).toBeGreaterThan(150 * 86400000);
+    expect(await resolveRpcAccessGrant(db.prisma, grant.token, "trading/perpetualJournalRead")).toEqual(owner);
+    await expect(createOwnedRpcAccessGrant(db.prisma, owner, { ...longInput, label: "Other grant" })).rejects.toThrow();
+    await expect(createOwnedRpcAccessGrant(db.prisma, owner, { ...longInput, procedures: ["trading/list"] })).rejects.toThrow();
+    await expect(createOwnedRpcAccessGrant(db.prisma, owner, { ...longInput, durationMinutes: 270000 })).rejects.toThrow();
+  });
   it("refuses unlimited, duplicate or non-PAPER authority", async () => {
     for (const extra of [
       { durationMinutes: 0 },
+      { durationMinutes: 270001 },
       { durationMinutes: 20161 },
       { procedures: ["computer/exec"] },
       { procedures: ["rpcAccess/grantCreate"] },

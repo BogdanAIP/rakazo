@@ -152,6 +152,9 @@ export function PaperPerpetualDashboard({
                 <dl className="grid grid-cols-2 gap-x-5 gap-y-5 p-5 sm:grid-cols-3 xl:grid-cols-6">
                   {[
                     ["Вход", price(position.entryPriceQuote)],
+                    ["Номинал позиции", number(Number(position.quantityBase) * Number(position.entryPriceQuote), 2) + " USDT"],
+                    ["Начальная маржа (номинал / плечо)", position.initialMarginQuote ? number(position.initialMarginQuote, 2) + " USDT" : "—"],
+                    ["Поддерживающая маржа", number(position.maintenanceMarginQuote, 2) + " USDT"],
                     ["Текущая · Mark", price(position.markPriceQuote)],
                     ["Стоп", plan ? price(plan.stopPriceQuote) : "Не подтверждён"],
                     ["Тейк-профит", plan ? price(plan.takeProfitPriceQuote) : "Не подтверждён"],

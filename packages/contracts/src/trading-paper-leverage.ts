@@ -28,6 +28,6 @@ export const PaperLeverageReadInputSchema = z.object({
   instruments: z
     .array(Instrument)
     .min(1)
-    .max(8)
+    .max(100)
     .refine((rows) => new Set(rows).size === rows.length),
 });

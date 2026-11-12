@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PaperPerpetualProposalInput } from "./trading-paper-perpetual-preview.js";
-import { previewPaperPerpetualProposal } from "./trading-paper-perpetual-preview.js";
+import { getPaperPerpetualRiskLimits, previewPaperPerpetualProposal } from "./trading-paper-perpetual-preview.js";
 
 const fixture: PaperPerpetualProposalInput = {
   strategy: "moderate",
@@ -39,6 +39,58 @@ function expectDenial(overrides: Partial<PaperPerpetualProposalInput>, reason: s
 }
 
 describe("inert, risk-bounded PAPER perpetual proposals", () => {
+  it("scales aggressive TOTAL open stop risk to 10% equity, retaining 2% per idea", () => {
+    const limits = getPaperPerpetualRiskLimits("aggressive", "994.6036993");
+    expect(Number(limits.maxOpenRiskQuote)).toBeCloseTo(99.46036993, 5);
+    expect(Number(limits.maxPerIdeaRiskQuote)).toBeCloseTo(19.892073986, 5);
+    expect(Number(getPaperPerpetualRiskLimits("moderate", "1000").maxOpenRiskQuote)).toBe(20);
+    expect(Number(getPaperPerpetualRiskLimits("conservative", "1000").maxOpenRiskQuote)).toBe(10);
+  });
+  it("enforces 3% minimum cross initial collateral, not maximum", () => {
+    const proposed = {
+      ...fixture,
+      strategy: "aggressive" as const,
+      leverage: 5,
+      ownerMaxLeverage: 5,
+      entryPriceQuote: "100",
+      stopPriceQuote: "96",
+      takeProfitPriceQuote: "110",
+      firstEntryMarginFloorBps: 300,
+    };
+    const accepted = previewPaperPerpetualProposal({ ...proposed, quantityBase: "1.51" });
+    expect(accepted.status).toBe("inert_preview");
+    expect(previewPaperPerpetualProposal({ ...proposed, leverage: 4, quantityBase: "1.51" }))
+      .toMatchObject({ status: "deny", reason: "leverage_exceeded" });
+    if (accepted.status === "inert_preview") {
+      expect(accepted.initialMarginFloorQuote).toBe("30");
+      expect(Number(accepted.initialMarginQuote)).toBeGreaterThan(30);
+      expect(Number(accepted.worstCaseStopLossQuote)).toBeLessThan(20);
+    }
+    expect(previewPaperPerpetualProposal({ ...proposed, quantityBase: "1.49" }))
+      .toMatchObject({ status: "deny", reason: "initial_entry_margin_below_minimum" });
+    expect(previewPaperPerpetualProposal({
+      ...proposed, quantityBase: "1.50", firstEntryMarginFloorBps: undefined,
+    }).status).toBe("inert_preview");
+  });
+  it("subtracts gross CROSS exposure before computing the 3% entry floor", () => {
+    const result = previewPaperPerpetualProposal({
+      ...fixture,
+      strategy: "aggressive",
+      leverage: 5,
+      ownerMaxLeverage: 5,
+      firstEntryMarginFloorBps: 300,
+      quantityBase: "1.30",
+      portfolio: {
+        ...fixture.portfolio,
+        openNotionalQuote: "500",
+        openLongNotionalQuote: "250",
+        openShortNotionalQuote: "250",
+        maintenanceLegs: [{ grossNotionalQuote: "500", maintenanceMarginBps: 50 }],
+      },
+    });
+    expect(result).toMatchObject({ status: "deny", reason: "initial_entry_margin_below_minimum" });
+  });
+
   it("previews a long without exposing order authority", () => {
     const result = previewPaperPerpetualProposal(fixture);
     expect(result.status).toBe("inert_preview");

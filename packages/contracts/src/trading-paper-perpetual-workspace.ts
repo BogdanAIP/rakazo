@@ -82,6 +82,7 @@ export const PaperPerpetualDecisionSchema = z.discriminatedUnion("kind", [
       kind: z.literal("reduce"),
       positionId: Id,
       quantityBase: Positive,
+      takePartialAndBreakEven: z.literal(true).optional(),
       reason: z.string().trim().min(1).max(2000),
     })
     .strict(),
@@ -132,7 +133,7 @@ export const PaperPerpetualCommandSchema = z.discriminatedUnion("action", [
       instruments: z
         .array(Instrument)
         .min(1)
-        .max(8)
+        .max(100)
         .refine((a) => new Set(a).size === a.length),
       durationMinutes: z.number().int().min(15).max(20160),
       protectionMinutes: z.number().int().min(15).max(1440),
@@ -150,12 +151,38 @@ export const PaperPerpetualCommandSchema = z.discriminatedUnion("action", [
   z
     .object({
       ...Base,
+      action: z.literal("extend"),
+      durationMinutes: z.number().int().min(15).max(20160),
+    })
+    .strict(),
+  z
+    .object({
+      ...Base,
+      action: z.literal("set_auto_research"),
+      enabled: z.boolean(),
+    })
+    .strict(),
+  z
+    .object({
+      ...Base,
+      action: z.literal("set_instruments"),
+      venue: z.literal("okx"),
+      instruments: z
+        .array(Instrument)
+        .min(1)
+        .max(100)
+        .refine((a) => new Set(a).size === a.length),
+    })
+    .strict(),
+  z
+    .object({
+      ...Base,
       action: z.literal("set_leverage"),
       venue: z.literal("okx"),
       instruments: z
         .array(Instrument)
         .min(1)
-        .max(8)
+        .max(100)
         .refine((a) => new Set(a).size === a.length),
       maxLeverage: z.number().int().positive().safe(),
     })
@@ -196,6 +223,7 @@ export const PaperPerpetualWorkspaceStatusSchema = z.object({
   runtimeError: z.string().nullable(),
   instruments: z.array(Instrument),
   researchMode: z.enum(["model", "external"]).default("model"),
+  autoResearch: z.boolean().optional(),
   pendingExternalProposal: z
     .object({
       commandId: z.string().uuid(),
@@ -338,6 +366,19 @@ const RecoveryPlannedStep = PaperRecoveryStepSchema.omit({ allocationPercent: tr
 const Plan = z.object({
   positionId: z.string(),
   stopPriceQuote: z.string(),
+  originalStopPriceQuote: z.string().optional(),
+  halfTakenAt: IsoDate.nullable().optional(),
+  /** Disable automatic profit exits after any separate manual native reduction. */
+  manualReductionSeen: z.boolean().optional(),
+  /** Original native risk and cumulative VERIFIED profit-reduction fills. */
+  profitTaking: z.object({
+    initialEntryPriceQuote: Positive,
+    initialStopPriceQuote: Positive,
+    partial: z.object({
+      targetQuantityBase: Positive,
+      filledQuantityBase: Decimal,
+    }).strict().optional(),
+  }).strict().optional(),
   takeProfitPriceQuote: z.string(),
   stopRiskQuote: z.string(),
   /** Unspent, committed future add capacity (not an executable limit order). */
@@ -352,6 +393,11 @@ export const PerpetualControlSchema = z
   .object({
     maxLeverage: z.number().int().positive().safe().nullable().default(null),
     sessionStatus: z.enum(["idle", "active", "paused", "ended"]),
+    autoExtend: z.boolean().default(false),
+    /** Owner opted into native PAPER-only public-data research; never inferred from autoExtend. */
+    autoResearch: z.boolean().optional(),
+    /** Durable bounded retries for transient market network outages. */
+    networkRetryCount: z.number().int().min(0).max(3).optional(),
     startedAt: IsoDate.nullable(),
     expiresAt: IsoDate.nullable(),
     protectionExpiresAt: IsoDate.nullable(),

@@ -83,3 +83,4 @@ export * from "./trading-resolved-research.js";
 export * from "./trading-walkforward.js";
 export * from "./user-error.js";
 export * from "./voice-chat-groups.js";
+export * from "./trading-paper-cross-management.js";
