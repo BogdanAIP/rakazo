@@ -1,0 +1,325 @@
+{
+ "hypotheses": [
+  {
+   "author": "claude-search",
+   "beta_window": 120,
+   "horizon_bars": 1,
+   "id": "search-r3-1",
+   "neutralize": "beta",
+   "rationale": "-liq60; hold 1d; equal weights; beta-neutral",
+   "score": [
+    "neg",
+    [
+     "clip",
+     [
+      "csz",
+      [
+       "mean",
+       [
+        "log1p",
+        [
+         "field",
+         "volume"
+        ]
+       ],
+       60
+      ]
+     ],
+     3.0
+    ]
+   ]
+  },
+  {
+   "author": "claude-search",
+   "beta_window": 120,
+   "horizon_bars": 1,
+   "id": "search-r3-2",
+   "neutralize": "beta",
+   "rationale": "illiq60 + resid120; hold 1d; equal weights; beta-neutral",
+   "score": [
+    "add",
+    [
+     "clip",
+     [
+      "csz",
+      [
+       "csrank",
+       [
+        "div",
+        [
+         "mean",
+         [
+          "abs",
+          [
+           "field",
+           "ret"
+          ]
+         ],
+         60
+        ],
+        [
+         "mean",
+         [
+          "field",
+          "volume"
+         ],
+         60
+        ]
+       ]
+      ]
+     ],
+     3.0
+    ],
+    [
+     "clip",
+     [
+      "csz",
+      [
+       "sub",
+       [
+        "sum",
+        [
+         "field",
+         "ret"
+        ],
+        120
+       ],
+       [
+        "mul",
+        [
+         "beta",
+         [
+          "field",
+          "ret"
+         ],
+         [
+          "csmean",
+          [
+           "field",
+           "ret"
+          ]
+         ],
+         120
+        ],
+        [
+         "sum",
+         [
+          "csmean",
+          [
+           "field",
+           "ret"
+          ]
+         ],
+         120
+        ]
+       ]
+      ]
+     ],
+     3.0
+    ]
+   ]
+  },
+  {
+   "author": "claude-search",
+   "beta_window": 120,
+   "horizon_bars": 1,
+   "id": "search-r3-3",
+   "neutralize": "beta",
+   "rationale": "illiq60 + resid20; hold 1d; equal weights; beta-neutral",
+   "score": [
+    "add",
+    [
+     "clip",
+     [
+      "csz",
+      [
+       "csrank",
+       [
+        "div",
+        [
+         "mean",
+         [
+          "abs",
+          [
+           "field",
+           "ret"
+          ]
+         ],
+         60
+        ],
+        [
+         "mean",
+         [
+          "field",
+          "volume"
+         ],
+         60
+        ]
+       ]
+      ]
+     ],
+     3.0
+    ],
+    [
+     "clip",
+     [
+      "csz",
+      [
+       "sub",
+       [
+        "sum",
+        [
+         "field",
+         "ret"
+        ],
+        20
+       ],
+       [
+        "mul",
+        [
+         "beta",
+         [
+          "field",
+          "ret"
+         ],
+         [
+          "csmean",
+          [
+           "field",
+           "ret"
+          ]
+         ],
+         120
+        ],
+        [
+         "sum",
+         [
+          "csmean",
+          [
+           "field",
+           "ret"
+          ]
+         ],
+         20
+        ]
+       ]
+      ]
+     ],
+     3.0
+    ]
+   ]
+  },
+  {
+   "author": "claude-search",
+   "beta_window": 120,
+   "horizon_bars": 1,
+   "id": "search-r3-4",
+   "neutralize": "beta",
+   "rationale": "if mvol_high: illiq60 else beta60 + -vol60; hold 1d; equal weights; beta-neutral",
+   "score": [
+    "where",
+    [
+     "sub",
+     [
+      "std",
+      [
+       "csmean",
+       [
+        "field",
+        "ret"
+       ]
+      ],
+      20
+     ],
+     [
+      "std",
+      [
+       "csmean",
+       [
+        "field",
+        "ret"
+       ]
+      ],
+      120
+     ]
+    ],
+    [
+     "clip",
+     [
+      "csz",
+      [
+       "csrank",
+       [
+        "div",
+        [
+         "mean",
+         [
+          "abs",
+          [
+           "field",
+           "ret"
+          ]
+         ],
+         60
+        ],
+        [
+         "mean",
+         [
+          "field",
+          "volume"
+         ],
+         60
+        ]
+       ]
+      ]
+     ],
+     3.0
+    ],
+    [
+     "add",
+     [
+      "clip",
+      [
+       "csz",
+       [
+        "beta",
+        [
+         "field",
+         "ret"
+        ],
+        [
+         "csmean",
+         [
+          "field",
+          "ret"
+         ]
+        ],
+        60
+       ]
+      ],
+      3.0
+     ],
+     [
+      "neg",
+      [
+       "clip",
+       [
+        "csz",
+        [
+         "std",
+         [
+          "field",
+          "ret"
+         ],
+         60
+        ]
+       ],
+       3.0
+      ]
+     ]
+    ]
+   ]
+  }
+ ],
+ "schema": "rakazo_bench_hypothesis_v1"
+}
