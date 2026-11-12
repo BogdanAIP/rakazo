@@ -45,5 +45,5 @@ Next defensible work: (1) independent non-author review of this decomposition an
 ## Local private audit receipts
 
 - Immutable private aggregate post-hoc diagnostic `r3-3-posthoc-20261112/posthoc.json`: SHA-256 `4e15e384c76268429451358e21b777bcc8b47f4dbec08e65cb2526b42a27f171`; runner SHA `13eda58e163c1af2a211d2a49933d153bc89e49267d7278556aec2de29f24009`.
-- Exposure diagnostic `r3-3-exposure-20261112/exposure.json`: SHA `a56534629affa88540c2581c0a4b5500c34707fd8a645b9d068a572c7f938db84`; runner SHA `ea2fc4161a462a6e122bfec0cf80303030c4d6df90577e6960c587c9a5511be8`.
+- Exposure diagnostic `r3-3-exposure-20261112/exposure.json`: SHA `a56534629aff88540c2581c0a4b5500c34707fd8a645b9d068a572c7f938db84`; runner SHA `ea2fc4161a462a6e122bfec0cf80303030c4d6df90577e6960c587c9a5511be8`.
 - The supplemental price/funding/fee region split above was recomputed read-only using the same pinned engine and validation panel; no private market panels, strategy ledgers or individual position logs are committed to the public research repo.
