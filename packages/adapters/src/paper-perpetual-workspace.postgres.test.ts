@@ -2303,7 +2303,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["moderate"]))
           .accounts[0]!.ledgerId;
         await start(id, engine);
-        decision = { ...proposal("short"), leverage: 10, quantityBase: "1.00" };
+        decision = { ...proposal("short"), leverage: 5, quantityBase: "1.60" };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         const initial = await state(id);
         expect(initial.openPositions).toHaveLength(1);
@@ -2322,7 +2322,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         // simulation fills at 100; consuming only 95 would leave phantom capacity.
         decision = {
           ...proposal("short"),
-          leverage: 10,
+          leverage: 5,
           quantityBase: "0.50",
           orderType: "limit",
           limitPriceQuote: "95.00",
@@ -2330,7 +2330,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           recoverySteps: undefined,
         };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
-        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1.5);
+        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(2.1);
         expect(Number((await plan()).recoveryReserveQuote)).toBe(0);
         expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
           "verified",
@@ -2353,7 +2353,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["moderate"]))
           .accounts[0]!.ledgerId;
         await start(id, engine);
-        decision = { ...proposal("long"), leverage: 10, quantityBase: "1.00" };
+        decision = { ...proposal("long"), leverage: 5, quantityBase: "1.50" };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         const initial = await state(id);
         expect(initial.openPositions).toHaveLength(1);
@@ -2377,24 +2377,24 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         // Model cannot consume more scale-in notional than planned for this position.
         decision = {
           ...proposal("long"),
-          leverage: 10,
+          leverage: 5,
           quantityBase: "0.75",
           addToPositionId: positionId,
           recoverySteps: undefined,
         };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         expect((await readPlan()).lastDecision?.outcome).toBe("denied_add_unreserved");
-        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1);
+        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1.5);
 
         decision = {
           ...proposal("long"),
-          leverage: 10,
+          leverage: 5,
           quantityBase: "0.50",
           addToPositionId: positionId,
           recoverySteps: undefined,
         };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
-        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1.5);
+        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(2);
         const later = (await readPlan()).plans.find((x) => x.positionId === positionId)!;
         expect(Number(later.recoveryReserveQuote)).toBeLessThan(
           Number(firstPlan.recoveryReserveQuote),
@@ -2425,8 +2425,8 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         await start(id, engine);
         decision = {
           ...proposal("long"),
-          leverage: 10,
-          quantityBase: "1.00",
+          leverage: 5,
+          quantityBase: "1.50",
           stopPriceQuote: "96",
           recoverySteps: [
             { stepId: "first-retest", triggerPriceQuote: "98.5", allocationPercent: 60 },
@@ -2460,7 +2460,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
 
         decision = {
           ...proposal("long"),
-          leverage: 10,
+          leverage: 5,
           stopPriceQuote: "96",
           quantityBase: "0.10",
           addToPositionId: positionId,
@@ -2474,7 +2474,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
 
         decision = {
           ...proposal("long"),
-          leverage: 10,
+          leverage: 5,
           stopPriceQuote: "96",
           quantityBase: "0.10",
           addToPositionId: positionId,
@@ -2485,7 +2485,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         expect((await currentControl()).lastDecision?.outcome).toBe(
           "denied_recovery_step_no_reversal",
         );
-        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1);
+        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1.5);
         expect((await readOwnedPerpetualPaperJournal(db.prisma, owner, id))?.status).toBe(
           "verified",
         );
