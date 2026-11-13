@@ -3338,7 +3338,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         await start(id, engine);
         decision = {
           ...proposal("long"),
-          leverage: 10,
+          leverage: 5,
           stopPriceQuote: "96",
           recoverySteps: [
             { stepId: "first-retest", triggerPriceQuote: "98.5", allocationPercent: 60 },
@@ -3365,7 +3365,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         };
         decision = {
           ...proposal("long"),
-          leverage: 10,
+          leverage: 5,
           stopPriceQuote: "96",
           quantityBase: "0.10",
           addToPositionId: positionId,
@@ -3376,7 +3376,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           { ...worker(), engine, fetchSnapshot },
           await payload(id, true),
         );
-        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1);
+        expect(Number((await state(id)).openPositions[0]!.quantityBase)).toBe(1.5);
         const workspace = await readOwnedPerpetualWorkspace(db.prisma, owner, id);
         expect(workspace?.runtimeError).toBeNull();
         expect(workspace?.lastDecision?.outcome).toBe("denied_recovery_step_no_reversal");
