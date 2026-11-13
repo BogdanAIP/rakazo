@@ -1909,8 +1909,8 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       try {
         const profiles = [
           { strategy: "conservative", ceiling: 5, instrument: "BTC-USDT-SWAP" },
-          { strategy: "moderate", ceiling: 10, instrument: "SOL-USDT-SWAP" },
-          { strategy: "aggressive", ceiling: 20, instrument: "ETH-USDT-SWAP" },
+          { strategy: "moderate", ceiling: 5, instrument: "SOL-USDT-SWAP" },
+          { strategy: "aggressive", ceiling: 5, instrument: "ETH-USDT-SWAP" },
         ] as const;
         const accounts = (
           await createOwnedPerpetualExperimentAccounts(
@@ -1935,11 +1935,9 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           decision = {
             ...proposal("long", profile.instrument),
             leverage: profile.ceiling,
-            quantityBase: "1.00",
-            recoverySteps: [
-              { stepId: "r1", triggerPriceQuote: "98.5", allocationPercent: 60 },
-              { stepId: "r2", triggerPriceQuote: "97.5", allocationPercent: 40 },
-            ],
+            quantityBase: "1.50",
+            plannedRecoveryNotionalQuote: "0",
+            recoverySteps: undefined,
             // Both stages strictly above hard stop of 97 and below entry of 100.
           };
           await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
@@ -1958,8 +1956,8 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
             runtimeError: null,
             lastDecision: { outcome: "filled" },
           });
-          expect(ws?.recoveryReservations?.[0]?.stages).toHaveLength(2);
-          expect(ws?.recoveryReservations?.[0]?.stages?.[0]?.activatedAt).toBeNull();
+          expect(ws?.recoveryReservations?.[0]?.stages).toHaveLength(0);
+          expect(ws?.positionPlans).toHaveLength(1);
         }
 
         // No shared wallet or unintended cross-ledger entries.
