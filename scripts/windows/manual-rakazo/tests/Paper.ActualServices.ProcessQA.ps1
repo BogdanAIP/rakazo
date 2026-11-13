@@ -13,6 +13,16 @@ $qaPorts=@(15549,15651,15652)
 $started=@()
 $pgStarted=$false
 $oldEnv=@{}
+function New-QARandomBytes([int]$count){
+ $generator=[Security.Cryptography.RandomNumberGenerator]::Create()
+ try{
+  $bytes=[byte[]]::new($count)
+  $generator.GetBytes($bytes)
+  return ,$bytes
+ }finally{
+  $generator.Dispose()
+ }
+}
 function Assert-QA([bool]$condition,[string]$label){
  if(!$condition){throw ("QA failed: "+$label)}
  Write-Output ("PASS "+$label)
@@ -55,10 +65,10 @@ try{
  $pgStarted=$true
  Assert-QA (Listen 15549) "Real disposable PostgreSQL started on 15549"
  $url="postgresql://qa_actual@127.0.0.1:15549/postgres"
- $crypto=[Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
+ $crypto=(New-QARandomBytes 32)
  $secret=[Convert]::ToBase64String($crypto)
- $key=([BitConverter]::ToString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))).Replace("-","").ToLowerInvariant()
- $proxySecret=[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+ $key=([BitConverter]::ToString((New-QARandomBytes 32))).Replace("-","").ToLowerInvariant()
+ $proxySecret=[Convert]::ToBase64String((New-QARandomBytes 32))
  $httpOrigin="http://127.0.0.1:15651"
  $qaEnv=@{
   NODE_ENV="development";TZ="UTC";DATABASE_URL=$url;REALTIME_DATABASE_URL=$url;
@@ -93,7 +103,7 @@ try{
  for($i=0;$i -lt 150 -and !(Test-Path (Join-Path $dir "paper-worker-stop.ready.json"));$i++){Start-Sleep -Milliseconds 200}
  if(!(Test-Path (Join-Path $dir "paper-worker-stop.ready.json"))){throw "Actual worker never registered stop protocol"}
  Assert-QA ([bool](Get-Process -Id $worker.Id -ErrorAction SilentlyContinue)) "Actual Rakazo worker registered control"
- $tokenBytes=[Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
+ $tokenBytes=(New-QARandomBytes 32)
  $qaToken="rkg_"+[Convert]::ToBase64String($tokenBytes).TrimEnd("=").Replace("+","-").Replace("/","_")
  $gatewayConfig=@{
   publicOrigin="http://127.0.0.1:15652";authOrigin="http://127.0.0.1:15652";
