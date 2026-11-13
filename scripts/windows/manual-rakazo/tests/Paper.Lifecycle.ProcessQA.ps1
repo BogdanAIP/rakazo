@@ -48,7 +48,7 @@ $replaceDb=@(
  '(?ms)^if\(\$pgRunning\)\{\s*& \$pgCtl[\s\S]*?^\}'
 )
 $replaceWith=@(
- '$pgRunning=((Get-Content (Join-Path $root ''database.state'') -Raw).Trim() -eq ''running'');$workerDrainReady=$true;if($Action -eq ''Probe'' -or $Action -eq ''Plan''){',
+ '$pgRunning=((Get-Content (Join-Path $root ''database.state'') -Raw).Trim() -eq ''running'');$workerDrainReady=$true;$apiDrainReady=$true;$gatewayDrainReady=$true;if($Action -eq ''Probe'' -or $Action -eq ''Plan''){',
  'if($pgRunning){Set-Content (Join-Path $root ''database.state'') ''stopped''}'
 )
 for($i=0;$i -lt 2;$i++){
@@ -65,6 +65,11 @@ $workerBoundary='(?ms)^if\(\$worker\)\{\s*\$drainScript=Join-Path[\s\S]*?^\}'
 if(([regex]::Matches($raw,$workerBoundary)).Count -ne 1){throw 'QA worker block ambiguous'}
 $raw=[regex]::Replace($raw,$workerBoundary,
  'if($worker){Stop-Registered $pids.worker $entries.worker ''worker''}',1)
+# Simulate gateway/API drain ONLY in the disposable process fixture.
+$serviceBoundary='(?ms)^if\(\$gatewayOk\)\{\s*\$receipt=& \$drainPath -Action Request -Service gateway[\s\S]*?^if\(\$api\)\{[\s\S]*?^\}'
+if(([regex]::Matches($raw,$serviceBoundary)).Count -ne 1){throw 'QA service block ambiguous'}
+$raw=[regex]::Replace($raw,$serviceBoundary,
+  'if($gatewayOk){Stop-Registered $gateway $gateway.server ''journal''};if($api){Stop-Registered $pids.api $entries.api ''api''}',1)
 # QA-only Stop-Process for verified disposable Node PIDs. No taskkill process trees.
 $stopBoundary='(?ms)^function Stop-Registered\([\s\S]*?^\}'
 if(([regex]::Matches($raw,$stopBoundary)).Count -ne 1){throw 'QA process-stop boundary ambiguous'}
