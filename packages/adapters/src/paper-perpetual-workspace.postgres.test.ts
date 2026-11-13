@@ -3296,7 +3296,9 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         ] as const) {
           const id = await account(strategy);
           await start(id, engine);
-          decision = proposal("long");
+          decision = strategy === "conservative"
+            ? { ...proposal("long"), plannedRecoveryNotionalQuote: "0", recoverySteps: undefined }
+            : proposal("long");
           await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
           const held = (await state(id)).openPositions[0]!;
           decision = {
@@ -3313,7 +3315,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           validId = id;
           validPositionId = held.positionId;
         }
-        decision = { ...proposal("short"), replacePositionId: validPositionId };
+        decision = { ...proposal("short"), quantityBase: "1.6", replacePositionId: validPositionId };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(validId, true));
         const replaced = await state(validId);
         expect(replaced.openPositions).toHaveLength(1);
