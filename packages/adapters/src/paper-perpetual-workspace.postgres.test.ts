@@ -20,6 +20,7 @@ import {
   createDb,
   createOwnedPerpetualExperimentAccounts,
   parsePerpetualControl,
+  perpetualDatabaseClock,
   perpetualMarketSource,
   perpetualPaperHash,
   perpetualPaperJson,
@@ -421,10 +422,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     });
     const control = parsePerpetualControl(row);
     if (researchDue) control.lastResearchAt = null;
-    const [clockRow] = await db.prisma.$queryRaw<
-      Array<{ now: Date }>
-    >`SELECT clock_timestamp() AS now`;
-    const now = clockRow!.now;
+    const now = await db.prisma.$transaction((tx) => perpetualDatabaseClock(tx));
     await db.prisma.tradingPaperPerpetualWorkspace.update({
       where: { ledgerId },
       data: {
@@ -814,13 +812,11 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       where: { ledgerId: id },
     });
     const control = parsePerpetualControl(row);
-    const [clock] = await db.prisma.$queryRaw<
-      Array<{ now: Date }>
-    >`SELECT clock_timestamp() AS now`;
+    const clock = await db.prisma.$transaction((tx) => perpetualDatabaseClock(tx));
     control.pendingExternalProposal!.submittedAt = new Date(
-      clock!.now.getTime() - 120000,
+      clock.getTime() - 120000,
     ).toISOString();
-    control.pendingExternalProposal!.expiresAt = clock!.now.toISOString();
+    control.pendingExternalProposal!.expiresAt = clock.toISOString();
     const stored = {
       control: perpetualPaperJson(control),
       controlSha256: perpetualPaperHash(control),
@@ -829,7 +825,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       where: { ledgerId: id },
       data: stored,
     });
-    const localClock = vi.spyOn(Date, "now").mockReturnValue(clock!.now.getTime() - 86400000);
+    const localClock = vi.spyOn(Date, "now").mockReturnValue(clock.getTime() - 86400000);
     try {
       expect(
         (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!.pendingExternalProposal,
