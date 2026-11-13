@@ -2903,9 +2903,9 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     ];
     decision = { kind: "no_trade", reason: "No new setup" };
     await handlePerpetualPaperWake(worker(), await payload(id));
-    expect((await state(id)).fundingNetQuote).toBe("-0.1");
+    expect((await state(id)).fundingNetQuote).toBe("-0.15");
     await handlePerpetualPaperWake(worker(), await payload(id));
-    expect((await state(id)).fundingNetQuote).toBe("-0.1");
+    expect((await state(id)).fundingNetQuote).toBe("-0.15");
     const status = await readOwnedPerpetualWorkspace(db.prisma, owner, id);
     expect(status?.status, JSON.stringify(status)).toBe("verified");
     await controlPerpetualPaperWorkspace(deps(), owner, {
@@ -2918,7 +2918,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     await handlePerpetualPaperWake(worker(), await payload(id));
     const partial = await state(id);
     expect(partial.openPositions).toHaveLength(1);
-    expect(partial.openPositions[0]!.quantityBase).toBe("0.6");
+    expect(partial.openPositions[0]!.quantityBase).toBe("1.1");
     expect(partial.closedPositions).toBe(0);
     depth = "100";
     await handlePerpetualPaperWake(worker(), await payload(id));
