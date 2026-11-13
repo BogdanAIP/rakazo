@@ -813,9 +813,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     });
     const control = parsePerpetualControl(row);
     const clock = await db.prisma.$transaction((tx) => perpetualDatabaseClock(tx));
-    control.pendingExternalProposal!.submittedAt = new Date(
-      clock.getTime() - 120000,
-    ).toISOString();
+    control.pendingExternalProposal!.submittedAt = new Date(clock.getTime() - 120000).toISOString();
     control.pendingExternalProposal!.expiresAt = clock.toISOString();
     const stored = {
       control: perpetualPaperJson(control),
