@@ -2508,8 +2508,8 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         await start(id, engine);
         decision = {
           ...proposal("long"),
-          leverage: 20,
-          quantityBase: "1.00",
+          leverage: 5,
+          quantityBase: "1.60",
           orderType: "limit",
           limitPriceQuote: "99.00",
         };
@@ -2566,8 +2566,9 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         await start(id, engine);
         decision = {
           ...proposal("long"),
-          leverage: 20,
+          leverage: 5,
           orderType: "limit",
+          quantityBase: "1.6",
           limitPriceQuote: "99.00",
         };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
@@ -2693,7 +2694,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
           .accounts[0]!.ledgerId;
         await start(id, engine);
-        decision = { ...proposal("long"), leverage: 20, quantityBase: "1" };
+        decision = { ...proposal("long"), leverage: 5, quantityBase: "1.5" };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         expect((await state(id)).openPositions).toHaveLength(1);
         const boundary = Date.now() + 1000;
@@ -2709,7 +2710,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           sessionStatus: "paused",
           runtimeError: "protection_unavailable",
         });
-        expect((await state(id)).bookBalanceQuote).toBe("999.95000000");
+        expect((await state(id)).bookBalanceQuote).toBe("999.92500000");
         funding = [
           {
             settledAt: new Date(boundary).toISOString(),
@@ -2718,10 +2719,10 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           },
         ];
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id));
-        expect((await state(id)).bookBalanceQuote).toBe("999.85000000");
+        expect((await state(id)).bookBalanceQuote).toBe("999.77500000");
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id));
-        expect((await state(id)).bookBalanceQuote).toBe("999.85000000");
-        expect((await state(id)).fundingNetQuote).toBe("-0.10000000");
+        expect((await state(id)).bookBalanceQuote).toBe("999.77500000");
+        expect((await state(id)).fundingNetQuote).toBe("-0.15000000");
       } finally {
         engine.dispose();
       }
@@ -2737,21 +2738,21 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         scriptPath: fileURLToPath(new URL("../nautilus/paper_engine.py", import.meta.url)),
       });
       try {
-        tierMaximumBase = "1";
+        tierMaximumBase = "2";
         const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
           .accounts[0]!.ledgerId;
         await start(id, engine);
-        decision = { ...proposal("long"), leverage: 20, quantityBase: "1" };
+        decision = { ...proposal("long"), leverage: 5, quantityBase: "1.5" };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         expect((await state(id)).openPositions).toHaveLength(1);
-        decision = { ...proposal("short"), leverage: 20, quantityBase: "1" };
+        decision = { ...proposal("short"), leverage: 5, quantityBase: "1.5" };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
           runtimeError: null,
           lastDecision: { outcome: "denied_contract" },
         });
         expect((await state(id)).openPositions).toHaveLength(1);
-        expect((await state(id)).bookBalanceQuote).toBe("999.95000000");
+        expect((await state(id)).bookBalanceQuote).toBe("999.92500000");
       } finally {
         engine.dispose();
       }
