@@ -1021,7 +1021,7 @@ export async function recordPerpetualResearchTick(
             Date.parse(pending.expiresAt) <= clock.getTime() ||
             Date.parse(pending.submittedAt) > clock.getTime()
           )
-            decision = { kind: "no_trade", reason: "???? ???????? ??????????? ?????" };
+            decision = { kind: "no_trade", reason: "Срок внешнего предложения истёк" };
         }
         verifyResearchComparison(
           decision,
