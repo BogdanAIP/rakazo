@@ -24,6 +24,7 @@ import {
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
 import { readOwnedMarketPreparedResearch } from "./market-research-read.js";
+import { tradingPaperDatabaseNow } from "./trading-paper-clock.js";
 import {
   createDisabledPerpetualPaperAccount,
   PerpetualPaperIntegrityError,
@@ -82,10 +83,7 @@ export function parsePerpetualControl(row: {
   return PerpetualControlSchema.parse(control);
 }
 export async function perpetualDatabaseClock(tx: Prisma.TransactionClient): Promise<Date> {
-  const [row] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`;
-  if (!row || !Number.isFinite(row.now.getTime()))
-    throw new Error("Futures trusted clock unavailable");
-  return row.now;
+  return tradingPaperDatabaseNow(tx);
 }
 export async function lockOwnedPerpetualWorkspace(
   tx: Prisma.TransactionClient,
