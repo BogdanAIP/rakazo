@@ -921,6 +921,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           const candidate = compared({
             ...proposal("long"),
             orderType: "limit",
+            quantityBase: "1.6",
             limitPriceQuote: "99",
           });
           candidate.comparison!.validUntil = new Date(
