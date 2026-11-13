@@ -3451,7 +3451,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         expect(JSON.stringify(beforeEntry)).not.toContain("ETH-USDT-SWAP");
 
         await submit(
-          compared({ ...proposal("long", "ETH-USDT-SWAP"), leverage: 5 }, ["BTC-USDT-SWAP"]),
+          compared({ ...proposal("long", "ETH-USDT-SWAP"), leverage: 5, plannedRecoveryNotionalQuote: "0", recoverySteps: undefined }, ["BTC-USDT-SWAP"]),
         );
         const freshCapture = vi.fn(snapshot);
         await handlePerpetualPaperWake(
