@@ -841,7 +841,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     }
   });
 
-  it("rejects flat Resume and consumes a proposal expiring during research as no-trade", async () => {
+  it("resumes a flat paused PAPER session and consumes an expiring proposal as no-trade", async () => {
     const id = await account();
     await start(id, undefined, ["BTC-USDT-SWAP"], "external");
     let current = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
@@ -852,18 +852,17 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       commandId: randomUUID(),
     });
     current = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
-    await expect(
-      controlPerpetualPaperWorkspace(deps(), owner, {
-        action: "resume",
-        ledgerId: id,
-        expectedRevision: current.revision,
-        commandId: randomUUID(),
-        durationMinutes: 15,
-        protectionMinutes: 1440,
-      }),
-    ).rejects.toThrow("intact position protection");
-    await start(id, undefined, ["BTC-USDT-SWAP"], "external");
+    await controlPerpetualPaperWorkspace(deps(), owner, {
+      action: "resume",
+      ledgerId: id,
+      expectedRevision: current.revision,
+      commandId: randomUUID(),
+      durationMinutes: 15,
+      protectionMinutes: 1440,
+    });
     current = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+    expect(current.sessionStatus).toBe("active");
+    expect((await state(id)).openPositions).toHaveLength(0);
     const candidate = compared(proposal("long"));
     await controlPerpetualPaperWorkspace(deps(), owner, {
       action: "submit_external_proposal",
