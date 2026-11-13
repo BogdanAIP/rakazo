@@ -1675,7 +1675,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
 
         fetchSnapshot.mockReset();
         fetchSnapshot.mockImplementation(snapshot);
-        decision = { ...proposal("long"), orderType: "limit", limitPriceQuote: "99" };
+        decision = { ...proposal("long"), quantityBase: "1.6", orderType: "limit", limitPriceQuote: "99" };
         await handlePerpetualPaperWake(run, await payload(id, true));
         expect(fetchSnapshot).toHaveBeenCalledTimes(3);
         expect((await state(id)).openPositions).toHaveLength(0);
