@@ -24,7 +24,7 @@ export const RpcAccessProceduresSchema = z
 export const RpcAccessGrantCreateSchema = z
   .object({
     label: z.string().trim().min(1).max(80),
-    durationMinutes: z.number().int().min(15).max(20160),
+    durationMinutes: z.number().int().min(15).max(270000),
     procedures: RpcAccessProceduresSchema,
   })
   .strict();

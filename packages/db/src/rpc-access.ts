@@ -1,7 +1,12 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { RpcAccessGrantCreate } from "@rakazo/contracts";
-import { RpcAccessGrantCreateSchema, RpcAccessProceduresSchema } from "@rakazo/contracts";
+import {
+  PAPER_RPC_ACCESS_PROCEDURES,
+  RpcAccessGrantCreateSchema,
+  RpcAccessProceduresSchema,
+} from "@rakazo/contracts";
 import type { Prisma, PrismaClient } from "./client.js";
+import { tradingPaperDatabaseNow } from "./trading-paper-clock.js";
 
 type Owner = { userId: string; spaceId: string };
 const hashToken = (token: string) => createHash("sha256").update(token, "utf8").digest("hex");
@@ -25,9 +30,7 @@ function dto(row: Grant) {
   };
 }
 async function clock(tx: Prisma.TransactionClient) {
-  const [row] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`;
-  if (!row || !Number.isFinite(row.now.getTime())) throw new Error("RPC access clock unavailable");
-  return row.now;
+  return tradingPaperDatabaseNow(tx);
 }
 export async function createOwnedRpcAccessGrant(
   prisma: PrismaClient,
@@ -38,6 +41,20 @@ export async function createOwnedRpcAccessGrant(
   const token = "rkg_" + randomBytes(32).toString("base64url");
   const result = await prisma.$transaction(async (tx) => {
     const now = await clock(tx);
+    if (input.durationMinutes > 20160) {
+      const sixMonths = new Date(now);
+      sixMonths.setUTCMonth(sixMonths.getUTCMonth() + 6);
+      const maxMinutes = Math.floor((sixMonths.getTime() - now.getTime()) / 60000);
+      if (
+        input.label !== "PAPER journal - owner renewed" ||
+        input.procedures.length !== PAPER_RPC_ACCESS_PROCEDURES.length ||
+        input.procedures.some((procedure) => !PAPER_RPC_ACCESS_PROCEDURES.includes(procedure)) ||
+        input.durationMinutes > maxMinutes
+      )
+        throw new Error(
+          "Long RPC grant requires the reviewed PAPER journal scope and at most six calendar months",
+        );
+    }
     return tx.rpcAccessGrant.create({
       data: {
         id: "rpc-grant:" + randomUUID(),

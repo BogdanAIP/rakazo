@@ -155,7 +155,7 @@ class PaperEngine:
         self.terms = config["instruments"]
         self.leverage = leverage
         self.instruments = {t["instrument"]: instrument(t, leverage) for t in self.terms}
-        if not 1 <= len(self.instruments) <= 8 or len(self.instruments) != len(config["instruments"]):
+        if not 1 <= len(self.instruments) <= 100 or len(self.instruments) != len(config["instruments"]):
             raise ValueError("Invalid instrument set")
         self.engine = BacktestEngine(config=BacktestEngineConfig(bypass_logging=True, run_analysis=False))
         self.engine.add_venue(
@@ -192,7 +192,7 @@ class PaperEngine:
             raise ValueError("Engine input sequence gap")
         registrations = batch.get("registerInstruments", [])
         if registrations:
-            if self.engine.cache.positions_open() or self.engine.cache.orders_open():
+            if self.engine.cache.orders_open() or (self.engine.cache.positions_open() and any(t["instrument"] in self.instruments for t in registrations)):
                 raise ValueError("Register new contracts only on a settled account")
             distinct = {terms["instrument"] for terms in registrations}
             if len(distinct) != len(registrations):

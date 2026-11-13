@@ -14,6 +14,7 @@
       "!**/coverage",
       "!**/design",
       "!**/packages/db/src/generated",
+      "!**/scripts/local-paper-journal/offline-gap-runtime.mjs",
       "!**/apps/mobile/.expo",
       "!**/playwright-report",
       "!**/test-results",

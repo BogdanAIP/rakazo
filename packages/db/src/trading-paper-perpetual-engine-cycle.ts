@@ -4,8 +4,10 @@ import type {
   PaperPerpetualEngineConfig,
   PaperPerpetualEngineSnapshot,
   PaperPerpetualSnapshot,
+  PerpetualControl,
 } from "@rakazo/contracts";
 import { PaperPerpetualDecisionSchema, PaperPerpetualSnapshotSchema } from "@rakazo/contracts";
+import type { PerpetualPaperPositionState } from "@rakazo/core";
 import {
   paperPerpetualAmount as amount,
   assessPaperRecoveryStructure,
@@ -17,9 +19,11 @@ import {
   isFreshPaperObservation,
   paperPerpetualNotional as notional,
   observePaperRecoverySteps,
+  PAPER_FIRST_ENTRY_MARGIN_BPS,
   PAPER_OKX_LV1_FEES,
   PAPER_PERPETUAL_RISK_POLICY_VERSION,
   paperPerpetualOrderExpiresAt,
+  planPaperHalfExit,
   planPaperRecoverySteps,
   previewPaperPerpetualProposal,
   projectPerpetualEngineSnapshot,
@@ -30,6 +34,10 @@ import {
   appendPerpetualEngineBatchInTransaction,
   recoverPerpetualEngineInTransaction,
 } from "./trading-paper-perpetual-engine.js";
+import {
+  perpetualBreakEvenStop,
+  planPerpetualProfitReduction,
+} from "./trading-paper-perpetual-profit.js";
 import { recoverPerpetualPaperInTransaction } from "./trading-paper-perpetual-store.js";
 import type { PerpetualOwner } from "./trading-paper-perpetual-workspace.js";
 import {
@@ -46,6 +54,7 @@ const signed = (s: string) => (s.startsWith("-") ? -amount(s.slice(1)) : amount(
 const ns = (date: string | Date) =>
   String(BigInt(date instanceof Date ? date.getTime() : Date.parse(date)) * 1000000n);
 const ceil = (a: bigint, b: bigint) => (a + b - 1n) / b;
+type PositionPlan = PerpetualControl["plans"][number];
 type Key = {
   ledgerId: string;
   revision: number;
@@ -224,7 +233,7 @@ async function commitPerpetualEngineWakeOnce(
           accountId: key.ledgerId,
           initialBalanceQuote: "1000",
           leverage: ceiling,
-          instruments: control.instruments.map(termsFor),
+          instruments: execution.map((snapshot) => termsFor(snapshot.market.symbol)),
         };
         let state = old.state;
         const batch: PaperPerpetualEngineBatch = {
@@ -249,9 +258,16 @@ async function commitPerpetualEngineWakeOnce(
           .map((snapshot) => termsFor(snapshot.market.symbol))
           .filter((term) => hash(existing.get(term.instrument)) !== hash(term));
         const contractUpdatePending = additions.length > 0 || refreshes.length > 0;
-        const canUpdateContracts = !state.openPositions.length && !priorSnapshot?.openOrders.length;
-        if (contractUpdatePending && canUpdateContracts) {
-          batch.registerInstruments = [...additions, ...refreshes];
+        const noOpenOrders = !priorSnapshot?.openOrders.length && !control.orders.length;
+        const canRefreshContracts = !state.openPositions.length && noOpenOrders;
+        // A new contract can be registered alongside a held instrument,
+        // but existing live contract terms must never be replaced.
+        const registrations = [
+          ...(noOpenOrders ? additions : []),
+          ...(canRefreshContracts ? refreshes : []),
+        ];
+        if (registrations.length) {
+          batch.registerInstruments = registrations;
           const next = new Map(effectiveConfig.instruments.map((term) => [term.instrument, term]));
           for (const term of batch.registerInstruments) {
             next.set(term.instrument, term);
@@ -259,7 +275,8 @@ async function commitPerpetualEngineWakeOnce(
           }
           effectiveConfig = { ...effectiveConfig, instruments: [...next.values()] };
         }
-        const contractUpdateDeferred = contractUpdatePending && !canUpdateContracts;
+        const contractUpdateDeferred =
+          contractUpdatePending && registrations.length !== additions.length + refreshes.length;
         const nativeClock = BigInt(priorSnapshot?.clockNs ?? "0");
         for (const p of state.openPositions)
           if (!snapshots.has(p.instrument))
@@ -283,7 +300,10 @@ async function commitPerpetualEngineWakeOnce(
           )
             throw new Error("Final funding settlement unavailable");
           if (held && !boundary) throw new Error("Funding boundary unavailable");
-          if (priorSnapshot)
+          // Funding belongs only to periods with an open position in this market.
+          // Do not backfill months of non-applicable funding on a flat account;
+          // large backlogs exceed the bounded native batch and block new entries.
+          if (priorSnapshot && held)
             for (const f of settled)
               batch.funding.push({
                 instrument: s.market.symbol,
@@ -307,6 +327,11 @@ async function commitPerpetualEngineWakeOnce(
           });
         }
         const prefix = "native:" + hash([key.ledgerId, key.revision, key.scheduledFor, key.stage]);
+        const profitCandidates: Array<{
+          p: PerpetualPaperPositionState;
+          plan: PositionPlan;
+          snapshot: PaperPerpetualSnapshot;
+        }> = [];
         if (protects)
           for (const p of state.openPositions) {
             const plan = control.plans.find((x) => x.positionId === p.positionId),
@@ -340,7 +365,36 @@ async function commitPerpetualEngineWakeOnce(
               const lot = amount(s.rules.lotIncrementBase);
               const remainder = held - requested;
               // No reverse trade, extra exposure or stranded sub-minimum dust.
-              if (
+              const heldPlan = control.plans.find((plan) => plan.positionId === p.positionId);
+              const halfProfit =
+                decision.takePartialAndBreakEven && heldPlan
+                  ? planPaperHalfExit({
+                      side: p.side,
+                      entryPriceQuote: p.entryPriceQuote,
+                      originalStopPriceQuote:
+                        heldPlan.originalStopPriceQuote ?? heldPlan.stopPriceQuote,
+                      markPriceQuote: s.markPriceQuote,
+                      quantityBase: p.quantityBase,
+                      lotIncrementBase: s.rules.lotIncrementBase,
+                      minimumBase: s.rules.minimumBase,
+                      priceIncrement: s.market.priceIncrement ?? "0",
+                      feeBpsPerSide: 10,
+                      slippageBpsPerSide: 10,
+                      fundingReserveBps: 5,
+                    })
+                  : null;
+              // Optional half-profit workflow cannot bypass native lot/price safeguards.
+              if (heldPlan?.profitTaking?.partial && !heldPlan.halfTakenAt) {
+                outcome = "denied_reduce_profit_in_progress";
+              } else if (
+                decision.takePartialAndBreakEven &&
+                (!heldPlan ||
+                  heldPlan.halfTakenAt ||
+                  halfProfit?.status !== "ready" ||
+                  amount(halfProfit.quantityBase) !== requested)
+              ) {
+                outcome = "denied_half_profit_condition";
+              } else if (
                 requested === 0n ||
                 requested > held ||
                 lot === 0n ||
@@ -365,7 +419,66 @@ async function commitPerpetualEngineWakeOnce(
                 orderType: "market",
                 limitPriceQuote: null,
               });
+            if (
+              !exitQuantity &&
+              key.stage === "protection" &&
+              !plan.halfTakenAt &&
+              !plan.manualReductionSeen &&
+              plan.profitTaking
+            )
+              profitCandidates.push({ p, plan, snapshot: s });
           }
+        const profitOrders: Array<{
+          before: PerpetualPaperPositionState;
+          plan: PositionPlan;
+          orderId: string;
+          quantityBase: string;
+        }> = [];
+        for (const { p, plan, snapshot } of profitCandidates) {
+          const terms = existing.get(p.instrument);
+          if (!terms || !plan.profitTaking) continue;
+          const action = p.side === "long" ? "sell" : "buy";
+          const depthKey = action === "sell" ? "bidAvailableBase" : "askAvailableBase";
+          const reserved = batch.commands.reduce(
+            (sum, c) =>
+              c.kind === "order" && c.instrument === p.instrument && c.action === action
+                ? sum + amount(c.quantityBase)
+                : sum,
+            0n,
+          );
+          const available = amount(snapshot.book[depthKey]) - reserved;
+          const reduction = planPerpetualProfitReduction(
+            plan.profitTaking,
+            p,
+            {
+              ...snapshot,
+              book: {
+                ...snapshot.book,
+                [depthKey]: format(available > 0n ? available : 0n),
+              },
+            },
+            terms,
+          );
+          if (!reduction) continue;
+          plan.profitTaking.partial = reduction.partial;
+          outcome = "profit_reduction_waiting_depth";
+          if (reduction.quantityBase) {
+            const orderId = prefix + ":profit:" + batch.commands.length;
+            batch.commands.push({
+              kind: "order",
+              orderId,
+              positionId: p.positionId,
+              instrument: p.instrument,
+              action,
+              quantityBase: reduction.quantityBase,
+              reduceOnly: true,
+              orderType: "market",
+              limitPriceQuote: null,
+            });
+            profitOrders.push({ before: p, plan, orderId, quantityBase: reduction.quantityBase });
+            outcome = "profit_reduction_requested";
+          }
+        }
         let output: PaperPerpetualEngineSnapshot | null = null;
         // Native marks, funding and exits settle before checking risk for a new entry.
         const applySettlement = async (suffix: string) => {
@@ -402,6 +515,76 @@ async function commitPerpetualEngineWakeOnce(
             const submitted = new Map(
               batch.commands.filter((c) => c.kind === "order").map((c) => [c.orderId, c]),
             );
+            // Only native-confirmed partial fills authorize a subsequent stop
+            // update. An accepted/rejected request is never treated as a fill.
+            if (
+              key.stage === "research" &&
+              decision.kind === "reduce" &&
+              decision.takePartialAndBreakEven
+            ) {
+              const beforeHalf = previousState.openPositions.find(
+                (x) => x.positionId === decision.positionId,
+              );
+              const afterHalf = state.openPositions.find(
+                (x) => x.positionId === decision.positionId,
+              );
+              const plan = control.plans.find((x) => x.positionId === decision.positionId);
+              const market = beforeHalf ? snapshots.get(beforeHalf.instrument) : undefined;
+              if (
+                beforeHalf &&
+                afterHalf &&
+                plan &&
+                market &&
+                !plan.halfTakenAt &&
+                amount(afterHalf.quantityBase) < amount(beforeHalf.quantityBase)
+              ) {
+                const filled = output!.events.reduce((sum, event) => {
+                  if (
+                    event.kind !== "fill" ||
+                    event.positionId !== decision.positionId ||
+                    !event.orderId ||
+                    !event.quantityBase
+                  )
+                    return sum;
+                  const order = submitted.get(event.orderId);
+                  return order && order.kind === "order" && order.reduceOnly
+                    ? sum + amount(event.quantityBase)
+                    : sum;
+                }, 0n);
+                const actualReduced =
+                  amount(beforeHalf.quantityBase) - amount(afterHalf.quantityBase);
+                const half = planPaperHalfExit({
+                  side: beforeHalf.side,
+                  entryPriceQuote: beforeHalf.entryPriceQuote,
+                  originalStopPriceQuote: plan.originalStopPriceQuote ?? plan.stopPriceQuote,
+                  markPriceQuote: market.markPriceQuote,
+                  quantityBase: beforeHalf.quantityBase,
+                  lotIncrementBase: market.rules.lotIncrementBase,
+                  minimumBase: market.rules.minimumBase,
+                  priceIncrement: market.market.priceIncrement ?? "0",
+                  feeBpsPerSide: 10,
+                  slippageBpsPerSide: 10,
+                  fundingReserveBps: 5,
+                });
+                if (
+                  filled > 0n &&
+                  actualReduced === filled &&
+                  half.status === "ready" &&
+                  actualReduced === amount(half.quantityBase)
+                ) {
+                  const old = amount(plan.stopPriceQuote);
+                  const next = amount(half.breakEvenStop);
+                  const currentMark = amount(market.markPriceQuote);
+                  const safer =
+                    beforeHalf.side === "long"
+                      ? next > old && next < currentMark
+                      : next < old && next > currentMark;
+                  if (safer) plan.stopPriceQuote = half.breakEvenStop;
+                  // An already tighter stop is preserved, never widened.
+                  plan.halfTakenAt = now.toISOString();
+                }
+              }
+            }
             batch.quotes = batch.quotes.map((q) => {
               let bid = amount(q.bidAvailableBase),
                 ask = amount(q.askAvailableBase);
@@ -426,6 +609,74 @@ async function commitPerpetualEngineWakeOnce(
           }
         };
         await applySettlement(":observe");
+        // Do not cut the same position automatically after a separate manual
+        // reduce order, even when that manual order only partially filled.
+        if (key.stage === "research" && decision.kind === "reduce") {
+          const beforeManual = old.state.openPositions.find(
+            (p) => p.positionId === decision.positionId,
+          );
+          const afterManual = state.openPositions.find((p) => p.positionId === decision.positionId);
+          const planManual = control.plans.find((p) => p.positionId === decision.positionId);
+          if (
+            beforeManual &&
+            afterManual &&
+            planManual &&
+            amount(afterManual.quantityBase) < amount(beforeManual.quantityBase)
+          )
+            planManual.manualReductionSeen = true;
+        }
+        const settlement = output as PaperPerpetualEngineSnapshot | null;
+        // Native fill receipts are the ONLY authority for advancing a
+        // cumulative 50% profit target and changing the protective stop.
+        for (const { before, plan, orderId, quantityBase } of profitOrders) {
+          const after = state.openPositions.find((p) => p.positionId === before.positionId);
+          if (!after) {
+            if (
+              settlement?.events.some(
+                (event) =>
+                  event.kind === "fill" &&
+                  event.orderId?.startsWith("LIQUIDATION") &&
+                  event.positionId === before.positionId,
+              )
+            )
+              continue;
+            throw new Error("Native PAPER profit reduction unexpectedly closed a position");
+          }
+          const partial = plan.profitTaking?.partial;
+          if (!partial || !settlement) throw new Error("Missing native profit-reduction receipt");
+          const filled = settlement.events
+            .filter((event) => event.kind === "fill" && event.orderId === orderId)
+            .reduce((sum, event) => {
+              if (event.positionId !== before.positionId || !event.quantityBase)
+                throw new Error("Profit fill does not match the protected position");
+              return sum + amount(event.quantityBase);
+            }, 0n);
+          const actualReduction = amount(before.quantityBase) - amount(after.quantityBase);
+          if (filled !== actualReduction || filled > amount(quantityBase))
+            throw new Error("Native PAPER profit fill does not match position delta");
+          if (!filled) continue;
+          const total = amount(partial.filledQuantityBase) + filled;
+          if (total > amount(partial.targetQuantityBase))
+            throw new Error("Native PAPER profit fill exceeds the original 50% target");
+          partial.filledQuantityBase = format(total);
+          // Recovery additions must not increase exposure after a profit exit.
+          plan.recoveryReserveQuote = "0";
+          plan.recoveryReservedRiskQuote = "0";
+          plan.recoverySteps = [];
+          outcome = "profit_reduction_partially_filled";
+          if (total === amount(partial.targetQuantityBase)) {
+            const terms = existing.get(after.instrument);
+            if (!terms) throw new Error("Protected instrument terms unavailable");
+            const bufferedStop = perpetualBreakEvenStop(after, terms);
+            const oldStop = amount(plan.stopPriceQuote);
+            // Never widen stop. This buffer is a conservative commission,
+            // slippage and funding assumption, not guaranteed realized PnL.
+            if (after.side === "long" ? bufferedStop > oldStop : bufferedStop < oldStop)
+              plan.stopPriceQuote = format(bufferedStop);
+            plan.halfTakenAt = now.toISOString();
+            outcome = "profit_reduction_break_even";
+          }
+        }
         if (active && key.stage === "research" && decision.kind === "close") {
           const held = old.state.openPositions.some((p) => p.positionId === decision.positionId);
           outcome = !held
@@ -749,6 +1000,9 @@ async function commitPerpetualEngineWakeOnce(
                 side: p.side,
                 leverage: p.leverage,
                 ownerMaxLeverage: ceiling,
+                firstEntryMarginFloorBps: p.addToPositionId
+                  ? undefined
+                  : PAPER_FIRST_ENTRY_MARGIN_BPS,
                 quantityBase: p.quantityBase,
                 entryPriceQuote: entry ?? "0",
                 stopPriceQuote: p.stopPriceQuote,
@@ -816,6 +1070,13 @@ async function commitPerpetualEngineWakeOnce(
               )
                 denied = "denied_recovery_plan_invalid";
               else if (p.addToPositionId && !existingAddition) denied = "denied_add_unknown";
+              else if (
+                p.addToPositionId &&
+                (additionPlan?.halfTakenAt ||
+                  additionPlan?.manualReductionSeen ||
+                  additionPlan?.profitTaking?.partial)
+              )
+                denied = "denied_add_after_profit_reduction";
               else if (
                 p.addToPositionId &&
                 (!additionPlan ||
@@ -1066,6 +1327,12 @@ async function commitPerpetualEngineWakeOnce(
               control.plans.push({
                 positionId: enteringPosition,
                 stopPriceQuote: order.proposal.stopPriceQuote,
+                originalStopPriceQuote: order.proposal.stopPriceQuote,
+                halfTakenAt: null,
+                profitTaking: {
+                  initialEntryPriceQuote: after!.entryPriceQuote,
+                  initialStopPriceQuote: order.proposal.stopPriceQuote,
+                },
                 takeProfitPriceQuote: order.proposal.takeProfitPriceQuote,
                 stopRiskQuote: format(risk),
                 recoveryReserveQuote: format(
@@ -1159,6 +1426,7 @@ async function commitPerpetualEngineWakeOnce(
           control.lastDecision.outcome = outcome;
         }
         control.runtimeError = null;
+        if (key.stage === "research") control.networkRetryCount = 0;
         const needsNext = active || (state.openPositions.length > 0 && protects);
         const next =
           key.stage === "protection"

@@ -61,6 +61,7 @@ export * from "./trading-history-dataset.js";
 export * from "./trading-market.js";
 export * from "./trading-paper.js";
 export * from "./trading-paper-capacity.js";
+export * from "./trading-paper-cross-management.js";
 export * from "./trading-paper-experiments.js";
 export * from "./trading-paper-ledger.js";
 export * from "./trading-paper-leverage.js";

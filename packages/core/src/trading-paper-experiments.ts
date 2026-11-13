@@ -58,7 +58,7 @@ const presets: Readonly<Record<PaperExperimentStrategy, PaperExperimentPreset>> 
     initialBalanceQuote: "1000",
     maxPerIdeaRiskQuote: "20",
     maxDailyLossQuote: "50",
-    maxOpenRiskQuote: "40",
+    maxOpenRiskQuote: "100",
     maxTotalExposureQuote: "1500",
     maxLeverage: 20,
     maxConcurrentPositions: 4,

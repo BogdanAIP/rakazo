@@ -24,6 +24,7 @@ import {
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
 import { readOwnedMarketPreparedResearch } from "./market-research-read.js";
+import { tradingPaperDatabaseNow } from "./trading-paper-clock.js";
 import {
   createDisabledPerpetualPaperAccount,
   PerpetualPaperIntegrityError,
@@ -82,10 +83,7 @@ export function parsePerpetualControl(row: {
   return PerpetualControlSchema.parse(control);
 }
 export async function perpetualDatabaseClock(tx: Prisma.TransactionClient): Promise<Date> {
-  const [row] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`;
-  if (!row || !Number.isFinite(row.now.getTime()))
-    throw new Error("Futures trusted clock unavailable");
-  return row.now;
+  return tradingPaperDatabaseNow(tx);
 }
 export async function lockOwnedPerpetualWorkspace(
   tx: Prisma.TransactionClient,
@@ -175,6 +173,7 @@ function verifyResearchComparison(
 const initialControl = (): PerpetualControl => ({
   maxLeverage: null,
   sessionStatus: "idle",
+  autoExtend: false,
   startedAt: null,
   expiresAt: null,
   protectionExpiresAt: null,
@@ -347,6 +346,73 @@ export async function commandOwnedPerpetualWorkspace(
           // A one-time owner submission triggers the existing protected worker;
           // it does not allocate capital or execute exchange/broker commands.
           control.lastResearchAt = null;
+        } else if (input.action === "extend") {
+          if (
+            control.sessionStatus !== "active" ||
+            control.researchMode !== "external" ||
+            !control.source ||
+            !control.expiresAt ||
+            Date.parse(control.expiresAt) <= clock ||
+            control.closeAll ||
+            control.runtimeError
+          )
+            throw new Error("Only a healthy active external PAPER session can extend");
+          await verifyPerpetualSource(tx, owner, control.source);
+          const newExpiry = Math.max(
+            Date.parse(control.expiresAt),
+            clock + input.durationMinutes * 60000,
+          );
+          control.expiresAt = new Date(newExpiry).toISOString();
+          control.protectionExpiresAt = new Date(
+            Math.max(
+              Date.parse(control.protectionExpiresAt ?? now.toISOString()),
+              newExpiry + 1440 * 60000,
+            ),
+          ).toISOString();
+          control.autoExtend = true;
+          // Preserve orders, plans, exposure, research and account balances.
+        } else if (input.action === "set_auto_research") {
+          if (
+            control.sessionStatus !== "active" ||
+            control.researchMode !== "external" ||
+            !control.source ||
+            !control.expiresAt ||
+            Date.parse(control.expiresAt) <= clock ||
+            control.runtimeError ||
+            control.closeAll ||
+            control.pendingExternalProposal ||
+            control.orders.length ||
+            state.openPositions.length ||
+            control.maxLeverage !== 5 ||
+            control.instruments.length !== 55
+          )
+            throw new Error("Autonomous research needs a flat active 55-market PAPER session");
+          await verifyPerpetualSource(tx, owner, control.source);
+          control.autoResearch = input.enabled;
+          control.lastResearchAt = null;
+        } else if (input.action === "set_instruments") {
+          if (
+            !control.source ||
+            !["active", "paused"].includes(control.sessionStatus) ||
+            !control.expiresAt ||
+            Date.parse(control.expiresAt) <= clock ||
+            control.closeAll ||
+            control.orders.length ||
+            control.pendingExternalProposal
+          )
+            throw new Error("Instrument scope requires a settled, nonexpired PAPER session");
+          // Scope expansion only: do not remove a held/protected contract or
+          // silently change leverage, balances, position plans, or autoExtend.
+          if (
+            control.instruments.some((symbol) => !input.instruments.includes(symbol)) ||
+            state.openPositions.some((p) => !input.instruments.includes(p.instrument)) ||
+            state.openPositions.some(
+              (p) => !control.plans.some((plan) => plan.positionId === p.positionId),
+            )
+          )
+            throw new Error("Changing instrument scope cannot remove protected exposures");
+          control.instruments = input.instruments;
+          control.lastResearchAt = null;
         } else if (input.action === "set_leverage") {
           for (const instrument of input.instruments) {
             const evidence = limits.find((l) => l.instrument === instrument);
@@ -381,6 +447,7 @@ export async function commandOwnedPerpetualWorkspace(
             throw new Error("Settle the previous futures positions before a new Start");
           await verifyPerpetualSource(tx, owner, input.source);
           control.sessionStatus = "active";
+          control.autoExtend = false;
           control.startedAt ??= now.toISOString();
           control.expiresAt = new Date(clock + input.durationMinutes * 60000).toISOString();
           control.protectionExpiresAt = new Date(
@@ -404,7 +471,7 @@ export async function commandOwnedPerpetualWorkspace(
             throw new Error("Only a paused, settled-order PAPER session can resume");
           const positionIds = new Set(state.openPositions.map((position) => position.positionId));
           if (
-            positionIds.size === 0 ||
+            // Flat accounts have no protection plans; held positions still require exact matching plans.
             control.plans.length !== positionIds.size ||
             new Set(control.plans.map((plan) => plan.positionId)).size !== positionIds.size ||
             control.plans.some((plan) => !positionIds.has(plan.positionId)) ||
@@ -424,6 +491,7 @@ export async function commandOwnedPerpetualWorkspace(
           ).toISOString();
           control.pendingExternalProposal = null;
           control.lastResearchAt = null;
+          control.autoExtend = false;
         } else if (input.action === "protect") {
           if (!state.openPositions.length) throw new Error("No futures positions need protection");
           control.protectionExpiresAt = new Date(
@@ -435,6 +503,7 @@ export async function commandOwnedPerpetualWorkspace(
         } else {
           control.pendingExternalProposal = null;
           control.sessionStatus = input.action === "pause" ? "paused" : "ended";
+          control.autoExtend = false;
           control.orders = [];
           if (input.action !== "close_all" && control.protectionExpiresAt) {
             control.protectionExpiresAt = new Date(
@@ -531,6 +600,7 @@ export async function readOwnedPerpetualWorkspace(
           runtimeError: control.runtimeError,
           instruments: control.instruments,
           researchMode: control.researchMode,
+          autoResearch: control.autoResearch ?? false,
           pendingExternalProposal:
             active &&
             control.pendingExternalProposal &&
@@ -610,7 +680,7 @@ export async function readOwnedPerpetualWorkspace(
         };
       }
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 },
   );
 }
 export async function readPerpetualWake(
@@ -758,6 +828,57 @@ export async function reschedulePerpetualProtectionAfterResearchExpiry(
     ),
   );
 }
+/** Retry a transient public market fetch in the existing native worker queue.
+ * Preserve owner authority and all protective plans, but bound failures: a
+ * sustained outage goes to the existing fail-closed paused state. Never
+ * retry an unknown native execution or a live limit order here. */
+export async function retryTransientPerpetualMarketWake(
+  prisma: PrismaClient,
+  owner: PerpetualOwner,
+  key: { ledgerId: string; revision: number; scheduledFor: string },
+): Promise<boolean> {
+  return withTransactionRetry(() =>
+    prisma.$transaction(
+      async (tx) => {
+        const { row, control } = await lockOwnedPerpetualWorkspace(tx, owner, key.ledgerId);
+        const now = await perpetualDatabaseClock(tx);
+        if (
+          row.revision !== key.revision ||
+          row.nextScheduledFor?.toISOString() !== key.scheduledFor ||
+          control.sessionStatus !== "active" ||
+          control.closeAll ||
+          control.orders.length !== 0 ||
+          !control.source ||
+          !control.expiresAt ||
+          Date.parse(control.expiresAt) <= now.getTime()
+        )
+          return false;
+        const count = control.networkRetryCount ?? 0;
+        if (count >= 3) return false;
+        const { state } = await recoverPerpetualPaperInTransaction(tx, owner, key.ledgerId);
+        const protectedIds = new Set(control.plans.map((p) => p.positionId));
+        if (
+          state.openPositions.some((p) => !protectedIds.has(p.positionId)) ||
+          (state.openPositions.length > 0 &&
+            (!control.protectionExpiresAt ||
+              Date.parse(control.protectionExpiresAt) <= now.getTime()))
+        )
+          return false;
+        control.networkRetryCount = count + 1;
+        // No market order, no research decision, no changes to stops or margin.
+        await savePerpetualControl(
+          tx,
+          key.ledgerId,
+          key.revision,
+          control,
+          new Date(now.getTime() + 20000 + count * 20000),
+        );
+        return true;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    ),
+  );
+}
 export async function failPerpetualWake(
   prisma: PrismaClient,
   owner: PerpetualOwner,
@@ -772,6 +893,7 @@ export async function failPerpetualWake(
         if (result.row.revision !== revision) return;
         const control = result.control;
         control.sessionStatus = "paused";
+        control.autoExtend = false;
         control.orders = [];
         control.runtimeError = error;
         const now = await perpetualDatabaseClock(tx);
@@ -798,12 +920,31 @@ export async function pausePerpetualAfterRestart(
       async (tx) => {
         const { row, control } = await lockOwnedPerpetualWorkspace(tx, owner, ledgerId);
         if (control.sessionStatus !== "active") return;
+        const now = await perpetualDatabaseClock(tx);
+        const { state } = await recoverPerpetualPaperInTransaction(tx, owner, ledgerId);
+        // A restart is not a new trading authorization. An already-active,
+        // owner-extended EXTERNAL session may survive only if wholly flat and
+        // settled. It still needs a fresh external proposal before any entry.
+        // Paused/expired sessions, pending entries, orders and held exposures
+        // keep the original fail-closed restart barrier unchanged.
+        if (
+          control.autoExtend === true &&
+          control.researchMode === "external" &&
+          control.source !== null &&
+          control.runtimeError === null &&
+          control.closeAll === false &&
+          control.expiresAt !== null &&
+          Date.parse(control.expiresAt) > now.getTime() &&
+          control.orders.length === 0 &&
+          !control.pendingExternalProposal &&
+          state.openPositions.length === 0
+        )
+          return;
         control.sessionStatus = "paused";
+        control.autoExtend = false;
         control.orders = [];
         control.pendingExternalProposal = null;
         control.runtimeError = "restart_paused";
-        const now = await perpetualDatabaseClock(tx);
-        const { state } = await recoverPerpetualPaperInTransaction(tx, owner, ledgerId);
         const next =
           state.openPositions.length &&
           control.protectionExpiresAt &&
