@@ -2641,12 +2641,32 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         await start(id, engine, ["BTC-USDT-SWAP", "ETH-USDT-SWAP", "SOL-USDT-SWAP"]);
         decision = { ...proposal("long"), leverage: 1, quantityBase: "1" };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
+        expect((await readOwnedPerpetualWorkspace(db.prisma, actor, id))?.lastDecision?.outcome).toBe(
+          "denied_leverage_exceeded",
+        );
+        expect((await state(id)).openPositions).toHaveLength(0);
+        const renewed = (await readOwnedPerpetualWorkspace(db.prisma, actor, id))!;
+        await controlPerpetualPaperWorkspace(
+          { ...deps(), engine, fetchSnapshot: snapshot },
+          actor,
+          {
+            ledgerId: id,
+            commandId: randomUUID(),
+            expectedRevision: renewed.revision,
+            action: "set_leverage",
+            venue: "okx",
+            instruments: ["BTC-USDT-SWAP"],
+            maxLeverage: 5,
+          },
+        );
+        decision = { ...proposal("long"), leverage: 5, quantityBase: "1.5", plannedRecoveryNotionalQuote: "0", recoverySteps: undefined };
+        await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         expect(await readOwnedPerpetualWorkspace(db.prisma, actor, id)).toMatchObject({
           runtimeError: null,
           lastDecision: { outcome: "filled" },
         });
         expect((await state(id)).openPositions).toHaveLength(1);
-        expect((await state(id)).openPositions[0]!.leverage).toBe(1);
+        expect((await state(id)).openPositions[0]!.leverage).toBe(5);
       } finally {
         engine.dispose();
       }
