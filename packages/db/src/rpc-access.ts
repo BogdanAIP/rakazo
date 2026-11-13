@@ -6,6 +6,7 @@ import {
   RpcAccessProceduresSchema,
 } from "@rakazo/contracts";
 import type { Prisma, PrismaClient } from "./client.js";
+import { tradingPaperDatabaseNow } from "./trading-paper-clock.js";
 
 type Owner = { userId: string; spaceId: string };
 const hashToken = (token: string) => createHash("sha256").update(token, "utf8").digest("hex");
@@ -29,9 +30,7 @@ function dto(row: Grant) {
   };
 }
 async function clock(tx: Prisma.TransactionClient) {
-  const [row] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`;
-  if (!row || !Number.isFinite(row.now.getTime())) throw new Error("RPC access clock unavailable");
-  return row.now;
+  return tradingPaperDatabaseNow(tx);
 }
 export async function createOwnedRpcAccessGrant(
   prisma: PrismaClient,
