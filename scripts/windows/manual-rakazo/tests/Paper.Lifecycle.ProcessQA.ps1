@@ -74,7 +74,7 @@ $raw=[regex]::Replace($raw,$serviceBoundary,
 $stopBoundary='(?ms)^function Stop-Registered\([\s\S]*?^\}'
 if(([regex]::Matches($raw,$stopBoundary)).Count -ne 1){throw 'QA process-stop boundary ambiguous'}
 $raw=[regex]::Replace($raw,$stopBoundary,
- 'function Stop-Registered($item,[string]$entry,[string]$role){if(!(Test-RegisteredProcess $item $entry $role)){return};Stop-Process -Id ([int]$item.pid) -Force -ErrorAction Stop}',1)
+ 'function Stop-Registered($item,[string]$entry,[string]$role){if(!(Test-RegisteredProcess $item $entry $role)){return};Stop-Process -Id ([int]$item.pid) -Force -ErrorAction Stop;Wait-Process -Id ([int]$item.pid) -Timeout 8 -ErrorAction SilentlyContinue}',1)
 $qaScript=Join-Path $root 'QA-process-lifecycle.ps1'
 [IO.File]::WriteAllText($qaScript,$raw,[Text.UTF8Encoding]::new($false))
 $e=$null;$t=$null
