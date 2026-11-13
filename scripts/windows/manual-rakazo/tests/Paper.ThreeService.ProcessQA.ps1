@@ -3,10 +3,11 @@ $ErrorActionPreference="Stop"
 Set-StrictMode -Version Latest
 $root=Join-Path $env:TEMP ("rakazo-three-stop-"+[guid]::NewGuid().ToString("N"))
 $repo=Join-Path $root "repo"
-$pgBin="C:\Users\eahra\RakazoRuntime\postgresql\bin"
+$sourceRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\..\..'))
+$pgBin=Join-Path $env:USERPROFILE 'RakazoRuntime\postgresql\bin'
 $node="C:\Program Files\nodejs\node.exe"
-$tsx="C:\Users\eahra\rakazo-paper-journal-risk-20261019\node_modules\tsx\dist\loader.mjs"
-$bundle=Join-Path $HOME "rakazo-paper-offline-gateway-20261019\scripts\local-paper-journal\paper-graceful-stop-runtime.mjs"
+$tsx=Join-Path $sourceRoot 'node_modules\tsx\dist\loader.mjs'
+$bundle=Join-Path $sourceRoot 'scripts\local-paper-journal\paper-graceful-stop-runtime.mjs'
 $controller=Join-Path (Split-Path -Parent $PSScriptRoot) "Paper.GracefulWorker.ps1"
 $lifecycle=Join-Path (Split-Path -Parent $PSScriptRoot) "Paper.Lifecycle.ps1"
 $started=@()
