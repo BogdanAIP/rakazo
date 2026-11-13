@@ -1822,7 +1822,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
           .accounts[0]!.ledgerId;
         await start(id, engine);
-        decision = { ...proposal("long"), leverage: 20, quantityBase: "1.00" };
+        decision = { ...proposal("long"), leverage: 5, quantityBase: "1.50", plannedRecoveryNotionalQuote: "0", recoverySteps: undefined };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         const journal = await readOwnedPerpetualPaperJournal(db.prisma, owner, id);
         expect(journal?.status).toBe("verified");
@@ -1831,7 +1831,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           JSON.stringify(journal),
         ).toMatchObject({ runtimeError: null, lastDecision: { outcome: "filled" } });
         expect((await state(id)).openPositions).toHaveLength(1);
-        expect((await state(id)).openPositions[0]!.leverage).toBe(20);
+        expect((await state(id)).openPositions[0]!.leverage).toBe(5);
         const modelContext = JSON.parse(
           (calls[0] as Parameters<AgentRuntime["run"]>[0]).prompt,
         ).publicMarketData;
@@ -1853,7 +1853,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         expect(await db.prisma.tradingPaperPerpetualEvent.count({ where: { ledgerId: id } })).toBe(
           0,
         );
-        decision = { ...proposal("short"), leverage: 20, quantityBase: "1.00" };
+        decision = { ...proposal("short"), leverage: 5, quantityBase: "1.50", plannedRecoveryNotionalQuote: "0", recoverySteps: undefined };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         expect(
           (await state(id)).openPositions.map((p) => p.side).sort(),
@@ -1862,7 +1862,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
             journal: await readOwnedPerpetualPaperJournal(db.prisma, owner, id),
           }),
         ).toEqual(["long", "short"]);
-        expect((await state(id)).bookBalanceQuote).toBe("999.90000000");
+        expect((await state(id)).bookBalanceQuote).toBe("999.85000000");
         engine.invalidate(id);
         await reconcilePerpetualPaperWorkspaces({ ...deps(), engine }, true);
         expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
@@ -1883,17 +1883,17 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         });
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id));
         expect((await state(id)).openPositions).toHaveLength(0);
-        expect((await state(id)).bookBalanceQuote).toBe("999.80400000");
+        expect((await state(id)).bookBalanceQuote).toBe("999.70600000");
         modelFails = false;
         price = "100.00";
         await start(id, engine, ["ETH-USDT-SWAP"]);
-        decision = { ...proposal("long", "ETH-USDT-SWAP"), leverage: 20, quantityBase: "1" };
+        decision = { ...proposal("long", "ETH-USDT-SWAP"), leverage: 5, quantityBase: "1.5", plannedRecoveryNotionalQuote: "0", recoverySteps: undefined };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         expect((await state(id)).openPositions[0]!.instrument).toBe("ETH-USDT-SWAP");
-        expect((await state(id)).bookBalanceQuote).toBe("999.75400000");
+        expect((await state(id)).bookBalanceQuote).toBe("999.63100000");
         engine.invalidate(id);
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id));
-        expect((await state(id)).bookBalanceQuote).toBe("999.75400000");
+        expect((await state(id)).bookBalanceQuote).toBe("999.63100000");
       } finally {
         engine.dispose();
       }
