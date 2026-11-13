@@ -1706,7 +1706,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
           .accounts[0]!.ledgerId;
         await start(id, engine, ["BTC-USDT-SWAP"]);
-        decision = { ...proposal("long"), quantityBase: "1.00", leverage: 20 };
+        decision = { ...proposal("long"), quantityBase: "1.50", leverage: 5 };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         expect((await state(id)).openPositions).toHaveLength(1);
 
@@ -1715,7 +1715,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         contractPriceStep = "0.05";
         contractSizeStep = "0.05";
         contractMaintenanceBps = 100;
-        decision = { ...proposal("short"), quantityBase: "1.00", leverage: 20 };
+        decision = { ...proposal("short"), quantityBase: "1.50", leverage: 5 };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         expect((await state(id)).openPositions).toHaveLength(1);
         expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
