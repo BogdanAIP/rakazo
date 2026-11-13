@@ -2124,7 +2124,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
           .accounts[0]!.ledgerId;
         await start(id, engine);
-        decision = { ...proposal("long"), leverage: 20 };
+        decision = { ...proposal("long"), leverage: 5 };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         const positionId = (await state(id)).openPositions[0]!.positionId;
         const control = async () =>
