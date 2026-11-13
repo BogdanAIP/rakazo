@@ -1796,7 +1796,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
           .accounts[0]!.ledgerId;
         await start(id, engine);
         observationShiftMs = 1500;
-        decision = { ...proposal("long"), leverage: 20 };
+        decision = { ...proposal("long"), leverage: 5 };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         expect((await state(id)).openPositions).toHaveLength(1);
         observationShiftMs = 6000;
