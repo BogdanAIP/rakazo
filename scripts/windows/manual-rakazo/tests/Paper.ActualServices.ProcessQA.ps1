@@ -2,8 +2,8 @@
 # NEVER use production DATABASE_URL, running worker PID or live ledger files.
 $ErrorActionPreference="Stop"
 Set-StrictMode -Version Latest
-$repo=Join-Path $HOME "rakazo-paper-graceful-worker-20261020"
-$gatewayRepo=Join-Path $HOME "rakazo-paper-offline-gateway-20261019"
+$repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\..\..'))
+$gatewayRepo=$repo
 $dir=Join-Path $env:TEMP ("paper-actual-services-"+[guid]::NewGuid().ToString("N"))
 $data=Join-Path $dir "postgres"
 $bin=Join-Path $HOME "RakazoRuntime\postgresql\bin"
@@ -112,8 +112,15 @@ try{
  $started+=@($gateway.Id)
  for($i=0;$i -lt 110 -and !(Listen 15652);$i++){Start-Sleep -Milliseconds 200}
  Assert-QA (Listen 15652) "Actual journal gateway listened on isolated port"
- $probe=Invoke-WebRequest -Uri "http://127.0.0.1:15652/linked-paper/status" -UseBasicParsing -SkipHttpErrorCheck -TimeoutSec 8
- Assert-QA ($probe.StatusCode -ge 400 -and $probe.StatusCode -lt 600) "Unauthenticated journal status did not expose trading data"
+ $statusCode=$null
+ try{
+  $probe=Invoke-WebRequest -Uri "http://127.0.0.1:15652/linked-paper/status" -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop
+  $statusCode=[int]$probe.StatusCode
+ }catch [System.Net.WebException]{
+  if(!$_.Exception.Response){throw}
+  $statusCode=[int]$_.Exception.Response.StatusCode
+ }
+ Assert-QA ($statusCode -ge 400 -and $statusCode -lt 600) "Unauthenticated journal status did not expose trading data"
  $cfg=@{repo=$repo;pgBin=$bin;pgData=$data;pgPort=15549}
  $cfg|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $dir "paper-runtime-config.json")
  $pids=@{api=(Register-Service "api" $api (Join-Path $repo "apps\api\src\index.ts"));
