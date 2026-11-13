@@ -1763,9 +1763,9 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
           .accounts[0]!.ledgerId;
         await start(id, engine, ["BTC-USDT-SWAP"]);
-        decision = { ...proposal("long"), leverage: 20, quantityBase: "1.00" };
+        decision = { ...proposal("long"), leverage: 5, quantityBase: "1.50" };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
-        expect(Number((await state(id)).openPositions[0]?.quantityBase)).toBe(1);
+        expect(Number((await state(id)).openPositions[0]?.quantityBase)).toBe(1.5);
 
         // Protection sees only 0.40 base at bid while a full 1.00 long
         // crosses its stop. Research no-trade must not refill the same book.
@@ -1775,7 +1775,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         const after = await state(id);
         expect(after.openPositions).toHaveLength(1);
-        expect(Number(after.openPositions[0]?.quantityBase)).toBe(0.6);
+        expect(Number(after.openPositions[0]?.quantityBase)).toBe(1.1);
         expect(after.closedPositions).toBe(0);
       } finally {
         engine.dispose();
