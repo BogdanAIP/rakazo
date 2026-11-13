@@ -3858,6 +3858,89 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
     expect(research).toHaveBeenCalledTimes(3);
     expect(calls).toHaveLength(0);
   });
+  it("PAPER-v3 idle minute wakes do not reset the native 15-minute research clock", async () => {
+    const id = await account("moderate");
+    const markets = [
+      "BTC-USDT-SWAP",
+      "ETH-USDT-SWAP",
+      "SOL-USDT-SWAP",
+      ...Array.from({ length: 52 }, (_, i) => `QA${i}-USDT-SWAP`),
+    ];
+    const research = vi.fn(async () => ({
+      decision: { kind: "no_trade" as const, reason: "Independent public signal absent" },
+      snapshots: [],
+    }));
+    await start(id, undefined, markets, "external");
+    const initialRow = await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+      where: { ledgerId: id },
+    });
+    const control = parsePerpetualControl(initialRow);
+    control.maxLeverage = 5;
+    await db.prisma.tradingPaperPerpetualWorkspace.update({
+      where: { ledgerId: id },
+      data: { control: perpetualPaperJson(control), controlSha256: perpetualPaperHash(control) },
+    });
+    const initial = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
+    await controlPerpetualPaperWorkspace(deps(), owner, {
+      action: "set_auto_research",
+      ledgerId: id,
+      commandId: randomUUID(),
+      expectedRevision: initial.revision,
+      enabled: true,
+    });
+    const run = async () =>
+      handlePerpetualPaperWake({ ...worker(), nativeResearch: research }, await payload(id, false));
+
+    await run();
+    expect(research).toHaveBeenCalledTimes(1);
+    const first = parsePerpetualControl(
+      await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+        where: { ledgerId: id },
+      }),
+    );
+    expect(first.lastResearchAt).toBeTruthy();
+
+    await run();
+    expect(research).toHaveBeenCalledTimes(1);
+    const second = parsePerpetualControl(
+      await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+        where: { ledgerId: id },
+      }),
+    );
+    expect(second.lastResearchAt).toBe(first.lastResearchAt);
+    const afterIdle = await db.prisma.tradingPaperPerpetualTick.findMany({
+      where: { ledgerId: id, stage: "research" },
+      orderBy: { scheduledFor: "asc" },
+    });
+    expect(afterIdle).toHaveLength(2);
+    expect(afterIdle[0]?.modelProvider).toBe("native-public-rules");
+    expect(afterIdle[1]?.decision).toMatchObject({
+      kind: "no_trade",
+      reason: "Waiting for the next five-minute analysis",
+    });
+    expect(afterIdle[1]?.modelId).toBeNull();
+
+    const row = await db.prisma.tradingPaperPerpetualWorkspace.findUniqueOrThrow({
+      where: { ledgerId: id },
+    });
+    const due = parsePerpetualControl(row);
+    due.lastResearchAt = new Date(Date.now() - 16 * 60_000).toISOString();
+    await db.prisma.tradingPaperPerpetualWorkspace.update({
+      where: { ledgerId: id },
+      data: { control: perpetualPaperJson(due), controlSha256: perpetualPaperHash(due) },
+    });
+    await run();
+    expect(research).toHaveBeenCalledTimes(2);
+    const afterDue = await db.prisma.tradingPaperPerpetualTick.findMany({
+      where: { ledgerId: id, stage: "research" },
+      orderBy: { scheduledFor: "asc" },
+    });
+    expect(afterDue).toHaveLength(3);
+    expect(afterDue[2]?.modelProvider).toBe("native-public-rules");
+    expect((await readOwnedPerpetualWorkspace(db.prisma, owner, id))?.runtimeError).toBeNull();
+    expect((await state(id)).openPositions).toHaveLength(0);
+  });
+
   it.skipIf(!process.env.PAPER_NAUTILUS_PYTHON)(
     "PAPER-v3 autonomous native proposal fills two distinct 5x positions",
     async () => {

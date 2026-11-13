@@ -314,6 +314,7 @@ export async function handlePerpetualPaperWake(
     };
     let snapshots: PaperPerpetualSnapshot[] = [];
     let model: AgentRunModel | undefined;
+    let nativeResearchExecuted = false;
     const priorTick = await deps.prisma.tradingPaperPerpetualTick.findUnique({
       where: {
         ledgerId_revision_scheduledFor_stage: {
@@ -366,6 +367,7 @@ export async function handlePerpetualPaperWake(
         });
         decision = generated.decision;
         snapshots = generated.snapshots;
+        nativeResearchExecuted = true;
       } else {
         failure = "market_skill_unavailable";
         if (!current.control.source) throw new Error("No selected futures skill");
@@ -541,7 +543,7 @@ export async function handlePerpetualPaperWake(
         ? { provider: "external-proposal", modelId: "external-unattested" }
         : model
           ? { provider: model.provider, modelId: model.id }
-          : nativeAuto
+          : nativeResearchExecuted
             ? { provider: "native-public-rules", modelId: "okx-m15-h1-h4-v1" }
             : undefined,
     );
