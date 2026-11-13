@@ -2190,7 +2190,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         const id = (await createOwnedPerpetualExperimentAccounts(db.prisma, owner, ["aggressive"]))
           .accounts[0]!.ledgerId;
         await start(id, engine);
-        decision = { ...proposal("long"), leverage: 20, quantityBase: "1.00" };
+        decision = { ...proposal("long"), leverage: 5, quantityBase: "1.50" };
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
         expect((await state(id)).openPositions).toHaveLength(1);
         const original = (await state(id)).openPositions[0]!.positionId;
@@ -2203,7 +2203,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         let after = await state(id);
         expect(after.openPositions).toHaveLength(1);
         expect(after.openPositions[0]!.positionId).toBe(original);
-        expect(Number(after.openPositions[0]!.quantityBase)).toBe(0.75);
+        expect(Number(after.openPositions[0]!.quantityBase)).toBe(1.25);
         expect(await readOwnedPerpetualWorkspace(db.prisma, owner, id)).toMatchObject({
           sessionStatus: "paused",
           runtimeError: "model_unavailable",
@@ -2214,7 +2214,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id));
         after = await state(id);
         expect(after.openPositions).toHaveLength(1);
-        expect(Number(after.openPositions[0]!.quantityBase)).toBe(0.75);
+        expect(Number(after.openPositions[0]!.quantityBase)).toBe(1.25);
         expect(after.openPositions[0]!.side).toBe("long");
 
         // On later public depth, the independently protected remainder exits.
