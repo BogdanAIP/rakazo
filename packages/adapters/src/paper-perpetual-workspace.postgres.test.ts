@@ -1045,6 +1045,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         const command = await send({
           ...proposal("long"),
           orderType: "limit",
+          quantityBase: "1.6",
           limitPriceQuote: "99",
         });
         await handlePerpetualPaperWake({ ...worker(), engine }, await payload(id, true));
@@ -3139,6 +3140,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
         const candidate = compared({
           ...proposal("long"),
           orderType: "limit",
+          quantityBase: "1.6",
           limitPriceQuote: "99",
           plannedRecoveryNotionalQuote: "0",
           recoverySteps: undefined,
@@ -3192,6 +3194,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
             decision: compared({
               ...proposal("long"),
               orderType: "limit",
+              quantityBase: "1.6",
               limitPriceQuote: "99",
               plannedRecoveryNotionalQuote: "0",
               recoverySteps: undefined,
@@ -3527,7 +3530,7 @@ suite("owner-controlled PAPER futures execution against PostgreSQL", () => {
       try {
         const id = await account();
         await start(id, warm);
-        decision = { ...proposal("long"), orderType: "limit", limitPriceQuote: "99" };
+        decision = { ...proposal("long"), orderType: "limit", quantityBase: "1.6", limitPriceQuote: "99" };
         await handlePerpetualPaperWake({ ...worker(), engine: warm }, await payload(id, true));
         const before = await state(id);
         const workspace = (await readOwnedPerpetualWorkspace(db.prisma, owner, id))!;
