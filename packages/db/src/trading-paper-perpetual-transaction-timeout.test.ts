@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "./generated/prisma/client.js";
 import { describe, expect, it, vi } from "vitest";
 import {
   commandOwnedPerpetualWorkspace,
@@ -57,13 +57,10 @@ describe("PAPER control and protection transactions under a growing event histor
     {
       name: "commit protection tick before entering risk core",
       invoke: (prisma) =>
-        recordPerpetualResearchTick(
-          prisma,
-          owner,
-          { ...key, stage: "protection" },
-          [],
-          { kind: "no_trade", reason: "Protect positions" },
-        ),
+        recordPerpetualResearchTick(prisma, owner, { ...key, stage: "protection" }, [], {
+          kind: "no_trade",
+          reason: "Protect positions",
+        }),
     },
     {
       name: "bounded hash-verified research history",
@@ -71,14 +68,17 @@ describe("PAPER control and protection transactions under a growing event histor
     },
   ];
 
-  it.each(operations)("$name has a deliberate 30-second database transaction budget", async ({ invoke }) => {
-    const transaction = vi.fn(async (_callback: unknown, _options: unknown) => null);
-    const prisma = { $transaction: transaction } as unknown as PrismaClient;
-    await invoke(prisma);
-    expect(transaction).toHaveBeenCalledTimes(1);
-    expect(transaction).toHaveBeenCalledWith(
-      expect.any(Function),
-      expect.objectContaining({ timeout: 30000 }),
-    );
-  });
+  it.each(operations)(
+    "$name has a deliberate 30-second database transaction budget",
+    async ({ invoke }) => {
+      const transaction = vi.fn(async (_callback: unknown, _options: unknown) => null);
+      const prisma = { $transaction: transaction } as unknown as PrismaClient;
+      await invoke(prisma);
+      expect(transaction).toHaveBeenCalledTimes(1);
+      expect(transaction).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({ timeout: 30000 }),
+      );
+    },
+  );
 });
