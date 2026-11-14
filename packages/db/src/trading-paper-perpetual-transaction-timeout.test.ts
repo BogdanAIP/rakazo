@@ -1,5 +1,5 @@
-import type { PrismaClient } from "./generated/prisma/client.js";
 import { describe, expect, it, vi } from "vitest";
+import type { PrismaClient } from "./generated/prisma/client.js";
 import {
   commandOwnedPerpetualWorkspace,
   completeIdleExternalPerpetualWake,
