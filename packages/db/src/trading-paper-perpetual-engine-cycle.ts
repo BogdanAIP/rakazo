@@ -194,7 +194,7 @@ async function commitPerpetualEngineWakeOnce(
                 comparison: decision.comparison,
               };
             }
-            control.runtimeError = null;
+            if (active) control.runtimeError = null;
             await savePerpetualControl(
               tx,
               key.ledgerId,
@@ -1425,7 +1425,7 @@ async function commitPerpetualEngineWakeOnce(
           // or overwriting its original research time, rationale and provenance.
           control.lastDecision.outcome = outcome;
         }
-        control.runtimeError = null;
+        if (active) control.runtimeError = null;
         if (key.stage === "research") control.networkRetryCount = 0;
         const needsNext = active || (state.openPositions.length > 0 && protects);
         const next =

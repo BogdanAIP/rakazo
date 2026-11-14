@@ -543,7 +543,7 @@ export async function commandOwnedPerpetualWorkspace(
         });
         return { revision, duplicate: false };
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 },
     ),
   );
 }
@@ -720,7 +720,7 @@ export async function readPerpetualWake(
         }
         return { row, control, state, engineConfig, entries, now };
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 },
     ),
   );
 }
@@ -780,7 +780,7 @@ export async function completeIdleExternalPerpetualWake(
         );
         return true;
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 },
     ),
   );
 }
@@ -824,7 +824,7 @@ export async function reschedulePerpetualProtectionAfterResearchExpiry(
         );
         return true;
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 },
     ),
   );
 }
@@ -875,7 +875,7 @@ export async function retryTransientPerpetualMarketWake(
         );
         return true;
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 },
     ),
   );
 }
@@ -906,7 +906,7 @@ export async function failPerpetualWake(
             : null;
         await savePerpetualControl(tx, ledgerId, revision, control, next);
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 },
     ),
   );
 }
@@ -961,7 +961,7 @@ export async function pausePerpetualAfterRestart(
           },
         });
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 },
     ),
   );
 }
@@ -1064,7 +1064,7 @@ export async function recordPerpetualResearchTick(
           },
         });
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 },
     ),
   );
 }
@@ -1158,6 +1158,6 @@ export async function readOwnedPerpetualResearchHistory(
         return { ...base, status: "integrity_blocked" as const, decisions: [], nextBefore: null };
       }
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 30000 },
   );
 }

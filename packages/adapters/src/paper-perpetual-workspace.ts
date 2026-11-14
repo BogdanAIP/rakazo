@@ -214,7 +214,7 @@ export async function handlePerpetualPaperWake(
     revision: payload.sessionRevision,
     scheduledFor: payload.scheduledFor,
   };
-  let failure = "market_data_unavailable";
+  let failure = "database_unavailable";
   try {
     const first = await readPerpetualWake(
       deps.prisma,
@@ -260,6 +260,7 @@ export async function handlePerpetualPaperWake(
         ? first.control.pendingExternalProposal.decision.instrument
         : null;
     // Protect held lots; capture only the proposed market when flat.
+    failure = "market_data_unavailable";
     const protection = await read(
       activeProtectionSymbols.length
         ? activeProtectionSymbols
@@ -287,6 +288,7 @@ export async function handlePerpetualPaperWake(
           ? commitPerpetualPaperWake(deps.prisma, owner, stage, observations)
           : Promise.reject(new Error("PAPER futures engine not configured"));
     const protectionKey = { ...key, stage: "protection" as const };
+    failure = "database_unavailable";
     await recordPerpetualResearchTick(deps.prisma, owner, protectionKey, protection, {
       kind: "no_trade",
       reason: "Protect existing positions before research",

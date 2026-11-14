@@ -606,13 +606,9 @@ export async function commitPerpetualPaperWake(
           }
         }
         if (!active && control.sessionStatus === "active") control.orders = [];
-        if (
-          active ||
-          ["market_data_unavailable", "protection_unavailable", "execution_unavailable"].includes(
-            control.runtimeError ?? "",
-          )
-        )
-          control.runtimeError = null;
+        // A protection-only tick is not evidence that the failed entry/research
+        // operation recovered. Keep the pause reason visible until an authorized resume.
+        if (active) control.runtimeError = null;
         const needsNext = active || (state.openPositions.length > 0 && protects);
         const next =
           key.stage === "protection"
