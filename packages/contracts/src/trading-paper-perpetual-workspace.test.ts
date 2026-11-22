@@ -5,6 +5,31 @@ import {
 } from "./trading-paper-perpetual-workspace.js";
 
 describe("AI PAPER futures portfolio decision schema", () => {
+  it("allows owner-approved 55-market expansion without altering leverage or account session", () => {
+    const symbols = Array.from({ length: 55 }, (_, i) => `ASSET${i}-USDT-SWAP`);
+    const command = {
+      action: "set_instruments",
+      ledgerId: "paper-futures:fixture",
+      commandId: "f417c73b-7e44-4d73-ae7a-ccf8872d43f2",
+      expectedRevision: 7,
+      venue: "okx",
+      instruments: symbols,
+    };
+    expect(PaperPerpetualCommandSchema.parse(command)).toEqual(command);
+    expect(
+      PaperPerpetualCommandSchema.safeParse({ ...command, instruments: [...symbols, symbols[0]] })
+        .success,
+    ).toBe(false);
+    expect(
+      PaperPerpetualCommandSchema.safeParse({
+        ...command,
+        instruments: Array.from({ length: 101 }, (_, i) => `ASSET${i}-USDT-SWAP`),
+      }).success,
+    ).toBe(false);
+    expect(PaperPerpetualCommandSchema.safeParse({ ...command, maxLeverage: 20 }).success).toBe(
+      false,
+    );
+  });
   it("resumes only a bounded existing scope and rejects scope overrides", () => {
     const resume = {
       action: "resume",
@@ -32,7 +57,7 @@ describe("AI PAPER futures portfolio decision schema", () => {
       kind: "reduce",
       positionId: "paper-position:one",
       quantityBase: "0.25",
-      reason: "Сократить экспозицию перед рыночной турбулентностью.",
+      reason: "????????? ?????????? ????? ???????? ???????????????.",
     });
     expect(decision).toMatchObject({
       kind: "reduce",
@@ -49,7 +74,7 @@ describe("AI PAPER futures portfolio decision schema", () => {
           kind: "reduce",
           positionId: "paper-position:one",
           quantityBase,
-          reason: "Исправление риска",
+          reason: "??????????? ?????",
         }).success,
       ).toBe(false);
     }
@@ -58,7 +83,7 @@ describe("AI PAPER futures portfolio decision schema", () => {
         kind: "reduce",
         positionId: "paper-position:one",
         quantityBase: "1",
-        reason: "Исправление риска",
+        reason: "??????????? ?????",
         ignoreRiskChecks: true,
       }).success,
     ).toBe(false);
@@ -169,7 +194,7 @@ describe("AI PAPER futures portfolio decision schema", () => {
 
   it("preserves no_trade and full close decisions", () => {
     expect(
-      PaperPerpetualDecisionSchema.parse({ kind: "no_trade", reason: "Нет сигнала" }),
+      PaperPerpetualDecisionSchema.parse({ kind: "no_trade", reason: "??? ???????" }),
     ).toMatchObject({
       kind: "no_trade",
     });
@@ -177,8 +202,34 @@ describe("AI PAPER futures portfolio decision schema", () => {
       PaperPerpetualDecisionSchema.parse({
         kind: "close",
         positionId: "paper-position:one",
-        reason: "Торговая идея утратила силу",
+        reason: "???????? ???? ???????? ????",
       }),
     ).toMatchObject({ kind: "close" });
+  });
+});
+
+describe("continuous PAPER entry authority", () => {
+  const valid = {
+    action: "extend" as const,
+    ledgerId: "paper-futures:fixture",
+    commandId: "b7e0b8b5-c03d-4dc0-a2fb-8883371f8029",
+    expectedRevision: 4,
+    durationMinutes: 20160,
+  };
+  it("extends a running session without a trade or settings change", () => {
+    expect(PaperPerpetualCommandSchema.parse(valid)).toEqual(valid);
+  });
+  it("refuses unbounded authority, funding or leverage changes", () => {
+    for (const extra of [
+      { durationMinutes: 0 },
+      { durationMinutes: 20161 },
+      { expectedRevision: -1 },
+      { maxLeverage: 100 },
+      { instruments: ["BTC-USDT-SWAP"] },
+      { decision: { kind: "proposal" } },
+      { closeAll: false },
+    ]) {
+      expect(PaperPerpetualCommandSchema.safeParse({ ...valid, ...extra }).success).toBe(false);
+    }
   });
 });

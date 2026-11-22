@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import {
   type BackgroundJob,
   type BackgroundJobHandlers,
@@ -7,9 +8,48 @@ import {
 } from "@rakazo/adapter-kit";
 import { isTooManyDatabaseConnections } from "@rakazo/db";
 import { runCorrelatedJob, unwrapJobPayload, wrapJobPayload } from "@rakazo/logging";
-import { makeWorkerUtils, type Runner, run, type WorkerUtils } from "graphile-worker";
+import {
+  makeWorkerUtils,
+  type Runner,
+  run,
+  type WorkerEvents,
+  type WorkerUtils,
+} from "graphile-worker";
 import type { Pool } from "pg";
+import { awaitGraphileJobSettlements } from "./graphile-settlement.js";
 import { recordHistoryCompactAttemptsExhausted } from "./history-compaction.js";
+
+/** Retry only known transient PostgreSQL transport failures, not SQL logic errors. */
+function retryableDatabaseConnectionError(error: unknown): boolean {
+  if (isTooManyDatabaseConnections(error)) return true;
+  let current: unknown = error;
+  for (let i = 0; i < 5 && typeof current === "object" && current !== null; i++) {
+    const e = current as { code?: unknown; message?: unknown; cause?: unknown };
+    if (
+      typeof e.code === "string" &&
+      [
+        "ECONNRESET",
+        "ECONNREFUSED",
+        "ETIMEDOUT",
+        "EPIPE",
+        "08000",
+        "08003",
+        "08006",
+        "57P01",
+      ].includes(e.code)
+    )
+      return true;
+    if (
+      typeof e.message === "string" &&
+      /connection terminated unexpectedly|connection terminated due to connection timeout|server closed the connection unexpectedly|socket hang up/i.test(
+        e.message,
+      )
+    )
+      return true;
+    current = e.cause;
+  }
+  return false;
+}
 
 // Share the caller's pg.Pool instead of opening a separate connectionString-based
 // pool per graphile-worker component: three independent pools per worker process
@@ -45,7 +85,13 @@ export class GraphileJobPublisher implements JobPublisher {
 
   private getUtils(): Promise<WorkerUtils> {
     if (this.closed) throw new Error("Background job publisher is closed");
-    this.utils ??= makeWorkerUtils({ pgPool: this.pgPool });
+    if (!this.utils) {
+      const pending = makeWorkerUtils({ pgPool: this.pgPool });
+      this.utils = pending;
+      void pending.catch(() => {
+        if (this.utils === pending) this.utils = undefined;
+      });
+    }
     return this.utils;
   }
 }
@@ -56,7 +102,7 @@ export function databaseCapacityBackoffMs(attempt: number): number {
 }
 
 export class GraphileJobWorkerHost implements JobWorkerHost {
-  private runner: Runner | undefined;
+  private runner: { instance: Runner; failure: () => unknown } | undefined;
   private handlers: BackgroundJobHandlers | undefined;
   private stopping = false;
   private superviseTask: Promise<void> | undefined;
@@ -88,7 +134,11 @@ export class GraphileJobWorkerHost implements JobWorkerHost {
     this.stopping = true;
     this.wakeSleep?.();
     try {
-      await this.runner?.stop();
+      if (this.runner) {
+        await this.runner.instance.stop();
+        // Wait for Graphile job acknowledgement before allowing DB pool teardown.
+        await awaitGraphileJobSettlements(this.pgPool);
+      }
     } finally {
       await this.superviseTask?.catch(() => undefined);
       this.runner = undefined;
@@ -114,11 +164,17 @@ export class GraphileJobWorkerHost implements JobWorkerHost {
         },
       ]),
     );
+    const events = new EventEmitter() as WorkerEvents;
+    let failure: unknown;
+    events.on("pool:fatalError", ({ error }) => {
+      if (failure === undefined || retryableDatabaseConnectionError(failure)) failure = error;
+    });
     const runner = await run({
       pgPool: this.pgPool,
       concurrency: this.options.concurrency ?? 4,
       pollInterval: this.options.pollInterval ?? 500,
       noHandleSignals: this.options.noHandleSignals,
+      events,
       taskList,
     });
     runner.events.on("job:failed", ({ job, error }) => {
@@ -128,7 +184,7 @@ export class GraphileJobWorkerHost implements JobWorkerHost {
       await runner.stop().catch(() => undefined);
       return;
     }
-    this.runner = runner;
+    this.runner = { instance: runner, failure: () => failure };
   }
 
   private delay(ms: number): Promise<void> {
@@ -154,14 +210,15 @@ export class GraphileJobWorkerHost implements JobWorkerHost {
       const runner = this.runner;
       if (!runner || this.stopping) return;
       try {
-        await runner.promise;
-        return;
+        await runner.instance.promise;
+        if (this.stopping) return;
+        throw runner.failure() ?? new Error("Background job runner stopped unexpectedly");
       } catch (error) {
         if (this.stopping) return;
         if (this.runner === runner) this.runner = undefined;
-        if (!isTooManyDatabaseConnections(error)) throw error;
+        if (!retryableDatabaseConnectionError(error)) throw error;
         // Back off after every lifecycle 53300 (runner death or failed relaunch),
-        // not only when launchRunner rejects — otherwise a runner that starts then
+        // not only when launchRunner rejects ? otherwise a runner that starts then
         // dies again under saturation reconnects with no delay.
         for (let attempt = 0; ; attempt += 1) {
           if (this.stopping) return;
@@ -172,7 +229,7 @@ export class GraphileJobWorkerHost implements JobWorkerHost {
             if (this.stopping || !this.runner) return;
             break;
           } catch (startError) {
-            if (!isTooManyDatabaseConnections(startError)) throw startError;
+            if (!retryableDatabaseConnectionError(startError)) throw startError;
           }
         }
       }

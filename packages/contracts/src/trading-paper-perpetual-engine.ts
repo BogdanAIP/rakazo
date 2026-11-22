@@ -32,7 +32,7 @@ export const PaperPerpetualEngineConfigSchema = z
     accountId: Id,
     initialBalanceQuote: z.literal("1000"),
     leverage: z.number().int().positive().safe(),
-    instruments: z.array(PaperPerpetualEngineInstrumentSchema).min(1).max(8),
+    instruments: z.array(PaperPerpetualEngineInstrumentSchema).min(1).max(100),
   })
   .strict();
 export const PaperPerpetualEngineBatchSchema = z

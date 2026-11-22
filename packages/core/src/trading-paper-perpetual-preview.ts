@@ -44,6 +44,7 @@ function checkedBps(n: number, max: number): bigint {
 }
 
 export const PAPER_PERPETUAL_RISK_POLICY_VERSION = "paper-risk-v3" as const;
+export const PAPER_FIRST_ENTRY_MARGIN_BPS = 300 as const;
 
 /** Equity-relative PAPER budgets. Drawdown only restricts new exposure. */
 export function getPaperPerpetualRiskLimits(
@@ -85,6 +86,8 @@ export type PaperPerpetualProposalInput = Readonly<{
   stopPriceQuote: string;
   takeProfitPriceQuote: string;
   availableQuote: string;
+  /** Verified executor-supplied entry collateral budget. */
+  firstEntryMarginFloorBps?: number;
   /** Future additional gross quote budget for this NEW idea; no automatic order. */
   additionalRecoveryNotionalQuote?: string;
   /** Snapshot MUST come from the same owner-scoped ledger, never from the model. */
@@ -132,6 +135,7 @@ export type PaperPerpetualProposal =
         | "invalid_input"
         | "unsupported_market"
         | "leverage_exceeded"
+        | "initial_entry_margin_below_minimum"
         | "invalid_exit_prices"
         | "risk_budget_exceeded"
         | "position_count_exceeded"
@@ -154,6 +158,7 @@ export type PaperPerpetualProposal =
       quantityBase: string;
       notionalQuote: string;
       initialMarginQuote: string;
+      initialMarginFloorQuote: string | null;
       entryFeeQuote: string;
       stopExitFeeQuote: string;
       worstCaseStopLossQuote: string;
@@ -191,6 +196,8 @@ export function previewPaperPerpetualProposal(
     input.leverage < 1 ||
     input.leverage > (input.ownerMaxLeverage ?? preset.maxLeverage)
   )
+    return deny("leverage_exceeded");
+  if (input.firstEntryMarginFloorBps === PAPER_FIRST_ENTRY_MARGIN_BPS && input.leverage !== 5)
     return deny("leverage_exceeded");
   try {
     const fee = checkedBps(input.assumedFeeBpsPerSide, 1000);
@@ -264,6 +271,17 @@ export function previewPaperPerpetualProposal(
     const notional = ceil(qty * effectiveEntry, SCALE);
     const closeNotional = ceil(qty * effectiveStop, SCALE);
     const margin = ceil(notional, BigInt(input.leverage));
+    const bps =
+      input.firstEntryMarginFloorBps === undefined
+        ? null
+        : checkedBps(input.firstEntryMarginFloorBps, 1000);
+    // Native available locks only maintenance; cross initial requirements
+    // for all gross hedge legs and reserved adds reduce the usable equity.
+    const committedInitial = ceil(existingGross, BigInt(input.leverage));
+    const remaining = markedEquity > committedInitial ? markedEquity - committedInitial : 0n;
+    const free = min(available, remaining);
+    const budget = bps === null ? null : (free * bps) / BPS;
+    if (budget !== null && margin < budget) return deny("initial_entry_margin_below_minimum");
     const entryFee = ceil(notional * fee, BPS);
     const stopFee = ceil(closeNotional * fee, BPS);
     const adverseDifference =
@@ -341,6 +359,7 @@ export function previewPaperPerpetualProposal(
       quantityBase: fmt(qty),
       notionalQuote: fmt(notional),
       initialMarginQuote: fmt(margin),
+      initialMarginFloorQuote: budget === null ? null : fmt(budget),
       entryFeeQuote: fmt(entryFee),
       stopExitFeeQuote: fmt(stopFee),
       worstCaseStopLossQuote: fmt(stopRisk),

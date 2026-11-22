@@ -487,6 +487,6 @@ export async function readOwnedPerpetualPaperJournal(
         };
       }
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 },
   );
 }

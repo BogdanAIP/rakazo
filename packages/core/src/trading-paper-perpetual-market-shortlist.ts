@@ -158,7 +158,7 @@ export function suggestPaperPerpetualCryptoUniverse(
         a[0].localeCompare(b[0]),
     )
     .map(([symbol]) => symbol);
-  const symbols = researchSymbols.slice(0, 8);
+  const symbols = researchSymbols.slice(0, 80);
   return {
     symbols,
     researchSymbols,

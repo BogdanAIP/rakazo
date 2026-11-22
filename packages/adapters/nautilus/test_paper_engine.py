@@ -49,6 +49,29 @@ class EngineTest(unittest.TestCase):
         finally:
             replay.dispose()
 
+    def test_new_contract_can_be_added_while_a_different_position_is_open(self):
+        first = batch(1, [order("original", "OPEN", "buy")])
+        second = batch(2, [order("new", "NEW", "buy", symbol="SOL-USDT-SWAP")])
+        second["registerInstruments"] = [dict(config()["instruments"][0], instrument="SOL-USDT-SWAP")]
+        second["quotes"].append(dict(second["quotes"][0], instrument="SOL-USDT-SWAP"))
+        first_output = second_output = None
+        engine = PaperEngine(config())
+        try:
+            first_output = engine.apply(first)
+            second_output = engine.apply(second)
+            self.assertEqual(len(first_output["positions"]), 1)
+            self.assertEqual(len(second_output["positions"]), 2)
+            original = next(p for p in second_output["positions"] if p["positionId"] == "OPEN")
+            self.assertEqual(original["quantityBase"], "1.00")
+        finally:
+            engine.dispose()
+        replay = PaperEngine(config())
+        try:
+            self.assertEqual(replay.apply(first), first_output)
+            self.assertEqual(replay.apply(second), second_output)
+        finally:
+            replay.dispose()
+
     def test_known_contract_terms_refresh_only_while_flat_and_replay_deterministically(self):
         initial = config()
         updated = dict(initial["instruments"][0], priceIncrement="0.10",
