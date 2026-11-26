@@ -27,6 +27,18 @@ describe("pstack candidate integration", () => {
     }
   });
 
+  it("pins all portable engineering skills", async () => {
+    const batch = JSON.parse(await read("../../../market/rakazo-engineering.v1.json"));
+    expect(batch.items).toHaveLength(8);
+    expect(new Set(batch.items.map((item: { key: string }) => item.key)).size).toBe(8);
+    for (const item of batch.items) {
+      expect(item.repository).toBe("BogdanAIP/rakazo");
+      expect(item.sourceRef).toMatch(/^[0-9a-f]{40}$/);
+      expect(item.sourcePath).toMatch(/^\.agents\/skills\/[a-z-]+\/SKILL\.md$/);
+      expect(item.key).toBe(`${item.repository}:${item.sourcePath}@${item.sourceRef}`);
+    }
+  });
+
   it.each(["discover","deep-research","verify","simplify","autofix","benchmark","compare-reference","engineering"])("validates portable RCCL skill %s", async (name) => {
     const content = await read(`../../../.agents/skills/${name}/SKILL.md`);
     const result = analyzeRcclSkillMd(content);
