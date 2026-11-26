@@ -1,0 +1,143 @@
+{
+  "schemaVersion": "market-rakazo-engineering-batch-v1",
+  "id": "rakazo-engineering-v1",
+  "procedure": "market/importGithubBatch",
+  "items": [
+    {
+      "kind": "skill",
+      "key": "BogdanAIP/rakazo:.agents/skills/discover/SKILL.md@a842d3cb752389b4f3404b31dbf3f1d921bb37e4",
+      "tags": [
+        "rakazo",
+        "engineering",
+        "discover"
+      ],
+      "repository": "BogdanAIP/rakazo",
+      "sourcePath": ".agents/skills/discover/SKILL.md",
+      "sourceRef": "a842d3cb752389b4f3404b31dbf3f1d921bb37e4",
+      "metadata": {
+        "populationBatch": "rakazo-engineering-v1",
+        "reviewBeforeInstall": true,
+        "profile": "rccl-skill-v1"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "BogdanAIP/rakazo:.agents/skills/deep-research/SKILL.md@a842d3cb752389b4f3404b31dbf3f1d921bb37e4",
+      "tags": [
+        "rakazo",
+        "engineering",
+        "deep-research"
+      ],
+      "repository": "BogdanAIP/rakazo",
+      "sourcePath": ".agents/skills/deep-research/SKILL.md",
+      "sourceRef": "a842d3cb752389b4f3404b31dbf3f1d921bb37e4",
+      "metadata": {
+        "populationBatch": "rakazo-engineering-v1",
+        "reviewBeforeInstall": true,
+        "profile": "rccl-skill-v1"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "BogdanAIP/rakazo:.agents/skills/verify/SKILL.md@a842d3cb752389b4f3404b31dbf3f1d921bb37e4",
+      "tags": [
+        "rakazo",
+        "engineering",
+        "verify"
+      ],
+      "repository": "BogdanAIP/rakazo",
+      "sourcePath": ".agents/skills/verify/SKILL.md",
+      "sourceRef": "a842d3cb752389b4f3404b31dbf3f1d921bb37e4",
+      "metadata": {
+        "populationBatch": "rakazo-engineering-v1",
+        "reviewBeforeInstall": true,
+        "profile": "rccl-skill-v1"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "BogdanAIP/rakazo:.agents/skills/simplify/SKILL.md@a842d3cb752389b4f3404b31dbf3f1d921bb37e4",
+      "tags": [
+        "rakazo",
+        "engineering",
+        "simplify"
+      ],
+      "repository": "BogdanAIP/rakazo",
+      "sourcePath": ".agents/skills/simplify/SKILL.md",
+      "sourceRef": "a842d3cb752389b4f3404b31dbf3f1d921bb37e4",
+      "metadata": {
+        "populationBatch": "rakazo-engineering-v1",
+        "reviewBeforeInstall": true,
+        "profile": "rccl-skill-v1"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "BogdanAIP/rakazo:.agents/skills/autofix/SKILL.md@a842d3cb752389b4f3404b31dbf3f1d921bb37e4",
+      "tags": [
+        "rakazo",
+        "engineering",
+        "autofix"
+      ],
+      "repository": "BogdanAIP/rakazo",
+      "sourcePath": ".agents/skills/autofix/SKILL.md",
+      "sourceRef": "a842d3cb752389b4f3404b31dbf3f1d921bb37e4",
+      "metadata": {
+        "populationBatch": "rakazo-engineering-v1",
+        "reviewBeforeInstall": true,
+        "profile": "rccl-skill-v1"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "BogdanAIP/rakazo:.agents/skills/benchmark/SKILL.md@a842d3cb752389b4f3404b31dbf3f1d921bb37e4",
+      "tags": [
+        "rakazo",
+        "engineering",
+        "benchmark"
+      ],
+      "repository": "BogdanAIP/rakazo",
+      "sourcePath": ".agents/skills/benchmark/SKILL.md",
+      "sourceRef": "a842d3cb752389b4f3404b31dbf3f1d921bb37e4",
+      "metadata": {
+        "populationBatch": "rakazo-engineering-v1",
+        "reviewBeforeInstall": true,
+        "profile": "rccl-skill-v1"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "BogdanAIP/rakazo:.agents/skills/compare-reference/SKILL.md@a842d3cb752389b4f3404b31dbf3f1d921bb37e4",
+      "tags": [
+        "rakazo",
+        "engineering",
+        "compare-reference"
+      ],
+      "repository": "BogdanAIP/rakazo",
+      "sourcePath": ".agents/skills/compare-reference/SKILL.md",
+      "sourceRef": "a842d3cb752389b4f3404b31dbf3f1d921bb37e4",
+      "metadata": {
+        "populationBatch": "rakazo-engineering-v1",
+        "reviewBeforeInstall": true,
+        "profile": "rccl-skill-v1"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "BogdanAIP/rakazo:.agents/skills/engineering/SKILL.md@a842d3cb752389b4f3404b31dbf3f1d921bb37e4",
+      "tags": [
+        "rakazo",
+        "engineering",
+        "engineering"
+      ],
+      "repository": "BogdanAIP/rakazo",
+      "sourcePath": ".agents/skills/engineering/SKILL.md",
+      "sourceRef": "a842d3cb752389b4f3404b31dbf3f1d921bb37e4",
+      "metadata": {
+        "populationBatch": "rakazo-engineering-v1",
+        "reviewBeforeInstall": true,
+        "profile": "rccl-skill-v1"
+      }
+    }
+  ]
+}
