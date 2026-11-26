@@ -1,0 +1,247 @@
+{
+  "schemaVersion": "market-pstack-batch-v1",
+  "id": "pstack-priority-v1",
+  "procedure": "market/importGithubBatch",
+  "source": {
+    "repository": "cursor/plugins",
+    "commit": "b7b93c36be9bcc36a74db438e0fd385d660bc559",
+    "license": "MIT",
+    "licenseUrl": "https://github.com/cursor/plugins/blob/b7b93c36be9bcc36a74db438e0fd385d660bc559/pstack/LICENSE"
+  },
+  "codex": {
+    "repository": "backnotprop/pstack",
+    "commit": "c81f1bf680803f9e3f0cade6adb62593f43fb61f",
+    "license": "MIT",
+    "role": "separate optional harness adaptation; not upstream control"
+  },
+  "items": [
+    {
+      "kind": "skill",
+      "key": "cursor/plugins:pstack/skills/reframe/SKILL.md@b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "tags": [
+        "pstack",
+        "market-skill",
+        "reframe"
+      ],
+      "repository": "cursor/plugins",
+      "sourcePath": "pstack/skills/reframe/SKILL.md",
+      "sourceRef": "b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "metadata": {
+        "populationBatch": "pstack-priority-v1",
+        "licenseHint": "MIT",
+        "invocation": "explicit-only",
+        "reviewBeforeInstall": true,
+        "licenseUrl": "https://github.com/cursor/plugins/blob/b7b93c36be9bcc36a74db438e0fd385d660bc559/pstack/LICENSE"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "cursor/plugins:pstack/skills/sharpen/SKILL.md@b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "tags": [
+        "pstack",
+        "market-skill",
+        "sharpen"
+      ],
+      "repository": "cursor/plugins",
+      "sourcePath": "pstack/skills/sharpen/SKILL.md",
+      "sourceRef": "b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "metadata": {
+        "populationBatch": "pstack-priority-v1",
+        "licenseHint": "MIT",
+        "invocation": "explicit-only",
+        "reviewBeforeInstall": true,
+        "licenseUrl": "https://github.com/cursor/plugins/blob/b7b93c36be9bcc36a74db438e0fd385d660bc559/pstack/LICENSE"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "cursor/plugins:pstack/skills/architect/SKILL.md@b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "tags": [
+        "pstack",
+        "market-skill",
+        "architect"
+      ],
+      "repository": "cursor/plugins",
+      "sourcePath": "pstack/skills/architect/SKILL.md",
+      "sourceRef": "b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "metadata": {
+        "populationBatch": "pstack-priority-v1",
+        "licenseHint": "MIT",
+        "invocation": "explicit-only",
+        "reviewBeforeInstall": true,
+        "licenseUrl": "https://github.com/cursor/plugins/blob/b7b93c36be9bcc36a74db438e0fd385d660bc559/pstack/LICENSE"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "cursor/plugins:pstack/skills/arena/SKILL.md@b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "tags": [
+        "pstack",
+        "market-skill",
+        "arena"
+      ],
+      "repository": "cursor/plugins",
+      "sourcePath": "pstack/skills/arena/SKILL.md",
+      "sourceRef": "b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "metadata": {
+        "populationBatch": "pstack-priority-v1",
+        "licenseHint": "MIT",
+        "invocation": "explicit-only",
+        "reviewBeforeInstall": true,
+        "licenseUrl": "https://github.com/cursor/plugins/blob/b7b93c36be9bcc36a74db438e0fd385d660bc559/pstack/LICENSE"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "cursor/plugins:pstack/skills/swarm/SKILL.md@b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "tags": [
+        "pstack",
+        "market-skill",
+        "swarm"
+      ],
+      "repository": "cursor/plugins",
+      "sourcePath": "pstack/skills/swarm/SKILL.md",
+      "sourceRef": "b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "metadata": {
+        "populationBatch": "pstack-priority-v1",
+        "licenseHint": "MIT",
+        "invocation": "explicit-only",
+        "reviewBeforeInstall": true,
+        "licenseUrl": "https://github.com/cursor/plugins/blob/b7b93c36be9bcc36a74db438e0fd385d660bc559/pstack/LICENSE"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "cursor/plugins:pstack/skills/interrogate/SKILL.md@b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "tags": [
+        "pstack",
+        "market-skill",
+        "interrogate"
+      ],
+      "repository": "cursor/plugins",
+      "sourcePath": "pstack/skills/interrogate/SKILL.md",
+      "sourceRef": "b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "metadata": {
+        "populationBatch": "pstack-priority-v1",
+        "licenseHint": "MIT",
+        "invocation": "explicit-only",
+        "reviewBeforeInstall": true,
+        "licenseUrl": "https://github.com/cursor/plugins/blob/b7b93c36be9bcc36a74db438e0fd385d660bc559/pstack/LICENSE"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "cursor/plugins:pstack/skills/reflect/SKILL.md@b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "tags": [
+        "pstack",
+        "market-skill",
+        "reflect"
+      ],
+      "repository": "cursor/plugins",
+      "sourcePath": "pstack/skills/reflect/SKILL.md",
+      "sourceRef": "b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "metadata": {
+        "populationBatch": "pstack-priority-v1",
+        "licenseHint": "MIT",
+        "invocation": "explicit-only",
+        "reviewBeforeInstall": true,
+        "licenseUrl": "https://github.com/cursor/plugins/blob/b7b93c36be9bcc36a74db438e0fd385d660bc559/pstack/LICENSE"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "cursor/plugins:pstack/skills/tdd/SKILL.md@b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "tags": [
+        "pstack",
+        "market-skill",
+        "tdd"
+      ],
+      "repository": "cursor/plugins",
+      "sourcePath": "pstack/skills/tdd/SKILL.md",
+      "sourceRef": "b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "metadata": {
+        "populationBatch": "pstack-priority-v1",
+        "licenseHint": "MIT",
+        "invocation": "explicit-only",
+        "reviewBeforeInstall": true,
+        "licenseUrl": "https://github.com/cursor/plugins/blob/b7b93c36be9bcc36a74db438e0fd385d660bc559/pstack/LICENSE"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "cursor/plugins:pstack/skills/unslop/SKILL.md@b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "tags": [
+        "pstack",
+        "market-skill",
+        "unslop"
+      ],
+      "repository": "cursor/plugins",
+      "sourcePath": "pstack/skills/unslop/SKILL.md",
+      "sourceRef": "b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "metadata": {
+        "populationBatch": "pstack-priority-v1",
+        "licenseHint": "MIT",
+        "invocation": "explicit-only",
+        "reviewBeforeInstall": true,
+        "licenseUrl": "https://github.com/cursor/plugins/blob/b7b93c36be9bcc36a74db438e0fd385d660bc559/pstack/LICENSE"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "cursor/plugins:pstack/skills/automate-me/SKILL.md@b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "tags": [
+        "pstack",
+        "market-skill",
+        "automate-me"
+      ],
+      "repository": "cursor/plugins",
+      "sourcePath": "pstack/skills/automate-me/SKILL.md",
+      "sourceRef": "b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "metadata": {
+        "populationBatch": "pstack-priority-v1",
+        "licenseHint": "MIT",
+        "invocation": "explicit-only",
+        "reviewBeforeInstall": true,
+        "licenseUrl": "https://github.com/cursor/plugins/blob/b7b93c36be9bcc36a74db438e0fd385d660bc559/pstack/LICENSE"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "cursor/plugins:pstack/skills/figure-it-out/SKILL.md@b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "tags": [
+        "pstack",
+        "market-skill",
+        "figure-it-out"
+      ],
+      "repository": "cursor/plugins",
+      "sourcePath": "pstack/skills/figure-it-out/SKILL.md",
+      "sourceRef": "b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "metadata": {
+        "populationBatch": "pstack-priority-v1",
+        "licenseHint": "MIT",
+        "invocation": "explicit-only",
+        "reviewBeforeInstall": true,
+        "licenseUrl": "https://github.com/cursor/plugins/blob/b7b93c36be9bcc36a74db438e0fd385d660bc559/pstack/LICENSE"
+      }
+    },
+    {
+      "kind": "skill",
+      "key": "cursor/plugins:pstack/skills/poteto-mode/SKILL.md@b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "tags": [
+        "pstack",
+        "market-skill",
+        "poteto-mode"
+      ],
+      "repository": "cursor/plugins",
+      "sourcePath": "pstack/skills/poteto-mode/SKILL.md",
+      "sourceRef": "b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "metadata": {
+        "populationBatch": "pstack-priority-v1",
+        "licenseHint": "MIT",
+        "invocation": "explicit-only",
+        "reviewBeforeInstall": true,
+        "licenseUrl": "https://github.com/cursor/plugins/blob/b7b93c36be9bcc36a74db438e0fd385d660bc559/pstack/LICENSE"
+      }
+    }
+  ]
+}
